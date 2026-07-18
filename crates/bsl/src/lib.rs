@@ -4,8 +4,13 @@ use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
 
 mod calls;
+mod resolution;
 
 pub use calls::{BslCall, BslCallError, BslCallExtractor, LineBslCallExtractor};
+pub use resolution::{
+    BslCallResolution, BslCallResolver, LocalBslCallResolver, ResolvedBslCall, UnresolvedBslCall,
+    UnresolvedCallReason,
+};
 
 /// Supported BSL symbol kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

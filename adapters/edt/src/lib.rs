@@ -1,5 +1,6 @@
 //! Adapter for reading `1C:EDT` project sources.
 
+mod bsl_graph;
 mod metadata_object;
 mod module_reader;
 
@@ -11,6 +12,8 @@ pub use metadata_object::{
 pub use module_reader::{
     EdtModuleDescriptor, EdtModuleError, EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader,
 };
+
+pub use bsl_graph::{EdtBslGraphError, add_module_symbols};
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
@@ -435,6 +438,7 @@ fn collect_top_level_metadata(
                     EdgeKind::Contains,
                 ))
                 .map_err(EdtGraphError::Graph)?;
+            add_module_symbols(graph, &module).map_err(EdtGraphError::Bsl)?;
         }
     }
 
@@ -478,6 +482,9 @@ pub enum EdtGraphError {
     /// A metadata object module could not be read.
     Module(EdtModuleError),
     Graph(oneagent_graph::GraphError),
+
+    /// BSL symbols could not be added to the graph.
+    Bsl(EdtBslGraphError),
 }
 
 impl Display for EdtGraphError {
@@ -514,6 +521,9 @@ impl Display for EdtGraphError {
             Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
             Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
             Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
+            Self::Bsl(error) => {
+                write!(formatter, "failed to add BSL symbols to graph: {error}")
+            }
         }
     }
 }
@@ -529,6 +539,7 @@ impl std::error::Error for EdtGraphError {
             Self::Module(error) => Some(error),
             Self::Graph(error) => Some(error),
             Self::InvalidIdentifier | Self::InvalidName => None,
+            Self::Bsl(error) => Some(error),
         }
     }
 }
@@ -644,9 +655,11 @@ mod graph_tests {
             .build_graph(root.path())
             .expect("graph must build");
 
-        assert_eq!(graph.node_count(), 7);
-        assert_eq!(graph.edge_count(), 6);
+        assert_eq!(graph.node_count(), 10);
+        assert_eq!(graph.edge_count(), 9);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
         assert_eq!(
             graph
                 .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))

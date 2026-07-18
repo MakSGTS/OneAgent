@@ -9,6 +9,7 @@ oneagent-metadata = { path = "../../crates/metadata" }
 oneagent-graph = { path = "../../crates/graph" }
 oneagent-common = { path = "../../crates/common" }
 oneagent-workspace = { path = "../../crates/workspace" }
+oneagent-bsl = { path = "../../crates/bsl" }
 quick-xml = "0.38"
 
 [dev-dependencies]

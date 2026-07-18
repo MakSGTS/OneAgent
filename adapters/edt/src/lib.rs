@@ -1,0 +1,601 @@
+//! Adapter for reading `1C:EDT` project sources.
+
+mod metadata_object;
+
+pub use metadata_object::{
+    EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
+    FileSystemEdtMetadataObjectReader,
+};
+
+use oneagent_common::{EntityId, EntityName};
+use oneagent_workspace::{Configuration, WorkspaceFormat};
+use quick_xml::Reader;
+use quick_xml::events::Event;
+use std::fmt::{Display, Formatter};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+const CONFIGURATION_RELATIVE_PATH: &str = "src/Configuration/Configuration.mdo";
+
+/// Port for loading a semantic configuration from an EDT project.
+pub trait EdtConfigurationLoader {
+    /// Loads an EDT configuration rooted at `project_root`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project structure or XML is invalid.
+    fn load(&self, project_root: &Path) -> Result<Configuration, EdtLoadError>;
+}
+
+/// Filesystem implementation of the EDT configuration loader.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FileSystemEdtConfigurationLoader;
+
+impl EdtConfigurationLoader for FileSystemEdtConfigurationLoader {
+    fn load(&self, project_root: &Path) -> Result<Configuration, EdtLoadError> {
+        let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
+
+        if !configuration_path.is_file() {
+            return Err(EdtLoadError::ConfigurationFileNotFound(configuration_path));
+        }
+
+        let xml =
+            fs::read_to_string(&configuration_path).map_err(|source| EdtLoadError::ReadFile {
+                path: configuration_path.clone(),
+                source,
+            })?;
+
+        let descriptor = parse_configuration_descriptor(&xml)?;
+
+        let id = EntityId::new(
+            descriptor
+                .uuid
+                .unwrap_or_else(|| format!("edt:{}", project_root.display())),
+        )
+        .map_err(|_| EdtLoadError::InvalidIdentifier)?;
+
+        let name = EntityName::new(descriptor.name).map_err(|_| EdtLoadError::MissingName)?;
+
+        Ok(Configuration::new(
+            id,
+            name,
+            project_root,
+            WorkspaceFormat::Edt,
+        ))
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct ConfigurationDescriptor {
+    name: String,
+    uuid: Option<String>,
+    synonym: Option<String>,
+}
+
+fn parse_configuration_descriptor(xml: &str) -> Result<ConfigurationDescriptor, EdtLoadError> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+
+    let mut descriptor = ConfigurationDescriptor::default();
+    let mut path = Vec::<String>::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(event)) => {
+                path.push(local_name(event.name().as_ref()));
+
+                for attribute in event.attributes().with_checks(false) {
+                    let attribute = attribute
+                        .map_err(|source| EdtLoadError::MalformedXml(source.to_string()))?;
+                    if local_name(attribute.key.as_ref()) == "uuid" && descriptor.uuid.is_none() {
+                        descriptor.uuid = Some(
+                            attribute
+                                .decode_and_unescape_value(reader.decoder())
+                                .map_err(|source| EdtLoadError::MalformedXml(source.to_string()))?
+                                .into_owned(),
+                        );
+                    }
+                }
+            }
+            Ok(Event::Empty(event)) => {
+                for attribute in event.attributes().with_checks(false) {
+                    let attribute = attribute
+                        .map_err(|source| EdtLoadError::MalformedXml(source.to_string()))?;
+                    if local_name(attribute.key.as_ref()) == "uuid" && descriptor.uuid.is_none() {
+                        descriptor.uuid = Some(
+                            attribute
+                                .decode_and_unescape_value(reader.decoder())
+                                .map_err(|source| EdtLoadError::MalformedXml(source.to_string()))?
+                                .into_owned(),
+                        );
+                    }
+                }
+            }
+            Ok(Event::Text(event)) => {
+                let text = event
+                    .decode()
+                    .map_err(|source| EdtLoadError::MalformedXml(source.to_string()))?
+                    .into_owned();
+
+                match path.last().map(String::as_str) {
+                    Some("name") if descriptor.name.is_empty() => descriptor.name = text,
+                    Some("content") if is_synonym_content_path(&path) => {
+                        descriptor.synonym.get_or_insert(text);
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(_)) => {
+                path.pop();
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(source) => return Err(EdtLoadError::MalformedXml(source.to_string())),
+        }
+    }
+
+    if descriptor.name.trim().is_empty() {
+        return Err(EdtLoadError::MissingName);
+    }
+
+    Ok(descriptor)
+}
+
+fn is_synonym_content_path(path: &[String]) -> bool {
+    path.len() >= 2 && path[path.len() - 2] == "synonym" && path[path.len() - 1] == "content"
+}
+
+fn local_name(name: &[u8]) -> String {
+    let name = String::from_utf8_lossy(name);
+    name.rsplit(':').next().unwrap_or(&name).to_owned()
+}
+
+/// Errors produced while loading an EDT configuration.
+#[derive(Debug)]
+pub enum EdtLoadError {
+    /// `Configuration.mdo` was not found.
+    ConfigurationFileNotFound(PathBuf),
+    /// The configuration file could not be read.
+    ReadFile {
+        /// File path.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+    /// The XML document is malformed.
+    MalformedXml(String),
+    /// The configuration has no metadata name.
+    MissingName,
+    /// A stable configuration identifier could not be created.
+    InvalidIdentifier,
+}
+
+impl Display for EdtLoadError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ConfigurationFileNotFound(path) => write!(
+                formatter,
+                "EDT configuration file was not found: {}",
+                path.display()
+            ),
+            Self::ReadFile { path, source } => write!(
+                formatter,
+                "failed to read EDT configuration {}: {source}",
+                path.display()
+            ),
+            Self::MalformedXml(message) => {
+                write!(formatter, "malformed EDT configuration XML: {message}")
+            }
+            Self::MissingName => formatter.write_str("EDT configuration name is missing"),
+            Self::InvalidIdentifier => {
+                formatter.write_str("EDT configuration identifier is invalid")
+            }
+        }
+    }
+}
+
+impl std::error::Error for EdtLoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::ReadFile { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use tempfile::tempdir;
+
+    use super::{
+        EdtConfigurationLoader, FileSystemEdtConfigurationLoader, parse_configuration_descriptor,
+    };
+
+    const CONFIGURATION_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Configuration
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="40d7b43a-b34f-4e6f-a756-6d7f0dc850f0">
+    <name>DemoConfiguration</name>
+    <synonym>
+        <key>ru</key>
+        <content>Демонстрационная конфигурация</content>
+    </synonym>
+</mdclass:Configuration>
+"#;
+
+    #[test]
+    fn parses_configuration_descriptor() {
+        let descriptor =
+            parse_configuration_descriptor(CONFIGURATION_XML).expect("XML must be valid");
+
+        assert_eq!(descriptor.name, "DemoConfiguration");
+        assert_eq!(
+            descriptor.uuid.as_deref(),
+            Some("40d7b43a-b34f-4e6f-a756-6d7f0dc850f0")
+        );
+        assert_eq!(
+            descriptor.synonym.as_deref(),
+            Some("Демонстрационная конфигурация")
+        );
+    }
+
+    #[test]
+    fn loads_configuration_from_edt_project() {
+        let root = tempdir().expect("temporary directory must be created");
+        let configuration_directory = root.path().join("src/Configuration");
+
+        fs::create_dir_all(&configuration_directory)
+            .expect("configuration directory must be created");
+        fs::write(
+            configuration_directory.join("Configuration.mdo"),
+            CONFIGURATION_XML,
+        )
+        .expect("configuration file must be created");
+
+        let configuration = FileSystemEdtConfigurationLoader
+            .load(root.path())
+            .expect("configuration must load");
+
+        assert_eq!(configuration.name().as_str(), "DemoConfiguration");
+        assert_eq!(
+            configuration.id().as_str(),
+            "40d7b43a-b34f-4e6f-a756-6d7f0dc850f0"
+        );
+    }
+
+    #[test]
+    fn rejects_configuration_without_name() {
+        let xml = r#"<mdclass:Configuration uuid="id" />"#;
+        let error = parse_configuration_descriptor(xml).expect_err("missing name must be rejected");
+        assert_eq!(error.to_string(), "EDT configuration name is missing");
+    }
+}
+
+use oneagent_graph::{EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticGraph};
+use oneagent_metadata::MetadataKind;
+use std::collections::BTreeMap;
+
+/// Builds an initial semantic graph from an EDT project.
+pub trait EdtSemanticGraphBuilder {
+    /// Builds a semantic graph rooted at the EDT configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when project metadata cannot be read or represented.
+    fn build_graph(&self, project_root: &Path) -> Result<SemanticGraph, EdtGraphError>;
+}
+
+/// Filesystem implementation of the EDT semantic graph builder.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FileSystemEdtSemanticGraphBuilder;
+
+impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
+    fn build_graph(&self, project_root: &Path) -> Result<SemanticGraph, EdtGraphError> {
+        let configuration = FileSystemEdtConfigurationLoader.load(project_root)?;
+        let mut graph = SemanticGraph::new();
+
+        let configuration_id = configuration.id().clone();
+        graph.insert_node(GraphNode::new(
+            configuration_id.clone(),
+            configuration.name().clone(),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+
+        let source_root = project_root.join("src");
+        if !source_root.is_dir() {
+            return Ok(graph);
+        }
+
+        let kind_by_directory = supported_metadata_directories();
+
+        for entry in fs::read_dir(&source_root).map_err(|source| EdtGraphError::ReadDirectory {
+            path: source_root.clone(),
+            source,
+        })? {
+            let entry = entry.map_err(|source| EdtGraphError::ReadDirectoryEntry {
+                path: source_root.clone(),
+                source,
+            })?;
+
+            let file_type = entry
+                .file_type()
+                .map_err(|source| EdtGraphError::ReadFileType {
+                    path: entry.path(),
+                    source,
+                })?;
+
+            if !file_type.is_dir() {
+                continue;
+            }
+
+            let directory_name = entry.file_name().to_string_lossy().into_owned();
+            let Some(kind) = kind_by_directory.get(directory_name.as_str()).copied() else {
+                continue;
+            };
+
+            collect_top_level_metadata(&entry.path(), kind, &configuration_id, &mut graph)?;
+        }
+
+        Ok(graph)
+    }
+}
+
+fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
+    BTreeMap::from([
+        ("Catalogs", MetadataKind::Catalog),
+        ("Documents", MetadataKind::Document),
+        ("Enums", MetadataKind::Enumeration),
+        ("CommonModules", MetadataKind::CommonModule),
+        ("Reports", MetadataKind::Report),
+        ("DataProcessors", MetadataKind::DataProcessor),
+        ("InformationRegisters", MetadataKind::InformationRegister),
+        ("AccumulationRegisters", MetadataKind::AccumulationRegister),
+        ("AccountingRegisters", MetadataKind::AccountingRegister),
+        ("CalculationRegisters", MetadataKind::CalculationRegister),
+        ("BusinessProcesses", MetadataKind::BusinessProcess),
+        ("Tasks", MetadataKind::Task),
+        ("Roles", MetadataKind::Role),
+        ("CommonForms", MetadataKind::CommonForm),
+        ("HTTPServices", MetadataKind::HttpService),
+        ("WebServices", MetadataKind::WebService),
+        ("XDTOPackages", MetadataKind::XdtoPackage),
+        ("Subsystems", MetadataKind::Subsystem),
+    ])
+}
+
+fn collect_top_level_metadata(
+    directory: &Path,
+    kind: MetadataKind,
+    configuration_id: &EntityId,
+    graph: &mut SemanticGraph,
+) -> Result<(), EdtGraphError> {
+    for entry in fs::read_dir(directory).map_err(|source| EdtGraphError::ReadDirectory {
+        path: directory.to_path_buf(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| EdtGraphError::ReadDirectoryEntry {
+            path: directory.to_path_buf(),
+            source,
+        })?;
+
+        if !entry
+            .file_type()
+            .map_err(|source| EdtGraphError::ReadFileType {
+                path: entry.path(),
+                source,
+            })?
+            .is_dir()
+        {
+            continue;
+        }
+
+        let object_name = entry.file_name().to_string_lossy().into_owned();
+
+        if object_name.trim().is_empty() {
+            continue;
+        }
+
+        let object_id = EntityId::new(format!(
+            "{}:{}:{}",
+            kind.as_str(),
+            configuration_id.as_str(),
+            object_name
+        ))
+        .map_err(|_| EdtGraphError::InvalidIdentifier)?;
+
+        let object_name = EntityName::new(object_name).map_err(|_| EdtGraphError::InvalidName)?;
+
+        graph.insert_node(GraphNode::new(
+            object_id.clone(),
+            object_name,
+            NodeKind::Metadata(kind),
+        ));
+
+        graph
+            .insert_edge(GraphEdge::new(
+                configuration_id.clone(),
+                object_id,
+                EdgeKind::Contains,
+            ))
+            .map_err(EdtGraphError::Graph)?;
+    }
+
+    Ok(())
+}
+
+/// Errors produced while building an EDT semantic graph.
+#[derive(Debug)]
+pub enum EdtGraphError {
+    /// EDT configuration loading failed.
+    Load(EdtLoadError),
+    /// A directory could not be read.
+    ReadDirectory {
+        /// Directory path.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+    /// A directory entry could not be read.
+    ReadDirectoryEntry {
+        /// Parent directory path.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+    /// File type metadata could not be read.
+    ReadFileType {
+        /// Entry path.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+    /// A stable identifier could not be created.
+    InvalidIdentifier,
+    /// A stable name could not be created.
+    InvalidName,
+    /// Semantic graph validation failed.
+    Graph(oneagent_graph::GraphError),
+}
+
+impl Display for EdtGraphError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Load(error) => write!(formatter, "failed to load EDT configuration: {error}"),
+            Self::ReadDirectory { path, source } => {
+                write!(
+                    formatter,
+                    "failed to read directory {}: {source}",
+                    path.display()
+                )
+            }
+            Self::ReadDirectoryEntry { path, source } => {
+                write!(
+                    formatter,
+                    "failed to read an entry in {}: {source}",
+                    path.display()
+                )
+            }
+            Self::ReadFileType { path, source } => {
+                write!(
+                    formatter,
+                    "failed to read file type for {}: {source}",
+                    path.display()
+                )
+            }
+            Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
+            Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
+            Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for EdtGraphError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Load(error) => Some(error),
+            Self::ReadDirectory { source, .. }
+            | Self::ReadDirectoryEntry { source, .. }
+            | Self::ReadFileType { source, .. } => Some(source),
+            Self::Graph(error) => Some(error),
+            Self::InvalidIdentifier | Self::InvalidName => None,
+        }
+    }
+}
+
+impl From<EdtLoadError> for EdtGraphError {
+    fn from(error: EdtLoadError) -> Self {
+        Self::Load(error)
+    }
+}
+
+#[cfg(test)]
+mod graph_tests {
+    use oneagent_graph::{EdgeKind, NodeKind};
+    use oneagent_metadata::MetadataKind;
+    use std::fs;
+    use tempfile::tempdir;
+
+    use super::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
+
+    const CONFIGURATION_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Configuration
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="11111111-2222-3333-4444-555555555555">
+    <name>DemoConfiguration</name>
+</mdclass:Configuration>
+"#;
+
+    fn create_edt_project() -> tempfile::TempDir {
+        let root = tempdir().expect("temporary directory must be created");
+
+        fs::create_dir_all(root.path().join("src/Configuration"))
+            .expect("configuration directory must be created");
+        fs::write(
+            root.path().join("src/Configuration/Configuration.mdo"),
+            CONFIGURATION_XML,
+        )
+        .expect("configuration file must be created");
+
+        fs::create_dir_all(root.path().join("src/Documents/Sales"))
+            .expect("document directory must be created");
+        fs::create_dir_all(root.path().join("src/Catalogs/Products"))
+            .expect("catalog directory must be created");
+        fs::create_dir_all(root.path().join("src/CommonModules/AccessManagement"))
+            .expect("common module directory must be created");
+
+        root
+    }
+
+    #[test]
+    fn builds_graph_with_configuration_and_metadata_objects() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        assert_eq!(graph.node_count(), 4);
+        assert_eq!(graph.edge_count(), 3);
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+                .len(),
+            1
+        );
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Catalog))
+                .len(),
+            1
+        );
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::CommonModule))
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn configuration_contains_discovered_objects() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let configuration = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Configuration))
+            .into_iter()
+            .next()
+            .expect("configuration node must exist");
+
+        assert_eq!(
+            graph
+                .outgoing_by_kind(configuration.id(), EdgeKind::Contains)
+                .len(),
+            3
+        );
+    }
+}

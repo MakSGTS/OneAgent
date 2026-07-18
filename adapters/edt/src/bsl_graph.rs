@@ -1,7 +1,8 @@
 //! Integration between EDT module files, BSL declarations and the semantic graph.
 
 use oneagent_bsl::{
-    BslDeclarationExtractor, BslParseError, BslSymbolKind, LineBslDeclarationExtractor,
+    BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor, BslParseError,
+    BslSymbolKind, LineBslCallExtractor, LineBslDeclarationExtractor, LocalBslCallResolver,
 };
 use oneagent_graph::{EdgeKind, GraphEdge, GraphError, GraphNode, NodeKind, SemanticGraph};
 use std::fmt::{Display, Formatter};
@@ -9,11 +10,12 @@ use std::fs;
 
 use crate::EdtModuleDescriptor;
 
-/// Adds top-level BSL declarations from a module to the semantic graph.
+/// Adds top-level BSL declarations and local call relations to the semantic graph.
 ///
 /// # Errors
 ///
-/// Returns an error when the module cannot be read, parsed or inserted into the graph.
+/// Returns an error when the module cannot be read, parsed, resolved or inserted
+/// into the graph.
 pub fn add_module_symbols(
     graph: &mut SemanticGraph,
     module: &EdtModuleDescriptor,
@@ -26,11 +28,9 @@ pub fn add_module_symbols(
 
     let symbols = LineBslDeclarationExtractor
         .extract(module.id(), &source)
-        .map_err(EdtBslGraphError::Parse)?;
+        .map_err(EdtBslGraphError::ParseDeclarations)?;
 
-    let count = symbols.len();
-
-    for symbol in symbols {
+    for symbol in &symbols {
         let node_kind = match symbol.kind() {
             BslSymbolKind::Procedure => NodeKind::Procedure,
             BslSymbolKind::Function => NodeKind::Function,
@@ -51,7 +51,23 @@ pub fn add_module_symbols(
             .map_err(EdtBslGraphError::Graph)?;
     }
 
-    Ok(count)
+    let calls = LineBslCallExtractor
+        .extract_calls(module.id(), &source)
+        .map_err(EdtBslGraphError::ParseCalls)?;
+
+    let resolution = LocalBslCallResolver.resolve(&symbols, &calls);
+
+    for resolved_call in resolution.resolved() {
+        graph
+            .insert_edge(GraphEdge::new(
+                resolved_call.origin_id().clone(),
+                resolved_call.destination_id().clone(),
+                EdgeKind::Calls,
+            ))
+            .map_err(EdtBslGraphError::Graph)?;
+    }
+
+    Ok(symbols.len())
 }
 
 /// Error produced while adding BSL declarations to the EDT semantic graph.
@@ -65,7 +81,11 @@ pub enum EdtBslGraphError {
         source: std::io::Error,
     },
     /// BSL declaration extraction failed.
-    Parse(BslParseError),
+    ParseDeclarations(BslParseError),
+
+    /// BSL call extraction failed.
+    ParseCalls(BslCallError),
+
     /// Semantic graph validation failed.
     Graph(GraphError),
 }
@@ -80,8 +100,18 @@ impl Display for EdtBslGraphError {
                     path.display()
                 )
             }
-            Self::Parse(error) => write!(formatter, "failed to parse BSL declarations: {error}"),
-            Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
+
+            Self::ParseDeclarations(error) => {
+                write!(formatter, "failed to parse BSL declarations: {error}")
+            }
+
+            Self::ParseCalls(error) => {
+                write!(formatter, "failed to parse BSL calls: {error}")
+            }
+
+            Self::Graph(error) => {
+                write!(formatter, "semantic graph error: {error}")
+            }
         }
     }
 }
@@ -90,7 +120,8 @@ impl std::error::Error for EdtBslGraphError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::ReadModule { source, .. } => Some(source),
-            Self::Parse(error) => Some(error),
+            Self::ParseDeclarations(error) => Some(error),
+            Self::ParseCalls(error) => Some(error),
             Self::Graph(error) => Some(error),
         }
     }
@@ -99,7 +130,7 @@ impl std::error::Error for EdtBslGraphError {
 #[cfg(test)]
 mod tests {
     use oneagent_common::{EntityId, EntityName};
-    use oneagent_graph::{GraphNode, NodeKind, SemanticGraph};
+    use oneagent_graph::{EdgeKind, GraphNode, NodeKind, SemanticGraph};
     use std::fs;
     use tempfile::tempdir;
 
@@ -114,7 +145,15 @@ mod tests {
 
         fs::write(
             &module_path,
-            "Procedure BeforeWrite() Export\nEndProcedure\n\nFunction Total()\nEndFunction",
+            concat!(
+                "Procedure BeforeWrite() Export\n",
+                "    Total();\n",
+                "EndProcedure\n",
+                "\n",
+                "Function Total()\n",
+                "    Return 100;\n",
+                "EndFunction\n",
+            ),
         )
         .expect("module file must be created");
 
@@ -135,6 +174,24 @@ mod tests {
         ));
 
         let count = add_module_symbols(&mut graph, &module).expect("symbols must be added");
+
+        let procedure = graph
+            .nodes_by_kind(NodeKind::Procedure)
+            .into_iter()
+            .next()
+            .expect("procedure node must exist");
+
+        let calls = graph.outgoing_by_kind(procedure.id(), EdgeKind::Calls);
+
+        assert_eq!(calls.len(), 1);
+
+        let function = graph
+            .nodes_by_kind(NodeKind::Function)
+            .into_iter()
+            .next()
+            .expect("function node must exist");
+
+        assert_eq!(calls[0].target(), function.id());
 
         assert_eq!(count, 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 1);

@@ -1,0 +1,13 @@
+[package]
+name = "oneagent-workspace"
+version.workspace = true
+edition.workspace = true
+
+license.workspace = true
+
+[dependencies]
+oneagent-metadata = { path = "../metadata" }
+oneagent-common = { path = "../common" }
+
+[lints]
+workspace = true

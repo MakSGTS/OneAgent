@@ -1,0 +1,12 @@
+[package]
+name = "oneagent-graph"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oneagent-common = { path = "../common" }
+oneagent-metadata = { path = "../metadata" }
+
+[lints]
+workspace = true

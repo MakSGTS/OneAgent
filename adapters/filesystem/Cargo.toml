@@ -1,0 +1,14 @@
+[package]
+name = "oneagent-workspace-fs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oneagent-workspace = { path = "../../crates/workspace" }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

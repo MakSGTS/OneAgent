@@ -3,6 +3,10 @@
 use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
 
+mod calls;
+
+pub use calls::{BslCall, BslCallError, BslCallExtractor, LineBslCallExtractor};
+
 /// Supported BSL symbol kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BslSymbolKind {

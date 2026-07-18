@@ -7,15 +7,26 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BslCall {
     id: EntityId,
-    callee: EntityName,
+    source_symbol: Option<EntityName>,
+    target_symbol: EntityName,
     line: usize,
 }
 
 impl BslCall {
     /// Creates a BSL call.
     #[must_use]
-    pub const fn new(id: EntityId, callee: EntityName, line: usize) -> Self {
-        Self { id, callee, line }
+    pub const fn new(
+        id: EntityId,
+        source_symbol: Option<EntityName>,
+        target_symbol: EntityName,
+        line: usize,
+    ) -> Self {
+        Self {
+            id,
+            source_symbol,
+            target_symbol,
+            line,
+        }
     }
 
     /// Returns the stable call identifier.
@@ -24,10 +35,16 @@ impl BslCall {
         &self.id
     }
 
+    /// Returns the procedure or function containing the call.
+    #[must_use]
+    pub fn source_symbol(&self) -> Option<&EntityName> {
+        self.source_symbol.as_ref()
+    }
+
     /// Returns the called symbol name.
     #[must_use]
-    pub const fn callee(&self) -> &EntityName {
-        &self.callee
+    pub const fn target_symbol(&self) -> &EntityName {
+        &self.target_symbol
     }
 
     /// Returns the one-based source line.
@@ -52,6 +69,8 @@ pub trait BslCallExtractor {
 }
 
 /// Conservative line-oriented extractor for direct BSL calls.
+///
+/// This implementation also tracks the current top-level procedure or function.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LineBslCallExtractor;
 
@@ -63,12 +82,23 @@ impl BslCallExtractor for LineBslCallExtractor {
     ) -> Result<Vec<BslCall>, BslCallError> {
         let mut calls = Vec::new();
         let mut ordinal = 0_usize;
+        let mut current_scope: Option<EntityName> = None;
 
         for (index, line) in source.lines().enumerate() {
             let line_number = index + 1;
             let trimmed = line.trim_start();
 
-            if should_skip_line(trimmed) {
+            if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#') {
+                continue;
+            }
+
+            if let Some(scope_name) = parse_scope_start(trimmed, line_number)? {
+                current_scope = Some(scope_name);
+                continue;
+            }
+
+            if is_scope_end(trimmed) {
+                current_scope = None;
                 continue;
             }
 
@@ -83,10 +113,15 @@ impl BslCallExtractor for LineBslCallExtractor {
                 ))
                 .map_err(|_| BslCallError::InvalidIdentifier(line_number))?;
 
-                let callee =
+                let target_symbol =
                     EntityName::new(callee).map_err(|_| BslCallError::InvalidName(line_number))?;
 
-                calls.push(BslCall::new(id, callee, line_number));
+                calls.push(BslCall::new(
+                    id,
+                    current_scope.clone(),
+                    target_symbol,
+                    line_number,
+                ));
             }
         }
 
@@ -94,16 +129,45 @@ impl BslCallExtractor for LineBslCallExtractor {
     }
 }
 
-fn should_skip_line(line: &str) -> bool {
+fn parse_scope_start(line: &str, line_number: usize) -> Result<Option<EntityName>, BslCallError> {
     let lowercase = line.to_lowercase();
 
-    line.is_empty()
-        || line.starts_with("//")
-        || line.starts_with('#')
-        || lowercase.starts_with("procedure ")
-        || lowercase.starts_with("процедура ")
-        || lowercase.starts_with("function ")
-        || lowercase.starts_with("функция ")
+    let keyword = ["procedure", "процедура", "function", "функция"]
+        .into_iter()
+        .find(|keyword| lowercase.starts_with(keyword));
+
+    let Some(keyword) = keyword else {
+        return Ok(None);
+    };
+
+    let remainder = line[keyword.len()..].trim_start();
+
+    let Some(open_parenthesis) = remainder.find('(') else {
+        return Err(BslCallError::MalformedScope {
+            line: line_number,
+            text: line.to_owned(),
+        });
+    };
+
+    let name = remainder[..open_parenthesis].trim();
+
+    if name.is_empty() {
+        return Err(BslCallError::MalformedScope {
+            line: line_number,
+            text: line.to_owned(),
+        });
+    }
+
+    EntityName::new(name)
+        .map(Some)
+        .map_err(|_| BslCallError::InvalidName(line_number))
+}
+
+fn is_scope_end(line: &str) -> bool {
+    matches!(
+        line.trim().to_lowercase().as_str(),
+        "endprocedure" | "конецпроцедуры" | "endfunction" | "конецфункции"
+    )
 }
 
 fn extract_call_names(line: &str) -> Vec<String> {
@@ -180,10 +244,20 @@ fn is_excluded_keyword(candidate: &str) -> bool {
 /// Error produced while extracting BSL calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BslCallError {
-    /// A call name could not be represented.
+    /// A call or scope name could not be represented.
     InvalidName(usize),
+
     /// A call identifier could not be represented.
     InvalidIdentifier(usize),
+
+    /// A procedure or function declaration is malformed.
+    MalformedScope {
+        /// One-based source line.
+        line: usize,
+
+        /// Original source text.
+        text: String,
+    },
 }
 
 impl Display for BslCallError {
@@ -192,8 +266,16 @@ impl Display for BslCallError {
             Self::InvalidName(line) => {
                 write!(formatter, "invalid BSL call name at line {line}")
             }
+
             Self::InvalidIdentifier(line) => {
                 write!(formatter, "invalid BSL call identifier at line {line}")
+            }
+
+            Self::MalformedScope { line, text } => {
+                write!(
+                    formatter,
+                    "malformed BSL scope declaration at line {line}: {text}"
+                )
             }
         }
     }
@@ -225,8 +307,56 @@ EndProcedure
             .expect("calls must parse");
 
         assert_eq!(calls.len(), 2);
-        assert_eq!(calls[0].callee().as_str(), "FillMovements");
-        assert_eq!(calls[1].callee().as_str(), "AccessManagement.CheckRights");
+
+        assert_eq!(
+            calls[0]
+                .source_symbol()
+                .expect("caller must exist")
+                .as_str(),
+            "Post"
+        );
+
+        assert_eq!(calls[0].target_symbol().as_str(), "FillMovements");
+
+        assert_eq!(
+            calls[1].target_symbol().as_str(),
+            "AccessManagement.CheckRights"
+        );
+    }
+
+    #[test]
+    fn tracks_different_symbol_scopes() {
+        let source = r"
+Процедура ЗаписатьДокумент()
+    ПроверитьДанные();
+КонецПроцедуры
+
+Функция ПолучитьСумму()
+    Возврат РассчитатьСумму();
+КонецФункции
+";
+
+        let calls = LineBslCallExtractor
+            .extract_calls(&module_id(), source)
+            .expect("calls must parse");
+
+        assert_eq!(calls.len(), 2);
+
+        assert_eq!(
+            calls[0]
+                .source_symbol()
+                .expect("caller must exist")
+                .as_str(),
+            "ЗаписатьДокумент"
+        );
+
+        assert_eq!(
+            calls[1]
+                .source_symbol()
+                .expect("caller must exist")
+                .as_str(),
+            "ПолучитьСумму"
+        );
     }
 
     #[test]
@@ -245,8 +375,8 @@ EndProcedure
             .expect("calls must parse");
 
         assert_eq!(calls.len(), 2);
-        assert_eq!(calls[0].callee().as_str(), "IsReady");
-        assert_eq!(calls[1].callee().as_str(), "RealCall");
+        assert_eq!(calls[0].target_symbol().as_str(), "IsReady");
+        assert_eq!(calls[1].target_symbol().as_str(), "RealCall");
     }
 
     #[test]
@@ -258,5 +388,6 @@ EndProcedure
             .expect("calls must parse");
 
         assert_eq!(calls[0].line(), 3);
+        assert!(calls[0].source_symbol().is_none());
     }
 }

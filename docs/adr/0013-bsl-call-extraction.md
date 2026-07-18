@@ -18,6 +18,8 @@ Add a conservative call-extraction stage to `oneagent-bsl`.
 - Calls contain a stable ID, callee name and one-based source line.
 - The first implementation is line-oriented and deliberately conservative.
 - Name resolution and graph `calls` edges remain separate later stages.
+- Calls retain the name of the containing procedure or function when available.
+- Calls outside procedures and functions have no caller scope.
 
 ## Consequences
 

@@ -1,10 +1,15 @@
 //! Adapter for reading `1C:EDT` project sources.
 
 mod metadata_object;
+mod module_reader;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
     FileSystemEdtMetadataObjectReader,
+};
+
+pub use module_reader::{
+    EdtModuleDescriptor, EdtModuleError, EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader,
 };
 
 use oneagent_common::{EntityId, EntityName};
@@ -370,6 +375,9 @@ fn collect_top_level_metadata(
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
 ) -> Result<(), EdtGraphError> {
+    let metadata_reader = FileSystemEdtMetadataObjectReader;
+    let module_reader = FileSystemEdtModuleReader;
+
     for entry in fs::read_dir(directory).map_err(|source| EdtGraphError::ReadDirectory {
         path: directory.to_path_buf(),
         source,
@@ -390,35 +398,44 @@ fn collect_top_level_metadata(
             continue;
         }
 
-        let object_name = entry.file_name().to_string_lossy().into_owned();
+        let object_directory = entry.path();
 
-        if object_name.trim().is_empty() {
-            continue;
-        }
-
-        let object_id = EntityId::new(format!(
-            "{}:{}:{}",
-            kind.as_str(),
-            configuration_id.as_str(),
-            object_name
-        ))
-        .map_err(|_| EdtGraphError::InvalidIdentifier)?;
-
-        let object_name = EntityName::new(object_name).map_err(|_| EdtGraphError::InvalidName)?;
+        let descriptor = metadata_reader
+            .read(&object_directory, kind)
+            .map_err(EdtGraphError::MetadataObject)?;
 
         graph.insert_node(GraphNode::new(
-            object_id.clone(),
-            object_name,
-            NodeKind::Metadata(kind),
+            descriptor.id().clone(),
+            descriptor.name().clone(),
+            NodeKind::Metadata(descriptor.kind()),
         ));
 
         graph
             .insert_edge(GraphEdge::new(
                 configuration_id.clone(),
-                object_id,
+                descriptor.id().clone(),
                 EdgeKind::Contains,
             ))
             .map_err(EdtGraphError::Graph)?;
+
+        for module in module_reader
+            .read_modules(descriptor.id(), &object_directory)
+            .map_err(EdtGraphError::Module)?
+        {
+            graph.insert_node(GraphNode::new(
+                module.id().clone(),
+                module.name().clone(),
+                NodeKind::Module,
+            ));
+
+            graph
+                .insert_edge(GraphEdge::new(
+                    descriptor.id().clone(),
+                    module.id().clone(),
+                    EdgeKind::Contains,
+                ))
+                .map_err(EdtGraphError::Graph)?;
+        }
     }
 
     Ok(())
@@ -455,6 +472,11 @@ pub enum EdtGraphError {
     /// A stable name could not be created.
     InvalidName,
     /// Semantic graph validation failed.
+    /// A top-level metadata descriptor could not be read.
+    MetadataObject(EdtMetadataObjectError),
+
+    /// A metadata object module could not be read.
+    Module(EdtModuleError),
     Graph(oneagent_graph::GraphError),
 }
 
@@ -483,6 +505,12 @@ impl Display for EdtGraphError {
                     path.display()
                 )
             }
+            Self::MetadataObject(error) => {
+                write!(formatter, "failed to read EDT metadata object: {error}")
+            }
+            Self::Module(error) => {
+                write!(formatter, "failed to read EDT module: {error}")
+            }
             Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
             Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
             Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
@@ -497,6 +525,8 @@ impl std::error::Error for EdtGraphError {
             Self::ReadDirectory { source, .. }
             | Self::ReadDirectoryEntry { source, .. }
             | Self::ReadFileType { source, .. } => Some(source),
+            Self::MetadataObject(error) => Some(error),
+            Self::Module(error) => Some(error),
             Self::Graph(error) => Some(error),
             Self::InvalidIdentifier | Self::InvalidName => None,
         }
@@ -525,6 +555,29 @@ mod graph_tests {
     <name>DemoConfiguration</name>
 </mdclass:Configuration>
 "#;
+    const DOCUMENT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+</mdclass:Document>
+"#;
+
+    const CATALOG_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Catalog
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="11111111-aaaa-bbbb-cccc-222222222222">
+    <name>Products</name>
+</mdclass:Catalog>
+"#;
+
+    const COMMON_MODULE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonModule
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="99999999-8888-7777-6666-555555555555">
+    <name>AccessManagement</name>
+</mdclass:CommonModule>
+"#;
 
     fn create_edt_project() -> tempfile::TempDir {
         let root = tempdir().expect("temporary directory must be created");
@@ -543,6 +596,42 @@ mod graph_tests {
             .expect("catalog directory must be created");
         fs::create_dir_all(root.path().join("src/CommonModules/AccessManagement"))
             .expect("common module directory must be created");
+        fs::write(
+            root.path().join("src/Documents/Sales/Sales.mdo"),
+            DOCUMENT_XML,
+        )
+        .expect("document descriptor must be created");
+
+        fs::write(
+            root.path().join("src/Catalogs/Products/Products.mdo"),
+            CATALOG_XML,
+        )
+        .expect("catalog descriptor must be created");
+
+        fs::write(
+            root.path()
+                .join("src/CommonModules/AccessManagement/AccessManagement.mdo"),
+            COMMON_MODULE_XML,
+        )
+        .expect("common module descriptor must be created");
+        fs::write(
+            root.path().join("src/Documents/Sales/ObjectModule.bsl"),
+            "Procedure BeforeWrite()\nEndProcedure",
+        )
+        .expect("object module must be created");
+
+        fs::write(
+            root.path().join("src/Documents/Sales/ManagerModule.bsl"),
+            "Function GetData()\nEndFunction",
+        )
+        .expect("manager module must be created");
+
+        fs::write(
+            root.path()
+                .join("src/CommonModules/AccessManagement/Module.bsl"),
+            "Procedure CheckAccess()\nEndProcedure",
+        )
+        .expect("common module must be created");
 
         root
     }
@@ -555,8 +644,9 @@ mod graph_tests {
             .build_graph(root.path())
             .expect("graph must build");
 
-        assert_eq!(graph.node_count(), 4);
-        assert_eq!(graph.edge_count(), 3);
+        assert_eq!(graph.node_count(), 7);
+        assert_eq!(graph.edge_count(), 6);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(
             graph
                 .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))

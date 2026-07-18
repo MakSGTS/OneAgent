@@ -6,7 +6,11 @@ members = [
     "crates/common",
     "crates/workspace",
     "crates/metadata",
-    "crates/protocol", "adapters/filesystem", "adapters/edt", "crates/graph",
+    "crates/protocol",
+    "crates/graph",
+    "crates/bsl",
+    "adapters/filesystem",
+    "adapters/edt",
 ]
 
 [workspace.package]

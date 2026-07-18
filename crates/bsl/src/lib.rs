@@ -4,9 +4,14 @@ use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
 
 mod calls;
+mod cross_module_resolution;
 mod resolution;
 
 pub use calls::{BslCall, BslCallError, BslCallExtractor, LineBslCallExtractor};
+pub use cross_module_resolution::{
+    BslModuleSymbols, CrossModuleCallResolution, CrossModuleCallResolver, QualifiedBslCallResolver,
+    ResolvedCrossModuleCall, UnresolvedCrossModuleCall, UnresolvedCrossModuleCallReason,
+};
 pub use resolution::{
     BslCallResolution, BslCallResolver, LocalBslCallResolver, ResolvedBslCall, UnresolvedBslCall,
     UnresolvedCallReason,

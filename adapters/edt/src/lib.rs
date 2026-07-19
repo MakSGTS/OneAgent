@@ -435,7 +435,7 @@ fn collect_top_level_metadata(
             .map_err(EdtGraphError::Graph)?;
 
         let modules = module_reader
-            .read_modules(descriptor.id(), &object_directory)
+            .read_modules(descriptor.id(), descriptor.name(), &object_directory)
             .map_err(EdtGraphError::Module)?;
 
         for module in &modules {
@@ -642,7 +642,11 @@ mod graph_tests {
         .expect("common module descriptor must be created");
         fs::write(
             root.path().join("src/Documents/Sales/ObjectModule.bsl"),
-            "Procedure BeforeWrite()\nEndProcedure",
+            concat!(
+                "Procedure BeforeWrite()\n",
+                "    AccessManagement.CheckAccess();\n",
+                "EndProcedure",
+            ),
         )
         .expect("object module must be created");
 
@@ -655,7 +659,7 @@ mod graph_tests {
         fs::write(
             root.path()
                 .join("src/CommonModules/AccessManagement/Module.bsl"),
-            "Procedure CheckAccess()\nEndProcedure",
+            "Procedure CheckAccess() Export\nEndProcedure",
         )
         .expect("common module must be created");
 
@@ -671,7 +675,7 @@ mod graph_tests {
             .expect("graph must build");
 
         assert_eq!(graph.node_count(), 10);
-        assert_eq!(graph.edge_count(), 9);
+        assert_eq!(graph.edge_count(), 10);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -715,5 +719,31 @@ mod graph_tests {
                 .len(),
             3
         );
+    }
+
+    #[test]
+    fn resolves_cross_module_call_through_production_graph_builder() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let before_write = graph
+            .nodes_by_kind(NodeKind::Procedure)
+            .into_iter()
+            .find(|node| node.name().as_str() == "BeforeWrite")
+            .expect("BeforeWrite procedure must exist");
+
+        let check_access = graph
+            .nodes_by_kind(NodeKind::Procedure)
+            .into_iter()
+            .find(|node| node.name().as_str() == "CheckAccess")
+            .expect("CheckAccess procedure must exist");
+
+        let calls = graph.outgoing_by_kind(before_write.id(), EdgeKind::Calls);
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].target(), check_access.id());
     }
 }

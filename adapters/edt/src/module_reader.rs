@@ -84,6 +84,7 @@ pub trait EdtModuleReader {
     fn read_modules(
         &self,
         object_id: &EntityId,
+        object_name: &EntityName,
         object_directory: &Path,
     ) -> Result<Vec<EdtModuleDescriptor>, EdtModuleError>;
 }
@@ -96,17 +97,18 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
     fn read_modules(
         &self,
         object_id: &EntityId,
+        object_name: &EntityName,
         object_directory: &Path,
     ) -> Result<Vec<EdtModuleDescriptor>, EdtModuleError> {
         let candidates = [
-            ("ObjectModule.bsl", EdtModuleKind::Object, "ObjectModule"),
-            ("ManagerModule.bsl", EdtModuleKind::Manager, "ManagerModule"),
-            ("Module.bsl", EdtModuleKind::Common, "Module"),
+            ("ObjectModule.bsl", EdtModuleKind::Object),
+            ("ManagerModule.bsl", EdtModuleKind::Manager),
+            ("Module.bsl", EdtModuleKind::Common),
         ];
 
         let mut modules = Vec::new();
 
-        for (file_name, kind, display_name) in candidates {
+        for (file_name, kind) in candidates {
             let path = object_directory.join(file_name);
 
             if !path.is_file() {
@@ -121,7 +123,15 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
             let id = EntityId::new(format!("{}:{}", object_id.as_str(), kind.as_str()))
                 .map_err(|_| EdtModuleError::InvalidIdentifier)?;
 
-            let name = EntityName::new(display_name).map_err(|_| EdtModuleError::InvalidName)?;
+            let name = match kind {
+                EdtModuleKind::Object => {
+                    EntityName::new("ObjectModule").map_err(|_| EdtModuleError::InvalidName)?
+                }
+                EdtModuleKind::Manager => {
+                    EntityName::new("ManagerModule").map_err(|_| EdtModuleError::InvalidName)?
+                }
+                EdtModuleKind::Common => object_name.clone(),
+            };
 
             modules.push(EdtModuleDescriptor::new(id, name, kind, path));
         }
@@ -173,7 +183,7 @@ impl std::error::Error for EdtModuleError {
 
 #[cfg(test)]
 mod tests {
-    use oneagent_common::EntityId;
+    use oneagent_common::{EntityId, EntityName};
     use std::fs;
     use tempfile::tempdir;
 
@@ -201,7 +211,11 @@ mod tests {
         let reader = FileSystemEdtModuleReader;
 
         let modules = reader
-            .read_modules(&object_id, root.path())
+            .read_modules(
+                &object_id,
+                &EntityName::new("Sales").expect("name must be valid"),
+                root.path(),
+            )
             .expect("modules must load");
 
         assert_eq!(modules.len(), 2);

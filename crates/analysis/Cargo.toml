@@ -1,0 +1,13 @@
+[package]
+name = "oneagent-analysis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oneagent-bsl = { path = "../bsl" }
+oneagent-common = { path = "../common" }
+oneagent-graph = { path = "../graph" }
+
+[lints]
+workspace = true

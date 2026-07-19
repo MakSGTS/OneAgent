@@ -135,7 +135,7 @@ pub fn add_configuration_module_symbols(
 /// # Errors
 ///
 /// Returns an error when an inserted graph edge references a missing node.
-pub fn add_analyzed_modules(
+fn add_analyzed_modules(
     graph: &mut SemanticGraph,
     modules: &[AnalyzedBslModule],
 ) -> Result<usize, EdtBslGraphError> {

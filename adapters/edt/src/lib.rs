@@ -14,8 +14,8 @@ pub use module_reader::{
 };
 
 pub use bsl_graph::{
-    AnalyzedBslModule, EdtBslGraphError, add_analyzed_modules, add_configuration_module_symbols,
-    add_module_symbols, analyze_module,
+    AnalyzedBslModule, EdtBslGraphError, add_configuration_module_symbols, add_module_symbols,
+    analyze_module,
 };
 
 use oneagent_common::{EntityId, EntityName};

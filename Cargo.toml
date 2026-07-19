@@ -11,6 +11,7 @@ members = [
     "crates/bsl",
     "adapters/filesystem",
     "adapters/edt",
+    "crates/analysis",
 ]
 
 [workspace.package]

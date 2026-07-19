@@ -13,7 +13,10 @@ pub use module_reader::{
     EdtModuleDescriptor, EdtModuleError, EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader,
 };
 
-pub use bsl_graph::{EdtBslGraphError, add_module_symbols};
+pub use bsl_graph::{
+    AnalyzedBslModule, EdtBslGraphError, add_analyzed_modules, add_configuration_module_symbols,
+    add_module_symbols, analyze_module,
+};
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
@@ -302,6 +305,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
     fn build_graph(&self, project_root: &Path) -> Result<SemanticGraph, EdtGraphError> {
         let configuration = FileSystemEdtConfigurationLoader.load(project_root)?;
         let mut graph = SemanticGraph::new();
+        let mut configuration_modules = Vec::new();
 
         let configuration_id = configuration.id().clone();
         graph.insert_node(GraphNode::new(
@@ -342,8 +346,16 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
                 continue;
             };
 
-            collect_top_level_metadata(&entry.path(), kind, &configuration_id, &mut graph)?;
+            configuration_modules.extend(collect_top_level_metadata(
+                &entry.path(),
+                kind,
+                &configuration_id,
+                &mut graph,
+            )?);
         }
+
+        add_configuration_module_symbols(&mut graph, &configuration_modules)
+            .map_err(EdtGraphError::Bsl)?;
 
         Ok(graph)
     }
@@ -377,9 +389,10 @@ fn collect_top_level_metadata(
     kind: MetadataKind,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
-) -> Result<(), EdtGraphError> {
+) -> Result<Vec<EdtModuleDescriptor>, EdtGraphError> {
     let metadata_reader = FileSystemEdtMetadataObjectReader;
     let module_reader = FileSystemEdtModuleReader;
+    let mut configuration_modules = Vec::new();
 
     for entry in fs::read_dir(directory).map_err(|source| EdtGraphError::ReadDirectory {
         path: directory.to_path_buf(),
@@ -421,10 +434,11 @@ fn collect_top_level_metadata(
             ))
             .map_err(EdtGraphError::Graph)?;
 
-        for module in module_reader
+        let modules = module_reader
             .read_modules(descriptor.id(), &object_directory)
-            .map_err(EdtGraphError::Module)?
-        {
+            .map_err(EdtGraphError::Module)?;
+
+        for module in &modules {
             graph.insert_node(GraphNode::new(
                 module.id().clone(),
                 module.name().clone(),
@@ -438,11 +452,12 @@ fn collect_top_level_metadata(
                     EdgeKind::Contains,
                 ))
                 .map_err(EdtGraphError::Graph)?;
-            add_module_symbols(graph, &module).map_err(EdtGraphError::Bsl)?;
         }
+
+        configuration_modules.extend(modules);
     }
 
-    Ok(())
+    Ok(configuration_modules)
 }
 
 /// Errors produced while building an EDT semantic graph.

@@ -636,6 +636,10 @@ mod graph_tests {
     <tabularSections uuid="aaaaaaaa-3333-3333-3333-333333333333">
         <name>Goods</name>
     </tabularSections>
+
+    <forms uuid="aaaaaaaa-4444-4444-4444-444444444444">
+        <name>DocumentForm</name>
+    </forms>
 </mdclass:Document>
 "#;
 
@@ -753,8 +757,8 @@ mod graph_tests {
             .build_graph(root.path())
             .expect("graph must build");
 
-        assert_eq!(graph.node_count(), 17);
-        assert_eq!(graph.edge_count(), 17);
+        assert_eq!(graph.node_count(), 18);
+        assert_eq!(graph.edge_count(), 18);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -764,7 +768,6 @@ mod graph_tests {
                 .len(),
             1
         );
-
         assert_eq!(graph.nodes_by_kind(NodeKind::Dimension).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Resource).len(), 1);
         assert_eq!(
@@ -786,8 +789,8 @@ mod graph_tests {
             1
         );
         assert_eq!(graph.nodes_by_kind(NodeKind::Attribute).len(), 2);
-
         assert_eq!(graph.nodes_by_kind(NodeKind::TabularSection).len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Form).len(), 1);
 
         assert!(
             graph
@@ -795,12 +798,17 @@ mod graph_tests {
                 .iter()
                 .any(|node| node.name().as_str() == "Company")
         );
-
         assert!(
             graph
                 .nodes_by_kind(NodeKind::TabularSection)
                 .iter()
                 .any(|node| node.name().as_str() == "Goods")
+        );
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::Form)
+                .iter()
+                .any(|node| node.name().as_str() == "DocumentForm")
         );
     }
 
@@ -868,7 +876,7 @@ mod graph_tests {
 
         let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
 
-        assert_eq!(children.len(), 5);
+        assert_eq!(children.len(), 6);
 
         let child_kinds = children
             .iter()
@@ -892,6 +900,14 @@ mod graph_tests {
             child_kinds
                 .iter()
                 .filter(|kind| **kind == NodeKind::TabularSection)
+                .count(),
+            1
+        );
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::Form)
                 .count(),
             1
         );
@@ -948,5 +964,29 @@ mod graph_tests {
                 .count(),
             1
         );
+    }
+    #[test]
+    fn metadata_object_contains_form() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .next()
+            .expect("document node must exist");
+
+        let form = graph
+            .nodes_by_kind(NodeKind::Form)
+            .into_iter()
+            .find(|node| node.name().as_str() == "DocumentForm")
+            .expect("document form node must exist");
+
+        let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
+
+        assert!(children.iter().any(|edge| edge.target() == form.id()));
     }
 }

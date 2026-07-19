@@ -24,6 +24,9 @@ pub enum EdtMetadataChildKind {
 
     /// Register resource.
     Resource,
+
+    /// Metadata object form.
+    Form,
 }
 
 impl EdtMetadataChildKind {
@@ -35,6 +38,7 @@ impl EdtMetadataChildKind {
             Self::TabularSection => "tabular_section",
             Self::Dimension => "dimension",
             Self::Resource => "resource",
+            Self::Form => "form",
         }
     }
 
@@ -46,6 +50,7 @@ impl EdtMetadataChildKind {
             Self::TabularSection => NodeKind::TabularSection,
             Self::Dimension => NodeKind::Dimension,
             Self::Resource => NodeKind::Resource,
+            Self::Form => NodeKind::Form,
         }
     }
 }
@@ -283,6 +288,8 @@ fn child_kind(element_name: &str) -> Option<EdtMetadataChildKind> {
         "dimensions" | "dimension" => Some(EdtMetadataChildKind::Dimension),
 
         "resources" | "resource" => Some(EdtMetadataChildKind::Resource),
+
+        "forms" | "form" => Some(EdtMetadataChildKind::Form),
 
         _ => None,
     }
@@ -609,6 +616,64 @@ mod tests {
             children
                 .iter()
                 .any(|child| child.name().as_str() == "Quantity")
+        );
+    }
+    #[test]
+    fn reads_metadata_object_forms() {
+        let root = tempdir().expect("temporary directory must be created");
+        let descriptor_path = root.path().join("Sales.mdo");
+
+        fs::write(
+            &descriptor_path,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+
+    <forms uuid="88888888-8888-8888-8888-888888888888">
+        <name>DocumentForm</name>
+    </forms>
+
+    <forms uuid="99999999-9999-9999-9999-999999999999">
+        <name>ListForm</name>
+    </forms>
+</mdclass:Document>
+"#,
+        )
+        .expect("descriptor must be written");
+
+        let descriptor = EdtMetadataObjectDescriptor::new(
+            EntityId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+                .expect("identifier must be valid"),
+            EntityName::new("Sales").expect("name must be valid"),
+            None,
+            MetadataKind::Document,
+            descriptor_path,
+        );
+
+        let children = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("forms must be read");
+
+        assert_eq!(children.len(), 2);
+
+        assert!(
+            children
+                .iter()
+                .all(|child| child.kind() == EdtMetadataChildKind::Form)
+        );
+
+        assert!(
+            children
+                .iter()
+                .any(|child| child.name().as_str() == "DocumentForm")
+        );
+
+        assert!(
+            children
+                .iter()
+                .any(|child| child.name().as_str() == "ListForm")
         );
     }
 }

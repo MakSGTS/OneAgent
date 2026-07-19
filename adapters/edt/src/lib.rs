@@ -640,6 +640,11 @@ mod graph_tests {
     <forms uuid="aaaaaaaa-4444-4444-4444-444444444444">
         <name>DocumentForm</name>
     </forms>
+
+        <commands uuid="aaaaaaaa-5555-5555-5555-555555555555">
+        <name>PostAndClose</name>
+    </commands>
+    
 </mdclass:Document>
 "#;
 
@@ -757,8 +762,8 @@ mod graph_tests {
             .build_graph(root.path())
             .expect("graph must build");
 
-        assert_eq!(graph.node_count(), 18);
-        assert_eq!(graph.edge_count(), 18);
+        assert_eq!(graph.node_count(), 19);
+        assert_eq!(graph.edge_count(), 19);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -809,6 +814,14 @@ mod graph_tests {
                 .nodes_by_kind(NodeKind::Form)
                 .iter()
                 .any(|node| node.name().as_str() == "DocumentForm")
+        );
+        assert_eq!(graph.nodes_by_kind(NodeKind::Command).len(), 1);
+
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::Command)
+                .iter()
+                .any(|node| node.name().as_str() == "PostAndClose")
         );
     }
 
@@ -861,7 +874,7 @@ mod graph_tests {
     }
 
     #[test]
-    fn metadata_object_contains_attributes_tabular_sections_and_modules() {
+    fn metadata_object_contains_structure_and_modules() {
         let root = create_edt_project();
 
         let graph = FileSystemEdtSemanticGraphBuilder
@@ -876,7 +889,9 @@ mod graph_tests {
 
         let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
 
-        assert_eq!(children.len(), 6);
+        // Two attributes, one tabular section, one form, one command,
+        // object module and manager module.
+        assert_eq!(children.len(), 7);
 
         let child_kinds = children
             .iter()
@@ -908,6 +923,14 @@ mod graph_tests {
             child_kinds
                 .iter()
                 .filter(|kind| **kind == NodeKind::Form)
+                .count(),
+            1
+        );
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::Command)
                 .count(),
             1
         );
@@ -988,5 +1011,29 @@ mod graph_tests {
         let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
 
         assert!(children.iter().any(|edge| edge.target() == form.id()));
+    }
+    #[test]
+    fn metadata_object_contains_command() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .next()
+            .expect("document node must exist");
+
+        let command = graph
+            .nodes_by_kind(NodeKind::Command)
+            .into_iter()
+            .find(|node| node.name().as_str() == "PostAndClose")
+            .expect("document command node must exist");
+
+        let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
+
+        assert!(children.iter().any(|edge| edge.target() == command.id()));
     }
 }

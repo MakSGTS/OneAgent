@@ -2,11 +2,17 @@
 
 mod bsl_graph;
 mod metadata_object;
+mod metadata_structure;
 mod module_reader;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
     FileSystemEdtMetadataObjectReader,
+};
+
+pub use metadata_structure::{
+    EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataStructureError,
+    EdtMetadataStructureReader, FileSystemEdtMetadataStructureReader,
 };
 
 pub use module_reader::{

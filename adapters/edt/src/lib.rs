@@ -440,6 +440,28 @@ fn collect_top_level_metadata(
             ))
             .map_err(EdtGraphError::Graph)?;
 
+        let structure_reader = FileSystemEdtMetadataStructureReader;
+
+        let children = structure_reader
+            .read_children(&descriptor)
+            .map_err(EdtGraphError::MetadataStructure)?;
+
+        for child in children {
+            graph.insert_node(GraphNode::new(
+                child.id().clone(),
+                child.name().clone(),
+                child.kind().node_kind(),
+            ));
+
+            graph
+                .insert_edge(GraphEdge::new(
+                    child.parent_id().clone(),
+                    child.id().clone(),
+                    EdgeKind::Contains,
+                ))
+                .map_err(EdtGraphError::Graph)?;
+        }
+
         let modules = module_reader
             .read_modules(descriptor.id(), descriptor.name(), &object_directory)
             .map_err(EdtGraphError::Module)?;
@@ -500,6 +522,9 @@ pub enum EdtGraphError {
     /// A top-level metadata descriptor could not be read.
     MetadataObject(EdtMetadataObjectError),
 
+    /// The internal structure of a metadata object could not be read.
+    MetadataStructure(EdtMetadataStructureError),
+
     /// A metadata object module could not be read.
     Module(EdtModuleError),
     Graph(oneagent_graph::GraphError),
@@ -536,6 +561,12 @@ impl Display for EdtGraphError {
             Self::MetadataObject(error) => {
                 write!(formatter, "failed to read EDT metadata object: {error}")
             }
+            Self::MetadataStructure(error) => {
+                write!(
+                    formatter,
+                    "failed to read EDT metadata object structure: {error}"
+                )
+            }
             Self::Module(error) => {
                 write!(formatter, "failed to read EDT module: {error}")
             }
@@ -557,6 +588,7 @@ impl std::error::Error for EdtGraphError {
             | Self::ReadDirectoryEntry { source, .. }
             | Self::ReadFileType { source, .. } => Some(source),
             Self::MetadataObject(error) => Some(error),
+            Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
             Self::Graph(error) => Some(error),
             Self::InvalidIdentifier | Self::InvalidName => None,
@@ -592,6 +624,18 @@ mod graph_tests {
     xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
     uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
     <name>Sales</name>
+
+    <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
+        <name>Company</name>
+    </attributes>
+
+    <attributes uuid="aaaaaaaa-2222-2222-2222-222222222222">
+        <name>Warehouse</name>
+    </attributes>
+
+    <tabularSections uuid="aaaaaaaa-3333-3333-3333-333333333333">
+        <name>Goods</name>
+    </tabularSections>
 </mdclass:Document>
 "#;
 
@@ -611,6 +655,26 @@ mod graph_tests {
 </mdclass:CommonModule>
 "#;
 
+    const ACCUMULATION_REGISTER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:AccumulationRegister
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="44444444-4444-4444-4444-444444444444">
+    <name>StockBalance</name>
+
+    <dimensions uuid="55555555-5555-5555-5555-555555555555">
+        <name>Product</name>
+    </dimensions>
+
+    <dimensions uuid="66666666-6666-6666-6666-666666666666">
+        <name>Warehouse</name>
+    </dimensions>
+
+    <resources uuid="77777777-7777-7777-7777-777777777777">
+        <name>Quantity</name>
+    </resources>
+</mdclass:AccumulationRegister>
+"#;
+
     fn create_edt_project() -> tempfile::TempDir {
         let root = tempdir().expect("temporary directory must be created");
 
@@ -628,6 +692,8 @@ mod graph_tests {
             .expect("catalog directory must be created");
         fs::create_dir_all(root.path().join("src/CommonModules/AccessManagement"))
             .expect("common module directory must be created");
+        fs::create_dir_all(root.path().join("src/AccumulationRegisters/StockBalance"))
+            .expect("accumulation register directory must be created");
         fs::write(
             root.path().join("src/Documents/Sales/Sales.mdo"),
             DOCUMENT_XML,
@@ -669,6 +735,13 @@ mod graph_tests {
         )
         .expect("common module must be created");
 
+        fs::write(
+            root.path()
+                .join("src/AccumulationRegisters/StockBalance/StockBalance.mdo"),
+            ACCUMULATION_REGISTER_XML,
+        )
+        .expect("accumulation register descriptor must be created");
+
         root
     }
 
@@ -680,11 +753,20 @@ mod graph_tests {
             .build_graph(root.path())
             .expect("graph must build");
 
-        assert_eq!(graph.node_count(), 10);
-        assert_eq!(graph.edge_count(), 10);
+        assert_eq!(graph.node_count(), 17);
+        assert_eq!(graph.edge_count(), 17);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::AccumulationRegister))
+                .len(),
+            1
+        );
+
+        assert_eq!(graph.nodes_by_kind(NodeKind::Dimension).len(), 2);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Resource).len(), 1);
         assert_eq!(
             graph
                 .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
@@ -702,6 +784,23 @@ mod graph_tests {
                 .nodes_by_kind(NodeKind::Metadata(MetadataKind::CommonModule))
                 .len(),
             1
+        );
+        assert_eq!(graph.nodes_by_kind(NodeKind::Attribute).len(), 2);
+
+        assert_eq!(graph.nodes_by_kind(NodeKind::TabularSection).len(), 1);
+
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::Attribute)
+                .iter()
+                .any(|node| node.name().as_str() == "Company")
+        );
+
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::TabularSection)
+                .iter()
+                .any(|node| node.name().as_str() == "Goods")
         );
     }
 
@@ -723,7 +822,7 @@ mod graph_tests {
             graph
                 .outgoing_by_kind(configuration.id(), EdgeKind::Contains)
                 .len(),
-            3
+            4
         );
     }
 
@@ -751,5 +850,103 @@ mod graph_tests {
 
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].target(), check_access.id());
+    }
+
+    #[test]
+    fn metadata_object_contains_attributes_tabular_sections_and_modules() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .next()
+            .expect("document node must exist");
+
+        let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
+
+        assert_eq!(children.len(), 5);
+
+        let child_kinds = children
+            .iter()
+            .map(|edge| {
+                graph
+                    .node(edge.target())
+                    .expect("contained node must exist")
+                    .kind()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::Attribute)
+                .count(),
+            2
+        );
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::TabularSection)
+                .count(),
+            1
+        );
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::Module)
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn accumulation_register_contains_dimensions_and_resources() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let register = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::AccumulationRegister))
+            .into_iter()
+            .next()
+            .expect("accumulation register node must exist");
+
+        let children = graph.outgoing_by_kind(register.id(), EdgeKind::Contains);
+
+        assert_eq!(children.len(), 3);
+
+        let child_kinds = children
+            .iter()
+            .map(|edge| {
+                graph
+                    .node(edge.target())
+                    .expect("contained register node must exist")
+                    .kind()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::Dimension)
+                .count(),
+            2
+        );
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::Resource)
+                .count(),
+            1
+        );
     }
 }

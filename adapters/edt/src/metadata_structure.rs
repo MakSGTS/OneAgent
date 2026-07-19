@@ -18,6 +18,12 @@ pub enum EdtMetadataChildKind {
 
     /// Metadata object tabular section.
     TabularSection,
+
+    /// Register dimension.
+    Dimension,
+
+    /// Register resource.
+    Resource,
 }
 
 impl EdtMetadataChildKind {
@@ -27,6 +33,8 @@ impl EdtMetadataChildKind {
         match self {
             Self::Attribute => "attribute",
             Self::TabularSection => "tabular_section",
+            Self::Dimension => "dimension",
+            Self::Resource => "resource",
         }
     }
 
@@ -36,6 +44,8 @@ impl EdtMetadataChildKind {
         match self {
             Self::Attribute => NodeKind::Attribute,
             Self::TabularSection => NodeKind::TabularSection,
+            Self::Dimension => NodeKind::Dimension,
+            Self::Resource => NodeKind::Resource,
         }
     }
 }
@@ -269,6 +279,10 @@ fn child_kind(element_name: &str) -> Option<EdtMetadataChildKind> {
         "attributes" | "attribute" => Some(EdtMetadataChildKind::Attribute),
 
         "tabularSections" | "tabularSection" => Some(EdtMetadataChildKind::TabularSection),
+
+        "dimensions" | "dimension" => Some(EdtMetadataChildKind::Dimension),
+
+        "resources" | "resource" => Some(EdtMetadataChildKind::Resource),
 
         _ => None,
     }
@@ -523,6 +537,78 @@ mod tests {
         assert_eq!(
             children[0].id().as_str(),
             "catalog-products:attribute:Article"
+        );
+    }
+    #[test]
+    fn reads_register_dimensions_and_resources() {
+        let root = tempdir().expect("temporary directory must be created");
+        let descriptor_path = root.path().join("StockBalance.mdo");
+
+        fs::write(
+            &descriptor_path,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:AccumulationRegister
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="44444444-4444-4444-4444-444444444444">
+    <name>StockBalance</name>
+
+    <dimensions uuid="55555555-5555-5555-5555-555555555555">
+        <name>Product</name>
+    </dimensions>
+
+    <dimensions uuid="66666666-6666-6666-6666-666666666666">
+        <name>Warehouse</name>
+    </dimensions>
+
+    <resources uuid="77777777-7777-7777-7777-777777777777">
+        <name>Quantity</name>
+    </resources>
+</mdclass:AccumulationRegister>
+"#,
+        )
+        .expect("descriptor must be written");
+
+        let descriptor = EdtMetadataObjectDescriptor::new(
+            EntityId::new("44444444-4444-4444-4444-444444444444")
+                .expect("identifier must be valid"),
+            EntityName::new("StockBalance").expect("name must be valid"),
+            None,
+            MetadataKind::AccumulationRegister,
+            descriptor_path,
+        );
+
+        let children = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("register structure must be read");
+
+        assert_eq!(children.len(), 3);
+
+        assert_eq!(
+            children
+                .iter()
+                .filter(|child| child.kind() == EdtMetadataChildKind::Dimension)
+                .count(),
+            2
+        );
+
+        assert_eq!(
+            children
+                .iter()
+                .filter(|child| child.kind() == EdtMetadataChildKind::Resource)
+                .count(),
+            1
+        );
+
+        assert!(
+            children
+                .iter()
+                .any(|child| child.name().as_str() == "Product")
+        );
+
+        assert!(
+            children
+                .iter()
+                .any(|child| child.name().as_str() == "Quantity")
         );
     }
 }

@@ -26,6 +26,10 @@ pub enum NodeKind {
     Attribute,
     /// Tabular section node.
     TabularSection,
+    /// Register dimension node.
+    Dimension,
+    /// Register resource node.
+    Resource,
     /// Role node.
     Role,
     /// Subsystem node.

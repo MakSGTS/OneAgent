@@ -1,65 +1,14 @@
-//! Typed semantic graph for `OneAgent`.
+//! Stable identifiers used by the `OneAgent` Knowledge Graph.
+
+pub mod identity;
+pub mod kind;
+
+pub use identity::{EdgeId, NodeId};
+pub use kind::{EdgeKind, NodeKind};
 
 use oneagent_common::{EntityId, EntityName};
-use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
-
-/// Semantic node classification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum NodeKind {
-    /// Metadata object node.
-    Metadata(MetadataKind),
-    /// Module node.
-    Module,
-    /// Procedure node.
-    Procedure,
-    /// Function node.
-    Function,
-    /// Query node.
-    Query,
-    /// Form node.
-    Form,
-    /// Command node.
-    Command,
-    /// Attribute node.
-    Attribute,
-    /// Tabular section node.
-    TabularSection,
-    /// Register dimension node.
-    Dimension,
-    /// Register resource node.
-    Resource,
-    /// Role node.
-    Role,
-    /// Subsystem node.
-    Subsystem,
-    /// Unknown or not-yet-supported node.
-    Unknown,
-}
-
-/// Semantic relation between two nodes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum EdgeKind {
-    /// Parent contains child.
-    Contains,
-    /// Source calls target.
-    Calls,
-    /// Source references target.
-    References,
-    /// Source reads target.
-    Reads,
-    /// Source writes target.
-    Writes,
-    /// Source grants access to target.
-    Grants,
-    /// Source includes target.
-    Includes,
-    /// Source extends target.
-    Extends,
-    /// Source depends on target.
-    DependsOn,
-}
 
 /// Semantic graph node.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -253,9 +202,9 @@ impl std::error::Error for GraphError {}
 #[cfg(test)]
 mod tests {
     use oneagent_common::{EntityId, EntityName};
-    use oneagent_metadata::MetadataKind;
 
     use super::{EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticGraph};
+    use oneagent_metadata::MetadataKind;
 
     fn id(value: &str) -> EntityId {
         EntityId::new(value).expect("identifier must be valid")

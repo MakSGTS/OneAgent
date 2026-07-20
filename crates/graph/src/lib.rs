@@ -1,86 +1,20 @@
 //! Stable identifiers used by the `OneAgent` Knowledge Graph.
 
+//! Stable identifiers used by the `OneAgent` Knowledge Graph.
+
+pub mod edge;
 pub mod identity;
 pub mod kind;
+pub mod node;
 
+pub use edge::GraphEdge;
 pub use identity::{EdgeId, NodeId};
 pub use kind::{EdgeKind, NodeKind};
+pub use node::GraphNode;
 
-use oneagent_common::{EntityId, EntityName};
+use oneagent_common::EntityId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
-
-/// Semantic graph node.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphNode {
-    id: EntityId,
-    name: EntityName,
-    kind: NodeKind,
-}
-
-impl GraphNode {
-    /// Creates a semantic graph node.
-    #[must_use]
-    pub const fn new(id: EntityId, name: EntityName, kind: NodeKind) -> Self {
-        Self { id, name, kind }
-    }
-
-    /// Returns the node identifier.
-    #[must_use]
-    pub const fn id(&self) -> &EntityId {
-        &self.id
-    }
-
-    /// Returns the node name.
-    #[must_use]
-    pub const fn name(&self) -> &EntityName {
-        &self.name
-    }
-
-    /// Returns the node kind.
-    #[must_use]
-    pub const fn kind(&self) -> NodeKind {
-        self.kind
-    }
-}
-
-/// Directed semantic edge.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct GraphEdge {
-    source: EntityId,
-    target: EntityId,
-    kind: EdgeKind,
-}
-
-impl GraphEdge {
-    /// Creates a semantic edge.
-    #[must_use]
-    pub const fn new(source: EntityId, target: EntityId, kind: EdgeKind) -> Self {
-        Self {
-            source,
-            target,
-            kind,
-        }
-    }
-
-    /// Returns the source node identifier.
-    #[must_use]
-    pub const fn source(&self) -> &EntityId {
-        &self.source
-    }
-
-    /// Returns the target node identifier.
-    #[must_use]
-    pub const fn target(&self) -> &EntityId {
-        &self.target
-    }
-
-    /// Returns the edge kind.
-    #[must_use]
-    pub const fn kind(&self) -> EdgeKind {
-        self.kind
-    }
-}
 
 /// In-memory `OneAgent Semantic Graph`.
 #[derive(Debug, Default, Clone)]

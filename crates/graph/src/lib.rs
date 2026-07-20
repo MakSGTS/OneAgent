@@ -6,11 +6,13 @@ pub mod edge;
 pub mod identity;
 pub mod kind;
 pub mod node;
+pub mod provenance;
 
 pub use edge::GraphEdge;
 pub use identity::{EdgeId, NodeId};
 pub use kind::{EdgeKind, NodeKind};
 pub use node::GraphNode;
+pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
 
 use oneagent_common::EntityId;
 use std::collections::{BTreeMap, BTreeSet};

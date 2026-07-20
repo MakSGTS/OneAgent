@@ -289,9 +289,14 @@ mod tests {
     }
 }
 
-use oneagent_graph::{EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticGraph};
+use oneagent_graph::{
+    Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionState,
+    SemanticGraph,
+};
 use oneagent_metadata::MetadataKind;
 use std::collections::BTreeMap;
+
+const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
 
 /// Builds an initial semantic graph from an EDT project.
 pub trait EdtSemanticGraphBuilder {
@@ -314,11 +319,17 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut configuration_modules = Vec::new();
 
         let configuration_id = configuration.id().clone();
-        graph.insert_node(GraphNode::new(
+        let configuration_source = source_id_from_path(
+            &project_root.join(CONFIGURATION_RELATIVE_PATH),
+            EdtGraphError::InvalidIdentifier,
+        )?;
+        insert_node(
+            &mut graph,
             configuration_id.clone(),
             configuration.name().clone(),
             NodeKind::Metadata(MetadataKind::Configuration),
-        ));
+            parsed_provenance(configuration_source),
+        );
 
         let source_root = project_root.join("src");
         if !source_root.is_dir() {
@@ -425,20 +436,26 @@ fn collect_top_level_metadata(
         let descriptor = metadata_reader
             .read(&object_directory, kind)
             .map_err(EdtGraphError::MetadataObject)?;
+        let descriptor_source = source_id_from_path(
+            descriptor.descriptor_path(),
+            EdtGraphError::InvalidIdentifier,
+        )?;
 
-        graph.insert_node(GraphNode::new(
+        insert_node(
+            graph,
             descriptor.id().clone(),
             descriptor.name().clone(),
             NodeKind::Metadata(descriptor.kind()),
-        ));
+            declared_provenance(descriptor_source.clone()),
+        );
 
-        graph
-            .insert_edge(GraphEdge::new(
-                configuration_id.clone(),
-                descriptor.id().clone(),
-                EdgeKind::Contains,
-            ))
-            .map_err(EdtGraphError::Graph)?;
+        insert_edge(
+            graph,
+            configuration_id.clone(),
+            descriptor.id().clone(),
+            EdgeKind::Contains,
+            declared_provenance(descriptor_source.clone()),
+        )?;
 
         let structure_reader = FileSystemEdtMetadataStructureReader;
 
@@ -447,19 +464,21 @@ fn collect_top_level_metadata(
             .map_err(EdtGraphError::MetadataStructure)?;
 
         for child in children {
-            graph.insert_node(GraphNode::new(
+            insert_node(
+                graph,
                 child.id().clone(),
                 child.name().clone(),
                 child.kind().node_kind(),
-            ));
+                declared_provenance(descriptor_source.clone()),
+            );
 
-            graph
-                .insert_edge(GraphEdge::new(
-                    child.parent_id().clone(),
-                    child.id().clone(),
-                    EdgeKind::Contains,
-                ))
-                .map_err(EdtGraphError::Graph)?;
+            insert_edge(
+                graph,
+                child.parent_id().clone(),
+                child.id().clone(),
+                EdgeKind::Contains,
+                declared_provenance(descriptor_source.clone()),
+            )?;
         }
 
         let modules = module_reader
@@ -467,25 +486,89 @@ fn collect_top_level_metadata(
             .map_err(EdtGraphError::Module)?;
 
         for module in &modules {
-            graph.insert_node(GraphNode::new(
+            let module_source =
+                source_id_from_path(module.path(), EdtGraphError::InvalidIdentifier)?;
+
+            insert_node(
+                graph,
                 module.id().clone(),
                 module.name().clone(),
                 NodeKind::Module,
-            ));
+                parsed_provenance(module_source.clone()),
+            );
 
-            graph
-                .insert_edge(GraphEdge::new(
-                    descriptor.id().clone(),
-                    module.id().clone(),
-                    EdgeKind::Contains,
-                ))
-                .map_err(EdtGraphError::Graph)?;
+            insert_edge(
+                graph,
+                descriptor.id().clone(),
+                module.id().clone(),
+                EdgeKind::Contains,
+                parsed_provenance(module_source),
+            )?;
         }
 
         configuration_modules.extend(modules);
     }
 
     Ok(configuration_modules)
+}
+
+fn insert_node(
+    graph: &mut SemanticGraph,
+    id: EntityId,
+    name: EntityName,
+    kind: NodeKind,
+    provenance: Provenance,
+) {
+    graph.insert_node_with_provenance(id, name, kind, provenance);
+}
+
+fn insert_edge(
+    graph: &mut SemanticGraph,
+    source: EntityId,
+    target: EntityId,
+    kind: EdgeKind,
+    provenance: Provenance,
+) -> Result<bool, EdtGraphError> {
+    graph
+        .insert_edge_with_provenance(source, target, kind, provenance)
+        .map_err(EdtGraphError::Graph)
+}
+
+fn parsed_provenance(source: EntityId) -> Provenance {
+    graph_provenance(
+        source,
+        FactOrigin::Parsed,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    )
+}
+
+fn declared_provenance(source: EntityId) -> Provenance {
+    graph_provenance(
+        source,
+        FactOrigin::Declared,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    )
+}
+
+fn graph_provenance(
+    source: EntityId,
+    origin: FactOrigin,
+    confidence: Confidence,
+    resolution: ResolutionState,
+) -> Provenance {
+    Provenance::new(
+        Some(source),
+        ProducerId::new(EDT_GRAPH_PRODUCER),
+        origin,
+        confidence,
+        resolution,
+    )
+}
+
+fn source_id_from_path(path: &Path, error: EdtGraphError) -> Result<EntityId, EdtGraphError> {
+    EntityId::new(path.to_string_lossy().replace('\\', "/")).map_err(|_| error)
 }
 
 /// Errors produced while building an EDT semantic graph.
@@ -605,7 +688,7 @@ impl From<EdtLoadError> for EdtGraphError {
 
 #[cfg(test)]
 mod graph_tests {
-    use oneagent_graph::{EdgeKind, NodeKind};
+    use oneagent_graph::{EdgeKind, FactOrigin, NodeKind, ResolutionState};
     use oneagent_metadata::MetadataKind;
     use std::fs;
     use tempfile::tempdir;
@@ -871,6 +954,72 @@ mod graph_tests {
 
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].target(), check_access.id());
+    }
+
+    #[test]
+    fn attaches_provenance_to_edt_graph_facts() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        let document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .next()
+            .expect("document node must exist");
+        let object_module = graph
+            .nodes_by_kind(NodeKind::Module)
+            .into_iter()
+            .find(|node| node.name().as_str() == "ObjectModule")
+            .expect("object module node must exist");
+        let before_write = graph
+            .nodes_by_kind(NodeKind::Procedure)
+            .into_iter()
+            .find(|node| node.name().as_str() == "BeforeWrite")
+            .expect("BeforeWrite procedure must exist");
+        let check_access = graph
+            .nodes_by_kind(NodeKind::Procedure)
+            .into_iter()
+            .find(|node| node.name().as_str() == "CheckAccess")
+            .expect("CheckAccess procedure must exist");
+        let calls = graph.outgoing_by_kind(before_write.id(), EdgeKind::Calls);
+
+        assert_eq!(document.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            document.provenance()[0]
+                .source()
+                .expect("document source must exist")
+                .as_str()
+                .ends_with("/src/Documents/Sales/Sales.mdo")
+        );
+
+        assert_eq!(object_module.provenance()[0].origin(), FactOrigin::Parsed);
+        assert!(
+            object_module.provenance()[0]
+                .source()
+                .expect("module source must exist")
+                .as_str()
+                .ends_with("/src/Documents/Sales/ObjectModule.bsl")
+        );
+
+        assert_eq!(before_write.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            before_write.provenance()[0]
+                .source()
+                .expect("procedure source must exist")
+                .as_str()
+                .ends_with("/src/Documents/Sales/ObjectModule.bsl")
+        );
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].target(), check_access.id());
+        assert_eq!(calls[0].provenance()[0].origin(), FactOrigin::Resolved);
+        assert_eq!(
+            calls[0].provenance()[0].resolution(),
+            ResolutionState::Resolved
+        );
     }
 
     #[test]

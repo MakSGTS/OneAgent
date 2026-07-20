@@ -7,11 +7,17 @@ use oneagent_bsl::{
     QualifiedBslCallResolver,
 };
 use oneagent_common::{EntityId, EntityName};
-use oneagent_graph::{EdgeKind, GraphEdge, GraphError, GraphNode, NodeKind, SemanticGraph};
+use oneagent_graph::{
+    Confidence, EdgeKind, FactOrigin, GraphError, NodeKind, ProducerId, Provenance,
+    ResolutionState, SemanticGraph,
+};
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::path::Path;
 
 use crate::EdtModuleDescriptor;
+
+const EDT_BSL_GRAPH_PRODUCER: &str = "oneagent.edt.bsl-graph";
 
 /// Parsed declarations and calls collected from one EDT BSL module.
 ///
@@ -23,6 +29,7 @@ pub struct AnalyzedBslModule {
     module_name: EntityName,
     symbols: Vec<BslSymbol>,
     calls: Vec<BslCall>,
+    source: Option<EntityId>,
 }
 
 impl AnalyzedBslModule {
@@ -34,11 +41,24 @@ impl AnalyzedBslModule {
         symbols: Vec<BslSymbol>,
         calls: Vec<BslCall>,
     ) -> Self {
+        Self::new_with_source(module_id, module_name, symbols, calls, None)
+    }
+
+    /// Creates an analyzed BSL module with a source identifier.
+    #[must_use]
+    pub const fn new_with_source(
+        module_id: EntityId,
+        module_name: EntityName,
+        symbols: Vec<BslSymbol>,
+        calls: Vec<BslCall>,
+        source: Option<EntityId>,
+    ) -> Self {
         Self {
             module_id,
             module_name,
             symbols,
             calls,
+            source,
         }
     }
 
@@ -64,6 +84,12 @@ impl AnalyzedBslModule {
     #[must_use]
     pub fn calls(&self) -> &[BslCall] {
         &self.calls
+    }
+
+    /// Returns the source identifier used for graph provenance.
+    #[must_use]
+    pub const fn source(&self) -> Option<&EntityId> {
+        self.source.as_ref()
     }
 
     fn as_module_symbols(&self) -> BslModuleSymbols {
@@ -95,11 +121,12 @@ pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule,
         .extract_calls(module.id(), &source)
         .map_err(EdtBslGraphError::ParseCalls)?;
 
-    Ok(AnalyzedBslModule::new(
+    Ok(AnalyzedBslModule::new_with_source(
         module.id().clone(),
         module.name().clone(),
         symbols,
         calls,
+        Some(source_id_from_path(module.path())?),
     ))
 }
 
@@ -186,18 +213,20 @@ fn insert_declarations(
             BslSymbolKind::Function => NodeKind::Function,
         };
 
-        graph.insert_node(GraphNode::new(
+        graph.insert_node_with_provenance(
             symbol.id().clone(),
             symbol.name().clone(),
             node_kind,
-        ));
+            declared_provenance(module.source()),
+        );
 
         graph
-            .insert_edge(GraphEdge::new(
+            .insert_edge_with_provenance(
                 module.module_id().clone(),
                 symbol.id().clone(),
                 EdgeKind::Contains,
-            ))
+                declared_provenance(module.source()),
+            )
             .map_err(EdtBslGraphError::Graph)?;
     }
 
@@ -215,6 +244,7 @@ fn insert_local_calls(
             graph,
             resolved_call.origin_id(),
             resolved_call.destination_id(),
+            module.source(),
         )?;
     }
 
@@ -238,6 +268,7 @@ fn insert_cross_module_calls(
             graph,
             resolved_call.origin_id(),
             resolved_call.destination_id(),
+            module.source(),
         )?;
     }
 
@@ -248,15 +279,55 @@ fn insert_call_edge(
     graph: &mut SemanticGraph,
     origin_id: &EntityId,
     destination_id: &EntityId,
+    source: Option<&EntityId>,
 ) -> Result<(), EdtBslGraphError> {
     graph
-        .insert_edge(GraphEdge::new(
+        .insert_edge_with_provenance(
             origin_id.clone(),
             destination_id.clone(),
             EdgeKind::Calls,
-        ))
+            resolved_provenance(source),
+        )
         .map(|_| ())
         .map_err(EdtBslGraphError::Graph)
+}
+
+fn declared_provenance(source: Option<&EntityId>) -> Provenance {
+    bsl_provenance(
+        source,
+        FactOrigin::Declared,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    )
+}
+
+fn resolved_provenance(source: Option<&EntityId>) -> Provenance {
+    bsl_provenance(
+        source,
+        FactOrigin::Resolved,
+        Confidence::High,
+        ResolutionState::Resolved,
+    )
+}
+
+fn bsl_provenance(
+    source: Option<&EntityId>,
+    origin: FactOrigin,
+    confidence: Confidence,
+    resolution: ResolutionState,
+) -> Provenance {
+    Provenance::new(
+        source.cloned(),
+        ProducerId::new(EDT_BSL_GRAPH_PRODUCER),
+        origin,
+        confidence,
+        resolution,
+    )
+}
+
+fn source_id_from_path(path: &Path) -> Result<EntityId, EdtBslGraphError> {
+    EntityId::new(path.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)
 }
 
 /// Error produced while adding BSL declarations to the EDT semantic graph.
@@ -278,6 +349,9 @@ pub enum EdtBslGraphError {
 
     /// Semantic graph validation failed.
     Graph(GraphError),
+
+    /// A module source identifier could not be created.
+    InvalidSourceIdentifier,
 }
 
 impl Display for EdtBslGraphError {
@@ -302,6 +376,10 @@ impl Display for EdtBslGraphError {
             Self::Graph(error) => {
                 write!(formatter, "semantic graph error: {error}")
             }
+
+            Self::InvalidSourceIdentifier => {
+                formatter.write_str("EDT BSL source identifier is invalid")
+            }
         }
     }
 }
@@ -313,6 +391,7 @@ impl std::error::Error for EdtBslGraphError {
             Self::ParseDeclarations(error) => Some(error),
             Self::ParseCalls(error) => Some(error),
             Self::Graph(error) => Some(error),
+            Self::InvalidSourceIdentifier => None,
         }
     }
 }

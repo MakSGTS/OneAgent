@@ -11,8 +11,13 @@ use oneagent_bsl::{
     LocalBslCallResolver, QualifiedBslCallResolver, UnresolvedBslCall, UnresolvedCrossModuleCall,
 };
 use oneagent_common::{EntityId, EntityName};
-use oneagent_graph::{EdgeKind, GraphEdge, GraphError, GraphNode, NodeKind, SemanticGraph};
+use oneagent_graph::{
+    Confidence, EdgeKind, FactOrigin, GraphError, NodeKind, ProducerId, Provenance,
+    ResolutionState, SemanticGraph,
+};
 use std::fmt::{Display, Formatter};
+
+const ANALYSIS_PIPELINE_PRODUCER: &str = "oneagent.analysis.semantic-analysis-pipeline";
 
 /// Source module supplied to the semantic analysis pipeline.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,27 +205,30 @@ impl SemanticAnalysisPipeline {
                     source,
                 })?;
 
-            context.graph.insert_node(GraphNode::new(
+            context.insert_node(
                 module.id().clone(),
                 module.name().clone(),
                 NodeKind::Module,
-            ));
+                parsed_provenance(module.id()),
+            );
 
             for symbol in &symbols {
-                context.graph.insert_node(GraphNode::new(
+                context.insert_node(
                     symbol.id().clone(),
                     symbol.name().clone(),
                     match symbol.kind() {
                         oneagent_bsl::BslSymbolKind::Procedure => NodeKind::Procedure,
                         oneagent_bsl::BslSymbolKind::Function => NodeKind::Function,
                     },
-                ));
+                    declared_provenance(module.id()),
+                );
 
-                context.graph.insert_edge(GraphEdge::new(
+                context.insert_edge(
                     module.id().clone(),
                     symbol.id().clone(),
                     EdgeKind::Contains,
-                ))?;
+                    declared_provenance(module.id()),
+                )?;
             }
 
             context.modules.push(CollectedModule {
@@ -239,22 +247,28 @@ impl SemanticAnalysisPipeline {
             .map(|module| module.symbols.clone())
             .collect::<Vec<_>>();
 
-        for module in &context.modules {
+        for module_index in 0..context.modules.len() {
+            let (module_source, module_symbols) = {
+                let module = &context.modules[module_index];
+                (module.source.clone(), module.symbols.clone())
+            };
+
             let calls = LineBslCallExtractor
-                .extract_calls(module.symbols.module_id(), &module.source)
+                .extract_calls(module_symbols.module_id(), &module_source)
                 .map_err(|source| AnalysisError::CallExtraction {
-                    module_id: module.symbols.module_id().clone(),
+                    module_id: module_symbols.module_id().clone(),
                     source,
                 })?;
 
-            let local_resolution = LocalBslCallResolver.resolve(module.symbols.symbols(), &calls);
+            let local_resolution = LocalBslCallResolver.resolve(module_symbols.symbols(), &calls);
 
             for call in local_resolution.resolved() {
-                context.graph.insert_edge(GraphEdge::new(
+                context.insert_edge(
                     call.origin_id().clone(),
                     call.destination_id().clone(),
                     EdgeKind::Calls,
-                ))?;
+                    resolved_provenance(module_symbols.module_id()),
+                )?;
             }
 
             context.diagnostics.unresolved_local_calls.extend(
@@ -266,22 +280,23 @@ impl SemanticAnalysisPipeline {
                     })
                     .cloned()
                     .map(|call| {
-                        ModuleLocalDiagnostic::new(module.symbols.module_id().clone(), call)
+                        ModuleLocalDiagnostic::new(module_symbols.module_id().clone(), call)
                     }),
             );
 
             let cross_module_resolution = QualifiedBslCallResolver.resolve_cross_module_calls(
-                &module.symbols,
+                &module_symbols,
                 &available_modules,
                 &calls,
             );
 
             for call in cross_module_resolution.resolved() {
-                context.graph.insert_edge(GraphEdge::new(
+                context.insert_edge(
                     call.origin_id().clone(),
                     call.destination_id().clone(),
                     EdgeKind::Calls,
-                ))?;
+                    resolved_provenance(module_symbols.module_id()),
+                )?;
             }
 
             context.diagnostics.unresolved_cross_module_calls.extend(
@@ -290,7 +305,7 @@ impl SemanticAnalysisPipeline {
                     .iter()
                     .cloned()
                     .map(|call| {
-                        ModuleCrossModuleDiagnostic::new(module.symbols.module_id().clone(), call)
+                        ModuleCrossModuleDiagnostic::new(module_symbols.module_id().clone(), call)
                     }),
             );
         }
@@ -304,6 +319,72 @@ struct BuildContext {
     graph: SemanticGraph,
     modules: Vec<CollectedModule>,
     diagnostics: AnalysisDiagnostics,
+}
+
+impl BuildContext {
+    fn insert_node(
+        &mut self,
+        id: EntityId,
+        name: EntityName,
+        kind: NodeKind,
+        provenance: Provenance,
+    ) {
+        self.graph
+            .insert_node_with_provenance(id, name, kind, provenance);
+    }
+
+    fn insert_edge(
+        &mut self,
+        source: EntityId,
+        target: EntityId,
+        kind: EdgeKind,
+        provenance: Provenance,
+    ) -> Result<bool, GraphError> {
+        self.graph
+            .insert_edge_with_provenance(source, target, kind, provenance)
+    }
+}
+
+fn parsed_provenance(source: &EntityId) -> Provenance {
+    analysis_provenance(
+        source,
+        FactOrigin::Parsed,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    )
+}
+
+fn declared_provenance(source: &EntityId) -> Provenance {
+    analysis_provenance(
+        source,
+        FactOrigin::Declared,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    )
+}
+
+fn resolved_provenance(source: &EntityId) -> Provenance {
+    analysis_provenance(
+        source,
+        FactOrigin::Resolved,
+        Confidence::High,
+        ResolutionState::Resolved,
+    )
+}
+
+fn analysis_provenance(
+    source: &EntityId,
+    origin: FactOrigin,
+    confidence: Confidence,
+    resolution: ResolutionState,
+) -> Provenance {
+    Provenance::new(
+        Some(source.clone()),
+        ProducerId::new(ANALYSIS_PIPELINE_PRODUCER),
+        origin,
+        confidence,
+        resolution,
+    )
 }
 
 #[derive(Debug)]
@@ -374,7 +455,7 @@ impl From<GraphError> for AnalysisError {
 #[cfg(test)]
 mod tests {
     use oneagent_common::{EntityId, EntityName};
-    use oneagent_graph::{EdgeKind, NodeKind};
+    use oneagent_graph::{EdgeKind, FactOrigin, NodeKind, ResolutionState};
 
     use super::{AnalysisModule, SemanticAnalysisPipeline};
 
@@ -414,7 +495,46 @@ EndProcedure
             calls[0].target(),
             &id("module.sales:procedure:FillMovements")
         );
+        assert_eq!(calls[0].provenance().len(), 1);
+        assert_eq!(calls[0].provenance()[0].source(), Some(&id("module.sales")));
+        assert_eq!(calls[0].provenance()[0].origin(), FactOrigin::Resolved);
+        assert_eq!(
+            calls[0].provenance()[0].resolution(),
+            ResolutionState::Resolved
+        );
         assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn attaches_provenance_to_modules_and_declarations() {
+        let module = AnalysisModule::new(
+            id("module.sales"),
+            name("Sales"),
+            r"
+Procedure Post()
+EndProcedure
+",
+        );
+
+        let result = SemanticAnalysisPipeline
+            .analyze(&[module])
+            .expect("analysis must succeed");
+
+        let module_id = id("module.sales");
+        let procedure_id = id("module.sales:procedure:Post");
+        let module = result.graph().node(&module_id).expect("module must exist");
+        let procedure = result
+            .graph()
+            .node(&procedure_id)
+            .expect("procedure must exist");
+
+        assert_eq!(module.kind(), NodeKind::Module);
+        assert_eq!(module.provenance()[0].source(), Some(&module_id));
+        assert_eq!(module.provenance()[0].origin(), FactOrigin::Parsed);
+
+        assert_eq!(procedure.kind(), NodeKind::Procedure);
+        assert_eq!(procedure.provenance()[0].source(), Some(&module_id));
+        assert_eq!(procedure.provenance()[0].origin(), FactOrigin::Declared);
     }
 
     #[test]
@@ -447,6 +567,20 @@ EndProcedure
 
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].target(), &id("module.inventory:procedure:Reserve"));
+        assert_ne!(
+            result
+                .graph()
+                .node(&id("module.sales"))
+                .expect("sales module must exist")
+                .provenance()[0]
+                .source(),
+            result
+                .graph()
+                .node(&id("module.inventory"))
+                .expect("inventory module must exist")
+                .provenance()[0]
+                .source()
+        );
         assert!(result.diagnostics().is_empty());
     }
 

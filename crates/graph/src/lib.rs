@@ -14,7 +14,7 @@ pub use kind::{EdgeKind, NodeKind};
 pub use node::GraphNode;
 pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
 
-use oneagent_common::EntityId;
+use oneagent_common::{EntityId, EntityName};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 
@@ -40,6 +40,17 @@ impl SemanticGraph {
         self.nodes.insert(node.id().clone(), node)
     }
 
+    /// Inserts or replaces a node with provenance attached.
+    pub fn insert_node_with_provenance(
+        &mut self,
+        id: EntityId,
+        name: EntityName,
+        kind: NodeKind,
+        provenance: Provenance,
+    ) -> Option<GraphNode> {
+        self.insert_node(GraphNode::new(id, name, kind).with_provenance(provenance))
+    }
+
     /// Inserts an edge after validating both endpoints.
     ///
     /// # Errors
@@ -55,6 +66,21 @@ impl SemanticGraph {
         }
 
         Ok(self.edges.insert(edge))
+    }
+
+    /// Inserts an edge with provenance attached after validating both endpoints.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError::MissingNode`] when either endpoint is absent.
+    pub fn insert_edge_with_provenance(
+        &mut self,
+        source: EntityId,
+        target: EntityId,
+        kind: EdgeKind,
+        provenance: Provenance,
+    ) -> Result<bool, GraphError> {
+        self.insert_edge(GraphEdge::new(source, target, kind).with_provenance(provenance))
     }
 
     /// Returns a node by identifier.
@@ -139,7 +165,10 @@ impl std::error::Error for GraphError {}
 mod tests {
     use oneagent_common::{EntityId, EntityName};
 
-    use super::{EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticGraph};
+    use super::{
+        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
+        ResolutionState, SemanticGraph,
+    };
     use oneagent_metadata::MetadataKind;
 
     fn id(value: &str) -> EntityId {
@@ -148,6 +177,16 @@ mod tests {
 
     fn name(value: &str) -> EntityName {
         EntityName::new(value).expect("name must be valid")
+    }
+
+    fn provenance(source: &EntityId, origin: FactOrigin) -> Provenance {
+        Provenance::new(
+            Some(source.clone()),
+            ProducerId::new("oneagent.graph.tests"),
+            origin,
+            Confidence::Exact,
+            ResolutionState::NotApplicable,
+        )
     }
 
     #[test]
@@ -241,5 +280,100 @@ mod tests {
 
         assert_eq!(graph.nodes_by_kind(NodeKind::Query).len(), 1);
         assert_eq!(graph.outgoing_by_kind(&module_id, EdgeKind::Reads).len(), 1);
+    }
+
+    #[test]
+    fn inserts_node_with_provenance() {
+        let module_id = id("module.sales");
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node_with_provenance(
+            module_id.clone(),
+            name("SalesModule"),
+            NodeKind::Module,
+            provenance(&module_id, FactOrigin::Parsed),
+        );
+
+        let module = graph.node(&module_id).expect("module node must exist");
+
+        assert_eq!(module.id(), &module_id);
+        assert_eq!(module.kind(), NodeKind::Module);
+        assert_eq!(module.provenance().len(), 1);
+        assert_eq!(module.provenance()[0].source(), Some(&module_id));
+        assert_eq!(module.provenance()[0].origin(), FactOrigin::Parsed);
+    }
+
+    #[test]
+    fn inserts_edge_with_provenance() {
+        let module_id = id("module.sales");
+        let procedure_id = id("procedure.sales.post");
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node(GraphNode::new(
+            module_id.clone(),
+            name("SalesModule"),
+            NodeKind::Module,
+        ));
+        graph.insert_node(GraphNode::new(
+            procedure_id.clone(),
+            name("Post"),
+            NodeKind::Procedure,
+        ));
+
+        graph
+            .insert_edge_with_provenance(
+                module_id.clone(),
+                procedure_id.clone(),
+                EdgeKind::Contains,
+                provenance(&module_id, FactOrigin::Declared),
+            )
+            .expect("edge endpoints must exist");
+
+        let edges = graph.outgoing_by_kind(&module_id, EdgeKind::Contains);
+
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].target(), &procedure_id);
+        assert_eq!(edges[0].kind(), EdgeKind::Contains);
+        assert_eq!(edges[0].provenance().len(), 1);
+        assert_eq!(edges[0].provenance()[0].source(), Some(&module_id));
+    }
+
+    #[test]
+    fn edge_identity_is_independent_from_provenance() {
+        let source_id = id("module.sales");
+        let target_id = id("procedure.sales.post");
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node(GraphNode::new(
+            source_id.clone(),
+            name("SalesModule"),
+            NodeKind::Module,
+        ));
+        graph.insert_node(GraphNode::new(
+            target_id.clone(),
+            name("Post"),
+            NodeKind::Procedure,
+        ));
+
+        let first = graph
+            .insert_edge_with_provenance(
+                source_id.clone(),
+                target_id.clone(),
+                EdgeKind::Contains,
+                provenance(&source_id, FactOrigin::Declared),
+            )
+            .expect("edge endpoints must exist");
+        let second = graph
+            .insert_edge_with_provenance(
+                source_id.clone(),
+                target_id,
+                EdgeKind::Contains,
+                provenance(&source_id, FactOrigin::Derived),
+            )
+            .expect("edge endpoints must exist");
+
+        assert!(first);
+        assert!(!second);
+        assert_eq!(graph.edge_count(), 1);
     }
 }

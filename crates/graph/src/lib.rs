@@ -48,7 +48,12 @@ impl SemanticGraph {
         kind: NodeKind,
         provenance: Provenance,
     ) -> Option<GraphNode> {
-        self.insert_node(GraphNode::new(id, name, kind).with_provenance(provenance))
+        self.insert_node(GraphNode::new_with_provenance(
+            id,
+            name,
+            kind,
+            vec![provenance],
+        ))
     }
 
     /// Inserts an edge after validating both endpoints.
@@ -80,7 +85,12 @@ impl SemanticGraph {
         kind: EdgeKind,
         provenance: Provenance,
     ) -> Result<bool, GraphError> {
-        self.insert_edge(GraphEdge::new(source, target, kind).with_provenance(provenance))
+        self.insert_edge(GraphEdge::new_with_provenance(
+            source,
+            target,
+            kind,
+            vec![provenance],
+        ))
     }
 
     /// Returns a node by identifier.
@@ -304,6 +314,22 @@ mod tests {
     }
 
     #[test]
+    fn node_constructor_accepts_explicit_provenance() {
+        let module_id = id("module.sales");
+        let node = GraphNode::new_with_provenance(
+            module_id.clone(),
+            name("SalesModule"),
+            NodeKind::Module,
+            vec![provenance(&module_id, FactOrigin::Parsed)],
+        );
+
+        assert_eq!(node.id(), &module_id);
+        assert_eq!(node.kind(), NodeKind::Module);
+        assert_eq!(node.provenance().len(), 1);
+        assert_eq!(node.provenance()[0].source(), Some(&module_id));
+    }
+
+    #[test]
     fn inserts_edge_with_provenance() {
         let module_id = id("module.sales");
         let procedure_id = id("procedure.sales.post");
@@ -336,6 +362,24 @@ mod tests {
         assert_eq!(edges[0].kind(), EdgeKind::Contains);
         assert_eq!(edges[0].provenance().len(), 1);
         assert_eq!(edges[0].provenance()[0].source(), Some(&module_id));
+    }
+
+    #[test]
+    fn edge_constructor_accepts_explicit_provenance() {
+        let module_id = id("module.sales");
+        let procedure_id = id("procedure.sales.post");
+        let edge = GraphEdge::new_with_provenance(
+            module_id.clone(),
+            procedure_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance(&module_id, FactOrigin::Declared)],
+        );
+
+        assert_eq!(edge.source(), &module_id);
+        assert_eq!(edge.target(), &procedure_id);
+        assert_eq!(edge.kind(), EdgeKind::Contains);
+        assert_eq!(edge.provenance().len(), 1);
+        assert_eq!(edge.provenance()[0].source(), Some(&module_id));
     }
 
     #[test]

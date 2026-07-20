@@ -16,14 +16,25 @@ pub struct GraphEdge {
 }
 
 impl GraphEdge {
-    /// Creates a semantic edge.
+    /// Creates a semantic edge without provenance.
     #[must_use]
     pub const fn new(source: EntityId, target: EntityId, kind: EdgeKind) -> Self {
+        Self::new_with_provenance(source, target, kind, Vec::new())
+    }
+
+    /// Creates a semantic edge with provenance records.
+    #[must_use]
+    pub const fn new_with_provenance(
+        source: EntityId,
+        target: EntityId,
+        kind: EdgeKind,
+        provenance: Vec<Provenance>,
+    ) -> Self {
         Self {
             source,
             target,
             kind,
-            provenance: Vec::new(),
+            provenance,
         }
     }
 

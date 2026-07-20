@@ -14,14 +14,25 @@ pub struct GraphNode {
 }
 
 impl GraphNode {
-    /// Creates a semantic graph node.
+    /// Creates a semantic graph node without provenance.
     #[must_use]
     pub const fn new(id: EntityId, name: EntityName, kind: NodeKind) -> Self {
+        Self::new_with_provenance(id, name, kind, Vec::new())
+    }
+
+    /// Creates a semantic graph node with provenance records.
+    #[must_use]
+    pub const fn new_with_provenance(
+        id: EntityId,
+        name: EntityName,
+        kind: NodeKind,
+        provenance: Vec<Provenance>,
+    ) -> Self {
         Self {
             id,
             name,
             kind,
-            provenance: Vec::new(),
+            provenance,
         }
     }
 

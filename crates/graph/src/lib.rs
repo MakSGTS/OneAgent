@@ -11,6 +11,7 @@ pub mod kind;
 pub mod measure;
 pub mod node;
 pub mod provenance;
+pub mod query;
 pub mod report;
 pub mod resolution;
 pub mod standard_attribute;
@@ -36,6 +37,10 @@ pub use kind::{EdgeKind, NodeKind};
 pub use measure::{Measure, MeasureError};
 pub use node::GraphNode;
 pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
+pub use query::{
+    SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphRelation,
+    SemanticGraphTraversalDirection, SemanticGraphTraversalNode, SemanticGraphTraversalOptions,
+};
 pub use report::{
     DiagnosticSummary, EdgeSummary, GraphSummary, NodeSummary, ProvenanceCoverageSummary,
     ResolutionRate, SemanticGraphReport, SemanticReferenceOutcome, SemanticReferenceStatistics,
@@ -228,6 +233,12 @@ impl SemanticGraph {
     #[must_use]
     pub fn validate(&self) -> SemanticGraphValidationResult {
         SemanticGraphValidator::new().validate(self)
+    }
+
+    /// Creates a read-only Semantic Query API for this graph snapshot.
+    #[must_use]
+    pub const fn query(&self) -> SemanticGraphQuery<'_> {
+        SemanticGraphQuery::new(self)
     }
 
     /// Returns all nodes of a specified kind.

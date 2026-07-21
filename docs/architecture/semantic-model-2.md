@@ -1361,10 +1361,13 @@ representative fixtures currently exist for Configuration, Catalog, Document,
 Common Module, Accumulation Register, and Common Command; the other generic
 directory mappings lack dedicated integration fixtures.
 
-`MetadataKind::Form`, `MetadataKind::Template`, and `MetadataKind::Unknown` are
-not discovered as top-level EDT metadata entities. Forms and commands embedded
-in another metadata descriptor are different capabilities and emit the flat
-`NodeKind::Form` and `NodeKind::Command` variants.
+`MetadataKind::Form` and `NodeKind::Metadata(MetadataKind::Form)` are not
+applicable to the EDT adapter: common forms are top-level
+`MetadataKind::CommonForm` entities, while forms owned by documents, catalogs,
+and other metadata objects emit the flat `NodeKind::Form` variant.
+`MetadataKind::Template` and `MetadataKind::Unknown` are not discovered as
+top-level EDT metadata entities. Commands embedded in another metadata
+descriptor similarly emit the flat `NodeKind::Command` variant.
 
 ### Semantic node inventory
 
@@ -1459,12 +1462,16 @@ The Critical BSL call observability gap remains closed. The High
 `CommonCommands` are parsed through the universal top-level descriptor path,
 emitted with stable UUID identity and provenance, and owned by the configuration.
 The capability remains `PartiallySupported` only because complete typed metadata
-payload preservation is a separate Medium gap. According to the deterministic
-gap ordering, the first remaining High gap is `metadata_entity.form`.
+payload preservation is a separate Medium gap. The former
+`metadata_entity.form` and `semantic_node.metadata.form` High gaps were stale:
+the generic top-level Form concept is not applicable to EDT, whose actual common
+and subordinate form representations already use distinct semantic kinds.
+According to the deterministic gap ordering, the first remaining High gap is
+`metadata_entity.template`.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — unsupported top-level metadata entities.** Address Form next,
+1. **High — unsupported top-level metadata entities.** Address Template next,
    followed by the remaining entities in deterministic audit order; confirm the
    EDT source shape before adding discovery mappings. Acceptance: discovery
    mapping, typed descriptor, node emission, provenance, and one focused fixture

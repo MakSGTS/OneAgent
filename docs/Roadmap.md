@@ -113,15 +113,16 @@ Ordered follow-up work:
 
 1. **Critical — completed:** retain unresolved BSL calls as typed diagnostics and resolution statistics.
 2. **High — completed:** discover and emit top-level Common Command metadata (`metadata_entity.command`); typed payload completion remains Medium.
-3. **High — next:** add focused support for top-level Form metadata (`metadata_entity.form`), the first remaining gap in deterministic audit order.
-4. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
-5. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
-6. **High:** preserve tabular-section ownership for nested attributes.
-7. **High:** implement producer-specific support for each declared-only semantic edge.
-8. **Medium:** define and preserve complete typed metadata payloads.
-9. **Medium:** add successful fixtures for every mapped metadata reference target kind.
-10. **Medium:** decide and implement reference-request provenance ownership.
-11. **Medium:** replace permissive endpoint validation as new edge producers are added.
+3. **High — completed:** classify generic top-level Form entity and node capabilities as not applicable to EDT; real common and subordinate forms use distinct semantic kinds.
+4. **High — next:** add focused support for top-level Template metadata (`metadata_entity.template`), the first remaining gap in deterministic audit order.
+5. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
+6. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
+7. **High:** preserve tabular-section ownership for nested attributes.
+8. **High:** implement producer-specific support for each declared-only semantic edge.
+9. **Medium:** define and preserve complete typed metadata payloads.
+10. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+11. **Medium:** decide and implement reference-request provenance ownership.
+12. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

@@ -2416,6 +2416,93 @@ mod graph_tests {
 
         assert!(children.iter().any(|edge| edge.target() == form.id()));
     }
+
+    #[test]
+    fn ignores_generic_top_level_form_and_preserves_subordinate_form_semantics() {
+        let root = create_edt_project();
+        let common_form_directory = root.path().join("src/CommonForms/Workspace");
+        fs::create_dir_all(&common_form_directory).expect("common form directory must be created");
+        fs::write(
+            common_form_directory.join("Workspace.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonForm
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="ffffffff-1111-2222-3333-444444444444">
+    <name>Workspace</name>
+</mdclass:CommonForm>
+"#,
+        )
+        .expect("common form descriptor must be created");
+        let top_level_form_directory = root.path().join("src/Forms/UnexpectedForm");
+        fs::create_dir_all(&top_level_form_directory)
+            .expect("unsupported top-level form directory must be created");
+        fs::write(
+            top_level_form_directory.join("UnexpectedForm.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:DocumentForm
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="eeeeeeee-1111-2222-3333-444444444444">
+    <name>UnexpectedForm</name>
+</mdclass:DocumentForm>
+"#,
+        )
+        .expect("unsupported top-level form descriptor must be created");
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build while ignoring unsupported top-level form directory");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let common_form = graph
+            .query()
+            .node(&NodeId::new("ffffffff-1111-2222-3333-444444444444"))
+            .expect("common form must remain a top-level metadata entity");
+        let document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .next()
+            .expect("document node must exist");
+        let form_id = NodeId::new("aaaaaaaa-4444-4444-4444-444444444444");
+        let form = graph
+            .query()
+            .node(&form_id)
+            .expect("subordinate form must retain its stable UUID");
+        let owner = graph
+            .query()
+            .owner(&form_id)
+            .expect("document must own subordinate form");
+        let forms = graph
+            .query()
+            .children_by_kind(&NodeId::new(document.id().as_str()), NodeKind::Form);
+
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Form))
+                .is_empty()
+        );
+        assert_eq!(
+            common_form.kind(),
+            NodeKind::Metadata(MetadataKind::CommonForm)
+        );
+        assert_eq!(form.kind(), NodeKind::Form);
+        assert_eq!(form.name().as_str(), "DocumentForm");
+        assert_eq!(owner.id(), document.id());
+        assert_eq!(forms, vec![form]);
+        assert!(
+            form.provenance()[0]
+                .source()
+                .expect("form provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=form:aaaaaaaa-4444-4444-4444-444444444444"
+                )
+        );
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
     #[test]
     fn metadata_object_contains_command() {
         let root = create_edt_project();

@@ -104,6 +104,27 @@ Diagnostics, impact analysis, planning, refactoring and safe edit transactions.
 ### v1.0 — Stable Platform
 Stable APIs, plugin SDK, performance/security hardening, documentation and examples.
 
+## Sprint 3 Semantic Coverage
+
+- [x] Add a deterministic Semantic Coverage Audit for graph-domain and EDT-specific capabilities.
+- [ ] Complete Semantic Coverage; the audit does not mark completion itself.
+
+Ordered follow-up work:
+
+1. **Critical:** retain unresolved BSL calls as typed diagnostics and resolution statistics.
+2. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
+3. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
+4. **High:** preserve tabular-section ownership for nested attributes.
+5. **High:** add focused support for missing top-level metadata entities, starting with Template.
+6. **High:** implement producer-specific support for each declared-only semantic edge.
+7. **Medium:** define and preserve complete typed metadata payloads.
+8. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+9. **Medium:** decide and implement reference-request provenance ownership.
+10. **Medium:** replace permissive endpoint validation as new edge producers are added.
+
+The detailed capability inventory, missing evidence, acceptance criteria, and
+out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.
+
 ## Definition of Done
 
 - `cargo fmt --all -- --check`

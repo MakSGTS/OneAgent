@@ -1,6 +1,7 @@
 //! Adapter for reading `1C:EDT` project sources.
 
 mod bsl_graph;
+mod coverage;
 mod metadata_object;
 mod metadata_structure;
 mod module_reader;
@@ -24,6 +25,7 @@ pub use bsl_graph::{
     AnalyzedBslModule, EdtBslGraphError, add_configuration_module_symbols, add_module_symbols,
     analyze_module,
 };
+pub use coverage::{EdtSemanticCoverageRegistry, EdtSemanticCoverageReport};
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
@@ -401,6 +403,15 @@ impl EdtSemanticGraphBuildResult {
             &self.diagnostics,
             self.reference_statistics,
         )
+    }
+
+    /// Builds a deterministic Semantic Coverage Audit for this EDT build.
+    ///
+    /// Static graph and EDT support matrices remain separate from observed
+    /// occurrence, build metrics and validation outcomes.
+    #[must_use]
+    pub fn coverage_report(&self) -> EdtSemanticCoverageReport {
+        EdtSemanticCoverageReport::for_build_result(self)
     }
 }
 
@@ -1069,8 +1080,10 @@ impl From<EdtLoadError> for EdtGraphError {
 mod graph_tests {
     use oneagent_common::EntityName;
     use oneagent_graph::{
-        EdgeKind, FactOrigin, NodeKind, ResolutionError, ResolutionState, SemanticDiagnosticCode,
+        EdgeKind, FactOrigin, NodeKind, ResolutionError, ResolutionState,
+        SemanticCoverageCapabilityId, SemanticCoverageStatus, SemanticDiagnosticCode,
         SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
+        SemanticReferenceCapability,
     };
     use oneagent_metadata::MetadataKind;
     use std::fs;
@@ -2255,5 +2268,59 @@ mod graph_tests {
 
         assert!(validation.is_valid());
         assert!(validation.issues().is_empty());
+    }
+
+    #[test]
+    fn build_result_coverage_report_combines_static_and_observed_coverage() {
+        let root = create_edt_project();
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+
+        let coverage = result.coverage_report();
+
+        assert!(coverage.graph_domain().is_consistent());
+        assert!(coverage.edt_pipeline().is_consistent());
+        assert_eq!(
+            coverage.observed().total_nodes(),
+            result.graph().node_count()
+        );
+        assert_eq!(
+            coverage.observed().total_edges(),
+            result.graph().edge_count()
+        );
+        assert_eq!(
+            coverage.observed().nodes()[&NodeKind::Attribute].without_provenance(),
+            0
+        );
+        assert_eq!(
+            coverage.observed().edges()[&EdgeKind::References].without_provenance(),
+            0
+        );
+        assert_eq!(
+            coverage
+                .edt_pipeline()
+                .capability(SemanticCoverageCapabilityId::SemanticNode(
+                    NodeKind::StandardAttribute,
+                ))
+                .expect("standard attribute coverage must exist")
+                .status(),
+            SemanticCoverageStatus::Unsupported
+        );
+        assert_eq!(
+            coverage
+                .edt_pipeline()
+                .capability(SemanticCoverageCapabilityId::MetadataReference(
+                    SemanticReferenceCapability::MetadataType(MetadataKind::Catalog),
+                ))
+                .expect("catalog reference coverage must exist")
+                .status(),
+            SemanticCoverageStatus::Supported
+        );
+        assert!(coverage.validation().is_valid());
+        assert_eq!(
+            coverage.build_report().graph().total_nodes(),
+            result.graph().node_count()
+        );
     }
 }

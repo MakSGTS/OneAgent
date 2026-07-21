@@ -3,6 +3,7 @@
 //! Stable identifiers used by the `OneAgent` Knowledge Graph.
 
 pub mod build_diff;
+pub mod coverage;
 pub mod diagnostic;
 pub mod diff;
 pub mod edge;
@@ -24,6 +25,14 @@ pub use build_diff::{
     DiagnosticModifiedAspect, GraphReportDiff, GraphReportMetric, ProvenanceCoverageDiff,
     ProvenanceCoverageMetric, ResolutionStatisticsDiff, ResolutionStatisticsMetric,
     SemanticGraphBuildDiff,
+};
+pub use coverage::{
+    SemanticCoverageCapability, SemanticCoverageCapabilityId, SemanticCoverageCategory,
+    SemanticCoverageEvidence, SemanticCoverageGap, SemanticCoverageGapPriority,
+    SemanticCoverageRegistry, SemanticCoverageReport, SemanticCoverageStatus,
+    SemanticCoverageSummary, SemanticObservedCoverage, SemanticObservedKindCoverage,
+    SemanticProvenanceCapability, SemanticQueryCapability, SemanticReferenceCapability,
+    semantic_coverage_edge_kinds, semantic_coverage_node_kinds,
 };
 pub use diagnostic::{
     SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,

@@ -1297,6 +1297,199 @@ crates/graph/src/
 
 Existing graph modules remain available until migration is complete.
 
+## Semantic Coverage Audit
+
+The Semantic Coverage Audit records the implemented EDT-to-graph boundary before
+Semantic Coverage Completion. It is an observation and governance API; it does
+not change graph construction, resolution, validation, query, or impact
+semantics.
+
+The public API is split by dependency direction:
+
+* `SemanticCoverageRegistry::audit()` in `oneagent-graph` describes the
+  source-independent graph model, validation rules, Query API, Impact Analysis,
+  and provenance paths;
+* `SemanticObservedCoverage::for_graph()` counts node kinds, edge kinds, and
+  provenance in one graph snapshot without inferring support from absence;
+* `EdtSemanticCoverageRegistry::audit()` in `oneagent-edt` describes EDT
+  discovery, parsing, node and edge contribution, ownership, and reference
+  handling;
+* `EdtSemanticGraphBuildResult::coverage_report()` composes both static matrices
+  with observed graph coverage, the existing build report, and validation.
+
+No ADR is required for this first audit version. The registry exposes existing
+architecture and does not introduce a new semantic rule or dependency direction.
+
+### Coverage semantics
+
+`Supported` means that all evidence required by the capability category is
+present. `PartiallySupported` means that implementation exists but one or more
+required stages or representative checks are absent. `Unsupported` means that a
+known relevant capability has no pipeline implementation. `NotApplicable` is
+used only when a stage is intentionally outside the semantic meaning of a
+capability. `DeclaredOnly` means that a graph enum variant exists but the EDT
+pipeline does not emit it.
+
+Capabilities use typed identities based on `MetadataKind`, `NodeKind`,
+`EdgeKind`, validation codes, query capabilities, provenance paths, and typed
+reference capabilities. Titles and notes never define identity. Evidence and
+missing evidence are ordered typed sets. Capabilities sort by stable identity;
+gaps sort by priority, category, and identity; observed metrics use ordered maps.
+
+Static support and observed occurrence are intentionally separate. A metadata
+kind absent from one configuration remains supported or partially supported
+according to the static registry. Conversely, occurrence does not prove complete
+support.
+
+### EDT discovery and entity inventory
+
+The configuration root is loaded from `Configuration.mdo`. The top-level EDT
+directory registry discovers Catalog, Document, Enumeration, Common Module,
+Report, Data Processor, Information Register, Accumulation Register, Accounting
+Register, Calculation Register, Business Process, Task, Role, Common Form, HTTP
+Service, Web Service, XDTO Package, and Subsystem descriptors.
+
+All discovered top-level descriptors emit `NodeKind::Metadata(kind)` with stable
+identity and provenance. Their status is `PartiallySupported`: the descriptor
+reader parses identity, name, synonym, kind, and path, while the graph node keeps
+only identity, name, kind, and provenance. Descriptor payload beyond the current
+graph contract is not represented as typed semantic payload. Dedicated
+representative fixtures currently exist for Configuration, Catalog, Document,
+Common Module, and Accumulation Register; the other generic directory mappings
+lack dedicated integration fixtures.
+
+`MetadataKind::Form`, `MetadataKind::Command`, `MetadataKind::Template`, and
+`MetadataKind::Unknown` are not discovered as top-level EDT metadata entities.
+Forms and commands embedded in another metadata descriptor are different
+capabilities and emit the flat `NodeKind::Form` and `NodeKind::Command` variants.
+
+### Semantic node inventory
+
+The EDT pipeline currently emits:
+
+* top-level `NodeKind::Metadata(kind)` nodes for the directory registry above;
+* `Module`, `Procedure`, and `Function` nodes from known BSL module files and
+  declaration extraction;
+* `Attribute`, `TabularSection`, `Form`, `Command`, `Dimension`, and `Resource`
+  child nodes from metadata descriptors.
+
+`StandardAttribute` and `Measure` have graph-domain models and insertion tests,
+but the EDT structure reader does not extract or emit them. `Query`, the flat
+`Role` and `Subsystem` variants, and `Unknown` are also not emitted by the EDT
+pipeline. EDT roles and subsystems use `NodeKind::Metadata(MetadataKind::Role)`
+and `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
+
+### Ownership inventory
+
+`Contains` is stored from owner to child. EDT emits configuration-to-object,
+metadata-object-to-module, module-to-procedure/function, and
+metadata-object-to-child relations with provenance. Validation constrains
+containment endpoints and single-owner rules; Query exposes owners and children;
+Impact Analysis can opt into child-to-owner and owner-to-child propagation.
+
+Attribute ownership is only partially supported. The XML reader recognizes
+nested attribute elements, but currently assigns the top-level metadata object
+as parent. Attributes nested in a tabular section therefore do not preserve the
+tabular-section owner. Standard Attribute and Measure ownership is not emitted.
+
+### Reference and resolution inventory
+
+Metadata type references are extracted only from Attribute, Dimension, and
+Resource `<types>` values. Typed prefix mappings currently cover Catalog,
+Document, Enumeration, Information Register, Accumulation Register, Accounting
+Register, Calculation Register, Business Process, and Task targets. Requests
+preserve source object, source member, role, expected target kind, target name,
+and descriptor path. Resolution emits `References` edges or typed missing,
+ambiguous, and incompatible-kind diagnostics; both outcomes update reference
+statistics and receive provenance. Catalog and Document targets have successful
+representative integration fixtures; the other mapped targets lack successful
+fixtures.
+
+BSL calls are extracted and local or qualified calls can resolve to `Calls`
+edges. Unresolved BSL calls do not currently become semantic diagnostics and do
+not update EDT build reference statistics. This is a critical silent-loss gap.
+There is no resolved-without-edge path in the current metadata reference flow:
+successful metadata resolution immediately emits a `References` edge.
+
+### Edge, validation, query, and impact inventory
+
+The EDT pipeline emits `Contains`, `References`, and `Calls`, each with
+provenance. `Reads`, `Writes`, `Grants`, `Includes`, `Extends`, and `DependsOn`
+are declared but not emitted by EDT.
+
+Validation has explicit endpoint rules for `Contains`, `Calls`, and `References`.
+The remaining edge kinds are currently accepted by broad schema rules and are
+therefore structurally visible but not semantically constrained. Validation also
+checks missing endpoints, ownership, forbidden self-loops, ownership cycles,
+node and edge provenance, and build/report counter consistency.
+
+The Query API exposes all stored edge kinds. Dependency and usage classification
+includes `Calls`, `References`, `Reads`, `Writes`, and `DependsOn`; `Contains` is
+handled by ownership navigation. Impact Analysis uses the same dependency
+classification and supports optional `Contains` ownership propagation. `Grants`,
+`Includes`, and `Extends` are intentionally excluded from the first impact
+policy.
+
+### Provenance inventory
+
+EDT attaches provenance while creating metadata object nodes, child nodes,
+module nodes, symbol nodes, ownership edges, resolved reference edges, and
+resolution diagnostics. Pending metadata references preserve enough source
+context to construct provenance, but the pending request itself does not carry a
+public graph-domain `Provenance` value. This request-level gap is partial rather
+than a missing provenance gap on emitted nodes or edges.
+
+### Known limitations and ordered completion backlog
+
+The audit assigns priority by explicit policy. Missing provenance on an emitted
+fact and silently ignored references are critical. Missing core entities,
+ownership relations, references, or emitted edges are high priority. Partial
+variant support and missing representative tests are medium priority.
+
+The ordered Semantic Coverage Completion backlog is:
+
+1. **Critical — BSL call diagnostics and statistics.** Preserve unresolved and
+   ambiguous BSL calls in EDT build diagnostics and reference statistics.
+   Acceptance: every extracted call has a resolved or typed failure outcome with
+   provenance; no call is silently discarded.
+2. **High — Standard Attribute EDT contribution.** Extend metadata structure
+   extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
+   stable node identity, typed kind payload, owner edge, provenance, validation,
+   and representative tests.
+3. **High — Accounting Register Measure EDT contribution.** Extract and emit
+   `Measure` with stable identity, owner edge, provenance, validation, and a
+   representative fixture.
+4. **High — nested Tabular Section ownership.** Preserve nested parent context
+   so tabular-section attributes are owned by the tabular section. Acceptance:
+   correct `Contains` direction, owner validation, provenance, and positive and
+   invalid-owner tests.
+5. **High — unsupported top-level metadata entities.** Address Template first;
+   treat managed Form and Command mappings only after their EDT source shape is
+   confirmed. Acceptance: discovery mapping, typed descriptor, node emission,
+   provenance, and one focused fixture per entity kind.
+6. **High — declared semantic edges.** Add producer-specific tasks for Reads,
+   Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
+   task. Acceptance for each: extraction source, endpoint rule, provenance,
+   Query semantics, Impact policy decision, and tests.
+7. **Medium — metadata payload completion.** Define and preserve the typed
+   payload expected for each supported top-level metadata kind. Acceptance:
+   fields parsed by EDT are either represented, explicitly excluded by contract,
+   or recorded as a known limitation.
+8. **Medium — metadata reference fixtures.** Add successful fixtures for
+   Enumeration, Information Register, Accumulation Register, Accounting
+   Register, Calculation Register, Business Process, and Task targets.
+9. **Medium — reference-request provenance.** Decide whether pending reference
+   requests become a public graph-domain type; if accepted, attach provenance at
+   extraction time without changing resolution semantics.
+10. **Medium — broad endpoint validation.** Replace permissive rules for future
+    emitted dependency, access, composition, and extension edges with typed
+    endpoint policies and negative tests.
+
+The audit intentionally does not implement these backlog items, add serialization
+or a CLI, scan source code at runtime, introduce quality percentages, or change
+Semantic Resolution, Validation, Query, Impact Analysis, graph identity, or EDT
+graph construction.
+
 ## Definition of done for Semantic Model 2.0 core
 
 The Knowledge Graph core is complete when:

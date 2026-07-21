@@ -7,6 +7,7 @@ pub mod diagnostic;
 pub mod diff;
 pub mod edge;
 pub mod identity;
+pub mod impact;
 pub mod kind;
 pub mod measure;
 pub mod node;
@@ -33,6 +34,12 @@ pub use diff::{
 };
 pub use edge::GraphEdge;
 pub use identity::{EdgeId, NodeId};
+pub use impact::{
+    AffectedNode, ImpactAnalysisError, ImpactCompleteness, ImpactNodeAvailability,
+    ImpactNodeStatus, ImpactPropagationDirection, ImpactReason, ImpactReasonKind, ImpactSeed,
+    ImpactSeedKind, ImpactSnapshot, OwnershipImpactMode, ProvenanceImpactMode,
+    SemanticImpactAnalyzer, SemanticImpactOptions, SemanticImpactResult, SemanticImpactSummary,
+};
 pub use kind::{EdgeKind, NodeKind};
 pub use measure::{Measure, MeasureError};
 pub use node::GraphNode;

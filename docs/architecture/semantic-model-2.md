@@ -1347,7 +1347,10 @@ The configuration root is loaded from `Configuration.mdo`. The top-level EDT
 directory registry discovers Catalog, Document, Enumeration, Common Module,
 Report, Data Processor, Information Register, Accumulation Register, Accounting
 Register, Calculation Register, Business Process, Task, Role, Common Form, HTTP
-Service, Web Service, XDTO Package, and Subsystem descriptors.
+Service, Web Service, XDTO Package, Subsystem, and Common Command descriptors.
+Common commands use the EDT `CommonCommands/<Name>/<Name>.mdo` layout and are
+represented as `MetadataKind::Command` rather than the flat child
+`NodeKind::Command`.
 
 All discovered top-level descriptors emit `NodeKind::Metadata(kind)` with stable
 identity and provenance. Their status is `PartiallySupported`: the descriptor
@@ -1355,13 +1358,13 @@ reader parses identity, name, synonym, kind, and path, while the graph node keep
 only identity, name, kind, and provenance. Descriptor payload beyond the current
 graph contract is not represented as typed semantic payload. Dedicated
 representative fixtures currently exist for Configuration, Catalog, Document,
-Common Module, and Accumulation Register; the other generic directory mappings
-lack dedicated integration fixtures.
+Common Module, Accumulation Register, and Common Command; the other generic
+directory mappings lack dedicated integration fixtures.
 
-`MetadataKind::Form`, `MetadataKind::Command`, `MetadataKind::Template`, and
-`MetadataKind::Unknown` are not discovered as top-level EDT metadata entities.
-Forms and commands embedded in another metadata descriptor are different
-capabilities and emit the flat `NodeKind::Form` and `NodeKind::Command` variants.
+`MetadataKind::Form`, `MetadataKind::Template`, and `MetadataKind::Unknown` are
+not discovered as top-level EDT metadata entities. Forms and commands embedded
+in another metadata descriptor are different capabilities and emit the flat
+`NodeKind::Form` and `NodeKind::Command` variants.
 
 ### Semantic node inventory
 
@@ -1451,16 +1454,17 @@ fact and silently ignored references are critical. Missing core entities,
 ownership relations, references, or emitted edges are high priority. Partial
 variant support and missing representative tests are medium priority.
 
-The Critical BSL call observability gap is closed: every extracted local or
-qualified call has a resolved or unresolved outcome with provenance, and no call
-is silently discarded by the EDT graph builder. According to the deterministic
-gap ordering, the first remaining High gap is
-`metadata_entity.command`: top-level Command metadata is modeled but not
-discovered or emitted by the EDT pipeline.
+The Critical BSL call observability gap remains closed. The High
+`metadata_entity.command` discovery and emission gap is also closed: EDT
+`CommonCommands` are parsed through the universal top-level descriptor path,
+emitted with stable UUID identity and provenance, and owned by the configuration.
+The capability remains `PartiallySupported` only because complete typed metadata
+payload preservation is a separate Medium gap. According to the deterministic
+gap ordering, the first remaining High gap is `metadata_entity.form`.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — unsupported top-level metadata entities.** Address Command first,
+1. **High — unsupported top-level metadata entities.** Address Form next,
    followed by the remaining entities in deterministic audit order; confirm the
    EDT source shape before adding discovery mappings. Acceptance: discovery
    mapping, typed descriptor, node emission, provenance, and one focused fixture

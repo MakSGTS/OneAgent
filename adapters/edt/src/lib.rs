@@ -553,6 +553,7 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
         ("BusinessProcesses", MetadataKind::BusinessProcess),
         ("Tasks", MetadataKind::Task),
         ("Roles", MetadataKind::Role),
+        ("CommonCommands", MetadataKind::Command),
         ("CommonForms", MetadataKind::CommonForm),
         ("HTTPServices", MetadataKind::HttpService),
         ("WebServices", MetadataKind::WebService),
@@ -1157,6 +1158,18 @@ mod graph_tests {
 </mdclass:CommonModule>
 "#;
 
+    const COMMON_COMMAND_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonCommand
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="cccccccc-1111-2222-3333-444444444444">
+    <name>RefreshData</name>
+    <synonym>
+        <key>en</key>
+        <content>Refresh data</content>
+    </synonym>
+</mdclass:CommonCommand>
+"#;
+
     const ACCUMULATION_REGISTER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mdclass:AccumulationRegister
     xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
@@ -1279,6 +1292,13 @@ mod graph_tests {
             ),
         )
         .expect("catalog descriptor must be created");
+    }
+
+    fn add_common_command_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/CommonCommands/RefreshData");
+        fs::create_dir_all(&directory).expect("common command directory must be created");
+        fs::write(directory.join("RefreshData.mdo"), COMMON_COMMAND_XML)
+            .expect("common command descriptor must be created");
     }
 
     fn document_with_reference(reference_type: &str) -> String {
@@ -1528,6 +1548,134 @@ mod graph_tests {
                 .outgoing_by_kind(configuration.id(), EdgeKind::Contains)
                 .len(),
             4
+        );
+    }
+
+    #[test]
+    fn discovers_top_level_common_command_as_metadata_entity() {
+        let root = create_edt_project();
+        add_common_command_descriptor(&root);
+        let archive_directory = root.path().join("src/CommonCommands/ArchiveData");
+        fs::create_dir_all(&archive_directory)
+            .expect("second common command directory must be created");
+        fs::write(
+            archive_directory.join("ArchiveData.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonCommand
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="bbbbbbbb-1111-2222-3333-444444444444">
+    <name>ArchiveData</name>
+</mdclass:CommonCommand>
+"#,
+        )
+        .expect("second common command descriptor must be created");
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with common command must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let command_id = NodeId::new("cccccccc-1111-2222-3333-444444444444");
+        let configuration = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Configuration))
+            .into_iter()
+            .next()
+            .expect("configuration node must exist");
+        let command = graph
+            .query()
+            .node(&command_id)
+            .expect("common command must be queryable by stable UUID");
+        let owner = graph
+            .query()
+            .owner(&command_id)
+            .expect("configuration must own common command");
+        let command_children = graph.query().children_by_kind(
+            &NodeId::new(configuration.id().as_str()),
+            NodeKind::Metadata(MetadataKind::Command),
+        );
+        let contains = graph
+            .query()
+            .incoming_edges_by_kind(&command_id, EdgeKind::Contains)
+            .into_iter()
+            .next()
+            .expect("configuration containment edge must exist");
+        let coverage = first.coverage_report();
+
+        assert_eq!(command.name().as_str(), "RefreshData");
+        assert_eq!(command.kind(), NodeKind::Metadata(MetadataKind::Command));
+        assert_eq!(owner.id(), configuration.id());
+        assert_eq!(
+            command_children
+                .iter()
+                .map(|child| child.id().as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "bbbbbbbb-1111-2222-3333-444444444444",
+                "cccccccc-1111-2222-3333-444444444444",
+            ]
+        );
+        assert_eq!(contains.source(), configuration.id());
+        assert_eq!(command.provenance().len(), 1);
+        assert!(
+            command.provenance()[0]
+                .source()
+                .expect("command provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/CommonCommands/RefreshData/RefreshData.mdo#metadata_object=cccccccc-1111-2222-3333-444444444444;fact=metadata_object"
+                )
+        );
+        assert_eq!(contains.provenance().len(), 1);
+        assert!(
+            contains.provenance()[0]
+                .source()
+                .expect("containment provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/CommonCommands/RefreshData/RefreshData.mdo#metadata_object=cccccccc-1111-2222-3333-444444444444;edge=contains;source=11111111-2222-3333-4444-555555555555;target=cccccccc-1111-2222-3333-444444444444"
+                )
+        );
+        assert_eq!(
+            coverage.observed().nodes()[&NodeKind::Metadata(MetadataKind::Command)].total(),
+            2
+        );
+        assert_eq!(
+            coverage.observed().nodes()[&NodeKind::Metadata(MetadataKind::Command)]
+                .without_provenance(),
+            0
+        );
+        assert_eq!(graph.nodes_by_kind(NodeKind::Command).len(), 1);
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn rejects_top_level_common_command_without_name() {
+        let root = create_edt_project();
+        let directory = root.path().join("src/CommonCommands/BrokenCommand");
+        fs::create_dir_all(&directory).expect("common command directory must be created");
+        fs::write(
+            directory.join("BrokenCommand.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonCommand
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="dddddddd-1111-2222-3333-444444444444">
+</mdclass:CommonCommand>
+"#,
+        )
+        .expect("invalid common command descriptor must be created");
+
+        let error = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect_err("common command without name must be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("metadata object name is missing")
         );
     }
 

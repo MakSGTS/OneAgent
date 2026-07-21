@@ -112,15 +112,16 @@ Stable APIs, plugin SDK, performance/security hardening, documentation and examp
 Ordered follow-up work:
 
 1. **Critical — completed:** retain unresolved BSL calls as typed diagnostics and resolution statistics.
-2. **High — next:** add focused support for top-level Command metadata (`metadata_entity.command`), the first remaining gap in deterministic audit order.
-3. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
-4. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
-5. **High:** preserve tabular-section ownership for nested attributes.
-6. **High:** implement producer-specific support for each declared-only semantic edge.
-7. **Medium:** define and preserve complete typed metadata payloads.
-8. **Medium:** add successful fixtures for every mapped metadata reference target kind.
-9. **Medium:** decide and implement reference-request provenance ownership.
-10. **Medium:** replace permissive endpoint validation as new edge producers are added.
+2. **High — completed:** discover and emit top-level Common Command metadata (`metadata_entity.command`); typed payload completion remains Medium.
+3. **High — next:** add focused support for top-level Form metadata (`metadata_entity.form`), the first remaining gap in deterministic audit order.
+4. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
+5. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
+6. **High:** preserve tabular-section ownership for nested attributes.
+7. **High:** implement producer-specific support for each declared-only semantic edge.
+8. **Medium:** define and preserve complete typed metadata payloads.
+9. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+10. **Medium:** decide and implement reference-request provenance ownership.
+11. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

@@ -184,9 +184,11 @@ fn metadata_capability(kind: MetadataKind) -> SemanticCoverageCapability {
                 "The generic EDT path emits this metadata kind without a dedicated representative fixture, and descriptor payload is only partially preserved"
             });
             if representative {
-                capability.with_representative_test(
-                    "oneagent_edt::graph_tests::builds_graph_with_configuration_and_metadata_objects",
-                )
+                capability.with_representative_test(if kind == MetadataKind::Command {
+                    "oneagent_edt::graph_tests::discovers_top_level_common_command_as_metadata_entity"
+                } else {
+                    "oneagent_edt::graph_tests::builds_graph_with_configuration_and_metadata_objects"
+                })
             } else {
                 capability
             }
@@ -515,6 +517,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
         MetadataKind::Document,
         MetadataKind::CommonModule,
         MetadataKind::AccumulationRegister,
+        MetadataKind::Command,
     ])
 }
 
@@ -649,6 +652,7 @@ mod tests {
         SemanticCoverageStatus, SemanticReferenceCapability,
     };
     use oneagent_metadata::MetadataKind;
+    use std::collections::BTreeSet;
 
     use super::EdtSemanticCoverageRegistry;
 
@@ -729,11 +733,76 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        let next_gap = report.gaps().first().expect("a High gap must remain");
-        assert_eq!(next_gap.priority(), SemanticCoverageGapPriority::High);
+    }
+
+    #[test]
+    fn common_command_discovery_closes_the_high_gap() {
+        let report = EdtSemanticCoverageRegistry::audit();
+        let capability = report
+            .capability(SemanticCoverageCapabilityId::MetadataEntity(
+                MetadataKind::Command,
+            ))
+            .expect("command coverage must exist");
+
         assert_eq!(
-            next_gap.capability_id(),
-            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Command)
+            capability.status(),
+            SemanticCoverageStatus::PartiallySupported
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::Discovered)
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::Parsed)
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::NodeEmitted)
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::StableIdentityAssigned)
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::ProvenanceAttached)
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::PositiveTestExists)
+        );
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::IntegrationTestExists)
+        );
+        assert_eq!(
+            capability.missing_evidence(),
+            BTreeSet::from([SemanticCoverageEvidence::SemanticPayloadPreserved])
+        );
+
+        let command_gap = report
+            .gaps()
+            .iter()
+            .find(|gap| gap.capability_id() == capability.id())
+            .expect("payload completion must remain visible");
+        assert_eq!(command_gap.priority(), SemanticCoverageGapPriority::Medium);
+
+        let next_high_gap = report
+            .gaps_by_priority(SemanticCoverageGapPriority::High)
+            .into_iter()
+            .next()
+            .expect("a High gap must remain");
+        assert_eq!(
+            next_high_gap.capability_id(),
+            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Form)
         );
     }
 }

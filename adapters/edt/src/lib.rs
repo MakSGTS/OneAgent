@@ -319,8 +319,13 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut configuration_modules = Vec::new();
 
         let configuration_id = configuration.id().clone();
-        let configuration_source = source_id_from_path(
-            &project_root.join(CONFIGURATION_RELATIVE_PATH),
+        let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
+        let configuration_source = source_id_from_path_fragment(
+            &configuration_path,
+            format!(
+                "metadata_object={};fact=configuration",
+                configuration_id.as_str()
+            ),
             EdtGraphError::InvalidIdentifier,
         )?;
         insert_node(
@@ -436,10 +441,7 @@ fn collect_top_level_metadata(
         let descriptor = metadata_reader
             .read(&object_directory, kind)
             .map_err(EdtGraphError::MetadataObject)?;
-        let descriptor_source = source_id_from_path(
-            descriptor.descriptor_path(),
-            EdtGraphError::InvalidIdentifier,
-        )?;
+        let descriptor_source = metadata_object_source_id(&descriptor)?;
 
         insert_node(
             graph,
@@ -454,7 +456,12 @@ fn collect_top_level_metadata(
             configuration_id.clone(),
             descriptor.id().clone(),
             EdgeKind::Contains,
-            declared_provenance(descriptor_source.clone()),
+            declared_provenance(contains_edge_source_id(
+                descriptor.descriptor_path(),
+                descriptor.id(),
+                configuration_id,
+                descriptor.id(),
+            )?),
         )?;
 
         let structure_reader = FileSystemEdtMetadataStructureReader;
@@ -464,12 +471,14 @@ fn collect_top_level_metadata(
             .map_err(EdtGraphError::MetadataStructure)?;
 
         for child in children {
+            let child_source = metadata_child_source_id(&descriptor, &child)?;
+
             insert_node(
                 graph,
                 child.id().clone(),
                 child.name().clone(),
                 child.kind().node_kind(),
-                declared_provenance(descriptor_source.clone()),
+                declared_provenance(child_source),
             );
 
             insert_edge(
@@ -477,7 +486,12 @@ fn collect_top_level_metadata(
                 child.parent_id().clone(),
                 child.id().clone(),
                 EdgeKind::Contains,
-                declared_provenance(descriptor_source.clone()),
+                declared_provenance(contains_edge_source_id(
+                    descriptor.descriptor_path(),
+                    descriptor.id(),
+                    child.parent_id(),
+                    child.id(),
+                )?),
             )?;
         }
 
@@ -486,8 +500,7 @@ fn collect_top_level_metadata(
             .map_err(EdtGraphError::Module)?;
 
         for module in &modules {
-            let module_source =
-                source_id_from_path(module.path(), EdtGraphError::InvalidIdentifier)?;
+            let module_source = module_source_id(&descriptor, module)?;
 
             insert_node(
                 graph,
@@ -502,7 +515,12 @@ fn collect_top_level_metadata(
                 descriptor.id().clone(),
                 module.id().clone(),
                 EdgeKind::Contains,
-                parsed_provenance(module_source),
+                parsed_provenance(contains_edge_source_id(
+                    module.path(),
+                    descriptor.id(),
+                    descriptor.id(),
+                    module.id(),
+                )?),
             )?;
         }
 
@@ -567,8 +585,79 @@ fn graph_provenance(
     )
 }
 
-fn source_id_from_path(path: &Path, error: EdtGraphError) -> Result<EntityId, EdtGraphError> {
-    EntityId::new(path.to_string_lossy().replace('\\', "/")).map_err(|_| error)
+fn metadata_object_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        descriptor.descriptor_path(),
+        format!(
+            "metadata_object={};fact=metadata_object",
+            descriptor.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn metadata_child_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+    child: &EdtMetadataChildDescriptor,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        descriptor.descriptor_path(),
+        format!(
+            "metadata_object={};member={}:{}",
+            descriptor.id().as_str(),
+            child.kind().as_str(),
+            child.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn module_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+    module: &EdtModuleDescriptor,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        module.path(),
+        format!(
+            "metadata_object={};module={}",
+            descriptor.id().as_str(),
+            module.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn contains_edge_source_id(
+    path: &Path,
+    metadata_object_id: &EntityId,
+    source: &EntityId,
+    target: &EntityId,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        path,
+        format!(
+            "metadata_object={};edge=contains;source={};target={}",
+            metadata_object_id.as_str(),
+            source.as_str(),
+            target.as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn source_id_from_path_fragment(
+    path: &Path,
+    fragment: impl AsRef<str>,
+    error: EdtGraphError,
+) -> Result<EntityId, EdtGraphError> {
+    EntityId::new(format!(
+        "{}#{}",
+        path.to_string_lossy().replace('\\', "/"),
+        fragment.as_ref()
+    ))
+    .map_err(|_| error)
 }
 
 /// Errors produced while building an EDT semantic graph.
@@ -688,7 +777,7 @@ impl From<EdtLoadError> for EdtGraphError {
 
 #[cfg(test)]
 mod graph_tests {
-    use oneagent_graph::{EdgeKind, FactOrigin, NodeKind, ResolutionState};
+    use oneagent_graph::{EdgeKind, FactOrigin, NodeKind, ResolutionState, SemanticGraph};
     use oneagent_metadata::MetadataKind;
     use std::fs;
     use tempfile::tempdir;
@@ -835,6 +924,66 @@ mod graph_tests {
         .expect("accumulation register descriptor must be created");
 
         root
+    }
+
+    fn assert_metadata_member_provenance(graph: &SemanticGraph) {
+        let metadata_member_expectations = [
+            (
+                NodeKind::Attribute,
+                "Company",
+                "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=attribute:aaaaaaaa-1111-1111-1111-111111111111",
+            ),
+            (
+                NodeKind::Attribute,
+                "Warehouse",
+                "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=attribute:aaaaaaaa-2222-2222-2222-222222222222",
+            ),
+            (
+                NodeKind::TabularSection,
+                "Goods",
+                "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=tabular_section:aaaaaaaa-3333-3333-3333-333333333333",
+            ),
+            (
+                NodeKind::Form,
+                "DocumentForm",
+                "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=form:aaaaaaaa-4444-4444-4444-444444444444",
+            ),
+            (
+                NodeKind::Command,
+                "PostAndClose",
+                "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=command:aaaaaaaa-5555-5555-5555-555555555555",
+            ),
+            (
+                NodeKind::Dimension,
+                "Product",
+                "/src/AccumulationRegisters/StockBalance/StockBalance.mdo#metadata_object=44444444-4444-4444-4444-444444444444;member=dimension:55555555-5555-5555-5555-555555555555",
+            ),
+            (
+                NodeKind::Dimension,
+                "Warehouse",
+                "/src/AccumulationRegisters/StockBalance/StockBalance.mdo#metadata_object=44444444-4444-4444-4444-444444444444;member=dimension:66666666-6666-6666-6666-666666666666",
+            ),
+            (
+                NodeKind::Resource,
+                "Quantity",
+                "/src/AccumulationRegisters/StockBalance/StockBalance.mdo#metadata_object=44444444-4444-4444-4444-444444444444;member=resource:77777777-7777-7777-7777-777777777777",
+            ),
+        ];
+
+        for (kind, name, expected_source) in metadata_member_expectations {
+            let member = graph
+                .nodes_by_kind(kind)
+                .into_iter()
+                .find(|node| node.name().as_str() == name)
+                .expect("metadata member node must exist");
+            let source = member.provenance()[0]
+                .source()
+                .expect("metadata member source must exist")
+                .as_str();
+
+            assert_eq!(member.provenance()[0].origin(), FactOrigin::Declared);
+            assert!(source.contains(expected_source));
+        }
     }
 
     #[test]
@@ -986,14 +1135,15 @@ mod graph_tests {
             .expect("CheckAccess procedure must exist");
         let calls = graph.outgoing_by_kind(before_write.id(), EdgeKind::Calls);
 
+        let document_source = document.provenance()[0]
+            .source()
+            .expect("document source must exist")
+            .as_str();
+
         assert_eq!(document.provenance()[0].origin(), FactOrigin::Declared);
-        assert!(
-            document.provenance()[0]
-                .source()
-                .expect("document source must exist")
-                .as_str()
-                .ends_with("/src/Documents/Sales/Sales.mdo")
-        );
+        assert!(document_source.contains(
+            "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;fact=metadata_object"
+        ));
 
         assert_eq!(object_module.provenance()[0].origin(), FactOrigin::Parsed);
         assert!(
@@ -1001,7 +1151,9 @@ mod graph_tests {
                 .source()
                 .expect("module source must exist")
                 .as_str()
-                .ends_with("/src/Documents/Sales/ObjectModule.bsl")
+                .contains(
+                    "/src/Documents/Sales/ObjectModule.bsl#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;module=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module"
+                )
         );
 
         assert_eq!(before_write.provenance()[0].origin(), FactOrigin::Declared);
@@ -1020,6 +1172,41 @@ mod graph_tests {
             calls[0].provenance()[0].resolution(),
             ResolutionState::Resolved
         );
+
+        assert_metadata_member_provenance(&graph);
+
+        let document_contains_company = graph
+            .outgoing_by_kind(document.id(), EdgeKind::Contains)
+            .into_iter()
+            .find(|edge| edge.target().as_str() == "aaaaaaaa-1111-1111-1111-111111111111")
+            .expect("document must contain Company attribute");
+        let company_edge_source = document_contains_company.provenance()[0]
+            .source()
+            .expect("Company edge source must exist")
+            .as_str();
+
+        assert_eq!(
+            document_contains_company.provenance()[0].origin(),
+            FactOrigin::Declared
+        );
+        assert!(company_edge_source.contains(
+            "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=contains;source=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;target=aaaaaaaa-1111-1111-1111-111111111111"
+        ));
+
+        let module_edge = graph
+            .outgoing_by_kind(document.id(), EdgeKind::Contains)
+            .into_iter()
+            .find(|edge| edge.target() == object_module.id())
+            .expect("document must contain object module");
+        let module_edge_source = module_edge.provenance()[0]
+            .source()
+            .expect("module edge source must exist")
+            .as_str();
+
+        assert_eq!(module_edge.provenance()[0].origin(), FactOrigin::Parsed);
+        assert!(module_edge_source.contains(
+            "/src/Documents/Sales/ObjectModule.bsl#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=contains;source=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;target=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module"
+        ));
     }
 
     #[test]

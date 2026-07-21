@@ -18,12 +18,16 @@ pub enum NodeKind {
     Command,
     /// Attribute node.
     Attribute,
+    /// Platform-provided standard attribute node.
+    StandardAttribute,
     /// Tabular section node.
     TabularSection,
     /// Register dimension node.
     Dimension,
     /// Register resource node.
     Resource,
+    /// Accounting register measure node.
+    Measure,
     /// Role node.
     Role,
     /// Subsystem node.

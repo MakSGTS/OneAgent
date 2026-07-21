@@ -777,7 +777,11 @@ impl From<EdtLoadError> for EdtGraphError {
 
 #[cfg(test)]
 mod graph_tests {
-    use oneagent_graph::{EdgeKind, FactOrigin, NodeKind, ResolutionState, SemanticGraph};
+    use oneagent_common::EntityName;
+    use oneagent_graph::{
+        EdgeKind, FactOrigin, NodeKind, ResolutionError, ResolutionState, SemanticGraph,
+        SemanticReference,
+    };
     use oneagent_metadata::MetadataKind;
     use std::fs;
     use tempfile::tempdir;
@@ -1371,5 +1375,50 @@ mod graph_tests {
         let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
 
         assert!(children.iter().any(|edge| edge.target() == command.id()));
+    }
+
+    #[test]
+    fn semantic_resolution_finds_metadata_members_after_graph_build() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+        let document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .next()
+            .expect("document node must exist");
+        let index = graph.resolution_index();
+
+        let company = index
+            .resolve_child(
+                document.id(),
+                &EntityName::new("Company").expect("name must be valid"),
+            )
+            .expect("Company attribute must resolve under document");
+        let owner = index
+            .resolve_owner(company.id())
+            .expect("Company owner must resolve");
+        let ambiguous = index
+            .resolve_name(&EntityName::new("Warehouse").expect("name must be valid"))
+            .expect_err("Warehouse name must be ambiguous across document and register");
+
+        assert_eq!(company.kind(), NodeKind::Attribute);
+        assert_eq!(owner.id(), document.id());
+        assert_eq!(
+            ambiguous,
+            ResolutionError::AmbiguousTarget {
+                reference: SemanticReference::Name(
+                    EntityName::new("Warehouse").expect("name must be valid")
+                ),
+                candidates: vec![
+                    oneagent_common::EntityId::new("66666666-6666-6666-6666-666666666666")
+                        .expect("identifier must be valid"),
+                    oneagent_common::EntityId::new("aaaaaaaa-2222-2222-2222-222222222222")
+                        .expect("identifier must be valid"),
+                ],
+            }
+        );
     }
 }

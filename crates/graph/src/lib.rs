@@ -5,14 +5,20 @@
 pub mod edge;
 pub mod identity;
 pub mod kind;
+pub mod measure;
 pub mod node;
 pub mod provenance;
+pub mod resolution;
+pub mod standard_attribute;
 
 pub use edge::GraphEdge;
 pub use identity::{EdgeId, NodeId};
 pub use kind::{EdgeKind, NodeKind};
+pub use measure::{Measure, MeasureError};
 pub use node::GraphNode;
 pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
+pub use resolution::{ResolutionError, SemanticReference, SemanticResolutionIndex};
+pub use standard_attribute::{StandardAttribute, StandardAttributeError, StandardAttributeKind};
 
 use oneagent_common::{EntityId, EntityName};
 use std::collections::{BTreeMap, BTreeSet};
@@ -93,10 +99,89 @@ impl SemanticGraph {
         ))
     }
 
+    /// Inserts a standard attribute node and connects it to its metadata object.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError::MissingNode`] when the owning metadata object is
+    /// absent from the graph.
+    pub fn insert_standard_attribute(
+        &mut self,
+        attribute: &StandardAttribute,
+    ) -> Result<Option<GraphNode>, GraphError> {
+        if !self.nodes.contains_key(attribute.parent_id()) {
+            return Err(GraphError::MissingNode(attribute.parent_id().clone()));
+        }
+
+        let node = GraphNode::new_with_provenance(
+            attribute.id().clone(),
+            attribute.name().clone(),
+            NodeKind::StandardAttribute,
+            attribute.provenance().to_vec(),
+        );
+        let edge = GraphEdge::new_with_provenance(
+            attribute.parent_id().clone(),
+            attribute.id().clone(),
+            EdgeKind::Contains,
+            attribute.provenance().to_vec(),
+        );
+        let previous = self.insert_node(node);
+
+        self.insert_edge(edge)?;
+
+        Ok(previous)
+    }
+
+    /// Inserts a measure node and connects it to its metadata object.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError::MissingNode`] when the owning metadata object is
+    /// absent from the graph.
+    pub fn insert_measure(&mut self, measure: &Measure) -> Result<Option<GraphNode>, GraphError> {
+        if !self.nodes.contains_key(measure.parent_id()) {
+            return Err(GraphError::MissingNode(measure.parent_id().clone()));
+        }
+
+        let node = GraphNode::new_with_provenance(
+            measure.id().clone(),
+            measure.name().clone(),
+            NodeKind::Measure,
+            measure.provenance().to_vec(),
+        );
+        let edge = GraphEdge::new_with_provenance(
+            measure.parent_id().clone(),
+            measure.id().clone(),
+            EdgeKind::Contains,
+            measure.provenance().to_vec(),
+        );
+        let previous = self.insert_node(node);
+
+        self.insert_edge(edge)?;
+
+        Ok(previous)
+    }
+
     /// Returns a node by identifier.
     #[must_use]
     pub fn node(&self, id: &EntityId) -> Option<&GraphNode> {
         self.nodes.get(id)
+    }
+
+    /// Returns all graph nodes in deterministic order.
+    pub fn nodes(&self) -> impl Iterator<Item = &GraphNode> {
+        self.nodes.values()
+    }
+
+    /// Returns all graph edges in deterministic order.
+    pub fn edges(&self) -> impl Iterator<Item = &GraphEdge> {
+        self.edges.iter()
+    }
+
+    /// Builds a semantic resolution index for the current graph snapshot.
+    #[must_use]
+    pub fn resolution_index(&self) -> SemanticResolutionIndex<'_> {
+        SemanticResolutionIndex::new(self)
     }
 
     /// Returns all nodes of a specified kind.
@@ -176,8 +261,9 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use super::{
-        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
-        ResolutionState, SemanticGraph,
+        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphError, GraphNode, Measure, NodeKind,
+        ProducerId, Provenance, ResolutionState, SemanticGraph, StandardAttribute,
+        StandardAttributeKind,
     };
     use oneagent_metadata::MetadataKind;
 
@@ -419,5 +505,235 @@ mod tests {
         assert!(first);
         assert!(!second);
         assert_eq!(graph.edge_count(), 1);
+    }
+
+    #[test]
+    fn inserts_standard_attribute_node_and_parent_edge() {
+        let document_id = id("metadata.document.sales");
+        let attribute = StandardAttribute::new(
+            document_id.clone(),
+            StandardAttributeKind::Number,
+            vec![provenance(&document_id, FactOrigin::Declared)],
+        )
+        .expect("standard attribute must be valid");
+        let attribute_id = attribute.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node(GraphNode::new(
+            document_id.clone(),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Document),
+        ));
+
+        let previous = graph
+            .insert_standard_attribute(&attribute)
+            .expect("standard attribute parent must exist");
+
+        let node = graph
+            .node(&attribute_id)
+            .expect("standard attribute node must exist");
+        let edges = graph.outgoing_by_kind(&document_id, EdgeKind::Contains);
+
+        assert!(previous.is_none());
+        assert_eq!(node.kind(), NodeKind::StandardAttribute);
+        assert_eq!(node.name().as_str(), "Number");
+        assert_eq!(node.provenance().len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::StandardAttribute).len(), 1);
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].target(), &attribute_id);
+        assert_eq!(edges[0].provenance().len(), 1);
+    }
+
+    #[test]
+    fn rejects_standard_attribute_when_parent_is_missing() {
+        let document_id = id("metadata.document.sales");
+        let attribute =
+            StandardAttribute::new(document_id.clone(), StandardAttributeKind::Ref, Vec::new())
+                .expect("standard attribute must be valid");
+        let attribute_id = attribute.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        let error = graph
+            .insert_standard_attribute(&attribute)
+            .expect_err("missing parent must be rejected");
+
+        assert_eq!(error, GraphError::MissingNode(document_id));
+        assert!(graph.node(&attribute_id).is_none());
+    }
+
+    #[test]
+    fn standard_attribute_does_not_regress_user_attribute() {
+        let document_id = id("metadata.document.sales");
+        let user_attribute_id = id("metadata.document.sales:attribute:Code");
+        let standard_attribute = StandardAttribute::new(
+            document_id.clone(),
+            StandardAttributeKind::Code,
+            vec![provenance(&document_id, FactOrigin::Declared)],
+        )
+        .expect("standard attribute must be valid");
+        let standard_attribute_id = standard_attribute.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node(GraphNode::new(
+            document_id.clone(),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Document),
+        ));
+        graph.insert_node(GraphNode::new(
+            user_attribute_id.clone(),
+            name("Code"),
+            NodeKind::Attribute,
+        ));
+        graph
+            .insert_edge(GraphEdge::new(
+                document_id.clone(),
+                user_attribute_id.clone(),
+                EdgeKind::Contains,
+            ))
+            .expect("attribute edge must be valid");
+        graph
+            .insert_standard_attribute(&standard_attribute)
+            .expect("standard attribute parent must exist");
+
+        assert_ne!(user_attribute_id, standard_attribute_id);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Attribute).len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::StandardAttribute).len(), 1);
+        assert_eq!(
+            graph
+                .outgoing_by_kind(&document_id, EdgeKind::Contains)
+                .len(),
+            2
+        );
+        assert_eq!(
+            graph.node(&user_attribute_id).map(GraphNode::kind),
+            Some(NodeKind::Attribute)
+        );
+        assert_eq!(
+            graph.node(&standard_attribute_id).map(GraphNode::kind),
+            Some(NodeKind::StandardAttribute)
+        );
+    }
+
+    #[test]
+    fn inserts_measure_node_and_parent_edge() {
+        let register_id = id("metadata.accounting_register.sales");
+        let measure = Measure::new(
+            register_id.clone(),
+            name("Amount"),
+            vec![provenance(&register_id, FactOrigin::Declared)],
+        )
+        .expect("measure must be valid");
+        let measure_id = measure.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node(GraphNode::new(
+            register_id.clone(),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::AccountingRegister),
+        ));
+
+        let previous = graph
+            .insert_measure(&measure)
+            .expect("measure parent must exist");
+
+        let node = graph.node(&measure_id).expect("measure node must exist");
+        let edges = graph.outgoing_by_kind(&register_id, EdgeKind::Contains);
+
+        assert!(previous.is_none());
+        assert_eq!(node.kind(), NodeKind::Measure);
+        assert_eq!(node.name().as_str(), "Amount");
+        assert_eq!(node.provenance().len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Measure).len(), 1);
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].target(), &measure_id);
+        assert_eq!(edges[0].provenance().len(), 1);
+    }
+
+    #[test]
+    fn rejects_measure_when_parent_is_missing() {
+        let register_id = id("metadata.accounting_register.sales");
+        let measure = Measure::new(register_id.clone(), name("Amount"), Vec::new())
+            .expect("measure must be valid");
+        let measure_id = measure.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        let error = graph
+            .insert_measure(&measure)
+            .expect_err("missing parent must be rejected");
+
+        assert_eq!(error, GraphError::MissingNode(register_id));
+        assert!(graph.node(&measure_id).is_none());
+    }
+
+    #[test]
+    fn measure_does_not_collide_with_resource_or_dimension() {
+        let register_id = id("metadata.accounting_register.sales");
+        let dimension_id = id("metadata.accounting_register.sales:dimension:Amount");
+        let resource_id = id("metadata.accounting_register.sales:resource:Amount");
+        let measure = Measure::new(
+            register_id.clone(),
+            name("Amount"),
+            vec![provenance(&register_id, FactOrigin::Declared)],
+        )
+        .expect("measure must be valid");
+        let measure_id = measure.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        graph.insert_node(GraphNode::new(
+            register_id.clone(),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::AccountingRegister),
+        ));
+        graph.insert_node(GraphNode::new(
+            dimension_id.clone(),
+            name("Amount"),
+            NodeKind::Dimension,
+        ));
+        graph.insert_node(GraphNode::new(
+            resource_id.clone(),
+            name("Amount"),
+            NodeKind::Resource,
+        ));
+        graph
+            .insert_edge(GraphEdge::new(
+                register_id.clone(),
+                dimension_id.clone(),
+                EdgeKind::Contains,
+            ))
+            .expect("dimension edge must be valid");
+        graph
+            .insert_edge(GraphEdge::new(
+                register_id.clone(),
+                resource_id.clone(),
+                EdgeKind::Contains,
+            ))
+            .expect("resource edge must be valid");
+        graph
+            .insert_measure(&measure)
+            .expect("measure parent must exist");
+
+        assert_ne!(measure_id, dimension_id);
+        assert_ne!(measure_id, resource_id);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Dimension).len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Resource).len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::Measure).len(), 1);
+        assert_eq!(
+            graph
+                .outgoing_by_kind(&register_id, EdgeKind::Contains)
+                .len(),
+            3
+        );
+        assert_eq!(
+            graph.node(&dimension_id).map(GraphNode::kind),
+            Some(NodeKind::Dimension)
+        );
+        assert_eq!(
+            graph.node(&resource_id).map(GraphNode::kind),
+            Some(NodeKind::Resource)
+        );
+        assert_eq!(
+            graph.node(&measure_id).map(GraphNode::kind),
+            Some(NodeKind::Measure)
+        );
     }
 }

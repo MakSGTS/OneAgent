@@ -1369,7 +1369,14 @@ other generic directory mappings lack dedicated integration fixtures.
 applicable to the EDT adapter: common forms are top-level
 `MetadataKind::CommonForm` entities, while forms owned by documents, catalogs,
 and other metadata objects emit the flat `NodeKind::Form` variant.
-`MetadataKind::Unknown` is not discovered as a top-level EDT metadata entity.
+`MetadataKind::Unknown` is a source-independent fallback marker for metadata
+kinds that are unknown to or not yet represented by the domain model. It is not
+an EDT domain entity: EDT discovery has no directory mapping for it, metadata
+parsers do not return it as a normal descriptor kind, and unsupported source
+directories are ignored rather than emitted as unknown nodes. Consequently,
+`metadata_entity.unknown` remains explicitly registered but is `NotApplicable`
+to the EDT pipeline. This adapter-specific classification does not change the
+separate graph-domain or EDT semantic-node capabilities for unknown nodes.
 Commands embedded in another metadata descriptor similarly emit the flat
 `NodeKind::Command` variant.
 
@@ -1380,14 +1387,23 @@ The EDT pipeline currently emits:
 * top-level `NodeKind::Metadata(kind)` nodes for the directory registry above;
 * `Module`, `Procedure`, and `Function` nodes from known BSL module files and
   declaration extraction;
-* `Attribute`, `TabularSection`, `Form`, `Command`, `Dimension`, and `Resource`
-  child nodes from metadata descriptors.
+* `Attribute`, `TabularSection`, `Form`, `Command`, `Dimension`, `Resource`, and
+  `Measure` child nodes from metadata descriptors.
 
-`StandardAttribute` and `Measure` have graph-domain models and insertion tests,
-but the EDT structure reader does not extract or emit them. `Query`, the flat
-`Role` and `Subsystem` variants, and `Unknown` are also not emitted by the EDT
-pipeline. EDT roles and subsystems use `NodeKind::Metadata(MetadataKind::Role)`
-and `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
+EDT represents an accounting-register measure as an
+`AccountingRegisterResource` in the `<resources>` collection. The generic
+structure reader preserves that source vocabulary, while EDT graph conversion
+maps a resource owned by `MetadataKind::AccountingRegister` to
+`NodeKind::Measure`. Resources of accumulation and other register kinds remain
+`NodeKind::Resource`. Measure identity uses the source UUID when available and
+its provenance identifies the original accounting-register descriptor and
+resource member.
+
+`StandardAttribute` has a graph-domain model and insertion tests, but the EDT
+structure reader does not extract or emit it. `Query`, the flat `Role` and
+`Subsystem` variants, and `Unknown` are also not emitted by the EDT pipeline.
+EDT roles and subsystems use `NodeKind::Metadata(MetadataKind::Role)` and
+`NodeKind::Metadata(MetadataKind::Subsystem)` instead.
 
 ### Ownership inventory
 
@@ -1400,7 +1416,10 @@ Impact Analysis can opt into child-to-owner and owner-to-child propagation.
 Attribute ownership is only partially supported. The XML reader recognizes
 nested attribute elements, but currently assigns the top-level metadata object
 as parent. Attributes nested in a tabular section therefore do not preserve the
-tabular-section owner. Standard Attribute and Measure ownership is not emitted.
+tabular-section owner. Standard Attribute ownership is not emitted. Measure node
+conversion reuses generic child containment to preserve graph validity, but
+`ownership_relation.measure` remains a separate High capability pending its own
+ownership-specific evidence and review.
 
 ### Reference and resolution inventory
 
@@ -1470,22 +1489,25 @@ payload preservation is a separate Medium gap. The former
 `metadata_entity.form` and `semantic_node.metadata.form` High gaps were stale:
 the generic top-level Form concept is not applicable to EDT, whose actual common
 and subordinate form representations already use distinct semantic kinds.
-According to the deterministic gap ordering, the first remaining High gap is
-`metadata_entity.unknown`. Its applicability must be established before any
-producer behavior is added.
+The former `metadata_entity.unknown` High gap was a stale applicability
+classification. `MetadataKind::Unknown` is fallback-only for this adapter, so
+the capability is now `NotApplicable` without adding a producer or emitting
+unknown metadata nodes. According to the deterministic gap ordering, the first
+remaining High gap is `semantic_node.metadata.unknown`.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — Unknown metadata applicability.** Determine whether
-   `MetadataKind::Unknown` represents an EDT producer capability or an explicit
-   fallback only. Do not emit unknown nodes solely to satisfy coverage.
+1. **High — metadata Unknown node applicability.** Determine whether
+   `NodeKind::Metadata(MetadataKind::Unknown)` is an applicable EDT node
+   capability or another fallback-only classification. This is the first
+   remaining typed High gap.
 2. **High — Standard Attribute EDT contribution.** Extend metadata structure
    extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
    stable node identity, typed kind payload, owner edge, provenance, validation,
    and representative tests.
-3. **High — Accounting Register Measure EDT contribution.** Extract and emit
-   `Measure` with stable identity, owner edge, provenance, validation, and a
-   representative fixture.
+3. **High — Measure ownership evidence.** Review and test the existing generic
+   containment path independently from Measure node emission before changing
+   `ownership_relation.measure` status.
 4. **High — nested Tabular Section ownership.** Preserve nested parent context
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
@@ -1507,6 +1529,17 @@ The remaining thematic Semantic Coverage Completion backlog is:
 9. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
+
+The former `semantic_node.measure` High gap is closed. A representative EDT
+Accounting Register fixture now proves production parsing, semantic kind
+selection, stable UUID identity, source provenance, and repeated-build
+determinism. The node capability is `Supported`; ownership coverage remains a
+separate task.
+
+The EDT registry now reports 14 High gaps instead of 15 and retains 44 Medium
+gaps. Other fallback, flat-node, ownership, and declared-edge capabilities remain
+independent typed gaps and are not reclassified by these focused coverage changes.
+Sprint 3 Integration Review remains blocked while High gaps remain.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable

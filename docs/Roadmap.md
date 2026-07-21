@@ -115,15 +115,21 @@ Ordered follow-up work:
 2. **High — completed:** discover and emit top-level Common Command metadata (`metadata_entity.command`); typed payload completion remains Medium.
 3. **High — completed:** classify generic top-level Form entity and node capabilities as not applicable to EDT; real common and subordinate forms use distinct semantic kinds.
 4. **High — completed:** discover and emit top-level Common Template metadata (`metadata_entity.template`); typed payload completion remains Medium.
-5. **High — next:** determine whether `metadata_entity.unknown` is applicable to EDT or a fallback-only model kind.
-6. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
-7. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
-8. **High:** preserve tabular-section ownership for nested attributes.
-9. **High:** implement producer-specific support for each declared-only semantic edge.
-10. **Medium:** define and preserve complete typed metadata payloads.
-11. **Medium:** add successful fixtures for every mapped metadata reference target kind.
-12. **Medium:** decide and implement reference-request provenance ownership.
-13. **Medium:** replace permissive endpoint validation as new edge producers are added.
+5. **High — completed:** classify fallback-only `metadata_entity.unknown` as not applicable to EDT without emitting synthetic entities.
+6. **High — completed:** map EDT accounting-register resources to stable, provenance-backed `Measure` nodes (`semantic_node.measure`); ownership coverage remains separate.
+7. **High — next:** determine applicability of `semantic_node.metadata.unknown`, the first remaining typed gap.
+8. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
+9. **High:** review Measure ownership evidence independently from node emission.
+10. **High:** preserve tabular-section ownership for nested attributes.
+11. **High:** implement producer-specific support for each declared-only semantic edge.
+12. **Medium:** define and preserve complete typed metadata payloads.
+13. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+14. **Medium:** decide and implement reference-request provenance ownership.
+15. **Medium:** replace permissive endpoint validation as new edge producers are added.
+
+The EDT Coverage Registry currently contains 14 High gaps and 44 Medium gaps.
+Sprint 3 Integration Review remains blocked until all High gaps are resolved or
+correctly classified as not applicable.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

@@ -707,7 +707,7 @@ fn collect_metadata_child(
         graph,
         child.id().clone(),
         child.name().clone(),
-        child.kind().node_kind(),
+        semantic_child_node_kind(descriptor.kind(), child.kind()),
         declared_provenance(child_source),
     );
 
@@ -743,6 +743,23 @@ fn collect_metadata_child(
     }
 
     Ok(())
+}
+
+const fn semantic_child_node_kind(
+    owner_kind: MetadataKind,
+    child_kind: EdtMetadataChildKind,
+) -> NodeKind {
+    if matches!(
+        (owner_kind, child_kind),
+        (
+            MetadataKind::AccountingRegister,
+            EdtMetadataChildKind::Resource
+        )
+    ) {
+        NodeKind::Measure
+    } else {
+        child_kind.node_kind()
+    }
 }
 
 fn resolve_metadata_references(
@@ -1210,6 +1227,18 @@ mod graph_tests {
 </mdclass:AccumulationRegister>
 "#;
 
+    const ACCOUNTING_REGISTER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:AccountingRegister
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="abababab-1111-2222-3333-444444444444">
+    <name>GeneralLedger</name>
+
+    <resources uuid="cdcdcdcd-1111-2222-3333-444444444444">
+        <name>Amount</name>
+    </resources>
+</mdclass:AccountingRegister>
+"#;
+
     fn create_edt_project() -> tempfile::TempDir {
         let root = tempdir().expect("temporary directory must be created");
 
@@ -1337,6 +1366,13 @@ mod graph_tests {
 "#,
         )
         .expect("second common template descriptor must be created");
+    }
+
+    fn add_accounting_register_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/AccountingRegisters/GeneralLedger");
+        fs::create_dir_all(&directory).expect("accounting register directory must be created");
+        fs::write(directory.join("GeneralLedger.mdo"), ACCOUNTING_REGISTER_XML)
+            .expect("accounting register descriptor must be created");
     }
 
     fn document_with_reference(reference_type: &str) -> String {
@@ -2555,6 +2591,80 @@ mod graph_tests {
             1
         );
     }
+
+    #[test]
+    fn emits_accounting_register_resource_as_measure_node() {
+        let root = create_edt_project();
+        add_accounting_register_descriptor(&root);
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with accounting register measure must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let measure_id = NodeId::new("cdcdcdcd-1111-2222-3333-444444444444");
+        let measure = first
+            .graph()
+            .query()
+            .node(&measure_id)
+            .expect("accounting register resource must emit a measure node");
+        let repeated_measure = second
+            .graph()
+            .query()
+            .node(&measure_id)
+            .expect("repeated build must preserve measure identity");
+        let resource = first
+            .graph()
+            .nodes_by_kind(NodeKind::Resource)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Quantity")
+            .expect("accumulation register resource must remain a resource");
+        let coverage = first.coverage_report();
+        let capability = coverage
+            .edt_pipeline()
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Measure,
+            ))
+            .expect("measure node coverage must exist");
+        let ownership = coverage
+            .edt_pipeline()
+            .capability(SemanticCoverageCapabilityId::OwnershipRelation(
+                NodeKind::Measure,
+            ))
+            .expect("measure ownership coverage must remain registered");
+
+        assert_eq!(measure.id().as_str(), measure_id.as_str());
+        assert_eq!(measure.id(), repeated_measure.id());
+        assert_eq!(measure.name().as_str(), "Amount");
+        assert_eq!(measure.kind(), NodeKind::Measure);
+        assert_eq!(resource.kind(), NodeKind::Resource);
+        assert_eq!(first.graph().nodes_by_kind(NodeKind::Measure).len(), 1);
+        assert_eq!(measure.provenance().len(), 1);
+        assert_eq!(measure.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            measure.provenance()[0]
+                .source()
+                .expect("measure provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/AccountingRegisters/GeneralLedger/GeneralLedger.mdo#metadata_object=abababab-1111-2222-3333-444444444444;member=resource:cdcdcdcd-1111-2222-3333-444444444444"
+                )
+        );
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert!(capability.missing_evidence().is_empty());
+        assert_eq!(ownership.status(), SemanticCoverageStatus::Unsupported);
+        assert!(
+            coverage
+                .edt_pipeline()
+                .gaps_by_priority(oneagent_graph::SemanticCoverageGapPriority::High)
+                .iter()
+                .any(|gap| gap.capability_id() == ownership.id())
+        );
+        assert!(first.graph().diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
     #[test]
     fn metadata_object_contains_form() {
         let root = create_edt_project();

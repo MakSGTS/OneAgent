@@ -293,7 +293,8 @@ mod tests {
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionError,
     ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphBuildDiff,
-    SemanticGraphReport, SemanticReference, SemanticReferenceOutcome, SemanticReferenceStatistics,
+    SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
+    SemanticReferenceOutcome, SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -384,6 +385,21 @@ impl EdtSemanticGraphBuildResult {
             &current.graph,
             &current.diagnostics,
             current.reference_statistics,
+        )
+    }
+
+    /// Validates graph-level and build-level invariants for this EDT build result.
+    ///
+    /// Validation does not read EDT XML, does not rebuild the graph and does not
+    /// rerun semantic resolution. Recoverable semantic diagnostics remain
+    /// diagnostics and are not validation issues unless they expose an invalid
+    /// build-result state.
+    #[must_use]
+    pub fn validate(&self) -> SemanticGraphValidationResult {
+        SemanticGraphValidator::new().validate_build_result(
+            &self.graph,
+            &self.diagnostics,
+            self.reference_statistics,
         )
     }
 }
@@ -1060,7 +1076,9 @@ mod graph_tests {
     use std::fs;
     use tempfile::tempdir;
 
-    use super::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
+    use super::{
+        EdtSemanticGraphBuildResult, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder,
+    };
 
     const CONFIGURATION_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mdclass:Configuration
@@ -2227,5 +2245,15 @@ mod graph_tests {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn build_result_validation_uses_graph_validation_api() {
+        let result = EdtSemanticGraphBuildResult::new(SemanticGraph::new(), Vec::new());
+
+        let validation = result.validate();
+
+        assert!(validation.is_valid());
+        assert!(validation.issues().is_empty());
     }
 }

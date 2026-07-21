@@ -14,6 +14,7 @@ pub mod provenance;
 pub mod report;
 pub mod resolution;
 pub mod standard_attribute;
+pub mod validation;
 
 pub use build_diff::{
     BuildDiffSummary, CountChange, CountChangeDirection, CountDelta, DiagnosticChange,
@@ -41,6 +42,11 @@ pub use report::{
 };
 pub use resolution::{ResolutionError, SemanticReference, SemanticResolutionIndex};
 pub use standard_attribute::{StandardAttribute, StandardAttributeError, StandardAttributeKind};
+pub use validation::{
+    SemanticGraphSchema, SemanticGraphValidationCode, SemanticGraphValidationIssue,
+    SemanticGraphValidationIssueKind, SemanticGraphValidationResult,
+    SemanticGraphValidationSeverity, SemanticGraphValidationSummary, SemanticGraphValidator,
+};
 
 use oneagent_common::{EntityId, EntityName};
 use std::collections::{BTreeMap, BTreeSet};
@@ -216,6 +222,12 @@ impl SemanticGraph {
     #[must_use]
     pub fn diff(&self, new: &Self) -> SemanticGraphDiff {
         SemanticGraphDiff::between(self, new)
+    }
+
+    /// Validates graph-level structural, semantic and provenance invariants.
+    #[must_use]
+    pub fn validate(&self) -> SemanticGraphValidationResult {
+        SemanticGraphValidator::new().validate(self)
     }
 
     /// Returns all nodes of a specified kind.

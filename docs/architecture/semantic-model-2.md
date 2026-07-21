@@ -1347,10 +1347,14 @@ The configuration root is loaded from `Configuration.mdo`. The top-level EDT
 directory registry discovers Catalog, Document, Enumeration, Common Module,
 Report, Data Processor, Information Register, Accumulation Register, Accounting
 Register, Calculation Register, Business Process, Task, Role, Common Form, HTTP
-Service, Web Service, XDTO Package, Subsystem, and Common Command descriptors.
+Service, Web Service, XDTO Package, Subsystem, Common Command, and Common Template
+descriptors.
 Common commands use the EDT `CommonCommands/<Name>/<Name>.mdo` layout and are
 represented as `MetadataKind::Command` rather than the flat child
-`NodeKind::Command`.
+`NodeKind::Command`. Common templates similarly use
+`CommonTemplates/<Name>/<Name>.mdo` and the existing
+`MetadataKind::Template`; subordinate template extraction remains outside this
+capability.
 
 All discovered top-level descriptors emit `NodeKind::Metadata(kind)` with stable
 identity and provenance. Their status is `PartiallySupported`: the descriptor
@@ -1358,16 +1362,16 @@ reader parses identity, name, synonym, kind, and path, while the graph node keep
 only identity, name, kind, and provenance. Descriptor payload beyond the current
 graph contract is not represented as typed semantic payload. Dedicated
 representative fixtures currently exist for Configuration, Catalog, Document,
-Common Module, Accumulation Register, and Common Command; the other generic
-directory mappings lack dedicated integration fixtures.
+Common Module, Accumulation Register, Common Command, and Common Template; the
+other generic directory mappings lack dedicated integration fixtures.
 
 `MetadataKind::Form` and `NodeKind::Metadata(MetadataKind::Form)` are not
 applicable to the EDT adapter: common forms are top-level
 `MetadataKind::CommonForm` entities, while forms owned by documents, catalogs,
 and other metadata objects emit the flat `NodeKind::Form` variant.
-`MetadataKind::Template` and `MetadataKind::Unknown` are not discovered as
-top-level EDT metadata entities. Commands embedded in another metadata
-descriptor similarly emit the flat `NodeKind::Command` variant.
+`MetadataKind::Unknown` is not discovered as a top-level EDT metadata entity.
+Commands embedded in another metadata descriptor similarly emit the flat
+`NodeKind::Command` variant.
 
 ### Semantic node inventory
 
@@ -1467,15 +1471,14 @@ payload preservation is a separate Medium gap. The former
 the generic top-level Form concept is not applicable to EDT, whose actual common
 and subordinate form representations already use distinct semantic kinds.
 According to the deterministic gap ordering, the first remaining High gap is
-`metadata_entity.template`.
+`metadata_entity.unknown`. Its applicability must be established before any
+producer behavior is added.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — unsupported top-level metadata entities.** Address Template next,
-   followed by the remaining entities in deterministic audit order; confirm the
-   EDT source shape before adding discovery mappings. Acceptance: discovery
-   mapping, typed descriptor, node emission, provenance, and one focused fixture
-   per entity kind.
+1. **High — Unknown metadata applicability.** Determine whether
+   `MetadataKind::Unknown` represents an EDT producer capability or an explicit
+   fallback only. Do not emit unknown nodes solely to satisfy coverage.
 2. **High — Standard Attribute EDT contribution.** Extend metadata structure
    extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
    stable node identity, typed kind payload, owner edge, provenance, validation,
@@ -1504,6 +1507,13 @@ The remaining thematic Semantic Coverage Completion backlog is:
 9. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
+
+The former High `metadata_entity.template` gap is closed. EDT now discovers
+Common Template descriptors through the generic top-level path, emits stable
+`NodeKind::Metadata(MetadataKind::Template)` nodes and configuration ownership
+edges with provenance, and verifies deterministic Query API results. The
+capability remains `PartiallySupported` only because complete typed template
+payload preservation belongs to the shared Medium payload-completion item.
 
 The audit intentionally does not implement these backlog items, add serialization
 or a CLI, scan source code at runtime, introduce quality percentages, or change

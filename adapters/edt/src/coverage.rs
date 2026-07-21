@@ -199,10 +199,16 @@ fn metadata_capability(kind: MetadataKind) -> SemanticCoverageCapability {
                 "The generic EDT path emits this metadata kind without a dedicated representative fixture, and descriptor payload is only partially preserved"
             });
             if representative {
-                capability.with_representative_test(if kind == MetadataKind::Command {
-                    "oneagent_edt::graph_tests::discovers_top_level_common_command_as_metadata_entity"
-                } else {
-                    "oneagent_edt::graph_tests::builds_graph_with_configuration_and_metadata_objects"
+                capability.with_representative_test(match kind {
+                    MetadataKind::Command => {
+                        "oneagent_edt::graph_tests::discovers_top_level_common_command_as_metadata_entity"
+                    }
+                    MetadataKind::Template => {
+                        "oneagent_edt::graph_tests::discovers_top_level_common_template_as_metadata_entity"
+                    }
+                    _ => {
+                        "oneagent_edt::graph_tests::builds_graph_with_configuration_and_metadata_objects"
+                    }
                 })
             } else {
                 capability
@@ -547,6 +553,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
         MetadataKind::CommonModule,
         MetadataKind::AccumulationRegister,
         MetadataKind::Command,
+        MetadataKind::Template,
     ])
 }
 
@@ -726,7 +733,7 @@ mod tests {
                 ))
                 .expect("template coverage must exist")
                 .status(),
-            SemanticCoverageStatus::Unsupported
+            SemanticCoverageStatus::PartiallySupported
         );
     }
 
@@ -831,7 +838,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Template)
+            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Unknown)
         );
     }
 
@@ -881,7 +888,68 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Template)
+            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Unknown)
+        );
+    }
+
+    #[test]
+    fn common_template_discovery_closes_the_selected_high_gap() {
+        let report = EdtSemanticCoverageRegistry::audit();
+        let capability = report
+            .capability(SemanticCoverageCapabilityId::MetadataEntity(
+                MetadataKind::Template,
+            ))
+            .expect("template coverage must exist");
+        let node = report
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Metadata(MetadataKind::Template),
+            ))
+            .expect("template node coverage must exist");
+
+        assert_eq!(
+            capability.status(),
+            SemanticCoverageStatus::PartiallySupported
+        );
+        for evidence in [
+            SemanticCoverageEvidence::Discovered,
+            SemanticCoverageEvidence::Parsed,
+            SemanticCoverageEvidence::NodeEmitted,
+            SemanticCoverageEvidence::StableIdentityAssigned,
+            SemanticCoverageEvidence::ProvenanceAttached,
+            SemanticCoverageEvidence::PositiveTestExists,
+            SemanticCoverageEvidence::IntegrationTestExists,
+        ] {
+            assert!(capability.evidence().contains(&evidence));
+        }
+        assert_eq!(
+            capability.missing_evidence(),
+            BTreeSet::from([SemanticCoverageEvidence::SemanticPayloadPreserved])
+        );
+        assert_eq!(node.status(), SemanticCoverageStatus::Supported);
+        assert!(node.missing_evidence().is_empty());
+
+        let template_gap = report
+            .gaps()
+            .iter()
+            .find(|gap| gap.capability_id() == capability.id())
+            .expect("payload completion must remain visible");
+        assert_eq!(template_gap.priority(), SemanticCoverageGapPriority::Medium);
+
+        let form = report
+            .capability(SemanticCoverageCapabilityId::MetadataEntity(
+                MetadataKind::Form,
+            ))
+            .expect("form coverage must exist");
+        assert_eq!(form.status(), SemanticCoverageStatus::NotApplicable);
+
+        let next_high_gap = report
+            .gaps_by_priority(SemanticCoverageGapPriority::High)
+            .into_iter()
+            .next()
+            .expect("a High gap must remain");
+        assert_eq!(
+            next_high_gap.capability_id(),
+            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Unknown)
         );
     }
 }

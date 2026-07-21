@@ -555,6 +555,7 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
         ("Roles", MetadataKind::Role),
         ("CommonCommands", MetadataKind::Command),
         ("CommonForms", MetadataKind::CommonForm),
+        ("CommonTemplates", MetadataKind::Template),
         ("HTTPServices", MetadataKind::HttpService),
         ("WebServices", MetadataKind::WebService),
         ("XDTOPackages", MetadataKind::XdtoPackage),
@@ -1170,6 +1171,19 @@ mod graph_tests {
 </mdclass:CommonCommand>
 "#;
 
+    const COMMON_TEMPLATE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonTemplate
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="dddddddd-aaaa-bbbb-cccc-111111111111">
+    <name>Invoice</name>
+    <synonym>
+        <key>en</key>
+        <content>Invoice</content>
+    </synonym>
+    <templateType>SpreadsheetDocument</templateType>
+</mdclass:CommonTemplate>
+"#;
+
     const ACCUMULATION_REGISTER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mdclass:AccumulationRegister
     xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
@@ -1299,6 +1313,30 @@ mod graph_tests {
         fs::create_dir_all(&directory).expect("common command directory must be created");
         fs::write(directory.join("RefreshData.mdo"), COMMON_COMMAND_XML)
             .expect("common command descriptor must be created");
+    }
+
+    fn add_common_template_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/CommonTemplates/Invoice");
+        fs::create_dir_all(&directory).expect("common template directory must be created");
+        fs::write(directory.join("Invoice.mdo"), COMMON_TEMPLATE_XML)
+            .expect("common template descriptor must be created");
+    }
+
+    fn add_archive_common_template_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/CommonTemplates/Archive");
+        fs::create_dir_all(&directory).expect("second common template directory must be created");
+        fs::write(
+            directory.join("Archive.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonTemplate
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="eeeeeeee-aaaa-bbbb-cccc-111111111111">
+    <name>Archive</name>
+    <templateType>TextDocument</templateType>
+</mdclass:CommonTemplate>
+"#,
+        )
+        .expect("second common template descriptor must be created");
     }
 
     fn document_with_reference(reference_type: &str) -> String {
@@ -1671,6 +1709,131 @@ mod graph_tests {
         let error = FileSystemEdtSemanticGraphBuilder
             .build_graph(root.path())
             .expect_err("common command without name must be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("metadata object name is missing")
+        );
+    }
+
+    #[test]
+    fn discovers_top_level_common_template_as_metadata_entity() {
+        let root = create_edt_project();
+        add_common_template_descriptor(&root);
+        add_archive_common_template_descriptor(&root);
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with common template must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let template_id = NodeId::new("dddddddd-aaaa-bbbb-cccc-111111111111");
+        let configuration = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Configuration))
+            .into_iter()
+            .next()
+            .expect("configuration node must exist");
+        let template = graph
+            .query()
+            .node(&template_id)
+            .expect("common template must be queryable by stable UUID");
+        let owner = graph
+            .query()
+            .owner(&template_id)
+            .expect("configuration must own common template");
+        let template_children = graph.query().children_by_kind(
+            &NodeId::new(configuration.id().as_str()),
+            NodeKind::Metadata(MetadataKind::Template),
+        );
+        let contains = graph
+            .query()
+            .incoming_edges_by_kind(&template_id, EdgeKind::Contains)
+            .into_iter()
+            .next()
+            .expect("configuration containment edge must exist");
+        let coverage = first.coverage_report();
+        let capability = coverage
+            .edt_pipeline()
+            .capability(SemanticCoverageCapabilityId::MetadataEntity(
+                MetadataKind::Template,
+            ))
+            .expect("template coverage must exist");
+
+        assert_eq!(template.name().as_str(), "Invoice");
+        assert_eq!(template.kind(), NodeKind::Metadata(MetadataKind::Template));
+        assert_eq!(owner.id(), configuration.id());
+        assert_eq!(
+            template_children
+                .iter()
+                .map(|child| child.id().as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "dddddddd-aaaa-bbbb-cccc-111111111111",
+                "eeeeeeee-aaaa-bbbb-cccc-111111111111",
+            ]
+        );
+        assert_eq!(contains.source(), configuration.id());
+        assert_eq!(template.provenance().len(), 1);
+        assert!(
+            template.provenance()[0]
+                .source()
+                .expect("template provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/CommonTemplates/Invoice/Invoice.mdo#metadata_object=dddddddd-aaaa-bbbb-cccc-111111111111;fact=metadata_object"
+                )
+        );
+        assert_eq!(contains.provenance().len(), 1);
+        assert!(
+            contains.provenance()[0]
+                .source()
+                .expect("containment provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/CommonTemplates/Invoice/Invoice.mdo#metadata_object=dddddddd-aaaa-bbbb-cccc-111111111111;edge=contains;source=11111111-2222-3333-4444-555555555555;target=dddddddd-aaaa-bbbb-cccc-111111111111"
+                )
+        );
+        assert_eq!(
+            coverage.observed().nodes()[&NodeKind::Metadata(MetadataKind::Template)].total(),
+            2
+        );
+        assert_eq!(
+            coverage.observed().nodes()[&NodeKind::Metadata(MetadataKind::Template)]
+                .without_provenance(),
+            0
+        );
+        assert_eq!(
+            capability.status(),
+            SemanticCoverageStatus::PartiallySupported
+        );
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn rejects_top_level_common_template_without_name() {
+        let root = create_edt_project();
+        let directory = root.path().join("src/CommonTemplates/BrokenTemplate");
+        fs::create_dir_all(&directory).expect("common template directory must be created");
+        fs::write(
+            directory.join("BrokenTemplate.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonTemplate
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="ffffffff-aaaa-bbbb-cccc-111111111111">
+    <templateType>SpreadsheetDocument</templateType>
+</mdclass:CommonTemplate>
+"#,
+        )
+        .expect("invalid common template descriptor must be created");
+
+        let error = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect_err("common template without name must be rejected");
 
         assert!(
             error

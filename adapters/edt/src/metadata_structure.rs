@@ -121,21 +121,59 @@ impl EdtMetadataChildDescriptor {
     }
 }
 
+/// Semantic role of an explicit EDT metadata reference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum EdtMetadataReferenceRole {
+    /// Metadata object reference declared as an EDT type.
+    Type,
+}
+
+impl EdtMetadataReferenceRole {
+    /// Returns a stable machine-readable representation.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Type => "type",
+        }
+    }
+}
+
 /// Explicit metadata object reference declared by a child metadata element.
+///
+/// EDT metadata type values are normalized from supported `*Ref.Name` forms
+/// into a target metadata kind and canonical target name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EdtMetadataReferenceDescriptor {
+    role: EdtMetadataReferenceRole,
     target_kind: MetadataKind,
     target_name: EntityName,
 }
 
 impl EdtMetadataReferenceDescriptor {
-    /// Creates a metadata reference descriptor.
+    /// Creates a metadata type reference descriptor.
     #[must_use]
     pub const fn new(target_kind: MetadataKind, target_name: EntityName) -> Self {
+        Self::new_with_role(EdtMetadataReferenceRole::Type, target_kind, target_name)
+    }
+
+    /// Creates a metadata reference descriptor with an explicit semantic role.
+    #[must_use]
+    pub const fn new_with_role(
+        role: EdtMetadataReferenceRole,
+        target_kind: MetadataKind,
+        target_name: EntityName,
+    ) -> Self {
         Self {
+            role,
             target_kind,
             target_name,
         }
+    }
+
+    /// Returns the semantic reference role.
+    #[must_use]
+    pub const fn role(&self) -> EdtMetadataReferenceRole {
+        self.role
     }
 
     /// Returns the expected target metadata object kind.
@@ -568,7 +606,8 @@ mod tests {
     use crate::EdtMetadataObjectDescriptor;
 
     use super::{
-        EdtMetadataChildKind, EdtMetadataStructureReader, FileSystemEdtMetadataStructureReader,
+        EdtMetadataChildKind, EdtMetadataReferenceRole, EdtMetadataStructureReader,
+        FileSystemEdtMetadataStructureReader,
     };
 
     #[test]
@@ -804,9 +843,68 @@ mod tests {
             .expect("Comment attribute must exist");
 
         assert_eq!(product.references().len(), 1);
+        assert_eq!(
+            product.references()[0].role(),
+            EdtMetadataReferenceRole::Type
+        );
         assert_eq!(product.references()[0].target_kind(), MetadataKind::Catalog);
         assert_eq!(product.references()[0].target_name().as_str(), "Products");
         assert!(comment.references().is_empty());
+    }
+
+    #[test]
+    fn reads_composite_metadata_type_references() {
+        let root = tempdir().expect("temporary directory must be created");
+        let descriptor_path = root.path().join("Sales.mdo");
+
+        fs::write(
+            &descriptor_path,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+
+    <attributes uuid="11111111-1111-1111-1111-111111111111">
+        <name>Target</name>
+        <type>
+            <types>CatalogRef.Products</types>
+            <types>DocumentRef.Sales</types>
+        </type>
+    </attributes>
+</mdclass:Document>
+"#,
+        )
+        .expect("descriptor must be written");
+
+        let descriptor = EdtMetadataObjectDescriptor::new(
+            EntityId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+                .expect("identifier must be valid"),
+            EntityName::new("Sales").expect("name must be valid"),
+            None,
+            MetadataKind::Document,
+            descriptor_path,
+        );
+
+        let children = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("metadata children must be read");
+        let target = children
+            .iter()
+            .find(|child| child.name().as_str() == "Target")
+            .expect("Target attribute must exist");
+
+        assert_eq!(target.references().len(), 2);
+        assert_eq!(target.references()[0].target_kind(), MetadataKind::Catalog);
+        assert_eq!(target.references()[0].target_name().as_str(), "Products");
+        assert_eq!(target.references()[1].target_kind(), MetadataKind::Document);
+        assert_eq!(target.references()[1].target_name().as_str(), "Sales");
+        assert!(
+            target
+                .references()
+                .iter()
+                .all(|reference| reference.role() == EdtMetadataReferenceRole::Type)
+        );
     }
 
     #[test]

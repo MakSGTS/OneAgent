@@ -12,7 +12,8 @@ pub use metadata_object::{
 
 pub use metadata_structure::{
     EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataReferenceDescriptor,
-    EdtMetadataStructureError, EdtMetadataStructureReader, FileSystemEdtMetadataStructureReader,
+    EdtMetadataReferenceRole, EdtMetadataStructureError, EdtMetadataStructureReader,
+    FileSystemEdtMetadataStructureReader,
 };
 
 pub use module_reader::{
@@ -480,6 +481,7 @@ struct PendingMetadataReference {
     descriptor_path: PathBuf,
     metadata_object_id: EntityId,
     source_id: EntityId,
+    role: EdtMetadataReferenceRole,
     target_kind: MetadataKind,
     target_name: EntityName,
 }
@@ -640,6 +642,7 @@ fn collect_metadata_child(
                 descriptor_path: descriptor.descriptor_path().to_path_buf(),
                 metadata_object_id: descriptor.id().clone(),
                 source_id: child.id().clone(),
+                role: reference.role(),
                 target_kind: reference.target_kind(),
                 target_name: reference.target_name().clone(),
             });
@@ -838,9 +841,10 @@ fn metadata_reference_source_id(
     source_id_from_path_fragment(
         &reference.descriptor_path,
         format!(
-            "metadata_object={};edge=references;source={};target_kind={};target_name={}",
+            "metadata_object={};edge=references;source={};role={};target_kind={};target_name={}",
             reference.metadata_object_id.as_str(),
             reference.source_id.as_str(),
+            reference.role.as_str(),
             reference.target_kind.as_str(),
             reference.target_name.as_str()
         ),
@@ -1069,6 +1073,9 @@ mod graph_tests {
 
     <resources uuid="77777777-7777-7777-7777-777777777777">
         <name>Quantity</name>
+        <type>
+            <types>DocumentRef.Sales</types>
+        </type>
     </resources>
 </mdclass:AccumulationRegister>
 "#;
@@ -1210,6 +1217,25 @@ mod graph_tests {
         )
     }
 
+    fn document_with_composite_reference() -> String {
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+
+    <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
+        <name>Company</name>
+        <type>
+            <types>CatalogRef.Products</types>
+            <types>DocumentRef.Sales</types>
+        </type>
+    </attributes>
+</mdclass:Document>
+"#
+        .to_owned()
+    }
+
     fn document_with_two_missing_references(reverse_order: bool) -> String {
         let first = r#"
     <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
@@ -1318,7 +1344,7 @@ mod graph_tests {
             .expect("graph must build");
 
         assert_eq!(graph.node_count(), 19);
-        assert_eq!(graph.edge_count(), 22);
+        assert_eq!(graph.edge_count(), 23);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -1545,6 +1571,11 @@ mod graph_tests {
             .into_iter()
             .find(|node| node.name().as_str() == "Products")
             .expect("Products catalog must exist");
+        let sales_document = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .find(|node| node.name().as_str() == "Sales")
+            .expect("Sales document must exist");
         let company = graph
             .nodes_by_kind(NodeKind::Attribute)
             .into_iter()
@@ -1560,11 +1591,18 @@ mod graph_tests {
             .into_iter()
             .find(|node| node.name().as_str() == "Product")
             .expect("Product dimension must exist");
+        let quantity_resource = graph
+            .nodes_by_kind(NodeKind::Resource)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Quantity")
+            .expect("Quantity resource must exist");
 
         let company_references = graph.outgoing_by_kind(company.id(), EdgeKind::References);
         let warehouse_references = graph.outgoing_by_kind(warehouse.id(), EdgeKind::References);
         let product_references =
             graph.outgoing_by_kind(product_dimension.id(), EdgeKind::References);
+        let quantity_references =
+            graph.outgoing_by_kind(quantity_resource.id(), EdgeKind::References);
         let incoming_references = graph
             .incoming(products.id())
             .into_iter()
@@ -1574,10 +1612,12 @@ mod graph_tests {
         assert_eq!(company_references.len(), 1);
         assert_eq!(warehouse_references.len(), 1);
         assert_eq!(product_references.len(), 1);
+        assert_eq!(quantity_references.len(), 1);
         assert_eq!(incoming_references.len(), 3);
         assert_eq!(company_references[0].target(), products.id());
         assert_eq!(warehouse_references[0].target(), products.id());
         assert_eq!(product_references[0].target(), products.id());
+        assert_eq!(quantity_references[0].target(), sales_document.id());
         assert_eq!(company.provenance().len(), 1);
         assert_eq!(company_references[0].provenance().len(), 1);
         assert_eq!(
@@ -1594,9 +1634,41 @@ mod graph_tests {
                 .expect("reference edge source must exist")
                 .as_str()
                 .ends_with(
-            "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=references;source=aaaaaaaa-1111-1111-1111-111111111111;target_kind=catalog;target_name=Products"
+                    "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=references;source=aaaaaaaa-1111-1111-1111-111111111111;role=type;target_kind=catalog;target_name=Products"
                 )
         );
+        assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn composite_metadata_type_creates_one_edge_per_distinct_target() {
+        let root = create_edt_project();
+        replace_document_descriptor(&root, &document_with_composite_reference());
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+        let graph = result.graph();
+        let company_id = company_attribute_id();
+        let products = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Catalog))
+            .into_iter()
+            .find(|node| node.name().as_str() == "Products")
+            .expect("Products catalog must exist");
+        let sales = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+            .into_iter()
+            .find(|node| node.name().as_str() == "Sales")
+            .expect("Sales document must exist");
+        let targets = graph
+            .outgoing_by_kind(&company_id, EdgeKind::References)
+            .into_iter()
+            .map(|edge| edge.target().clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(targets.len(), 2);
+        assert!(targets.contains(products.id()));
+        assert!(targets.contains(sales.id()));
         assert!(result.diagnostics().is_empty());
     }
 

@@ -292,7 +292,8 @@ mod tests {
 
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionError,
-    ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticReference,
+    ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphReport, SemanticReference,
+    SemanticReferenceOutcome, SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -308,13 +309,32 @@ const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
 pub struct EdtSemanticGraphBuildResult {
     graph: SemanticGraph,
     diagnostics: Vec<SemanticDiagnostic>,
+    reference_statistics: SemanticReferenceStatistics,
 }
 
 impl EdtSemanticGraphBuildResult {
     /// Creates an EDT semantic graph build result.
     #[must_use]
     pub const fn new(graph: SemanticGraph, diagnostics: Vec<SemanticDiagnostic>) -> Self {
-        Self { graph, diagnostics }
+        Self {
+            graph,
+            diagnostics,
+            reference_statistics: SemanticReferenceStatistics::new(),
+        }
+    }
+
+    /// Creates an EDT semantic graph build result with reference statistics.
+    #[must_use]
+    pub const fn new_with_reference_statistics(
+        graph: SemanticGraph,
+        diagnostics: Vec<SemanticDiagnostic>,
+        reference_statistics: SemanticReferenceStatistics,
+    ) -> Self {
+        Self {
+            graph,
+            diagnostics,
+            reference_statistics,
+        }
     }
 
     /// Returns the generated semantic graph.
@@ -333,6 +353,25 @@ impl EdtSemanticGraphBuildResult {
     #[must_use]
     pub fn diagnostics(&self) -> &[SemanticDiagnostic] {
         &self.diagnostics
+    }
+
+    /// Returns immutable semantic reference resolution statistics.
+    #[must_use]
+    pub const fn reference_statistics(&self) -> &SemanticReferenceStatistics {
+        &self.reference_statistics
+    }
+
+    /// Builds a deterministic report for this EDT graph build result.
+    ///
+    /// The report combines graph metrics, recoverable semantic diagnostics and
+    /// reference outcome counters captured during graph construction.
+    #[must_use]
+    pub fn report(&self) -> SemanticGraphReport {
+        SemanticGraphReport::from_graph_diagnostics_and_references(
+            &self.graph,
+            &self.diagnostics,
+            self.reference_statistics,
+        )
     }
 }
 
@@ -378,6 +417,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut configuration_modules = Vec::new();
         let mut metadata_references = BTreeSet::new();
         let mut diagnostics = BTreeSet::new();
+        let mut reference_statistics = SemanticReferenceStatistics::new();
 
         let configuration_id = configuration.id().clone();
         let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
@@ -435,14 +475,20 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             metadata_references.extend(collected.references);
         }
 
-        resolve_metadata_references(&mut graph, &metadata_references, &mut diagnostics)?;
+        resolve_metadata_references(
+            &mut graph,
+            &metadata_references,
+            &mut diagnostics,
+            &mut reference_statistics,
+        )?;
 
         add_configuration_module_symbols(&mut graph, &configuration_modules)
             .map_err(EdtGraphError::Bsl)?;
 
-        Ok(EdtSemanticGraphBuildResult::new(
+        Ok(EdtSemanticGraphBuildResult::new_with_reference_statistics(
             graph,
             diagnostics.into_iter().collect(),
+            reference_statistics,
         ))
     }
 }
@@ -656,6 +702,7 @@ fn resolve_metadata_references(
     graph: &mut SemanticGraph,
     references: &BTreeSet<PendingMetadataReference>,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<(), EdtGraphError> {
     let resolved_references = {
         let index = graph.resolution_index();
@@ -667,8 +714,15 @@ fn resolve_metadata_references(
                 &reference.target_name,
                 NodeKind::Metadata(reference.target_kind),
             ) {
-                Ok(target) => resolved_references.push((reference.clone(), target.id().clone())),
+                Ok(target) => {
+                    reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+                    resolved_references.push((reference.clone(), target.id().clone()));
+                }
                 Err(error) => {
+                    reference_statistics.record(
+                        SemanticReferenceOutcome::from_resolution_error(&error),
+                        true,
+                    );
                     diagnostics.insert(metadata_reference_diagnostic(
                         reference,
                         error,
@@ -1670,6 +1724,64 @@ mod graph_tests {
         assert!(targets.contains(products.id()));
         assert!(targets.contains(sales.id()));
         assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn build_result_report_counts_resolved_references() {
+        let root = create_edt_project();
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+        let report = result.report();
+
+        assert_eq!(result.reference_statistics().total(), 4);
+        assert_eq!(result.reference_statistics().resolved(), 4);
+        assert_eq!(result.reference_statistics().outcome_total(), 4);
+        assert_eq!(result.reference_statistics().with_provenance(), 4);
+        assert_eq!(report.graph().total_nodes(), result.graph().node_count());
+        assert_eq!(report.graph().total_edges(), result.graph().edge_count());
+        assert_eq!(report.graph().total_diagnostics(), 0);
+        assert_eq!(report.resolution().total(), 4);
+        assert_eq!(report.resolution().resolved(), 4);
+        assert_eq!(report.resolution().resolution_rate().numerator(), 4);
+        assert_eq!(report.resolution().resolution_rate().denominator(), 4);
+        assert_eq!(report.provenance().references_with_provenance(), 4);
+    }
+
+    #[test]
+    fn build_result_report_counts_failed_references_and_diagnostics() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_reference("CatalogRef.MissingProducts"),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("recoverable missing target must not fail graph build");
+        let report = result.report();
+
+        assert_eq!(result.reference_statistics().total(), 3);
+        assert_eq!(result.reference_statistics().resolved(), 2);
+        assert_eq!(result.reference_statistics().unresolved(), 1);
+        assert_eq!(result.reference_statistics().outcome_total(), 3);
+        assert_eq!(report.graph().total_diagnostics(), 1);
+        assert_eq!(report.graph().recoverable_diagnostics(), 1);
+        assert_eq!(
+            report.diagnostics().by_code()[&SemanticDiagnosticCode::ReferenceUnresolved],
+            1
+        );
+        assert_eq!(
+            report.diagnostics().by_kind()[&SemanticDiagnosticKind::UnresolvedTarget],
+            1
+        );
+        assert_eq!(report.diagnostics().with_provenance(), 1);
+        assert_eq!(report.resolution().total(), 3);
+        assert_eq!(report.resolution().resolved(), 2);
+        assert_eq!(report.resolution().unresolved(), 1);
+        assert_eq!(report.resolution().resolution_rate().numerator(), 2);
+        assert_eq!(report.resolution().resolution_rate().denominator(), 3);
     }
 
     #[test]

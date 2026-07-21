@@ -9,6 +9,7 @@ pub mod kind;
 pub mod measure;
 pub mod node;
 pub mod provenance;
+pub mod report;
 pub mod resolution;
 pub mod standard_attribute;
 
@@ -21,6 +22,10 @@ pub use kind::{EdgeKind, NodeKind};
 pub use measure::{Measure, MeasureError};
 pub use node::GraphNode;
 pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
+pub use report::{
+    DiagnosticSummary, EdgeSummary, GraphSummary, NodeSummary, ProvenanceCoverageSummary,
+    ResolutionRate, SemanticGraphReport, SemanticReferenceOutcome, SemanticReferenceStatistics,
+};
 pub use resolution::{ResolutionError, SemanticReference, SemanticResolutionIndex};
 pub use standard_attribute::{StandardAttribute, StandardAttributeError, StandardAttributeKind};
 
@@ -186,6 +191,12 @@ impl SemanticGraph {
     #[must_use]
     pub fn resolution_index(&self) -> SemanticResolutionIndex<'_> {
         SemanticResolutionIndex::new(self)
+    }
+
+    /// Builds a deterministic graph-only quality report.
+    #[must_use]
+    pub fn report(&self) -> SemanticGraphReport {
+        SemanticGraphReport::from_graph(self)
     }
 
     /// Returns all nodes of a specified kind.

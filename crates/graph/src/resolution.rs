@@ -7,7 +7,7 @@ use std::fmt::{Display, Formatter};
 use crate::{EdgeKind, GraphNode, NodeId, NodeKind, SemanticGraph};
 
 /// Semantic reference resolved against a graph.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SemanticReference {
     /// Reference by stable node identifier.
     NodeId(String),
@@ -222,9 +222,34 @@ impl<'graph> SemanticResolutionIndex<'graph> {
         name: &EntityName,
         expected: NodeKind,
     ) -> Result<&'graph GraphNode, ResolutionError> {
-        let node = self.resolve_name(name)?;
+        let reference = SemanticReference::Name(name.clone());
+        let candidates =
+            self.nodes_by_name
+                .get(name)
+                .ok_or_else(|| ResolutionError::MissingTarget {
+                    reference: reference.clone(),
+                })?;
+        let matching = candidates
+            .iter()
+            .filter_map(|id| {
+                let node = self.nodes_by_id.get(id).copied()?;
 
-        Self::ensure_kind(node, &[expected])
+                (node.kind() == expected).then_some(id.clone())
+            })
+            .collect::<BTreeSet<_>>();
+
+        if matching.is_empty() {
+            let Some(first_id) = candidates.iter().next() else {
+                return Err(ResolutionError::MissingTarget { reference });
+            };
+            let Some(first_node) = self.nodes_by_id.get(first_id).copied() else {
+                return Err(ResolutionError::MissingTarget { reference });
+            };
+
+            Self::ensure_kind(first_node, &[expected])
+        } else {
+            self.expect_single_candidate(reference, &matching)
+        }
     }
 
     /// Resolves a child node by owner identifier and exact local name.
@@ -574,6 +599,55 @@ mod tests {
                 id: id("metadata.document.sales:form:Main"),
                 expected: vec![NodeKind::Attribute],
                 actual: NodeKind::Form,
+            }
+        );
+    }
+
+    #[test]
+    fn name_of_kind_resolves_when_other_kinds_share_name() {
+        let mut graph = graph_with_owned_attributes(false);
+        insert_node(
+            &mut graph,
+            id("metadata.catalog.sales"),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+        );
+        let index = graph.resolution_index();
+        let node = index
+            .resolve_name_of_kind(&name("Sales"), NodeKind::Metadata(MetadataKind::Catalog))
+            .expect("catalog target must resolve by name and kind");
+
+        assert_eq!(node.id().as_str(), "metadata.catalog.sales");
+    }
+
+    #[test]
+    fn name_of_kind_still_reports_same_kind_ambiguity() {
+        let mut graph = graph_with_owned_attributes(false);
+        insert_node(
+            &mut graph,
+            id("metadata.catalog.sales"),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+        );
+        insert_node(
+            &mut graph,
+            id("metadata.catalog.sales-copy"),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+        );
+        let index = graph.resolution_index();
+        let error = index
+            .resolve_name_of_kind(&name("Sales"), NodeKind::Metadata(MetadataKind::Catalog))
+            .expect_err("duplicate catalog names must be ambiguous");
+
+        assert_eq!(
+            error,
+            ResolutionError::AmbiguousTarget {
+                reference: SemanticReference::Name(name("Sales")),
+                candidates: vec![
+                    id("metadata.catalog.sales"),
+                    id("metadata.catalog.sales-copy")
+                ],
             }
         );
     }

@@ -2,6 +2,7 @@
 
 //! Stable identifiers used by the `OneAgent` Knowledge Graph.
 
+pub mod diagnostic;
 pub mod edge;
 pub mod identity;
 pub mod kind;
@@ -11,6 +12,9 @@ pub mod provenance;
 pub mod resolution;
 pub mod standard_attribute;
 
+pub use diagnostic::{
+    SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
+};
 pub use edge::GraphEdge;
 pub use identity::{EdgeId, NodeId};
 pub use kind::{EdgeKind, NodeKind};

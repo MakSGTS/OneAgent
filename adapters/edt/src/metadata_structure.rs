@@ -2,6 +2,7 @@
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::NodeKind;
+use oneagent_metadata::MetadataKind;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::fmt::{Display, Formatter};
@@ -67,6 +68,7 @@ pub struct EdtMetadataChildDescriptor {
     name: EntityName,
     kind: EdtMetadataChildKind,
     parent_id: EntityId,
+    references: Vec<EdtMetadataReferenceDescriptor>,
 }
 
 impl EdtMetadataChildDescriptor {
@@ -77,12 +79,14 @@ impl EdtMetadataChildDescriptor {
         name: EntityName,
         kind: EdtMetadataChildKind,
         parent_id: EntityId,
+        references: Vec<EdtMetadataReferenceDescriptor>,
     ) -> Self {
         Self {
             id,
             name,
             kind,
             parent_id,
+            references,
         }
     }
 
@@ -108,6 +112,42 @@ impl EdtMetadataChildDescriptor {
     #[must_use]
     pub const fn parent_id(&self) -> &EntityId {
         &self.parent_id
+    }
+
+    /// Returns explicit metadata references declared by this child element.
+    #[must_use]
+    pub fn references(&self) -> &[EdtMetadataReferenceDescriptor] {
+        &self.references
+    }
+}
+
+/// Explicit metadata object reference declared by a child metadata element.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EdtMetadataReferenceDescriptor {
+    target_kind: MetadataKind,
+    target_name: EntityName,
+}
+
+impl EdtMetadataReferenceDescriptor {
+    /// Creates a metadata reference descriptor.
+    #[must_use]
+    pub const fn new(target_kind: MetadataKind, target_name: EntityName) -> Self {
+        Self {
+            target_kind,
+            target_name,
+        }
+    }
+
+    /// Returns the expected target metadata object kind.
+    #[must_use]
+    pub const fn target_kind(&self) -> MetadataKind {
+        self.target_kind
+    }
+
+    /// Returns the target metadata object semantic name.
+    #[must_use]
+    pub const fn target_name(&self) -> &EntityName {
+        &self.target_name
     }
 }
 
@@ -150,6 +190,7 @@ struct PendingChild {
     kind: EdtMetadataChildKind,
     uuid: Option<String>,
     name: Option<String>,
+    references: Vec<EdtMetadataReferenceDescriptor>,
     depth: usize,
 }
 
@@ -176,6 +217,7 @@ fn parse_children(
                         kind,
                         uuid: read_uuid(&reader, &event)?,
                         name: None,
+                        references: Vec::new(),
                         depth: path.len(),
                     });
                 }
@@ -213,6 +255,28 @@ fn parse_children(
                             })?
                             .into_owned(),
                     );
+                }
+
+                if path.last().is_some_and(|element| element == "types")
+                    && let Some(child) = pending.last_mut()
+                {
+                    let value = event
+                        .decode()
+                        .map_err(|source| {
+                            EdtMetadataStructureError::MalformedXml(source.to_string())
+                        })?
+                        .into_owned();
+
+                    if let Some(reference) =
+                        parse_metadata_reference_type(&value).map_err(|()| {
+                            EdtMetadataStructureError::InvalidReferenceName {
+                                path: descriptor_path.to_path_buf(),
+                                type_name: value,
+                            }
+                        })?
+                    {
+                        child.references.push(reference);
+                    }
                 }
             }
 
@@ -280,7 +344,52 @@ fn finish_child(
         name,
         child.kind,
         parent_id.clone(),
+        child.references,
     ))
+}
+
+fn parse_metadata_reference_type(
+    value: &str,
+) -> Result<Option<EdtMetadataReferenceDescriptor>, ()> {
+    let value = value.trim();
+    let value = value.rsplit(':').next().unwrap_or(value);
+    let Some((prefix, target_name)) = value.split_once('.') else {
+        return Ok(None);
+    };
+
+    let Some(target_kind) = metadata_reference_kind(prefix) else {
+        return Ok(None);
+    };
+
+    let target_name = EntityName::new(target_name).map_err(|_| ())?;
+
+    Ok(Some(EdtMetadataReferenceDescriptor::new(
+        target_kind,
+        target_name,
+    )))
+}
+
+fn metadata_reference_kind(prefix: &str) -> Option<MetadataKind> {
+    match prefix {
+        "CatalogRef" => Some(MetadataKind::Catalog),
+        "DocumentRef" => Some(MetadataKind::Document),
+        "EnumRef" => Some(MetadataKind::Enumeration),
+        "InformationRegisterRecordSet" | "InformationRegisterRecordKey" => {
+            Some(MetadataKind::InformationRegister)
+        }
+        "AccumulationRegisterRecordSet" | "AccumulationRegisterRecordKey" => {
+            Some(MetadataKind::AccumulationRegister)
+        }
+        "AccountingRegisterRecordSet" | "AccountingRegisterRecordKey" => {
+            Some(MetadataKind::AccountingRegister)
+        }
+        "CalculationRegisterRecordSet" | "CalculationRegisterRecordKey" => {
+            Some(MetadataKind::CalculationRegister)
+        }
+        "BusinessProcessRef" => Some(MetadataKind::BusinessProcess),
+        "TaskRef" => Some(MetadataKind::Task),
+        _ => None,
+    }
 }
 
 fn child_kind(element_name: &str) -> Option<EdtMetadataChildKind> {
@@ -376,6 +485,15 @@ pub enum EdtMetadataStructureError {
         /// Invalid name.
         name: String,
     },
+
+    /// A metadata reference target name is invalid.
+    InvalidReferenceName {
+        /// Descriptor path.
+        path: PathBuf,
+
+        /// Invalid EDT type name.
+        type_name: String,
+    },
 }
 
 impl Display for EdtMetadataStructureError {
@@ -416,6 +534,12 @@ impl Display for EdtMetadataStructureError {
                 "invalid EDT metadata child name `{name}` in {}",
                 path.display()
             ),
+
+            Self::InvalidReferenceName { path, type_name } => write!(
+                formatter,
+                "invalid EDT metadata reference type `{type_name}` in {}",
+                path.display()
+            ),
         }
     }
 }
@@ -428,7 +552,8 @@ impl std::error::Error for EdtMetadataStructureError {
             | Self::MissingName { .. }
             | Self::MissingIdentifierAndName { .. }
             | Self::InvalidIdentifier { .. }
-            | Self::InvalidName { .. } => None,
+            | Self::InvalidName { .. }
+            | Self::InvalidReferenceName { .. } => None,
         }
     }
 }
@@ -625,6 +750,65 @@ mod tests {
                 .any(|child| child.name().as_str() == "Quantity")
         );
     }
+
+    #[test]
+    fn reads_explicit_metadata_references() {
+        let root = tempdir().expect("temporary directory must be created");
+        let descriptor_path = root.path().join("Sales.mdo");
+
+        fs::write(
+            &descriptor_path,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+
+    <attributes uuid="11111111-1111-1111-1111-111111111111">
+        <name>Product</name>
+        <type>
+            <types>CatalogRef.Products</types>
+        </type>
+    </attributes>
+
+    <attributes uuid="22222222-2222-2222-2222-222222222222">
+        <name>Comment</name>
+        <type>
+            <types>String</types>
+        </type>
+    </attributes>
+</mdclass:Document>
+"#,
+        )
+        .expect("descriptor must be written");
+
+        let descriptor = EdtMetadataObjectDescriptor::new(
+            EntityId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+                .expect("identifier must be valid"),
+            EntityName::new("Sales").expect("name must be valid"),
+            None,
+            MetadataKind::Document,
+            descriptor_path,
+        );
+
+        let children = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("metadata children must be read");
+        let product = children
+            .iter()
+            .find(|child| child.name().as_str() == "Product")
+            .expect("Product attribute must exist");
+        let comment = children
+            .iter()
+            .find(|child| child.name().as_str() == "Comment")
+            .expect("Comment attribute must exist");
+
+        assert_eq!(product.references().len(), 1);
+        assert_eq!(product.references()[0].target_kind(), MetadataKind::Catalog);
+        assert_eq!(product.references()[0].target_name().as_str(), "Products");
+        assert!(comment.references().is_empty());
+    }
+
     #[test]
     fn reads_metadata_object_forms() {
         let root = tempdir().expect("temporary directory must be created");

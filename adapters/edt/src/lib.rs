@@ -11,8 +11,8 @@ pub use metadata_object::{
 };
 
 pub use metadata_structure::{
-    EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataStructureError,
-    EdtMetadataStructureReader, FileSystemEdtMetadataStructureReader,
+    EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataReferenceDescriptor,
+    EdtMetadataStructureError, EdtMetadataStructureReader, FileSystemEdtMetadataStructureReader,
 };
 
 pub use module_reader::{
@@ -290,22 +290,77 @@ mod tests {
 }
 
 use oneagent_graph::{
-    Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionState,
-    SemanticGraph,
+    Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionError,
+    ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticReference,
 };
 use oneagent_metadata::MetadataKind;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
 
+/// Result of building an EDT semantic graph.
+///
+/// Recoverable semantic reference problems are returned as ordered diagnostics
+/// while the graph contains every node and every edge that could be built
+/// safely.
+#[derive(Debug, Clone)]
+pub struct EdtSemanticGraphBuildResult {
+    graph: SemanticGraph,
+    diagnostics: Vec<SemanticDiagnostic>,
+}
+
+impl EdtSemanticGraphBuildResult {
+    /// Creates an EDT semantic graph build result.
+    #[must_use]
+    pub const fn new(graph: SemanticGraph, diagnostics: Vec<SemanticDiagnostic>) -> Self {
+        Self { graph, diagnostics }
+    }
+
+    /// Returns the generated semantic graph.
+    #[must_use]
+    pub const fn graph(&self) -> &SemanticGraph {
+        &self.graph
+    }
+
+    /// Consumes the result and returns the generated semantic graph.
+    #[must_use]
+    pub fn into_graph(self) -> SemanticGraph {
+        self.graph
+    }
+
+    /// Returns ordered semantic diagnostics.
+    #[must_use]
+    pub fn diagnostics(&self) -> &[SemanticDiagnostic] {
+        &self.diagnostics
+    }
+}
+
 /// Builds an initial semantic graph from an EDT project.
 pub trait EdtSemanticGraphBuilder {
-    /// Builds a semantic graph rooted at the EDT configuration.
+    /// Builds a semantic graph and ordered diagnostics rooted at the EDT configuration.
     ///
     /// # Errors
     ///
-    /// Returns an error when project metadata cannot be read or represented.
-    fn build_graph(&self, project_root: &Path) -> Result<SemanticGraph, EdtGraphError>;
+    /// Returns an error for fatal project loading, parsing or graph invariant
+    /// violations. Recoverable semantic reference problems are returned as
+    /// diagnostics inside [`EdtSemanticGraphBuildResult`].
+    fn build_graph_with_diagnostics(
+        &self,
+        project_root: &Path,
+    ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError>;
+
+    /// Builds a semantic graph rooted at the EDT configuration.
+    ///
+    /// This compatibility convenience method discards recoverable diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for fatal project loading, parsing or graph invariant
+    /// violations.
+    fn build_graph(&self, project_root: &Path) -> Result<SemanticGraph, EdtGraphError> {
+        self.build_graph_with_diagnostics(project_root)
+            .map(EdtSemanticGraphBuildResult::into_graph)
+    }
 }
 
 /// Filesystem implementation of the EDT semantic graph builder.
@@ -313,10 +368,15 @@ pub trait EdtSemanticGraphBuilder {
 pub struct FileSystemEdtSemanticGraphBuilder;
 
 impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
-    fn build_graph(&self, project_root: &Path) -> Result<SemanticGraph, EdtGraphError> {
+    fn build_graph_with_diagnostics(
+        &self,
+        project_root: &Path,
+    ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
         let configuration = FileSystemEdtConfigurationLoader.load(project_root)?;
         let mut graph = SemanticGraph::new();
         let mut configuration_modules = Vec::new();
+        let mut metadata_references = BTreeSet::new();
+        let mut diagnostics = BTreeSet::new();
 
         let configuration_id = configuration.id().clone();
         let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
@@ -338,7 +398,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
 
         let source_root = project_root.join("src");
         if !source_root.is_dir() {
-            return Ok(graph);
+            return Ok(EdtSemanticGraphBuildResult::new(graph, Vec::new()));
         }
 
         let kind_by_directory = supported_metadata_directories();
@@ -368,18 +428,21 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
                 continue;
             };
 
-            configuration_modules.extend(collect_top_level_metadata(
-                &entry.path(),
-                kind,
-                &configuration_id,
-                &mut graph,
-            )?);
+            let collected =
+                collect_top_level_metadata(&entry.path(), kind, &configuration_id, &mut graph)?;
+            configuration_modules.extend(collected.modules);
+            metadata_references.extend(collected.references);
         }
+
+        resolve_metadata_references(&mut graph, &metadata_references, &mut diagnostics)?;
 
         add_configuration_module_symbols(&mut graph, &configuration_modules)
             .map_err(EdtGraphError::Bsl)?;
 
-        Ok(graph)
+        Ok(EdtSemanticGraphBuildResult::new(
+            graph,
+            diagnostics.into_iter().collect(),
+        ))
     }
 }
 
@@ -406,15 +469,28 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
     ])
 }
 
+#[derive(Debug, Default)]
+struct CollectedTopLevelMetadata {
+    modules: Vec<EdtModuleDescriptor>,
+    references: BTreeSet<PendingMetadataReference>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PendingMetadataReference {
+    descriptor_path: PathBuf,
+    metadata_object_id: EntityId,
+    source_id: EntityId,
+    target_kind: MetadataKind,
+    target_name: EntityName,
+}
+
 fn collect_top_level_metadata(
     directory: &Path,
     kind: MetadataKind,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
-) -> Result<Vec<EdtModuleDescriptor>, EdtGraphError> {
-    let metadata_reader = FileSystemEdtMetadataObjectReader;
-    let module_reader = FileSystemEdtModuleReader;
-    let mut configuration_modules = Vec::new();
+) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
+    let mut collected = CollectedTopLevelMetadata::default();
 
     for entry in fs::read_dir(directory).map_err(|source| EdtGraphError::ReadDirectory {
         path: directory.to_path_buf(),
@@ -437,97 +513,197 @@ fn collect_top_level_metadata(
         }
 
         let object_directory = entry.path();
+        let object = collect_metadata_object(&object_directory, kind, configuration_id, graph)?;
 
-        let descriptor = metadata_reader
-            .read(&object_directory, kind)
-            .map_err(EdtGraphError::MetadataObject)?;
-        let descriptor_source = metadata_object_source_id(&descriptor)?;
+        collected.modules.extend(object.modules);
+        collected.references.extend(object.references);
+    }
+
+    Ok(collected)
+}
+
+fn collect_metadata_object(
+    object_directory: &Path,
+    kind: MetadataKind,
+    configuration_id: &EntityId,
+    graph: &mut SemanticGraph,
+) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
+    let metadata_reader = FileSystemEdtMetadataObjectReader;
+    let module_reader = FileSystemEdtModuleReader;
+    let structure_reader = FileSystemEdtMetadataStructureReader;
+    let mut collected = CollectedTopLevelMetadata::default();
+
+    let descriptor = metadata_reader
+        .read(object_directory, kind)
+        .map_err(EdtGraphError::MetadataObject)?;
+    let descriptor_source = metadata_object_source_id(&descriptor)?;
+
+    insert_node(
+        graph,
+        descriptor.id().clone(),
+        descriptor.name().clone(),
+        NodeKind::Metadata(descriptor.kind()),
+        declared_provenance(descriptor_source),
+    );
+
+    insert_edge(
+        graph,
+        configuration_id.clone(),
+        descriptor.id().clone(),
+        EdgeKind::Contains,
+        declared_provenance(contains_edge_source_id(
+            descriptor.descriptor_path(),
+            descriptor.id(),
+            configuration_id,
+            descriptor.id(),
+        )?),
+    )?;
+
+    for child in structure_reader
+        .read_children(&descriptor)
+        .map_err(EdtGraphError::MetadataStructure)?
+    {
+        collect_metadata_child(graph, &descriptor, &child, &mut collected.references)?;
+    }
+
+    let modules = module_reader
+        .read_modules(descriptor.id(), descriptor.name(), object_directory)
+        .map_err(EdtGraphError::Module)?;
+
+    for module in &modules {
+        let module_source = module_source_id(&descriptor, module)?;
 
         insert_node(
             graph,
-            descriptor.id().clone(),
-            descriptor.name().clone(),
-            NodeKind::Metadata(descriptor.kind()),
-            declared_provenance(descriptor_source.clone()),
+            module.id().clone(),
+            module.name().clone(),
+            NodeKind::Module,
+            parsed_provenance(module_source.clone()),
         );
 
         insert_edge(
             graph,
-            configuration_id.clone(),
             descriptor.id().clone(),
+            module.id().clone(),
             EdgeKind::Contains,
-            declared_provenance(contains_edge_source_id(
-                descriptor.descriptor_path(),
+            parsed_provenance(contains_edge_source_id(
+                module.path(),
                 descriptor.id(),
-                configuration_id,
                 descriptor.id(),
+                module.id(),
             )?),
         )?;
-
-        let structure_reader = FileSystemEdtMetadataStructureReader;
-
-        let children = structure_reader
-            .read_children(&descriptor)
-            .map_err(EdtGraphError::MetadataStructure)?;
-
-        for child in children {
-            let child_source = metadata_child_source_id(&descriptor, &child)?;
-
-            insert_node(
-                graph,
-                child.id().clone(),
-                child.name().clone(),
-                child.kind().node_kind(),
-                declared_provenance(child_source),
-            );
-
-            insert_edge(
-                graph,
-                child.parent_id().clone(),
-                child.id().clone(),
-                EdgeKind::Contains,
-                declared_provenance(contains_edge_source_id(
-                    descriptor.descriptor_path(),
-                    descriptor.id(),
-                    child.parent_id(),
-                    child.id(),
-                )?),
-            )?;
-        }
-
-        let modules = module_reader
-            .read_modules(descriptor.id(), descriptor.name(), &object_directory)
-            .map_err(EdtGraphError::Module)?;
-
-        for module in &modules {
-            let module_source = module_source_id(&descriptor, module)?;
-
-            insert_node(
-                graph,
-                module.id().clone(),
-                module.name().clone(),
-                NodeKind::Module,
-                parsed_provenance(module_source.clone()),
-            );
-
-            insert_edge(
-                graph,
-                descriptor.id().clone(),
-                module.id().clone(),
-                EdgeKind::Contains,
-                parsed_provenance(contains_edge_source_id(
-                    module.path(),
-                    descriptor.id(),
-                    descriptor.id(),
-                    module.id(),
-                )?),
-            )?;
-        }
-
-        configuration_modules.extend(modules);
     }
 
-    Ok(configuration_modules)
+    collected.modules.extend(modules);
+
+    Ok(collected)
+}
+
+fn collect_metadata_child(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+    child: &EdtMetadataChildDescriptor,
+    references: &mut BTreeSet<PendingMetadataReference>,
+) -> Result<(), EdtGraphError> {
+    let child_source = metadata_child_source_id(descriptor, child)?;
+
+    insert_node(
+        graph,
+        child.id().clone(),
+        child.name().clone(),
+        child.kind().node_kind(),
+        declared_provenance(child_source),
+    );
+
+    insert_edge(
+        graph,
+        child.parent_id().clone(),
+        child.id().clone(),
+        EdgeKind::Contains,
+        declared_provenance(contains_edge_source_id(
+            descriptor.descriptor_path(),
+            descriptor.id(),
+            child.parent_id(),
+            child.id(),
+        )?),
+    )?;
+
+    if matches!(
+        child.kind(),
+        EdtMetadataChildKind::Attribute
+            | EdtMetadataChildKind::Dimension
+            | EdtMetadataChildKind::Resource
+    ) {
+        for reference in child.references() {
+            references.insert(PendingMetadataReference {
+                descriptor_path: descriptor.descriptor_path().to_path_buf(),
+                metadata_object_id: descriptor.id().clone(),
+                source_id: child.id().clone(),
+                target_kind: reference.target_kind(),
+                target_name: reference.target_name().clone(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_metadata_references(
+    graph: &mut SemanticGraph,
+    references: &BTreeSet<PendingMetadataReference>,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+) -> Result<(), EdtGraphError> {
+    let resolved_references = {
+        let index = graph.resolution_index();
+        let mut resolved_references = Vec::new();
+
+        for reference in references {
+            let reference_context = SemanticReference::Name(reference.target_name.clone());
+            match index.resolve_name_of_kind(
+                &reference.target_name,
+                NodeKind::Metadata(reference.target_kind),
+            ) {
+                Ok(target) => resolved_references.push((reference.clone(), target.id().clone())),
+                Err(error) => {
+                    diagnostics.insert(metadata_reference_diagnostic(
+                        reference,
+                        error,
+                        reference_context,
+                    )?);
+                }
+            }
+        }
+
+        resolved_references
+    };
+
+    for (reference, target_id) in resolved_references {
+        insert_edge(
+            graph,
+            reference.source_id.clone(),
+            target_id,
+            EdgeKind::References,
+            resolved_provenance(metadata_reference_source_id(&reference)?),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn metadata_reference_diagnostic(
+    reference: &PendingMetadataReference,
+    error: ResolutionError,
+    reference_context: SemanticReference,
+) -> Result<SemanticDiagnostic, EdtGraphError> {
+    Ok(
+        SemanticDiagnostic::from_resolution_error_with_reference(error, Some(reference_context))
+            .with_source_node(reference.source_id.clone())
+            .with_expected_kinds(vec![NodeKind::Metadata(reference.target_kind)])
+            .with_provenance(vec![resolved_provenance(metadata_reference_source_id(
+                reference,
+            )?)]),
+    )
 }
 
 fn insert_node(
@@ -567,6 +743,15 @@ fn declared_provenance(source: EntityId) -> Provenance {
         FactOrigin::Declared,
         Confidence::Exact,
         ResolutionState::NotApplicable,
+    )
+}
+
+fn resolved_provenance(source: EntityId) -> Provenance {
+    graph_provenance(
+        source,
+        FactOrigin::Resolved,
+        Confidence::High,
+        ResolutionState::Resolved,
     )
 }
 
@@ -647,6 +832,22 @@ fn contains_edge_source_id(
     )
 }
 
+fn metadata_reference_source_id(
+    reference: &PendingMetadataReference,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        &reference.descriptor_path,
+        format!(
+            "metadata_object={};edge=references;source={};target_kind={};target_name={}",
+            reference.metadata_object_id.as_str(),
+            reference.source_id.as_str(),
+            reference.target_kind.as_str(),
+            reference.target_name.as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
 fn source_id_from_path_fragment(
     path: &Path,
     fragment: impl AsRef<str>,
@@ -699,6 +900,8 @@ pub enum EdtGraphError {
 
     /// A metadata object module could not be read.
     Module(EdtModuleError),
+
+    /// Semantic graph validation failed.
     Graph(oneagent_graph::GraphError),
 
     /// BSL symbols could not be added to the graph.
@@ -779,8 +982,8 @@ impl From<EdtLoadError> for EdtGraphError {
 mod graph_tests {
     use oneagent_common::EntityName;
     use oneagent_graph::{
-        EdgeKind, FactOrigin, NodeKind, ResolutionError, ResolutionState, SemanticGraph,
-        SemanticReference,
+        EdgeKind, FactOrigin, NodeKind, ResolutionError, ResolutionState, SemanticDiagnosticCode,
+        SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
     };
     use oneagent_metadata::MetadataKind;
     use std::fs;
@@ -803,10 +1006,17 @@ mod graph_tests {
 
     <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
         <name>Company</name>
+        <type>
+            <types>CatalogRef.Products</types>
+            <types>CatalogRef.Products</types>
+        </type>
     </attributes>
 
     <attributes uuid="aaaaaaaa-2222-2222-2222-222222222222">
         <name>Warehouse</name>
+        <type>
+            <types>CatalogRef.Products</types>
+        </type>
     </attributes>
 
     <tabularSections uuid="aaaaaaaa-3333-3333-3333-333333333333">
@@ -848,6 +1058,9 @@ mod graph_tests {
 
     <dimensions uuid="55555555-5555-5555-5555-555555555555">
         <name>Product</name>
+        <type>
+            <types>CatalogRef.Products</types>
+        </type>
     </dimensions>
 
     <dimensions uuid="66666666-6666-6666-6666-666666666666">
@@ -930,6 +1143,112 @@ mod graph_tests {
         root
     }
 
+    fn replace_document_descriptor(root: &tempfile::TempDir, xml: &str) {
+        fs::write(root.path().join("src/Documents/Sales/Sales.mdo"), xml)
+            .expect("document descriptor must be replaced");
+    }
+
+    fn add_catalog_descriptor(
+        root: &tempfile::TempDir,
+        directory_name: &str,
+        uuid: &str,
+        name: &str,
+    ) {
+        let directory = root.path().join("src/Catalogs").join(directory_name);
+        fs::create_dir_all(&directory).expect("catalog directory must be created");
+        fs::write(
+            directory.join(format!("{directory_name}.mdo")),
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Catalog
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="{uuid}">
+    <name>{name}</name>
+</mdclass:Catalog>
+"#
+            ),
+        )
+        .expect("catalog descriptor must be created");
+    }
+
+    fn document_with_reference(reference_type: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+
+    <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
+        <name>Company</name>
+        <type>
+            <types>{reference_type}</types>
+        </type>
+    </attributes>
+</mdclass:Document>
+"#
+        )
+    }
+
+    fn document_with_duplicate_reference(reference_type: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+
+    <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
+        <name>Company</name>
+        <type>
+            <types>{reference_type}</types>
+            <types>{reference_type}</types>
+        </type>
+    </attributes>
+</mdclass:Document>
+"#
+        )
+    }
+
+    fn document_with_two_missing_references(reverse_order: bool) -> String {
+        let first = r#"
+    <attributes uuid="aaaaaaaa-1111-1111-1111-111111111111">
+        <name>Company</name>
+        <type>
+            <types>CatalogRef.MissingProducts</types>
+        </type>
+    </attributes>
+"#;
+        let second = r#"
+    <attributes uuid="aaaaaaaa-2222-2222-2222-222222222222">
+        <name>Warehouse</name>
+        <type>
+            <types>CatalogRef.MissingProducts</types>
+        </type>
+    </attributes>
+"#;
+        let (left, right) = if reverse_order {
+            (second, first)
+        } else {
+            (first, second)
+        };
+
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>Sales</name>
+{left}{right}</mdclass:Document>
+"#
+        )
+    }
+
+    fn company_attribute_id() -> oneagent_common::EntityId {
+        oneagent_common::EntityId::new("aaaaaaaa-1111-1111-1111-111111111111")
+            .expect("identifier must be valid")
+    }
+
     fn assert_metadata_member_provenance(graph: &SemanticGraph) {
         let metadata_member_expectations = [
             (
@@ -999,7 +1318,7 @@ mod graph_tests {
             .expect("graph must build");
 
         assert_eq!(graph.node_count(), 19);
-        assert_eq!(graph.edge_count(), 19);
+        assert_eq!(graph.edge_count(), 22);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -1211,6 +1530,270 @@ mod graph_tests {
         assert!(module_edge_source.contains(
             "/src/Documents/Sales/ObjectModule.bsl#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=contains;source=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;target=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module"
         ));
+    }
+
+    #[test]
+    fn resolves_metadata_reference_edges() {
+        let root = create_edt_project();
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+        let graph = result.graph();
+        let products = graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Catalog))
+            .into_iter()
+            .find(|node| node.name().as_str() == "Products")
+            .expect("Products catalog must exist");
+        let company = graph
+            .nodes_by_kind(NodeKind::Attribute)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Company")
+            .expect("Company attribute must exist");
+        let warehouse = graph
+            .nodes_by_kind(NodeKind::Attribute)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Warehouse")
+            .expect("Warehouse attribute must exist");
+        let product_dimension = graph
+            .nodes_by_kind(NodeKind::Dimension)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Product")
+            .expect("Product dimension must exist");
+
+        let company_references = graph.outgoing_by_kind(company.id(), EdgeKind::References);
+        let warehouse_references = graph.outgoing_by_kind(warehouse.id(), EdgeKind::References);
+        let product_references =
+            graph.outgoing_by_kind(product_dimension.id(), EdgeKind::References);
+        let incoming_references = graph
+            .incoming(products.id())
+            .into_iter()
+            .filter(|edge| edge.kind() == EdgeKind::References)
+            .collect::<Vec<_>>();
+
+        assert_eq!(company_references.len(), 1);
+        assert_eq!(warehouse_references.len(), 1);
+        assert_eq!(product_references.len(), 1);
+        assert_eq!(incoming_references.len(), 3);
+        assert_eq!(company_references[0].target(), products.id());
+        assert_eq!(warehouse_references[0].target(), products.id());
+        assert_eq!(product_references[0].target(), products.id());
+        assert_eq!(company.provenance().len(), 1);
+        assert_eq!(company_references[0].provenance().len(), 1);
+        assert_eq!(
+            company_references[0].provenance()[0].origin(),
+            FactOrigin::Resolved
+        );
+        assert_eq!(
+            company_references[0].provenance()[0].resolution(),
+            ResolutionState::Resolved
+        );
+        assert!(
+            company_references[0].provenance()[0]
+                .source()
+                .expect("reference edge source must exist")
+                .as_str()
+                .ends_with(
+            "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=references;source=aaaaaaaa-1111-1111-1111-111111111111;target_kind=catalog;target_name=Products"
+                )
+        );
+        assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn build_graph_convenience_returns_graph_without_diagnostics() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_reference("CatalogRef.MissingProducts"),
+        );
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("recoverable diagnostics must not fail compatibility graph build");
+
+        assert!(graph.node(&company_attribute_id()).is_some());
+    }
+
+    #[test]
+    fn missing_metadata_reference_target_is_reported() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_reference("CatalogRef.MissingProducts"),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("recoverable missing target must not fail graph build");
+        let diagnostics = result.diagnostics();
+        let graph = result.graph();
+        let company_id = company_attribute_id();
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].code(),
+            SemanticDiagnosticCode::ReferenceUnresolved
+        );
+        assert_eq!(
+            diagnostics[0].kind(),
+            SemanticDiagnosticKind::UnresolvedTarget
+        );
+        assert_eq!(diagnostics[0].severity(), SemanticDiagnosticSeverity::Error);
+        assert_eq!(diagnostics[0].source_node(), Some(&company_id));
+        assert_eq!(
+            diagnostics[0].expected_kinds(),
+            &[NodeKind::Metadata(MetadataKind::Catalog)]
+        );
+        assert_eq!(diagnostics[0].provenance().len(), 1);
+        assert!(matches!(
+            diagnostics[0].reference(),
+            SemanticReference::Name(name) if name.as_str() == "MissingProducts"
+        ));
+        assert!(graph.node(&company_id).is_some());
+        assert!(
+            graph
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .is_empty()
+        );
+
+        let product_dimension = graph
+            .nodes_by_kind(NodeKind::Dimension)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Product")
+            .expect("Product dimension must exist");
+        assert_eq!(
+            graph
+                .outgoing_by_kind(product_dimension.id(), EdgeKind::References)
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn ambiguous_metadata_reference_target_is_reported() {
+        let root = create_edt_project();
+        add_catalog_descriptor(
+            &root,
+            "ProductsCopy",
+            "22222222-aaaa-bbbb-cccc-333333333333",
+            "Products",
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("recoverable ambiguity must not fail graph build");
+        let diagnostics = result.diagnostics();
+        let company_id = company_attribute_id();
+
+        assert_eq!(diagnostics.len(), 3);
+        assert!(diagnostics.iter().all(|diagnostic| {
+            diagnostic.code() == SemanticDiagnosticCode::ReferenceAmbiguous
+                && diagnostic.kind() == SemanticDiagnosticKind::AmbiguousTarget
+                && diagnostic.severity() == SemanticDiagnosticSeverity::Error
+        }));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.source_node() == Some(&company_id))
+        );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn incompatible_metadata_reference_target_kind_is_reported() {
+        let root = create_edt_project();
+        replace_document_descriptor(&root, &document_with_reference("DocumentRef.Products"));
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("recoverable incompatible kind must not fail graph build");
+        let diagnostics = result.diagnostics();
+        let company_id = company_attribute_id();
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].code(),
+            SemanticDiagnosticCode::ReferenceIncompatibleKind
+        );
+        assert_eq!(
+            diagnostics[0].kind(),
+            SemanticDiagnosticKind::IncompatibleTargetKind
+        );
+        assert_eq!(
+            diagnostics[0].actual_kind(),
+            Some(NodeKind::Metadata(MetadataKind::Catalog))
+        );
+        assert_eq!(
+            diagnostics[0].expected_kinds(),
+            &[NodeKind::Metadata(MetadataKind::Document)]
+        );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn duplicate_identical_reference_diagnostic_is_deduplicated() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_duplicate_reference("CatalogRef.MissingProducts"),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("recoverable duplicate missing reference must not fail graph build");
+
+        assert_eq!(result.diagnostics().len(), 1);
+        assert_eq!(
+            result.diagnostics()[0].code(),
+            SemanticDiagnosticCode::ReferenceUnresolved
+        );
+    }
+
+    #[test]
+    fn different_sources_to_same_missing_target_create_distinct_diagnostics() {
+        let root = create_edt_project();
+        replace_document_descriptor(&root, &document_with_two_missing_references(false));
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("recoverable missing references must not fail graph build");
+
+        assert_eq!(result.diagnostics().len(), 2);
+        assert_ne!(
+            result.diagnostics()[0].source_node(),
+            result.diagnostics()[1].source_node()
+        );
+    }
+
+    #[test]
+    fn diagnostic_order_does_not_depend_on_reference_collection_order() {
+        let root = create_edt_project();
+        replace_document_descriptor(&root, &document_with_two_missing_references(false));
+
+        let normal_diagnostics = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("normal graph must build")
+            .diagnostics()
+            .to_vec();
+        replace_document_descriptor(&root, &document_with_two_missing_references(true));
+        let reversed_diagnostics = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("reversed graph must build")
+            .diagnostics()
+            .to_vec();
+
+        assert_eq!(normal_diagnostics, reversed_diagnostics);
     }
 
     #[test]

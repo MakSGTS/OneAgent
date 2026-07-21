@@ -111,11 +111,11 @@ Stable APIs, plugin SDK, performance/security hardening, documentation and examp
 
 Ordered follow-up work:
 
-1. **Critical:** retain unresolved BSL calls as typed diagnostics and resolution statistics.
-2. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
-3. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
-4. **High:** preserve tabular-section ownership for nested attributes.
-5. **High:** add focused support for missing top-level metadata entities, starting with Template.
+1. **Critical — completed:** retain unresolved BSL calls as typed diagnostics and resolution statistics.
+2. **High — next:** add focused support for top-level Command metadata (`metadata_entity.command`), the first remaining gap in deterministic audit order.
+3. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
+4. **High:** emit EDT accounting register `Measure` nodes, ownership, and provenance.
+5. **High:** preserve tabular-section ownership for nested attributes.
 6. **High:** implement producer-specific support for each declared-only semantic edge.
 7. **Medium:** define and preserve complete typed metadata payloads.
 8. **Medium:** add successful fixtures for every mapped metadata reference target kind.

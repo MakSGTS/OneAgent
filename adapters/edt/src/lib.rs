@@ -522,8 +522,13 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
-        add_configuration_module_symbols(&mut graph, &configuration_modules)
-            .map_err(EdtGraphError::Bsl)?;
+        bsl_graph::add_configuration_module_symbols_with_diagnostics(
+            &mut graph,
+            &configuration_modules,
+            &mut diagnostics,
+            &mut reference_statistics,
+        )
+        .map_err(EdtGraphError::Bsl)?;
 
         Ok(EdtSemanticGraphBuildResult::new_with_reference_statistics(
             graph,
@@ -1080,7 +1085,7 @@ impl From<EdtLoadError> for EdtGraphError {
 mod graph_tests {
     use oneagent_common::EntityName;
     use oneagent_graph::{
-        EdgeKind, FactOrigin, NodeKind, ResolutionError, ResolutionState,
+        EdgeKind, FactOrigin, NodeId, NodeKind, ResolutionError, ResolutionState,
         SemanticCoverageCapabilityId, SemanticCoverageStatus, SemanticDiagnosticCode,
         SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
         SemanticReferenceCapability,
@@ -1553,6 +1558,79 @@ mod graph_tests {
     }
 
     #[test]
+    fn preserves_unresolved_bsl_calls_as_deterministic_build_diagnostics() {
+        let root = create_edt_project();
+        let module_path = root.path().join("src/Documents/Sales/ObjectModule.bsl");
+        fs::write(
+            &module_path,
+            concat!(
+                "Procedure BeforeWrite()\n",
+                "    AccessManagement.CheckAccess();\n",
+                "    MissingLocal();\n",
+                "    MissingModule.Execute();\n",
+                "EndProcedure",
+            ),
+        )
+        .expect("object module must be replaced");
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("unresolved calls must not fail graph build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let before_write_id =
+            NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite");
+        let before_write = first
+            .graph()
+            .query()
+            .node(&before_write_id)
+            .expect("BeforeWrite procedure must retain its stable ID");
+        let calls = first
+            .graph()
+            .query()
+            .outgoing_edges_by_kind(&before_write_id, EdgeKind::Calls);
+        let diagnostics = first
+            .diagnostics()
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.code() == SemanticDiagnosticCode::ReferenceUnresolved
+                    && diagnostic.source_node() == Some(before_write.id())
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(first.diagnostics(), second.diagnostics());
+        assert_eq!(first.reference_statistics(), second.reference_statistics());
+        assert_eq!(first.reference_statistics().total(), 7);
+        assert_eq!(first.reference_statistics().resolved(), 5);
+        assert_eq!(first.reference_statistics().unresolved(), 2);
+        assert_eq!(first.reference_statistics().with_provenance(), 7);
+        assert!(first.validate().is_valid());
+
+        for diagnostic in diagnostics {
+            assert_eq!(diagnostic.kind(), SemanticDiagnosticKind::UnresolvedTarget);
+            assert_eq!(
+                diagnostic.expected_kinds(),
+                &[NodeKind::Procedure, NodeKind::Function]
+            );
+            assert_eq!(diagnostic.provenance().len(), 1);
+            assert_eq!(
+                diagnostic.provenance()[0].resolution(),
+                ResolutionState::Unresolved
+            );
+            assert!(
+                diagnostic.provenance()[0]
+                    .source()
+                    .expect("diagnostic source must exist")
+                    .as_str()
+                    .contains("/src/Documents/Sales/ObjectModule.bsl#bsl_call=")
+            );
+        }
+    }
+
+    #[test]
     fn attaches_provenance_to_edt_graph_facts() {
         let root = create_edt_project();
 
@@ -1779,18 +1857,18 @@ mod graph_tests {
             .expect("graph must build");
         let report = result.report();
 
-        assert_eq!(result.reference_statistics().total(), 4);
-        assert_eq!(result.reference_statistics().resolved(), 4);
-        assert_eq!(result.reference_statistics().outcome_total(), 4);
-        assert_eq!(result.reference_statistics().with_provenance(), 4);
+        assert_eq!(result.reference_statistics().total(), 5);
+        assert_eq!(result.reference_statistics().resolved(), 5);
+        assert_eq!(result.reference_statistics().outcome_total(), 5);
+        assert_eq!(result.reference_statistics().with_provenance(), 5);
         assert_eq!(report.graph().total_nodes(), result.graph().node_count());
         assert_eq!(report.graph().total_edges(), result.graph().edge_count());
         assert_eq!(report.graph().total_diagnostics(), 0);
-        assert_eq!(report.resolution().total(), 4);
-        assert_eq!(report.resolution().resolved(), 4);
-        assert_eq!(report.resolution().resolution_rate().numerator(), 4);
-        assert_eq!(report.resolution().resolution_rate().denominator(), 4);
-        assert_eq!(report.provenance().references_with_provenance(), 4);
+        assert_eq!(report.resolution().total(), 5);
+        assert_eq!(report.resolution().resolved(), 5);
+        assert_eq!(report.resolution().resolution_rate().numerator(), 5);
+        assert_eq!(report.resolution().resolution_rate().denominator(), 5);
+        assert_eq!(report.provenance().references_with_provenance(), 5);
     }
 
     #[test]
@@ -1806,10 +1884,10 @@ mod graph_tests {
             .expect("recoverable missing target must not fail graph build");
         let report = result.report();
 
-        assert_eq!(result.reference_statistics().total(), 3);
-        assert_eq!(result.reference_statistics().resolved(), 2);
+        assert_eq!(result.reference_statistics().total(), 4);
+        assert_eq!(result.reference_statistics().resolved(), 3);
         assert_eq!(result.reference_statistics().unresolved(), 1);
-        assert_eq!(result.reference_statistics().outcome_total(), 3);
+        assert_eq!(result.reference_statistics().outcome_total(), 4);
         assert_eq!(report.graph().total_diagnostics(), 1);
         assert_eq!(report.graph().recoverable_diagnostics(), 1);
         assert_eq!(
@@ -1821,11 +1899,11 @@ mod graph_tests {
             1
         );
         assert_eq!(report.diagnostics().with_provenance(), 1);
-        assert_eq!(report.resolution().total(), 3);
-        assert_eq!(report.resolution().resolved(), 2);
+        assert_eq!(report.resolution().total(), 4);
+        assert_eq!(report.resolution().resolved(), 3);
         assert_eq!(report.resolution().unresolved(), 1);
-        assert_eq!(report.resolution().resolution_rate().numerator(), 2);
-        assert_eq!(report.resolution().resolution_rate().denominator(), 3);
+        assert_eq!(report.resolution().resolution_rate().numerator(), 3);
+        assert_eq!(report.resolution().resolution_rate().denominator(), 4);
     }
 
     #[test]

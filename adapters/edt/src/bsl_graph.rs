@@ -4,13 +4,15 @@ use oneagent_bsl::{
     BslCall, BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor,
     BslModuleSymbols, BslParseError, BslSymbol, BslSymbolKind, CrossModuleCallResolver,
     LineBslCallExtractor, LineBslDeclarationExtractor, LocalBslCallResolver,
-    QualifiedBslCallResolver,
+    QualifiedBslCallResolver, UnresolvedBslCall, UnresolvedCrossModuleCall,
 };
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphError, NodeKind, ProducerId, Provenance,
-    ResolutionState, SemanticGraph,
+    ResolutionError, ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticReference,
+    SemanticReferenceOutcome, SemanticReferenceStatistics,
 };
+use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::Path;
@@ -147,12 +149,29 @@ pub fn add_configuration_module_symbols(
     graph: &mut SemanticGraph,
     modules: &[EdtModuleDescriptor],
 ) -> Result<usize, EdtBslGraphError> {
+    let mut diagnostics = BTreeSet::new();
+    let mut reference_statistics = SemanticReferenceStatistics::new();
+
+    add_configuration_module_symbols_with_diagnostics(
+        graph,
+        modules,
+        &mut diagnostics,
+        &mut reference_statistics,
+    )
+}
+
+pub(crate) fn add_configuration_module_symbols_with_diagnostics(
+    graph: &mut SemanticGraph,
+    modules: &[EdtModuleDescriptor],
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<usize, EdtBslGraphError> {
     let analyzed_modules = modules
         .iter()
         .map(analyze_module)
         .collect::<Result<Vec<_>, _>>()?;
 
-    add_analyzed_modules(graph, &analyzed_modules)
+    add_analyzed_modules(graph, &analyzed_modules, diagnostics, reference_statistics)
 }
 
 /// Adds previously analyzed modules to the semantic graph in two passes.
@@ -165,6 +184,8 @@ pub fn add_configuration_module_symbols(
 fn add_analyzed_modules(
     graph: &mut SemanticGraph,
     modules: &[AnalyzedBslModule],
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<usize, EdtBslGraphError> {
     // Pass 1: insert declarations from every module.
     for module in modules {
@@ -178,8 +199,15 @@ fn add_analyzed_modules(
 
     // Pass 2: resolve calls only after every declaration is present.
     for (module, module_symbols) in modules.iter().zip(&available_modules) {
-        insert_local_calls(graph, module)?;
-        insert_cross_module_calls(graph, module, module_symbols, &available_modules)?;
+        insert_local_calls(graph, module, diagnostics, reference_statistics)?;
+        insert_cross_module_calls(
+            graph,
+            module,
+            module_symbols,
+            &available_modules,
+            diagnostics,
+            reference_statistics,
+        )?;
     }
 
     Ok(modules.iter().map(|module| module.symbols().len()).sum())
@@ -200,7 +228,14 @@ pub fn add_module_symbols(
     module: &EdtModuleDescriptor,
 ) -> Result<usize, EdtBslGraphError> {
     let analyzed_module = analyze_module(module)?;
-    add_analyzed_modules(graph, std::slice::from_ref(&analyzed_module))
+    let mut diagnostics = BTreeSet::new();
+    let mut reference_statistics = SemanticReferenceStatistics::new();
+    add_analyzed_modules(
+        graph,
+        std::slice::from_ref(&analyzed_module),
+        &mut diagnostics,
+        &mut reference_statistics,
+    )
 }
 
 fn insert_declarations(
@@ -236,6 +271,8 @@ fn insert_declarations(
 fn insert_local_calls(
     graph: &mut SemanticGraph,
     module: &AnalyzedBslModule,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<(), EdtBslGraphError> {
     let resolution = LocalBslCallResolver.resolve(module.symbols(), module.calls());
 
@@ -248,6 +285,18 @@ fn insert_local_calls(
         )?;
     }
 
+    for call in module
+        .calls()
+        .iter()
+        .filter(|call| !is_qualified_call(call))
+    {
+        if local_call_is_unresolved(call, resolution.unresolved()) {
+            record_unresolved_call(module, call, diagnostics, reference_statistics);
+        } else {
+            reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+        }
+    }
+
     Ok(())
 }
 
@@ -256,6 +305,8 @@ fn insert_cross_module_calls(
     module: &AnalyzedBslModule,
     current_module: &BslModuleSymbols,
     available_modules: &[BslModuleSymbols],
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<(), EdtBslGraphError> {
     let resolution = QualifiedBslCallResolver.resolve_cross_module_calls(
         current_module,
@@ -272,7 +323,76 @@ fn insert_cross_module_calls(
         )?;
     }
 
+    for call in module.calls().iter().filter(|call| is_qualified_call(call)) {
+        if cross_module_call_is_unresolved(call, resolution.unresolved()) {
+            record_unresolved_call(module, call, diagnostics, reference_statistics);
+        } else {
+            reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+        }
+    }
+
     Ok(())
+}
+
+fn is_qualified_call(call: &BslCall) -> bool {
+    call.target_symbol().as_str().contains('.')
+}
+
+fn local_call_is_unresolved(call: &BslCall, unresolved: &[UnresolvedBslCall]) -> bool {
+    unresolved.iter().any(|candidate| {
+        candidate.source_name() == call.source_symbol()
+            && candidate.target_name() == call.target_symbol()
+            && candidate.line() == call.line()
+    })
+}
+
+fn cross_module_call_is_unresolved(
+    call: &BslCall,
+    unresolved: &[UnresolvedCrossModuleCall],
+) -> bool {
+    unresolved.iter().any(|candidate| {
+        candidate.source_name() == call.source_symbol()
+            && candidate.target_name() == call.target_symbol()
+            && candidate.line() == call.line()
+    })
+}
+
+fn record_unresolved_call(
+    module: &AnalyzedBslModule,
+    call: &BslCall,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) {
+    let reference = SemanticReference::Name(call.target_symbol().clone());
+    let mut diagnostic = SemanticDiagnostic::from_resolution_error_with_reference(
+        ResolutionError::MissingTarget {
+            reference: reference.clone(),
+        },
+        Some(reference),
+    )
+    .with_expected_kinds(vec![NodeKind::Procedure, NodeKind::Function])
+    .with_provenance(vec![unresolved_call_provenance(module.source(), call)]);
+
+    if let Some(source_node) = source_node_id(module, call) {
+        diagnostic = diagnostic.with_source_node(source_node);
+    }
+
+    diagnostics.insert(diagnostic);
+    reference_statistics.record(SemanticReferenceOutcome::Unresolved, true);
+}
+
+fn source_node_id(module: &AnalyzedBslModule, call: &BslCall) -> Option<EntityId> {
+    let source_name = call.source_symbol()?;
+    module
+        .symbols()
+        .iter()
+        .find(|symbol| {
+            symbol
+                .name()
+                .as_str()
+                .eq_ignore_ascii_case(source_name.as_str())
+        })
+        .map(|symbol| symbol.id().clone())
 }
 
 fn insert_call_edge(
@@ -307,6 +427,27 @@ fn resolved_provenance(source: Option<&EntityId>) -> Provenance {
         FactOrigin::Resolved,
         Confidence::High,
         ResolutionState::Resolved,
+    )
+}
+
+fn unresolved_call_provenance(source: Option<&EntityId>, call: &BslCall) -> Provenance {
+    let source = source.map_or_else(
+        || call.id().clone(),
+        |source| {
+            EntityId::new(format!(
+                "{}#bsl_call={}",
+                source.as_str(),
+                call.id().as_str()
+            ))
+            .expect("a non-empty source and call identifier must produce a valid identifier")
+        },
+    );
+
+    bsl_provenance(
+        Some(&source),
+        FactOrigin::Resolved,
+        Confidence::Exact,
+        ResolutionState::Unresolved,
     )
 }
 
@@ -399,13 +540,20 @@ impl std::error::Error for EdtBslGraphError {
 #[cfg(test)]
 mod tests {
     use oneagent_common::{EntityId, EntityName};
-    use oneagent_graph::{EdgeKind, GraphNode, NodeKind, SemanticGraph};
+    use oneagent_graph::{
+        EdgeKind, GraphNode, NodeKind, ResolutionState, SemanticDiagnosticCode,
+        SemanticDiagnosticKind, SemanticGraph, SemanticReferenceStatistics,
+    };
+    use std::collections::BTreeSet;
     use std::fs;
     use tempfile::tempdir;
 
     use crate::{EdtModuleDescriptor, EdtModuleKind};
 
-    use super::{add_configuration_module_symbols, add_module_symbols};
+    use super::{
+        add_configuration_module_symbols, add_configuration_module_symbols_with_diagnostics,
+        add_module_symbols,
+    };
 
     #[test]
     fn adds_procedure_and_function_nodes() {
@@ -636,5 +784,95 @@ mod tests {
         assert_eq!(normal_calls.len(), 1);
         assert_eq!(reversed_calls.len(), 1);
         assert_eq!(normal_calls[0].target(), reversed_calls[0].target());
+    }
+
+    #[test]
+    fn records_one_diagnostic_outcome_for_each_unresolved_call() {
+        let root = tempdir().expect("temporary directory must be created");
+        let module_path = root.path().join("CallerModule.bsl");
+
+        fs::write(
+            &module_path,
+            concat!(
+                "Procedure Run()\n",
+                "    MissingLocal();\n",
+                "    MissingModule.Execute();\n",
+                "EndProcedure\n",
+            ),
+        )
+        .expect("caller module must be created");
+
+        let build = || {
+            let module_id =
+                EntityId::new("configuration:caller_module").expect("identifier must be valid");
+            let module = EdtModuleDescriptor::new(
+                module_id.clone(),
+                EntityName::new("CallerModule").expect("name must be valid"),
+                EdtModuleKind::Object,
+                module_path.clone(),
+            );
+            let mut graph = SemanticGraph::new();
+            graph.insert_node(GraphNode::new(
+                module_id,
+                EntityName::new("CallerModule").expect("name must be valid"),
+                NodeKind::Module,
+            ));
+            let mut diagnostics = BTreeSet::new();
+            let mut statistics = SemanticReferenceStatistics::new();
+
+            add_configuration_module_symbols_with_diagnostics(
+                &mut graph,
+                &[module],
+                &mut diagnostics,
+                &mut statistics,
+            )
+            .expect("configuration symbols must be added");
+
+            (
+                graph,
+                diagnostics.into_iter().collect::<Vec<_>>(),
+                statistics,
+            )
+        };
+
+        let (graph, diagnostics, statistics) = build();
+        let (_, repeated_diagnostics, repeated_statistics) = build();
+        let run_id =
+            EntityId::new("configuration:caller_module:procedure:Run").expect("ID must be valid");
+
+        assert_eq!(statistics.total(), 2);
+        assert_eq!(statistics.unresolved(), 2);
+        assert_eq!(statistics.outcome_total(), 2);
+        assert_eq!(statistics.with_provenance(), 2);
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics, repeated_diagnostics);
+        assert_eq!(statistics, repeated_statistics);
+        assert!(graph.node(&run_id).is_some());
+        assert!(graph.outgoing_by_kind(&run_id, EdgeKind::Calls).is_empty());
+
+        for diagnostic in &diagnostics {
+            assert_eq!(
+                diagnostic.code(),
+                SemanticDiagnosticCode::ReferenceUnresolved
+            );
+            assert_eq!(diagnostic.kind(), SemanticDiagnosticKind::UnresolvedTarget);
+            assert_eq!(diagnostic.source_node(), Some(&run_id));
+            assert_eq!(
+                diagnostic.expected_kinds(),
+                &[NodeKind::Procedure, NodeKind::Function]
+            );
+            assert_eq!(diagnostic.provenance().len(), 1);
+            assert_eq!(
+                diagnostic.provenance()[0].resolution(),
+                ResolutionState::Unresolved
+            );
+            assert!(
+                diagnostic.provenance()[0]
+                    .source()
+                    .expect("diagnostic source must exist")
+                    .as_str()
+                    .contains("CallerModule.bsl#bsl_call=")
+            );
+        }
     }
 }

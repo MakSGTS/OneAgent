@@ -1406,10 +1406,15 @@ representative integration fixtures; the other mapped targets lack successful
 fixtures.
 
 BSL calls are extracted and local or qualified calls can resolve to `Calls`
-edges. Unresolved BSL calls do not currently become semantic diagnostics and do
-not update EDT build reference statistics. This is a critical silent-loss gap.
-There is no resolved-without-edge path in the current metadata reference flow:
-successful metadata resolution immediately emits a `References` edge.
+edges. Every extracted call now contributes exactly one final reference outcome:
+an unqualified call is handled by local resolution and a qualified call by
+cross-module resolution. Successful outcomes emit a `Calls` edge; unresolved
+outcomes emit the existing typed unresolved-reference diagnostic and update EDT
+build reference statistics. Diagnostic provenance identifies the source BSL
+file and stable call identity, and the source procedure or function is attached
+when available. There is no resolved-without-edge path in the current metadata
+reference flow: successful metadata resolution immediately emits a `References`
+edge.
 
 ### Edge, validation, query, and impact inventory
 
@@ -1446,12 +1451,20 @@ fact and silently ignored references are critical. Missing core entities,
 ownership relations, references, or emitted edges are high priority. Partial
 variant support and missing representative tests are medium priority.
 
-The ordered Semantic Coverage Completion backlog is:
+The Critical BSL call observability gap is closed: every extracted local or
+qualified call has a resolved or unresolved outcome with provenance, and no call
+is silently discarded by the EDT graph builder. According to the deterministic
+gap ordering, the first remaining High gap is
+`metadata_entity.command`: top-level Command metadata is modeled but not
+discovered or emitted by the EDT pipeline.
 
-1. **Critical — BSL call diagnostics and statistics.** Preserve unresolved and
-   ambiguous BSL calls in EDT build diagnostics and reference statistics.
-   Acceptance: every extracted call has a resolved or typed failure outcome with
-   provenance; no call is silently discarded.
+The remaining thematic Semantic Coverage Completion backlog is:
+
+1. **High — unsupported top-level metadata entities.** Address Command first,
+   followed by the remaining entities in deterministic audit order; confirm the
+   EDT source shape before adding discovery mappings. Acceptance: discovery
+   mapping, typed descriptor, node emission, provenance, and one focused fixture
+   per entity kind.
 2. **High — Standard Attribute EDT contribution.** Extend metadata structure
    extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
    stable node identity, typed kind payload, owner edge, provenance, validation,
@@ -1463,25 +1476,21 @@ The ordered Semantic Coverage Completion backlog is:
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
-5. **High — unsupported top-level metadata entities.** Address Template first;
-   treat managed Form and Command mappings only after their EDT source shape is
-   confirmed. Acceptance: discovery mapping, typed descriptor, node emission,
-   provenance, and one focused fixture per entity kind.
-6. **High — declared semantic edges.** Add producer-specific tasks for Reads,
+5. **High — declared semantic edges.** Add producer-specific tasks for Reads,
    Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
    task. Acceptance for each: extraction source, endpoint rule, provenance,
    Query semantics, Impact policy decision, and tests.
-7. **Medium — metadata payload completion.** Define and preserve the typed
+6. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
    or recorded as a known limitation.
-8. **Medium — metadata reference fixtures.** Add successful fixtures for
+7. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.
-9. **Medium — reference-request provenance.** Decide whether pending reference
+8. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
-10. **Medium — broad endpoint validation.** Replace permissive rules for future
+9. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
 

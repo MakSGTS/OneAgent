@@ -424,14 +424,17 @@ fn bsl_call_reference_capability() -> SemanticCoverageCapability {
     SemanticCoverageCapability::new(
         SemanticCoverageCapabilityId::MetadataReference(SemanticReferenceCapability::BslCall),
         "BSL call reference",
-        SemanticCoverageStatus::PartiallySupported,
+        SemanticCoverageStatus::Supported,
         [
             Evidence::Parsed,
             Evidence::ReferenceExtracted,
             Evidence::ReferenceResolved,
+            Evidence::DiagnosticEmitted,
             Evidence::SemanticEdgeEmitted,
             Evidence::ProvenanceAttached,
+            Evidence::ResolutionStatisticsRecorded,
             Evidence::PositiveTestExists,
+            Evidence::NegativeTestExists,
             Evidence::IntegrationTestExists,
         ],
         [
@@ -451,8 +454,8 @@ fn bsl_call_reference_capability() -> SemanticCoverageCapability {
     .with_representative_test(
         "oneagent_edt::graph_tests::resolves_cross_module_call_through_production_graph_builder",
     )
-    .with_limitation(
-        "Unresolved BSL calls do not produce EDT build diagnostics or resolution statistics",
+    .with_representative_test(
+        "oneagent_edt::graph_tests::preserves_unresolved_bsl_calls_as_deterministic_build_diagnostics",
     )
 }
 
@@ -695,7 +698,7 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_bsl_call_observability_is_a_typed_gap() {
+    fn bsl_call_observability_closes_the_typed_gap() {
         let report = EdtSemanticCoverageRegistry::audit();
         let capability = report
             .capability(SemanticCoverageCapabilityId::MetadataReference(
@@ -703,28 +706,34 @@ mod tests {
             ))
             .expect("BSL call coverage must exist");
 
-        assert_eq!(
-            capability.status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
         assert!(
             capability
-                .missing_evidence()
+                .evidence()
                 .contains(&SemanticCoverageEvidence::DiagnosticEmitted)
         );
         assert!(
             capability
-                .missing_evidence()
+                .evidence()
                 .contains(&SemanticCoverageEvidence::ResolutionStatisticsRecorded)
         );
-        assert_eq!(
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::NegativeTestExists)
+        );
+        assert!(capability.missing_evidence().is_empty());
+        assert!(
             report
                 .gaps()
                 .iter()
-                .find(|gap| gap.capability_id() == capability.id())
-                .expect("BSL call gap must exist")
-                .priority(),
-            SemanticCoverageGapPriority::Critical
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+        let next_gap = report.gaps().first().expect("a High gap must remain");
+        assert_eq!(next_gap.priority(), SemanticCoverageGapPriority::High);
+        assert_eq!(
+            next_gap.capability_id(),
+            SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::Command)
         );
     }
 }

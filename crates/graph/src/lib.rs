@@ -3,6 +3,7 @@
 //! Stable identifiers used by the `OneAgent` Knowledge Graph.
 
 pub mod diagnostic;
+pub mod diff;
 pub mod edge;
 pub mod identity;
 pub mod kind;
@@ -15,6 +16,10 @@ pub mod standard_attribute;
 
 pub use diagnostic::{
     SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
+};
+pub use diff::{
+    EdgeChange, EdgeModifiedAspect, EdgeSnapshot, GraphChangeKind, GraphDiffSummary, NodeChange,
+    NodeModifiedAspect, NodeSnapshot, SemanticGraphDiff,
 };
 pub use edge::GraphEdge;
 pub use identity::{EdgeId, NodeId};
@@ -197,6 +202,12 @@ impl SemanticGraph {
     #[must_use]
     pub fn report(&self) -> SemanticGraphReport {
         SemanticGraphReport::from_graph(self)
+    }
+
+    /// Compares this graph snapshot with a newer graph snapshot.
+    #[must_use]
+    pub fn diff(&self, new: &Self) -> SemanticGraphDiff {
+        SemanticGraphDiff::between(self, new)
     }
 
     /// Returns all nodes of a specified kind.

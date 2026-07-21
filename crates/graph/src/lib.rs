@@ -2,6 +2,7 @@
 
 //! Stable identifiers used by the `OneAgent` Knowledge Graph.
 
+pub mod build_diff;
 pub mod diagnostic;
 pub mod diff;
 pub mod edge;
@@ -14,6 +15,13 @@ pub mod report;
 pub mod resolution;
 pub mod standard_attribute;
 
+pub use build_diff::{
+    BuildDiffSummary, CountChange, CountChangeDirection, CountDelta, DiagnosticChange,
+    DiagnosticChangeKind, DiagnosticDiff, DiagnosticDiffSummary, DiagnosticIdentity,
+    DiagnosticModifiedAspect, GraphReportDiff, GraphReportMetric, ProvenanceCoverageDiff,
+    ProvenanceCoverageMetric, ResolutionStatisticsDiff, ResolutionStatisticsMetric,
+    SemanticGraphBuildDiff,
+};
 pub use diagnostic::{
     SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
 };

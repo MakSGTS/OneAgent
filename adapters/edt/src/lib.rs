@@ -292,8 +292,8 @@ mod tests {
 
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionError,
-    ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphReport, SemanticReference,
-    SemanticReferenceOutcome, SemanticReferenceStatistics,
+    ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphBuildDiff,
+    SemanticGraphReport, SemanticReference, SemanticReferenceOutcome, SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -371,6 +371,19 @@ impl EdtSemanticGraphBuildResult {
             &self.graph,
             &self.diagnostics,
             self.reference_statistics,
+        )
+    }
+
+    /// Compares this EDT graph build result with a newer build result.
+    #[must_use]
+    pub fn diff(&self, current: &Self) -> SemanticGraphBuildDiff {
+        SemanticGraphBuildDiff::between(
+            &self.graph,
+            &self.diagnostics,
+            self.reference_statistics,
+            &current.graph,
+            &current.diagnostics,
+            current.reference_statistics,
         )
     }
 }
@@ -1782,6 +1795,33 @@ mod graph_tests {
         assert_eq!(report.resolution().unresolved(), 1);
         assert_eq!(report.resolution().resolution_rate().numerator(), 2);
         assert_eq!(report.resolution().resolution_rate().denominator(), 3);
+    }
+
+    #[test]
+    fn build_result_diff_compares_graph_diagnostics_and_statistics() {
+        let previous_root = create_edt_project();
+        replace_document_descriptor(
+            &previous_root,
+            &document_with_reference("CatalogRef.MissingProducts"),
+        );
+        let current_root = create_edt_project();
+
+        let previous = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(previous_root.path())
+            .expect("previous graph must build");
+        let current = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(current_root.path())
+            .expect("current graph must build");
+        let diff = previous.diff(&current);
+
+        assert!(!diff.graph().added_edges().is_empty());
+        assert_eq!(diff.diagnostics().removed().len(), 1);
+        assert!(diff.diagnostics().added().is_empty());
+        assert!(diff.resolution().changed_metrics().iter().any(|change| {
+            *change.key() == oneagent_graph::ResolutionStatisticsMetric::ResolvedReferences
+        }));
+        assert!(diff.summary().edge_changes() > 0);
+        assert_eq!(diff.summary().diagnostic_changes(), 1);
     }
 
     #[test]

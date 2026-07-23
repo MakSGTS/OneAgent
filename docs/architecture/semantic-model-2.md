@@ -1415,6 +1415,188 @@ structure reader does not extract or emit it. `Query`, the flat `Role` and
 EDT roles and subsystems use `NodeKind::Metadata(MetadataKind::Role)` and
 `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
 
+### Query entity contract
+
+`NodeKind::Query` represents a stable source declaration of one complete
+1C query-language program. A Query node is a semantic entity in the graph; it
+is not the public Semantic Query API, not an arbitrary string that happens to
+contain query text, not a BSL runtime `Query` object by itself, not a query
+execution event, and not a `Reads`, `Writes`, or `DependsOn` edge.
+
+The current EDT pipeline does not implement Query extraction or Query node
+emission. The `semantic_node.query` coverage capability therefore remains
+`Unsupported` until a production source path provides parsing, stable identity,
+provenance, graph emission, and representative integration evidence.
+
+#### Source categories
+
+Query sources MUST be source declarations that can be rediscovered
+deterministically and attached to one structural owner. The accepted source
+categories are:
+
+* static BSL query declarations: complete query text supplied directly in a BSL
+  module through a statically extractable literal or literal composition;
+* metadata-owned query declarations: complete query text stored inside a stable
+  metadata member such as a report data-composition dataset or a dynamic-list
+  query setting once the corresponding EDT metadata parser exists.
+
+The following categories are possible future sources, but are not accepted by
+the first implementation slice until their EDT representation and identity
+rules are proven: standalone EDT artifacts that contain only query text,
+report internals beyond named data-composition datasets, form dynamic-list
+settings beyond their stable member path, and query text stored in external
+resources tracked by the workspace.
+
+Generated fragments, runtime-concatenated text, text loaded from an untracked
+external source, and partial query snippets MUST NOT produce Query nodes in the
+initial contract. They MAY later produce diagnostics or lower-confidence facts
+after a separate architecture decision.
+
+#### Canonical entity boundary
+
+One Query entity is one complete source declaration of a query program owned by
+one graph node. A metadata member MAY contain one or more Query entities only
+when each entity has a stable local declaration identity. A BSL procedure or
+function MAY contain multiple Query entities when each static declaration can
+be distinguished independently.
+
+Query text itself is payload evidence for future extraction, but it is not the
+primary identity. Formatting-only changes SHOULD NOT change identity when a
+stable metadata member path or named BSL binding remains unchanged. Changing
+the query body without changing the owner and local declaration identity MUST
+preserve the same Query node identity and later appear as semantic content
+change. Moving the declaration to another owner MUST create a different Query
+identity. Moving an unnamed BSL declaration that has only a source-range
+anchor MAY change identity; such declarations are therefore outside the first
+implementation slice.
+
+Nested subqueries, temporary-table statements, and multiple statements inside
+one static query text are part of the same Query entity until query-language
+analysis introduces child data nodes. Query nodes model source declarations,
+not runtime executions or individual executions of a reused query object.
+
+#### Ownership
+
+Every Query node MUST have exactly one structural owner represented by the
+existing `Contains` relation. For BSL sources, the owner SHOULD be the nearest
+procedure or function node; if a query is declared at module scope, the owner is
+the module node. For metadata sources, the owner SHOULD be the closest semantic
+metadata member node when such a node exists; otherwise the owner is the
+metadata object node and the Query provenance MUST include the nested member
+path that produced it.
+
+No new ownership edge kind is required for Query node support. Data-access
+relations derived from query-language analysis are separate semantic edges and
+MUST NOT be treated as ownership.
+
+#### Stable identity
+
+Query identity MUST reuse the existing deterministic `NodeId` strategy:
+
+* source UUID when the source declaration has its own stable UUID;
+* owner identity plus canonical metadata member path for EDT metadata members;
+* owner identity plus canonical BSL declaration identifier for named static BSL
+  query declarations;
+* source path and source range only as a secondary disambiguator when no more
+  stable local identity exists.
+
+Identity MUST NOT use filesystem traversal order, map iteration order,
+display text alone, a collection index without a stable source contract, or a
+hash of the full query text as the primary key. Query text MAY participate in a
+semantic-content fingerprint used by future diffing, but not in the stable
+node identity.
+
+Multiple Query entities under one owner MUST be distinguished by stable local
+declaration identity: metadata member path and dataset name for metadata
+sources, or named BSL binding plus source declaration anchor for BSL sources.
+Duplicate declarations with the same owner and local identity MUST be rejected,
+deduplicated, or diagnosed deterministically by a future implementation; they
+MUST NOT be resolved by insertion order.
+
+#### Provenance
+
+Query provenance MUST identify the source artifact, producer, owner context,
+and local declaration context. For EDT metadata sources, provenance MUST include
+the descriptor path and canonical member path, such as a dataset or dynamic-list
+query element. For BSL sources, provenance MUST include the BSL module source
+and enough local context to identify the declaration, such as procedure or
+function, binding name, and source range when available.
+
+The current `Provenance` model can represent Query facts by using a stable
+source identifier with a path fragment that encodes member or BSL declaration
+context. It does not yet provide a structured public source-range type; if a
+future implementation needs first-class ranges for BSL Query provenance, that
+range model is a separate prerequisite and MUST NOT be added implicitly by
+Query node emission.
+
+#### Extraction boundary
+
+Query extraction is distinct from 1C query-language parsing. The minimum
+extraction result needed to create a Query node is: owner identity, local
+declaration identity, source artifact, provenance source identifier, and the
+complete raw query text or a pointer to it. Full query-language AST,
+referenced tables, parameters, read/write sets, temporary-table analysis, and
+dependency classification belong to later Data Access Graph work.
+
+The first Query node implementation MUST NOT require full query-language
+analysis. It SHOULD preserve enough raw source context so later analysis can
+derive `Reads`, `Writes`, `DependsOn`, query fields, query parameters, and
+diagnostics without changing the Query node identity.
+
+#### Relation to Query API and semantic edges
+
+The Semantic Query API is a graph access interface over an already-built graph.
+It does not produce Query nodes and does not define Query entity identity.
+Query nodes, once emitted, will be retrievable through the existing Query API
+like any other node kind unless a concrete API gap is found later.
+
+Query node support is independent from `Reads`, `Writes`, and `DependsOn`.
+Future extraction creates the `NodeKind::Query` node and its ownership edge.
+Future query-language analysis may then produce references and data-access
+facts. `Reads` and `Writes` describe data access derived from a Query or BSL
+symbol. `DependsOn` describes semantic dependency. None of these edges is a
+prerequisite for creating the Query node.
+
+#### Determinism, errors, and first slice
+
+Query extraction MUST be deterministic: source discovery order, filesystem
+enumeration order, and map iteration order MUST NOT affect identity, ordering,
+or provenance. Repeated extraction of the same source MUST produce the same
+Query entity and repeated graph builds MUST produce an empty graph diff and
+empty build-result diff when inputs are unchanged. Duplicate extraction of the
+same declaration MUST be deduplicated or diagnosed deterministically.
+
+Empty query text, malformed query language, unsupported source format,
+dynamically constructed text, partial snippets, missing owner identity, and
+missing provenance MUST NOT produce a supported Query node in the first
+implementation phase. Malformed query language MAY still produce a Query node
+when extraction has a complete source declaration; syntax diagnostics belong to
+future query-language analysis. Parser failures in extraction itself SHOULD
+produce typed diagnostics only after a diagnostics contract is added.
+
+The first implementation slice SHOULD target static BSL query declarations
+inside a known procedure or function. This source already has a real EDT input
+family, stable module ownership, existing BSL module discovery, an existing
+symbol owner model, and provenance source identifiers. The slice MUST be
+restricted to declarations with a stable local binding and complete statically
+available text, and it MUST NOT emit `Reads`, `Writes`, or `DependsOn`.
+
+The ordered follow-up tasks are:
+
+1. add a private extracted Query representation carrying owner, local identity,
+   raw text location, and provenance source;
+2. implement extraction for static BSL Query declarations with a stable local
+   binding inside procedure or function owners;
+3. contribute `NodeKind::Query` nodes and `Contains` ownership edges with
+   deterministic identity and provenance;
+4. add a representative EDT BSL fixture and integration tests for identity,
+   provenance, repeated builds, graph diff, and build-result diff;
+5. update Coverage Registry evidence and close `semantic_node.query`;
+6. add query-language parsing and diagnostics in a separate task;
+7. derive `Reads` and `Writes` from parsed query sources in separate edge
+   capability tasks;
+8. derive `DependsOn` after data-access and dependency semantics are defined.
+
 ### Ownership inventory
 
 `Contains` is stored from owner to child. EDT emits configuration-to-object,

@@ -1395,6 +1395,8 @@ Commands embedded in another metadata descriptor similarly emit the flat
 The EDT pipeline currently emits:
 
 * top-level `NodeKind::Metadata(kind)` nodes for the directory registry above;
+* flat `Role` nodes derived from EDT role metadata objects while preserving the
+  original `NodeKind::Metadata(MetadataKind::Role)` object nodes;
 * `Module`, `Procedure`, and `Function` nodes from known BSL module files and
   declaration extraction;
 * `Query` nodes from static BSL Query declarations inside known procedures or
@@ -1411,10 +1413,17 @@ maps a resource owned by `MetadataKind::AccountingRegister` to
 its provenance identifies the original accounting-register descriptor and
 resource member.
 
+EDT role objects produce two coexisting semantic representations: the original
+`NodeKind::Metadata(MetadataKind::Role)` metadata object node and a flat
+`NodeKind::Role` semantic node. The flat role node uses the role metadata object
+UUID plus the `:role` suffix as its deterministic identity and attaches
+provenance to the role `.mdo` descriptor with `fact=role_node` context. No
+ownership edge is emitted for the flat role node because the current graph
+validator does not require ownership for `NodeKind::Role`.
+
 `StandardAttribute` has a graph-domain model and insertion tests, but the EDT
-structure reader does not extract or emit it. The flat `Role` and `Subsystem`
-variants, and `Unknown` are also not emitted by the EDT pipeline. EDT roles and
-subsystems use `NodeKind::Metadata(MetadataKind::Role)` and
+structure reader does not extract or emit it. The flat `Subsystem` variant and
+`Unknown` are also not emitted by the EDT pipeline. EDT subsystems use
 `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
 
 ### Query entity contract
@@ -1741,9 +1750,16 @@ ownership, preserves source provenance with owner and binding context, and
 verifies repeated-build determinism. Query-language parsing and data-access
 edges remain separate tasks.
 
-The EDT registry now reports 12 High gaps and retains 44 Medium gaps. Combined
+The former `semantic_node.role` High gap is closed. The EDT pipeline now emits
+flat `NodeKind::Role` nodes for every discovered role metadata object while
+preserving the existing `NodeKind::Metadata(MetadataKind::Role)` object node.
+Repeated builds preserve role node identity, provenance, and graph/build-result
+diff stability. Role access-right modeling and role-derived semantic edges
+remain separate future tasks.
+
+The EDT registry now reports 11 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 12 High gaps, and 45 Medium gaps. Other fallback, flat-node,
+0 Critical gaps, 11 High gaps, and 45 Medium gaps. Other fallback, flat-node,
 ownership, and declared-edge capabilities remain independent typed gaps and are
 not reclassified by these focused coverage changes. Sprint 3 Integration Review
 remains blocked while High gaps remain.

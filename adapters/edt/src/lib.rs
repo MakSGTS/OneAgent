@@ -641,6 +641,10 @@ fn collect_metadata_object(
         declared_provenance(descriptor_source),
     );
 
+    if descriptor.kind() == MetadataKind::Role {
+        insert_role_node(graph, &descriptor)?;
+    }
+
     insert_edge(
         graph,
         configuration_id.clone(),
@@ -693,6 +697,21 @@ fn collect_metadata_object(
     collected.modules.extend(modules);
 
     Ok(collected)
+}
+
+fn insert_role_node(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+) -> Result<(), EdtGraphError> {
+    insert_node(
+        graph,
+        role_node_id(descriptor)?,
+        descriptor.name().clone(),
+        NodeKind::Role,
+        declared_provenance(role_node_source_id(descriptor)?),
+    );
+
+    Ok(())
 }
 
 fn collect_metadata_child(
@@ -898,6 +917,24 @@ fn metadata_object_source_id(
         descriptor.descriptor_path(),
         format!(
             "metadata_object={};fact=metadata_object",
+            descriptor.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn role_node_id(descriptor: &EdtMetadataObjectDescriptor) -> Result<EntityId, EdtGraphError> {
+    EntityId::new(format!("{}:role", descriptor.id().as_str()))
+        .map_err(|_| EdtGraphError::InvalidIdentifier)
+}
+
+fn role_node_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        descriptor.descriptor_path(),
+        format!(
+            "metadata_object={};fact=role_node",
             descriptor.id().as_str()
         ),
         EdtGraphError::InvalidIdentifier,
@@ -1201,6 +1238,14 @@ mod graph_tests {
 </mdclass:CommonTemplate>
 "#;
 
+    const ROLE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Role
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="eeeeeeee-1111-2222-3333-444444444444">
+    <name>SalesManager</name>
+</mdclass:Role>
+"#;
+
     const ACCUMULATION_REGISTER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mdclass:AccumulationRegister
     xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
@@ -1381,6 +1426,29 @@ mod graph_tests {
         fs::create_dir_all(&directory).expect("accounting register directory must be created");
         fs::write(directory.join("GeneralLedger.mdo"), ACCOUNTING_REGISTER_XML)
             .expect("accounting register descriptor must be created");
+    }
+
+    fn add_role_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/Roles/SalesManager");
+        fs::create_dir_all(&directory).expect("role directory must be created");
+        fs::write(directory.join("SalesManager.mdo"), ROLE_XML)
+            .expect("role descriptor must be created");
+    }
+
+    fn add_read_only_role_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/Roles/ReadOnly");
+        fs::create_dir_all(&directory).expect("second role directory must be created");
+        fs::write(
+            directory.join("ReadOnly.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Role
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="eeeeeeee-aaaa-bbbb-cccc-555555555555">
+    <name>ReadOnly</name>
+</mdclass:Role>
+"#,
+        )
+        .expect("second role descriptor must be created");
     }
 
     fn document_with_reference(reference_type: &str) -> String {
@@ -1853,6 +1921,89 @@ mod graph_tests {
             capability.status(),
             SemanticCoverageStatus::PartiallySupported
         );
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn emits_role_semantic_nodes_alongside_metadata_role_objects() {
+        let root = create_edt_project();
+        add_role_descriptor(&root);
+        add_read_only_role_descriptor(&root);
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with roles must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let role_metadata_id = NodeId::new("eeeeeeee-1111-2222-3333-444444444444");
+        let role_node_id = NodeId::new("eeeeeeee-1111-2222-3333-444444444444:role");
+        let role_metadata = graph
+            .query()
+            .node(&role_metadata_id)
+            .expect("metadata role object must remain queryable by stable UUID");
+        let role = graph
+            .query()
+            .node(&role_node_id)
+            .expect("role semantic node must be queryable by stable derived id");
+        let repeated_role = second
+            .graph()
+            .query()
+            .node(&role_node_id)
+            .expect("repeated build must preserve role identity");
+        let role_sources = role
+            .provenance()
+            .iter()
+            .map(|provenance| {
+                provenance
+                    .source()
+                    .expect("role provenance source must exist")
+                    .as_str()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+        let repeated_role_sources = repeated_role
+            .provenance()
+            .iter()
+            .map(|provenance| {
+                provenance
+                    .source()
+                    .expect("repeated role provenance source must exist")
+                    .as_str()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+
+        assert!(first.diagnostics().is_empty());
+        assert_eq!(role_metadata.name().as_str(), "SalesManager");
+        assert_eq!(role_metadata.kind(), NodeKind::Metadata(MetadataKind::Role));
+        assert_eq!(role.name().as_str(), "SalesManager");
+        assert_eq!(role.kind(), NodeKind::Role);
+        assert_ne!(role_metadata.id(), role.id());
+        assert_eq!(role.id(), repeated_role.id());
+        assert_eq!(role_sources, repeated_role_sources);
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Role))
+                .len(),
+            2
+        );
+        assert_eq!(graph.nodes_by_kind(NodeKind::Role).len(), 2);
+        assert_eq!(role.provenance().len(), 1);
+        assert_eq!(role.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            role.provenance()[0]
+                .source()
+                .expect("role provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Roles/SalesManager/SalesManager.mdo#metadata_object=eeeeeeee-1111-2222-3333-444444444444;fact=role_node"
+                )
+        );
+        assert!(graph.query().owner(&role_node_id).is_none());
         assert!(first.validate().is_valid());
         assert!(graph.diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());

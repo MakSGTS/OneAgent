@@ -1648,10 +1648,13 @@ Impact Analysis can opt into child-to-owner and owner-to-child propagation.
 Attribute ownership is only partially supported. The XML reader recognizes
 nested attribute elements, but currently assigns the top-level metadata object
 as parent. Attributes nested in a tabular section therefore do not preserve the
-tabular-section owner. Standard Attribute ownership is not emitted. Measure node
-conversion reuses generic child containment to preserve graph validity, but
-`ownership_relation.measure` remains a separate High capability pending its own
-ownership-specific evidence and review.
+tabular-section owner. Standard Attribute ownership remains a separate
+ownership-coverage capability. Measure node conversion reuses generic child
+containment: an accounting-register metadata object owns each emitted
+`NodeKind::Measure` through the existing `EdgeKind::Contains` relation. The
+edge uses the same deterministic source, target, kind identity strategy as other
+graph edges and carries provenance pointing to the accounting-register `.mdo`
+descriptor with `edge=contains` context.
 
 ### Reference and resolution inventory
 
@@ -1737,9 +1740,9 @@ construction.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — Measure ownership evidence.** Review and test the existing generic
-   containment path independently from Measure node emission before changing
-   `ownership_relation.measure` status.
+1. **High — Standard Attribute ownership evidence.** Review and test the
+   existing standard-attribute containment path independently from node
+   emission before changing `ownership_relation.standard_attribute` status.
 2. **High — nested Tabular Section ownership.** Preserve nested parent context
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
@@ -1765,8 +1768,13 @@ The remaining thematic Semantic Coverage Completion backlog is:
 The former `semantic_node.measure` High gap is closed. A representative EDT
 Accounting Register fixture now proves production parsing, semantic kind
 selection, stable UUID identity, source provenance, and repeated-build
-determinism. The node capability is `Supported`; ownership coverage remains a
-separate task.
+determinism. The node capability is `Supported`.
+
+The former `ownership_relation.measure` High gap is closed. The existing EDT
+metadata-child production path emits exactly one `Contains` edge from the owning
+Accounting Register metadata node to each emitted `Measure` node, attaches
+edge-level provenance, satisfies graph validation, and remains deterministic
+across repeated builds.
 
 The former `semantic_node.query` High gap is closed. The EDT BSL pipeline now
 extracts static Query declarations with stable local bindings inside known
@@ -1796,12 +1804,12 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy and membership remain
 separate future capabilities.
 
-The EDT registry now reports 8 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 7 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 8 High gaps, and 45 Medium gaps. Other ownership, flat-node,
-and declared-edge capabilities remain independent typed gaps and are not
-reclassified by these focused coverage changes. Sprint 3 Integration Review
-remains blocked while High gaps remain.
+0 Critical gaps, 7 High gaps, and 45 Medium gaps. Other ownership and
+declared-edge capabilities remain independent typed gaps and are not reclassified
+by these focused coverage changes. Sprint 3 Integration Review remains blocked
+while High gaps remain.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable

@@ -3227,14 +3227,80 @@ mod graph_tests {
         );
         assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
         assert!(capability.missing_evidence().is_empty());
-        assert_eq!(ownership.status(), SemanticCoverageStatus::Unsupported);
+        assert_eq!(ownership.status(), SemanticCoverageStatus::Supported);
+        assert!(ownership.missing_evidence().is_empty());
         assert!(
             coverage
                 .edt_pipeline()
-                .gaps_by_priority(oneagent_graph::SemanticCoverageGapPriority::High)
+                .gaps()
                 .iter()
-                .any(|gap| gap.capability_id() == ownership.id())
+                .all(|gap| gap.capability_id() != ownership.id())
         );
+        assert!(first.graph().diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn emits_accounting_register_measure_with_owner() {
+        let root = create_edt_project();
+        add_accounting_register_descriptor(&root);
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with accounting register measure must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let repeated_graph = second.graph();
+        let register_id = NodeId::new("abababab-1111-2222-3333-444444444444");
+        let measure_id = NodeId::new("cdcdcdcd-1111-2222-3333-444444444444");
+        let measure = graph
+            .query()
+            .node(&measure_id)
+            .expect("accounting register resource must emit a measure node");
+        let owner = graph
+            .query()
+            .owner(&measure_id)
+            .expect("accounting register must own the measure");
+        let owner_edges = graph.query().owner_edges(&measure_id);
+        let repeated_owner_edges = repeated_graph.query().owner_edges(&measure_id);
+        let register_children = graph
+            .query()
+            .children_by_kind(&register_id, NodeKind::Measure);
+
+        assert!(first.diagnostics().is_empty());
+        assert_eq!(measure.kind(), NodeKind::Measure);
+        assert_eq!(owner.id().as_str(), register_id.as_str());
+        assert_eq!(
+            owner.kind(),
+            NodeKind::Metadata(MetadataKind::AccountingRegister)
+        );
+        assert_eq!(register_children.len(), 1);
+        assert_eq!(register_children[0].id().as_str(), measure_id.as_str());
+        assert_eq!(owner_edges.len(), 1);
+        assert_eq!(repeated_owner_edges.len(), 1);
+        assert_eq!(owner_edges[0].source().as_str(), register_id.as_str());
+        assert_eq!(owner_edges[0].target().as_str(), measure_id.as_str());
+        assert_eq!(owner_edges[0].kind(), EdgeKind::Contains);
+        assert_eq!(owner_edges[0].source(), repeated_owner_edges[0].source());
+        assert_eq!(owner_edges[0].target(), repeated_owner_edges[0].target());
+        assert_eq!(owner_edges[0].kind(), repeated_owner_edges[0].kind());
+        assert_eq!(owner_edges[0].provenance().len(), 1);
+        assert_eq!(
+            owner_edges[0].provenance()[0].origin(),
+            FactOrigin::Declared
+        );
+        assert!(
+            owner_edges[0].provenance()[0]
+                .source()
+                .expect("measure ownership provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/AccountingRegisters/GeneralLedger/GeneralLedger.mdo#metadata_object=abababab-1111-2222-3333-444444444444;edge=contains;source=abababab-1111-2222-3333-444444444444;target=cdcdcdcd-1111-2222-3333-444444444444"
+                )
+        );
+        assert!(first.graph().validate().is_valid());
         assert!(first.graph().diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());
     }

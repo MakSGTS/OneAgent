@@ -128,7 +128,7 @@ Ordered follow-up work:
 15. **High — completed:** implement the first production slice for declared `DependsOn` semantic edges using the accepted contract in `docs/adr/0017-depends-on-semantics.md`.
 16. **High:** preserve tabular-section ownership for nested attributes.
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
-18. **High — next typed:** implement producer-specific support for declared `Grants` semantic edges.
+18. **High — next typed:** implement producer-specific support for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; the architecture is defined, but production parser support, scoped access-right nodes, graph emission, and validator tightening remain pending.
 19. **Medium:** define and preserve complete typed metadata payloads.
 20. **Medium:** add successful fixtures for every mapped metadata reference target kind.
 21. **Medium:** decide and implement reference-request provenance ownership.

@@ -1682,9 +1682,10 @@ edge.
 
 ### Edge, validation, query, and impact inventory
 
-The EDT pipeline emits `Contains`, `References`, `Calls`, and the first
-`DependsOn` slice, each with provenance. `Reads`, `Writes`, `Grants`,
-`Includes`, and `Extends` are declared but not emitted by EDT.
+The EDT pipeline emits `Contains`, `References`, `Calls`, the first
+`DependsOn` slice, and the first `Extends` slice, each with provenance.
+`Reads`, `Writes`, `Grants`, and `Includes` are declared but not emitted by
+EDT.
 
 Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
 the first `DependsOn` slice, and the first `Extends` slice. The remaining edge
@@ -1725,6 +1726,24 @@ metadata object id, emits `Extends` only when source and target are
 incompatible, or self-extension facts. The edge uses the standard
 `(source, target, EdgeKind::Extends)` identity and resolved provenance
 identifying the adopted EDT descriptor and declared target id.
+
+`EdgeKind::Grants` is governed by
+`docs/adr/0019-grants-semantics.md`. It represents an explicit, direct,
+declared allow grant from an access subject to a scoped access-right entity:
+`access subject --Grants--> scoped access right`. The accepted first production
+slice is EDT role object-right declarations represented as
+`NodeKind::Role --Grants--> future NodeKind::AccessRight`, where the target
+preserves both protected-resource identity and right identity. A direct
+`Role --Grants--> Metadata(...)` edge is not accepted because it would collapse
+multiple rights on the same protected resource into one graph edge identity.
+EDT production support is not implemented yet; the future implementation must
+first add the scoped access-right node contract, parse real EDT role-right
+sources, resolve protected resources, attach provenance, add precise validator
+rules, and then transition `semantic_edge.grants` through the Coverage Registry.
+`Grants` is distinct from `Includes` membership, `Contains` ownership,
+`Reads`/`Writes` data access, `DependsOn` dependencies, effective runtime
+authorization, denied access, inherited access, user assignment, access groups,
+and BSP access-profile semantics.
 
 ### Provenance inventory
 
@@ -1772,15 +1791,17 @@ The remaining thematic Semantic Coverage Completion backlog is:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
 2. **High — declared semantic edges.** Add producer-specific tasks for Reads,
-   Writes, Grants, Includes, and Extends rather than a generic edge task. The
+   Writes, Grants, and Includes rather than a generic edge task. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
-   query-derived dependency origins remain separate tasks. `Extends` now has an
-   accepted architecture contract in
-   `docs/adr/0018-extends-semantics.md`, but production parser support and graph
-   emission remain pending. Acceptance for each remaining edge: extraction
-   source, endpoint rule, provenance, Query semantics, Impact policy decision,
-   and tests.
+   query-derived dependency origins remain separate tasks. The first `Extends`
+   slice is implemented according to `docs/adr/0018-extends-semantics.md`.
+   `Grants` now has an accepted architecture contract in
+   `docs/adr/0019-grants-semantics.md`, but production parser support, the
+   scoped access-right target node, graph emission, and validator tightening
+   remain pending. Acceptance for each remaining edge: extraction source,
+   endpoint rule, provenance, Query semantics, Impact policy decision, and
+   tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
@@ -1840,9 +1861,9 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy and membership remain
 separate future capabilities.
 
-The EDT registry now reports 6 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 4 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 6 High gaps, and 45 Medium gaps. Other ownership and
+0 Critical gaps, 4 High gaps, and 45 Medium gaps. Other ownership and
 declared-edge capabilities remain independent typed gaps and are not reclassified
 by these focused coverage changes. Sprint 3 Integration Review remains blocked
 while High gaps remain.

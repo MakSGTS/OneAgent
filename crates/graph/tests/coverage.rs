@@ -110,6 +110,23 @@ fn every_node_and_edge_kind_has_a_registry_entry() {
 }
 
 #[test]
+fn access_right_node_has_graph_domain_coverage_entry() {
+    let report = SemanticCoverageRegistry::audit();
+    let capability = report
+        .capability(SemanticCoverageCapabilityId::SemanticNode(
+            NodeKind::AccessRight,
+        ))
+        .expect("access right node coverage must exist");
+
+    assert_eq!(capability.stable_id(), "semantic_node.access_right");
+    assert_eq!(
+        capability.category(),
+        SemanticCoverageCategory::SemanticNode
+    );
+    assert_eq!(capability.related_node_kind(), Some(NodeKind::AccessRight));
+}
+
+#[test]
 fn status_contract_matches_required_evidence() {
     let report = SemanticCoverageRegistry::audit();
 

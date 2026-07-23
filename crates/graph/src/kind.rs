@@ -30,6 +30,8 @@ pub enum NodeKind {
     Measure,
     /// Role node.
     Role,
+    /// Scoped access-right node.
+    AccessRight,
     /// Subsystem node.
     Subsystem,
     /// Unknown or not-yet-supported node.

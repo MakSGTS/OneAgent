@@ -1732,14 +1732,21 @@ identifying the adopted EDT descriptor and declared target id.
 declared allow grant from an access subject to a scoped access-right entity:
 `access subject --Grants--> scoped access right`. The accepted first production
 slice is EDT role object-right declarations represented as
-`NodeKind::Role --Grants--> future NodeKind::AccessRight`, where the target
-preserves both protected-resource identity and right identity. A direct
+`NodeKind::Role --Grants--> NodeKind::AccessRight`, where the target preserves
+both protected-resource identity and right identity. `NodeKind::AccessRight`
+is a first-class graph-domain node representing one stable scoped access
+capability: one right or operation applied to one protected resource. Its
+identity is `AccessRight(protected_resource_identity, right_identity)` and is
+stored as a deterministic component-preserving `EntityId` independent from
+display name, provenance, parser state, insertion order, or random UUIDs. A direct
 `Role --Grants--> Metadata(...)` edge is not accepted because it would collapse
 multiple rights on the same protected resource into one graph edge identity.
-EDT production support is not implemented yet; the future implementation must
-first add the scoped access-right node contract, parse real EDT role-right
-sources, resolve protected resources, attach provenance, add precise validator
-rules, and then transition `semantic_edge.grants` through the Coverage Registry.
+The graph validator accepts only the precise future endpoint shape
+`NodeKind::Role --Grants--> NodeKind::AccessRight`; broad metadata targets and
+unrelated source kinds are rejected. EDT production support is not implemented
+yet; the future implementation must parse real EDT role-right sources, resolve
+protected resources, attach provenance to emitted access-right nodes and grant
+edges, and then transition `semantic_edge.grants` through the Coverage Registry.
 `Grants` is distinct from `Includes` membership, `Contains` ownership,
 `Reads`/`Writes` data access, `DependsOn` dependencies, effective runtime
 authorization, denied access, inherited access, user assignment, access groups,
@@ -1797,11 +1804,12 @@ The remaining thematic Semantic Coverage Completion backlog is:
    query-derived dependency origins remain separate tasks. The first `Extends`
    slice is implemented according to `docs/adr/0018-extends-semantics.md`.
    `Grants` now has an accepted architecture contract in
-   `docs/adr/0019-grants-semantics.md`, but production parser support, the
-   scoped access-right target node, graph emission, and validator tightening
-   remain pending. Acceptance for each remaining edge: extraction source,
-   endpoint rule, provenance, Query semantics, Impact policy decision, and
-   tests.
+   `docs/adr/0019-grants-semantics.md`, and the scoped `AccessRight` target
+   node plus precise validator endpoint rule exist in the graph domain. Production
+   parser support, graph emission, provenance from real role-right sources, and
+   Coverage transition remain pending. Acceptance for each remaining edge:
+   extraction source, endpoint rule, provenance, Query semantics, Impact policy
+   decision, and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,

@@ -434,7 +434,8 @@ impl SemanticGraphSchema {
             EdgeKind::References => allows_reference(source_kind, target_kind),
             EdgeKind::DependsOn => allows_depends_on(source_kind, target_kind),
             EdgeKind::Extends => allows_extends(source_kind, target_kind),
-            EdgeKind::Reads | EdgeKind::Writes | EdgeKind::Grants | EdgeKind::Includes => true,
+            EdgeKind::Grants => allows_grants(source_kind, target_kind),
+            EdgeKind::Reads | EdgeKind::Writes | EdgeKind::Includes => true,
         }
     }
 }
@@ -917,6 +918,13 @@ const fn allows_extends(source_kind: NodeKind, target_kind: NodeKind) -> bool {
         }
         _ => false,
     }
+}
+
+const fn allows_grants(source_kind: NodeKind, target_kind: NodeKind) -> bool {
+    matches!(
+        (source_kind, target_kind),
+        (NodeKind::Role, NodeKind::AccessRight)
+    )
 }
 
 const fn forbids_self_loop(kind: EdgeKind) -> bool {

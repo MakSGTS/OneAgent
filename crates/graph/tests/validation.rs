@@ -483,6 +483,117 @@ fn extends_self_loop_is_error() {
 }
 
 #[test]
+fn grants_accepts_role_to_access_right_pair() {
+    let mut graph = valid_graph(false);
+    let role_id = id("metadata.role.sales_manager:role");
+    let access_right_id =
+        id("access_right:resource#23:metadata.document.sales;right#10:right.read");
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        role_id.clone(),
+        name("SalesManager"),
+        NodeKind::Role,
+        vec![provenance("metadata.role.sales_manager")],
+    ));
+    graph.insert_node(GraphNode::new_with_provenance(
+        access_right_id.clone(),
+        name("right.read on metadata.document.sales"),
+        NodeKind::AccessRight,
+        vec![provenance("metadata.role.sales_manager#rights")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            role_id,
+            access_right_id,
+            EdgeKind::Grants,
+            vec![provenance("metadata.role.sales_manager#rights")],
+        ))
+        .expect("grants edge must be stored");
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn grants_rejects_unrelated_endpoint_pairs() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+    let role_id = id("metadata.role.sales_manager:role");
+    let metadata_role_id = id("metadata.role.sales_manager");
+    let access_right_id =
+        id("access_right:resource#23:metadata.document.sales;right#10:right.read");
+    let unknown_id = id("unknown.access");
+    let query_id = id("metadata.document.sales:object_module:procedure:Post:query:AccessQuery");
+
+    for (node_id, node_name, node_kind) in [
+        (role_id.clone(), "SalesManager", NodeKind::Role),
+        (
+            metadata_role_id.clone(),
+            "SalesManager",
+            NodeKind::Metadata(MetadataKind::Role),
+        ),
+        (
+            access_right_id.clone(),
+            "right.read on metadata.document.sales",
+            NodeKind::AccessRight,
+        ),
+        (unknown_id.clone(), "UnknownAccess", NodeKind::Unknown),
+        (query_id.clone(), "AccessQuery", NodeKind::Query),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("metadata.role.sales_manager#rights")],
+        ));
+    }
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.procedure.clone(),
+            query_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales:object_module#query")],
+        ))
+        .expect("query ownership edge must be stored");
+
+    for (source, target) in [
+        (role_id.clone(), ids.document.clone()),
+        (metadata_role_id, access_right_id.clone()),
+        (role_id.clone(), role_id.clone()),
+        (ids.procedure, access_right_id.clone()),
+        (query_id, access_right_id.clone()),
+        (unknown_id.clone(), access_right_id),
+        (role_id, unknown_id),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source,
+                target,
+                EdgeKind::Grants,
+                vec![provenance("metadata.role.sales_manager#rights")],
+            ))
+            .expect("storage only validates endpoint existence");
+    }
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert_eq!(
+        result
+            .issues()
+            .iter()
+            .filter(|issue| {
+                issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+                    && issue.edge_kind() == Some(EdgeKind::Grants)
+            })
+            .count(),
+        7
+    );
+}
+
+#[test]
 fn child_without_owner_is_error() {
     let mut graph = SemanticGraph::new();
 

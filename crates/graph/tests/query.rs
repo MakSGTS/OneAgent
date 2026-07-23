@@ -188,6 +188,25 @@ fn kind_queries_do_not_depend_on_insertion_order() {
 }
 
 #[test]
+fn query_finds_access_right_nodes_by_kind() {
+    let access_right_id =
+        id("access_right:resource#23:metadata.document.sales;right#10:right.read");
+    let mut graph = SemanticGraph::new();
+
+    graph.insert_node(GraphNode::new(
+        access_right_id.clone(),
+        name("right.read on metadata.document.sales"),
+        NodeKind::AccessRight,
+    ));
+
+    let nodes = graph.query().nodes_by_kind(NodeKind::AccessRight);
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].id(), &access_right_id);
+    assert_eq!(nodes[0].kind(), NodeKind::AccessRight);
+}
+
+#[test]
 fn owner_and_children_queries_use_contains_edges_only() {
     let graph = graph_fixture(false);
     let query = graph.query();

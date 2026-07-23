@@ -253,6 +253,13 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         );
     }
 
+    if kind == NodeKind::AccessRight {
+        return not_applicable_node_capability(
+            kind,
+            "NodeKind::AccessRight is the graph-domain target contract required by EdgeKind::Grants; EDT role-right parsing and grant emission are tracked by semantic_edge.grants",
+        );
+    }
+
     if kind == NodeKind::Metadata(MetadataKind::Form) {
         return not_applicable_node_capability(kind, "The EDT adapter emits subordinate forms as NodeKind::Form and common forms as NodeKind::Metadata(MetadataKind::CommonForm)")
         .with_metadata_kind(MetadataKind::Form)
@@ -663,6 +670,7 @@ const fn node_title(kind: NodeKind) -> &'static str {
         NodeKind::Resource => "resource",
         NodeKind::Measure => "measure",
         NodeKind::Role => "role",
+        NodeKind::AccessRight => "access right",
         NodeKind::Subsystem => "subsystem",
         NodeKind::Unknown => "unknown",
     }
@@ -703,7 +711,7 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::Role
         | NodeKind::StandardAttribute
         | NodeKind::Subsystem => true,
-        NodeKind::Unknown => false,
+        NodeKind::AccessRight | NodeKind::Unknown => false,
     }
 }
 
@@ -1205,6 +1213,53 @@ mod tests {
         assert_eq!(reads.status(), SemanticCoverageStatus::DeclaredOnly);
         assert_eq!(subsystem.status(), SemanticCoverageStatus::Supported);
 
+        assert_eq!(
+            first
+                .summary()
+                .by_gap_priority()
+                .get(&SemanticCoverageGapPriority::High),
+            Some(&4)
+        );
+        assert_eq!(
+            first
+                .summary()
+                .by_gap_priority()
+                .get(&SemanticCoverageGapPriority::Medium),
+            Some(&44)
+        );
+        assert_eq!(
+            first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Grants)
+        );
+    }
+
+    #[test]
+    fn access_right_node_is_grants_prerequisite_not_edt_gap() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let capability = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::AccessRight,
+            ))
+            .expect("access right node coverage must exist");
+        let grants = first
+            .capability(SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Grants))
+            .expect("grants edge coverage must exist");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+        assert_eq!(capability.status(), SemanticCoverageStatus::NotApplicable);
+        assert!(capability.evidence().is_empty());
+        assert!(capability.required_evidence().is_empty());
+        assert_eq!(capability.related_node_kind(), Some(NodeKind::AccessRight));
+        assert!(
+            first
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+        assert_eq!(grants.status(), SemanticCoverageStatus::DeclaredOnly);
         assert_eq!(
             first
                 .summary()

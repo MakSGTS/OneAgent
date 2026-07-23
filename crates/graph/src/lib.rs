@@ -2,6 +2,7 @@
 
 //! Stable identifiers used by the `OneAgent` Knowledge Graph.
 
+pub mod access_right;
 pub mod build_diff;
 pub mod coverage;
 pub mod diagnostic;
@@ -19,6 +20,7 @@ pub mod resolution;
 pub mod standard_attribute;
 pub mod validation;
 
+pub use access_right::{AccessRight, AccessRightError};
 pub use build_diff::{
     BuildDiffSummary, CountChange, CountChangeDirection, CountDelta, DiagnosticChange,
     DiagnosticChangeKind, DiagnosticDiff, DiagnosticDiffSummary, DiagnosticIdentity,
@@ -211,6 +213,16 @@ impl SemanticGraph {
         Ok(previous)
     }
 
+    /// Inserts an access-right node.
+    pub fn insert_access_right(&mut self, access_right: &AccessRight) -> Option<GraphNode> {
+        self.insert_node(GraphNode::new_with_provenance(
+            access_right.id().clone(),
+            access_right.name().clone(),
+            NodeKind::AccessRight,
+            access_right.provenance().to_vec(),
+        ))
+    }
+
     /// Returns a node by identifier.
     #[must_use]
     pub fn node(&self, id: &EntityId) -> Option<&GraphNode> {
@@ -334,8 +346,8 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use super::{
-        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphError, GraphNode, Measure, NodeKind,
-        ProducerId, Provenance, ResolutionState, SemanticGraph, StandardAttribute,
+        AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphError, GraphNode, Measure,
+        NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph, StandardAttribute,
         StandardAttributeKind,
     };
     use oneagent_metadata::MetadataKind;
@@ -418,6 +430,8 @@ mod tests {
         let module_id = id("module.sales");
         let procedure_id = id("procedure.sales.post");
         let query_id = id("query.sales.balance");
+        let access_right_id =
+            id("access_right:resource#23:metadata.document.sales;right#10:right.read");
         let mut graph = SemanticGraph::new();
 
         graph.insert_node(GraphNode::new(
@@ -435,6 +449,11 @@ mod tests {
             name("BalanceQuery"),
             NodeKind::Query,
         ));
+        graph.insert_node(GraphNode::new(
+            access_right_id,
+            name("right.read on metadata.document.sales"),
+            NodeKind::AccessRight,
+        ));
 
         graph
             .insert_edge(GraphEdge::new(
@@ -448,6 +467,7 @@ mod tests {
             .expect("reads edge must be valid");
 
         assert_eq!(graph.nodes_by_kind(NodeKind::Query).len(), 1);
+        assert_eq!(graph.nodes_by_kind(NodeKind::AccessRight).len(), 1);
         assert_eq!(graph.outgoing_by_kind(&module_id, EdgeKind::Reads).len(), 1);
     }
 
@@ -720,6 +740,37 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].target(), &measure_id);
         assert_eq!(edges[0].provenance().len(), 1);
+    }
+
+    #[test]
+    fn inserts_access_right_node_without_owner_edge() {
+        let resource_id = id("metadata.document.sales");
+        let right_id = id("right.read");
+        let access_right = AccessRight::new(
+            resource_id.clone(),
+            right_id,
+            vec![provenance(&resource_id, FactOrigin::Declared)],
+        )
+        .expect("access right must be valid");
+        let access_right_id = access_right.id().clone();
+        let mut graph = SemanticGraph::new();
+
+        let previous = graph.insert_access_right(&access_right);
+
+        let node = graph
+            .node(&access_right_id)
+            .expect("access right node must exist");
+
+        assert!(previous.is_none());
+        assert_eq!(node.kind(), NodeKind::AccessRight);
+        assert_eq!(
+            node.name().as_str(),
+            "right.read on metadata.document.sales"
+        );
+        assert_eq!(node.provenance().len(), 1);
+        assert_eq!(node.provenance()[0].source(), Some(&resource_id));
+        assert_eq!(graph.nodes_by_kind(NodeKind::AccessRight).len(), 1);
+        assert_eq!(graph.edge_count(), 0);
     }
 
     #[test]

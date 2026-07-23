@@ -1232,6 +1232,7 @@ fn all_node_kinds() -> Vec<NodeKind> {
         NodeKind::Resource,
         NodeKind::Measure,
         NodeKind::Role,
+        NodeKind::AccessRight,
         NodeKind::Subsystem,
         NodeKind::Unknown,
     ]);
@@ -1349,6 +1350,7 @@ const fn node_kind_code(kind: NodeKind) -> &'static str {
         NodeKind::Resource => "resource",
         NodeKind::Measure => "measure",
         NodeKind::Role => "role",
+        NodeKind::AccessRight => "access_right",
         NodeKind::Subsystem => "subsystem",
         NodeKind::Unknown => "unknown",
     }

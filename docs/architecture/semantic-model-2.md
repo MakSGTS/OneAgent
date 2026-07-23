@@ -1375,8 +1375,18 @@ an EDT domain entity: EDT discovery has no directory mapping for it, metadata
 parsers do not return it as a normal descriptor kind, and unsupported source
 directories are ignored rather than emitted as unknown nodes. Consequently,
 `metadata_entity.unknown` remains explicitly registered but is `NotApplicable`
-to the EDT pipeline. This adapter-specific classification does not change the
-separate graph-domain or EDT semantic-node capabilities for unknown nodes.
+to the EDT pipeline.
+`semantic_node.metadata.unknown` is a distinct node-layer capability, but it is
+also `NotApplicable` to EDT for the same production-source reason: without a
+discovered and parsed `MetadataKind::Unknown` entity there is no stable source
+object, descriptor path, semantic identity, or provenance contract from which to
+emit `NodeKind::Metadata(MetadataKind::Unknown)`. The EDT adapter therefore does
+not create synthetic unknown metadata entities or synthetic unknown metadata
+nodes for forward compatibility. Unknown source directories remain ignored by
+discovery, and reference-resolution failures are represented by typed
+diagnostics rather than fallback metadata nodes.
+This adapter-specific classification does not change the separate graph-domain
+or EDT capability for the flat `semantic_node.unknown` node kind.
 Commands embedded in another metadata descriptor similarly emit the flat
 `NodeKind::Command` variant.
 
@@ -1492,15 +1502,18 @@ and subordinate form representations already use distinct semantic kinds.
 The former `metadata_entity.unknown` High gap was a stale applicability
 classification. `MetadataKind::Unknown` is fallback-only for this adapter, so
 the capability is now `NotApplicable` without adding a producer or emitting
-unknown metadata nodes. According to the deterministic gap ordering, the first
-remaining High gap is `semantic_node.metadata.unknown`.
+unknown metadata entities. The former `semantic_node.metadata.unknown` High gap
+was the corresponding node-layer applicability gap: EDT has no production
+metadata entity, parsing path, graph emission contract, representative fixture,
+or error-recovery requirement for `NodeKind::Metadata(MetadataKind::Unknown)`,
+so it is also `NotApplicable`. The flat `semantic_node.unknown` capability
+remains a separate High gap.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — metadata Unknown node applicability.** Determine whether
-   `NodeKind::Metadata(MetadataKind::Unknown)` is an applicable EDT node
-   capability or another fallback-only classification. This is the first
-   remaining typed High gap.
+1. **High — Query EDT contribution applicability.** Determine whether
+   `NodeKind::Query` has a production EDT source in the current semantic graph
+   pipeline or should remain unsupported pending query extraction.
 2. **High — Standard Attribute EDT contribution.** Extend metadata structure
    extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
    stable node identity, typed kind payload, owner edge, provenance, validation,
@@ -1536,10 +1549,12 @@ selection, stable UUID identity, source provenance, and repeated-build
 determinism. The node capability is `Supported`; ownership coverage remains a
 separate task.
 
-The EDT registry now reports 14 High gaps instead of 15 and retains 44 Medium
-gaps. Other fallback, flat-node, ownership, and declared-edge capabilities remain
-independent typed gaps and are not reclassified by these focused coverage changes.
-Sprint 3 Integration Review remains blocked while High gaps remain.
+The EDT registry now reports 13 High gaps and retains 44 Medium gaps. Combined
+with the graph-domain registry, the current Semantic Coverage audit reports
+0 Critical gaps, 13 High gaps, and 45 Medium gaps. Other fallback, flat-node,
+ownership, and declared-edge capabilities remain independent typed gaps and are
+not reclassified by these focused coverage changes. Sprint 3 Integration Review
+remains blocked while High gaps remain.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable

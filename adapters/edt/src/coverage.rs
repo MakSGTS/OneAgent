@@ -238,15 +238,17 @@ fn not_applicable_metadata_capability(
 fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
     use SemanticCoverageEvidence as Evidence;
 
-    if kind == NodeKind::Metadata(MetadataKind::Form) {
-        return SemanticCoverageCapability::new(
-            SemanticCoverageCapabilityId::SemanticNode(kind),
-            format!("EDT {} node contribution", node_title(kind)),
-            SemanticCoverageStatus::NotApplicable,
-            [],
-            [],
+    if kind == NodeKind::Metadata(MetadataKind::Unknown) {
+        return not_applicable_node_capability(
+            kind,
+            "MetadataKind::Unknown is a fallback model marker; EDT has no discovery, parsing or graph emission contract for unknown metadata object nodes",
         )
-        .with_node_kind(kind)
+        .with_metadata_kind(MetadataKind::Unknown);
+    }
+
+    if kind == NodeKind::Metadata(MetadataKind::Form) {
+        return not_applicable_node_capability(kind, "The EDT adapter emits subordinate forms as NodeKind::Form and common forms as NodeKind::Metadata(MetadataKind::CommonForm)")
+        .with_metadata_kind(MetadataKind::Form)
         .with_note(
             "The EDT adapter emits subordinate forms as NodeKind::Form and common forms as NodeKind::Metadata(MetadataKind::CommonForm)",
         );
@@ -306,6 +308,21 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         ),
         _ => capability.with_representative_test("oneagent_edt::graph_tests"),
     }
+}
+
+fn not_applicable_node_capability(
+    kind: NodeKind,
+    note: &'static str,
+) -> SemanticCoverageCapability {
+    SemanticCoverageCapability::new(
+        SemanticCoverageCapabilityId::SemanticNode(kind),
+        format!("EDT {} node contribution", node_title(kind)),
+        SemanticCoverageStatus::NotApplicable,
+        [],
+        [],
+    )
+    .with_node_kind(kind)
+    .with_note(note)
 }
 
 fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
@@ -703,8 +720,10 @@ mod tests {
     };
     use oneagent_metadata::MetadataKind;
     use std::collections::BTreeSet;
+    use std::fs;
 
     use super::EdtSemanticCoverageRegistry;
+    use crate::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 
     #[test]
     fn registry_is_deterministic_unique_and_consistent() {
@@ -852,7 +871,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Unknown,))
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
         );
     }
 
@@ -902,7 +921,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Unknown,))
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
         );
     }
 
@@ -963,7 +982,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Unknown,))
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
         );
     }
 
@@ -1013,7 +1032,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Unknown)),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::StandardAttribute),
@@ -1030,16 +1048,156 @@ mod tests {
         ]);
 
         assert_eq!(actual_high_ids, expected_high_ids);
-        assert_eq!(high_gaps.len(), 14);
+        assert_eq!(high_gaps.len(), 13);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Unknown,))
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
         );
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
             44
+        );
+    }
+
+    #[test]
+    fn unknown_metadata_node_is_not_applicable_to_edt() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let capability = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Metadata(MetadataKind::Unknown),
+            ))
+            .expect("unknown metadata node coverage must remain registered");
+        let metadata_entity = first
+            .capability(SemanticCoverageCapabilityId::MetadataEntity(
+                MetadataKind::Unknown,
+            ))
+            .expect("unknown metadata entity coverage must remain registered");
+        let flat_unknown = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Unknown,
+            ))
+            .expect("flat unknown node coverage must remain registered");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+        assert_eq!(capability.status(), SemanticCoverageStatus::NotApplicable);
+        assert!(capability.evidence().is_empty());
+        assert!(capability.required_evidence().is_empty());
+        assert!(capability.missing_evidence().is_empty());
+        assert_eq!(
+            capability.source_metadata_kind(),
+            Some(MetadataKind::Unknown)
+        );
+        assert_eq!(
+            capability.related_node_kind(),
+            Some(NodeKind::Metadata(MetadataKind::Unknown))
+        );
+        assert!(!capability.notes().is_empty());
+
+        assert_eq!(
+            metadata_entity.status(),
+            SemanticCoverageStatus::NotApplicable
+        );
+        assert_eq!(flat_unknown.status(), SemanticCoverageStatus::Unsupported);
+        assert!(
+            flat_unknown
+                .missing_evidence()
+                .contains(&SemanticCoverageEvidence::NodeEmitted)
+        );
+
+        let high_gaps = first.gaps_by_priority(SemanticCoverageGapPriority::High);
+        let actual_high_ids = high_gaps
+            .iter()
+            .map(|gap| gap.capability_id())
+            .collect::<BTreeSet<_>>();
+        let expected_high_ids = BTreeSet::from([
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::StandardAttribute),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown),
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure),
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::StandardAttribute),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::DependsOn),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Extends),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Grants),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads),
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Writes),
+        ]);
+
+        assert_eq!(actual_high_ids, expected_high_ids);
+        assert!(
+            high_gaps
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+        assert_eq!(high_gaps.len(), 13);
+        assert_eq!(
+            high_gaps[0].capability_id(),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                .len(),
+            44
+        );
+    }
+
+    #[test]
+    fn unsupported_edt_directory_does_not_create_unknown_metadata_node() {
+        let root = tempfile::tempdir().expect("temporary EDT project must be created");
+        let configuration_directory = root.path().join("src/Configuration");
+        fs::create_dir_all(&configuration_directory)
+            .expect("configuration directory must be created");
+        fs::write(
+            configuration_directory.join("Configuration.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Configuration
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="11111111-2222-3333-4444-555555555555">
+    <name>Demo</name>
+</mdclass:Configuration>
+"#,
+        )
+        .expect("configuration descriptor must be created");
+
+        let unknown_directory = root.path().join("src/UnknownMetadata/FutureObject");
+        fs::create_dir_all(&unknown_directory).expect("unknown directory must be created");
+        fs::write(
+            unknown_directory.join("FutureObject.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:FutureObject
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+    <name>FutureObject</name>
+</mdclass:FutureObject>
+"#,
+        )
+        .expect("unknown descriptor must be created");
+
+        let build = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("unsupported EDT directory must be ignored");
+        let graph = build.graph();
+
+        assert!(build.diagnostics().is_empty());
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Unknown))
+                .is_empty()
+        );
+        assert!(graph.nodes_by_kind(NodeKind::Unknown).is_empty());
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Configuration))
+                .len(),
+            1
         );
     }
 
@@ -1082,11 +1240,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            14
+            13
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Unknown,))
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
         );
         assert_eq!(
             first

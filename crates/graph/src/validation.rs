@@ -433,11 +433,8 @@ impl SemanticGraphSchema {
             EdgeKind::Calls => is_callable(source_kind) && is_callable(target_kind),
             EdgeKind::References => allows_reference(source_kind, target_kind),
             EdgeKind::DependsOn => allows_depends_on(source_kind, target_kind),
-            EdgeKind::Reads
-            | EdgeKind::Writes
-            | EdgeKind::Grants
-            | EdgeKind::Includes
-            | EdgeKind::Extends => true,
+            EdgeKind::Extends => allows_extends(source_kind, target_kind),
+            EdgeKind::Reads | EdgeKind::Writes | EdgeKind::Grants | EdgeKind::Includes => true,
         }
     }
 }
@@ -913,8 +910,20 @@ const fn is_callable(kind: NodeKind) -> bool {
     matches!(kind, NodeKind::Procedure | NodeKind::Function)
 }
 
+const fn allows_extends(source_kind: NodeKind, target_kind: NodeKind) -> bool {
+    match (source_kind, target_kind) {
+        (NodeKind::Metadata(source_metadata), NodeKind::Metadata(target_metadata)) => {
+            source_metadata as u8 == target_metadata as u8
+        }
+        _ => false,
+    }
+}
+
 const fn forbids_self_loop(kind: EdgeKind) -> bool {
-    matches!(kind, EdgeKind::Contains | EdgeKind::Calls)
+    matches!(
+        kind,
+        EdgeKind::Contains | EdgeKind::Calls | EdgeKind::Extends
+    )
 }
 
 fn edge_id(source: &EntityId, target: &EntityId, kind: EdgeKind) -> EdgeId {

@@ -1687,11 +1687,11 @@ The EDT pipeline emits `Contains`, `References`, `Calls`, and the first
 `Includes`, and `Extends` are declared but not emitted by EDT.
 
 Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
-and the first `DependsOn` slice. The remaining edge kinds are currently accepted
-by broad schema rules and are therefore structurally visible but not
-semantically constrained. Validation also checks missing endpoints, ownership,
-forbidden self-loops, ownership cycles, node and edge provenance, and
-build/report counter consistency.
+the first `DependsOn` slice, and the first `Extends` slice. The remaining edge
+kinds are currently accepted by broad schema rules and are therefore
+structurally visible but not semantically constrained. Validation also checks
+missing endpoints, ownership, forbidden self-loops, ownership cycles, node and
+edge provenance, and build/report counter consistency.
 
 The Query API exposes all stored edge kinds. Dependency and usage classification
 includes `Calls`, `References`, `Reads`, `Writes`, and `DependsOn`; `Contains` is
@@ -1717,11 +1717,14 @@ direct extension relation stored as `extending entity --Extends--> directly
 extended base entity`. The first production slice is metadata-object extension:
 `NodeKind::Metadata(kind)` extends another resolved `NodeKind::Metadata(kind)`
 of the same kind when an EDT source artifact explicitly declares the base,
-borrowed, original, or extended metadata object. EDT does not currently parse
-that production fact and therefore still does not emit `Extends`. The future
-implementation must add parser support, precise endpoint validation,
-deterministic provenance, duplicate handling, and integration tests before
-`semantic_edge.extends` can become supported.
+borrowed, original, or extended metadata object. EDT parses adopted metadata
+object descriptors through `ObjectBelonging=Adopted` and
+`ExtendedConfigurationObject=<uuid>`, resolves the declared target by stable
+metadata object id, emits `Extends` only when source and target are
+`NodeKind::Metadata` of the same `MetadataKind`, and skips missing,
+incompatible, or self-extension facts. The edge uses the standard
+`(source, target, EdgeKind::Extends)` identity and resolved provenance
+identifying the adopted EDT descriptor and declared target id.
 
 ### Provenance inventory
 

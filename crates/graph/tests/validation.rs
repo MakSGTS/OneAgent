@@ -374,6 +374,115 @@ fn depends_on_rejects_unrelated_endpoint_pairs() {
 }
 
 #[test]
+fn extends_accepts_same_metadata_kind_pairs() {
+    let mut graph = valid_graph(false);
+    let base_document_id = id("metadata.document.base");
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        base_document_id.clone(),
+        name("BaseSales"),
+        NodeKind::Metadata(MetadataKind::Document),
+        vec![provenance("metadata.document.base")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            id("configuration.main"),
+            base_document_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("configuration.main")],
+        ))
+        .expect("metadata owner edge must be stored");
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            id("metadata.document.sales"),
+            base_document_id,
+            EdgeKind::Extends,
+            vec![provenance("metadata.document.sales")],
+        ))
+        .expect("extends edge must be stored");
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn extends_rejects_unrelated_endpoint_pairs() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+    let catalog_id = id("metadata.catalog.products");
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        catalog_id.clone(),
+        name("Products"),
+        NodeKind::Metadata(MetadataKind::Catalog),
+        vec![provenance("metadata.catalog.products")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.configuration.clone(),
+            catalog_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("configuration.main")],
+        ))
+        .expect("metadata owner edge must be stored");
+    for (source, target) in [
+        (ids.document.clone(), catalog_id),
+        (ids.document.clone(), ids.module.clone()),
+        (ids.attribute.clone(), ids.document.clone()),
+        (ids.procedure, ids.function),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source,
+                target,
+                EdgeKind::Extends,
+                vec![provenance("metadata.extension")],
+            ))
+            .expect("storage only validates endpoint existence");
+    }
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert_eq!(
+        result
+            .issues()
+            .iter()
+            .filter(|issue| {
+                issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+                    && issue.edge_kind() == Some(EdgeKind::Extends)
+            })
+            .count(),
+        4
+    );
+}
+
+#[test]
+fn extends_self_loop_is_error() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.document.clone(),
+            ids.document,
+            EdgeKind::Extends,
+            vec![provenance("metadata.extension")],
+        ))
+        .expect("storage allows self-loop");
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::ForbiddenSelfLoop
+            && issue.edge_kind() == Some(EdgeKind::Extends)
+    }));
+}
+
+#[test]
 fn child_without_owner_is_error() {
     let mut graph = SemanticGraph::new();
 

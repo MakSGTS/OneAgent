@@ -15,6 +15,7 @@ pub struct EdtMetadataObjectDescriptor {
     name: EntityName,
     synonym: Option<String>,
     kind: MetadataKind,
+    extension: Option<EdtMetadataObjectExtensionDescriptor>,
     descriptor_path: PathBuf,
 }
 
@@ -26,6 +27,7 @@ impl EdtMetadataObjectDescriptor {
         name: EntityName,
         synonym: Option<String>,
         kind: MetadataKind,
+        extension: Option<EdtMetadataObjectExtensionDescriptor>,
         descriptor_path: PathBuf,
     ) -> Self {
         Self {
@@ -33,6 +35,7 @@ impl EdtMetadataObjectDescriptor {
             name,
             synonym,
             kind,
+            extension,
             descriptor_path,
         }
     }
@@ -61,10 +64,38 @@ impl EdtMetadataObjectDescriptor {
         self.kind
     }
 
+    /// Returns the explicit metadata extension fact, when the descriptor is adopted.
+    #[must_use]
+    pub const fn extension(&self) -> Option<&EdtMetadataObjectExtensionDescriptor> {
+        self.extension.as_ref()
+    }
+
     /// Returns the source descriptor path.
     #[must_use]
     pub fn descriptor_path(&self) -> &Path {
         &self.descriptor_path
+    }
+}
+
+/// Explicit extension fact declared by an adopted EDT metadata object.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EdtMetadataObjectExtensionDescriptor {
+    extended_configuration_object_id: EntityId,
+}
+
+impl EdtMetadataObjectExtensionDescriptor {
+    /// Creates an extension descriptor for a resolved-later base metadata object id.
+    #[must_use]
+    pub const fn new(extended_configuration_object_id: EntityId) -> Self {
+        Self {
+            extended_configuration_object_id,
+        }
+    }
+
+    /// Returns the base/original metadata object identifier declared by EDT.
+    #[must_use]
+    pub const fn extended_configuration_object_id(&self) -> &EntityId {
+        &self.extended_configuration_object_id
     }
 }
 
@@ -152,6 +183,8 @@ fn parse_descriptor(
     let mut uuid = None;
     let mut name = None;
     let mut synonym = None;
+    let mut object_belonging = None;
+    let mut extended_configuration_object = None;
     let mut path = Vec::<String>::new();
 
     loop {
@@ -175,9 +208,19 @@ fn parse_descriptor(
                     .into_owned();
 
                 match path.last().map(String::as_str) {
-                    Some("name") if name.is_none() => name = Some(text),
-                    Some("content") if is_synonym_content_path(&path) => {
+                    Some(element) if element.eq_ignore_ascii_case("name") && name.is_none() => {
+                        name = Some(text);
+                    }
+                    Some(element) if is_synonym_content_path(&path, element) => {
                         synonym.get_or_insert(text);
+                    }
+                    Some(element) if element.eq_ignore_ascii_case("objectBelonging") => {
+                        object_belonging.get_or_insert(text);
+                    }
+                    Some(element)
+                        if element.eq_ignore_ascii_case("extendedConfigurationObject") =>
+                    {
+                        extended_configuration_object.get_or_insert(text);
                     }
                     _ => {}
                 }
@@ -205,12 +248,15 @@ fn parse_descriptor(
 
     let id = EntityId::new(uuid).map_err(|_| EdtMetadataObjectError::InvalidIdentifier)?;
     let name = EntityName::new(name).map_err(|_| EdtMetadataObjectError::InvalidName)?;
+    let extension =
+        extension_descriptor(object_belonging.as_deref(), extended_configuration_object)?;
 
     Ok(EdtMetadataObjectDescriptor::new(
         id,
         name,
         synonym,
         kind,
+        extension,
         descriptor_path,
     ))
 }
@@ -235,8 +281,30 @@ fn read_uuid(
     Ok(None)
 }
 
-fn is_synonym_content_path(path: &[String]) -> bool {
-    path.len() >= 2 && path[path.len() - 2] == "synonym" && path[path.len() - 1] == "content"
+fn extension_descriptor(
+    object_belonging: Option<&str>,
+    extended_configuration_object: Option<String>,
+) -> Result<Option<EdtMetadataObjectExtensionDescriptor>, EdtMetadataObjectError> {
+    if !object_belonging.is_some_and(|value| value.eq_ignore_ascii_case("Adopted")) {
+        return Ok(None);
+    }
+
+    let Some(extended_configuration_object) = extended_configuration_object else {
+        return Ok(None);
+    };
+
+    let extended_configuration_object_id = EntityId::new(extended_configuration_object.trim())
+        .map_err(|_| EdtMetadataObjectError::InvalidIdentifier)?;
+
+    Ok(Some(EdtMetadataObjectExtensionDescriptor::new(
+        extended_configuration_object_id,
+    )))
+}
+
+fn is_synonym_content_path(path: &[String], element: &str) -> bool {
+    path.len() >= 2
+        && path[path.len() - 2].eq_ignore_ascii_case("synonym")
+        && element.eq_ignore_ascii_case("content")
 }
 
 fn local_name(name: &[u8]) -> String {
@@ -365,6 +433,18 @@ mod tests {
 </mdclass:Document>
 "#;
 
+    const ADOPTED_DOCUMENT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="11111111-2222-3333-4444-555555555555">
+    <Properties>
+        <Name>SalesExtension</Name>
+        <ObjectBelonging>Adopted</ObjectBelonging>
+        <ExtendedConfigurationObject>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</ExtendedConfigurationObject>
+    </Properties>
+</mdclass:Document>
+"#;
+
     #[test]
     fn reads_top_level_metadata_descriptor() {
         let root = tempdir().expect("temporary directory must be created");
@@ -385,6 +465,32 @@ mod tests {
         assert_eq!(descriptor.name().as_str(), "SalesDocument");
         assert_eq!(descriptor.synonym(), Some("Документ продажи"));
         assert_eq!(descriptor.kind(), MetadataKind::Document);
+        assert!(descriptor.extension().is_none());
+    }
+
+    #[test]
+    fn reads_adopted_metadata_extension_descriptor() {
+        let root = tempdir().expect("temporary directory must be created");
+        let object_directory = root.path().join("SalesExtension");
+
+        fs::create_dir_all(&object_directory).expect("object directory must be created");
+        fs::write(
+            object_directory.join("SalesExtension.mdo"),
+            ADOPTED_DOCUMENT_XML,
+        )
+        .expect("descriptor must be created");
+
+        let descriptor = FileSystemEdtMetadataObjectReader
+            .read(&object_directory, MetadataKind::Document)
+            .expect("descriptor must load");
+
+        let extension = descriptor
+            .extension()
+            .expect("adopted metadata object must expose extension fact");
+        assert_eq!(
+            extension.extended_configuration_object_id().as_str(),
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        );
     }
 
     #[test]

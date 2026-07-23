@@ -645,6 +645,7 @@ mod tests {
             EntityName::new("Sales").expect("name must be valid"),
             None,
             MetadataKind::Document,
+            None,
             descriptor_path,
         );
 
@@ -704,6 +705,7 @@ mod tests {
             EntityName::new("Products").expect("name must be valid"),
             None,
             MetadataKind::Catalog,
+            None,
             descriptor_path,
         );
 
@@ -752,6 +754,7 @@ mod tests {
             EntityName::new("StockBalance").expect("name must be valid"),
             None,
             MetadataKind::AccumulationRegister,
+            None,
             descriptor_path,
         );
 
@@ -827,6 +830,7 @@ mod tests {
             EntityName::new("Sales").expect("name must be valid"),
             None,
             MetadataKind::Document,
+            None,
             descriptor_path,
         );
 
@@ -883,6 +887,7 @@ mod tests {
             EntityName::new("Sales").expect("name must be valid"),
             None,
             MetadataKind::Document,
+            None,
             descriptor_path,
         );
 
@@ -938,6 +943,7 @@ mod tests {
             EntityName::new("Sales").expect("name must be valid"),
             None,
             MetadataKind::Document,
+            None,
             descriptor_path,
         );
 
@@ -996,6 +1002,7 @@ mod tests {
             EntityName::new("Sales").expect("name must be valid"),
             None,
             MetadataKind::Document,
+            None,
             descriptor_path,
         );
 

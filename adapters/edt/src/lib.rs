@@ -457,6 +457,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut graph = SemanticGraph::new();
         let mut configuration_modules = Vec::new();
         let mut metadata_references = BTreeSet::new();
+        let mut metadata_extensions = BTreeSet::new();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
 
@@ -514,7 +515,10 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
                 collect_top_level_metadata(&entry.path(), kind, &configuration_id, &mut graph)?;
             configuration_modules.extend(collected.modules);
             metadata_references.extend(collected.references);
+            metadata_extensions.extend(collected.extensions);
         }
+
+        resolve_metadata_extensions(&mut graph, &metadata_extensions)?;
 
         resolve_metadata_references(
             &mut graph,
@@ -568,6 +572,7 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
 struct CollectedTopLevelMetadata {
     modules: Vec<EdtModuleDescriptor>,
     references: BTreeSet<PendingMetadataReference>,
+    extensions: BTreeSet<PendingMetadataExtension>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -578,6 +583,14 @@ struct PendingMetadataReference {
     role: EdtMetadataReferenceRole,
     target_kind: MetadataKind,
     target_name: EntityName,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PendingMetadataExtension {
+    descriptor_path: PathBuf,
+    source_id: EntityId,
+    source_kind: MetadataKind,
+    target_id: EntityId,
 }
 
 fn collect_top_level_metadata(
@@ -613,6 +626,7 @@ fn collect_top_level_metadata(
 
         collected.modules.extend(object.modules);
         collected.references.extend(object.references);
+        collected.extensions.extend(object.extensions);
     }
 
     Ok(collected)
@@ -648,6 +662,15 @@ fn collect_metadata_object(
 
     if descriptor.kind() == MetadataKind::Subsystem {
         insert_subsystem_node(graph, &descriptor)?;
+    }
+
+    if let Some(extension) = descriptor.extension() {
+        collected.extensions.insert(PendingMetadataExtension {
+            descriptor_path: descriptor.descriptor_path().to_path_buf(),
+            source_id: descriptor.id().clone(),
+            source_kind: descriptor.kind(),
+            target_id: extension.extended_configuration_object_id().clone(),
+        });
     }
 
     insert_standard_attribute_nodes(graph, &descriptor)?;
@@ -900,6 +923,39 @@ fn resolve_metadata_references(
     Ok(())
 }
 
+fn resolve_metadata_extensions(
+    graph: &mut SemanticGraph,
+    extensions: &BTreeSet<PendingMetadataExtension>,
+) -> Result<(), EdtGraphError> {
+    let resolved_extensions = extensions
+        .iter()
+        .filter_map(|extension| {
+            if extension.source_id == extension.target_id {
+                return None;
+            }
+
+            let target = graph.node(&extension.target_id)?;
+            if target.kind() != NodeKind::Metadata(extension.source_kind) {
+                return None;
+            }
+
+            Some((extension.clone(), target.id().clone()))
+        })
+        .collect::<Vec<_>>();
+
+    for (extension, target_id) in resolved_extensions {
+        insert_edge(
+            graph,
+            extension.source_id.clone(),
+            target_id.clone(),
+            EdgeKind::Extends,
+            resolved_provenance(metadata_extension_source_id(&extension, &target_id)?),
+        )?;
+    }
+
+    Ok(())
+}
+
 fn metadata_reference_diagnostic(
     reference: &PendingMetadataReference,
     error: ResolutionError,
@@ -1131,6 +1187,24 @@ fn metadata_dependency_source_id(
             reference.role.as_str(),
             reference.target_kind.as_str(),
             reference.target_name.as_str(),
+            target_id.as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn metadata_extension_source_id(
+    extension: &PendingMetadataExtension,
+    target_id: &EntityId,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        &extension.descriptor_path,
+        format!(
+            "metadata_object={};edge=extends;origin=metadata_object_extension;source={};target_kind={};declared_target={};target={}",
+            extension.source_id.as_str(),
+            extension.source_id.as_str(),
+            extension.source_kind.as_str(),
+            extension.target_id.as_str(),
             target_id.as_str()
         ),
         EdtGraphError::InvalidIdentifier,
@@ -1526,6 +1600,72 @@ mod graph_tests {
             ),
         )
         .expect("catalog descriptor must be created");
+    }
+
+    fn add_adopted_document_descriptor(
+        root: &tempfile::TempDir,
+        directory_name: &str,
+        uuid: &str,
+        name: &str,
+        extended_configuration_object: &str,
+    ) {
+        add_adopted_metadata_descriptor(
+            root,
+            "Documents",
+            "Document",
+            directory_name,
+            uuid,
+            name,
+            extended_configuration_object,
+        );
+    }
+
+    fn add_adopted_catalog_descriptor(
+        root: &tempfile::TempDir,
+        directory_name: &str,
+        uuid: &str,
+        name: &str,
+        extended_configuration_object: &str,
+    ) {
+        add_adopted_metadata_descriptor(
+            root,
+            "Catalogs",
+            "Catalog",
+            directory_name,
+            uuid,
+            name,
+            extended_configuration_object,
+        );
+    }
+
+    fn add_adopted_metadata_descriptor(
+        root: &tempfile::TempDir,
+        directory: &str,
+        xml_kind: &str,
+        directory_name: &str,
+        uuid: &str,
+        name: &str,
+        extended_configuration_object: &str,
+    ) {
+        let object_directory = root.path().join("src").join(directory).join(directory_name);
+        fs::create_dir_all(&object_directory).expect("adopted object directory must be created");
+        fs::write(
+            object_directory.join(format!("{directory_name}.mdo")),
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:{xml_kind}
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="{uuid}">
+    <Properties>
+        <Name>{name}</Name>
+        <ObjectBelonging>Adopted</ObjectBelonging>
+        <ExtendedConfigurationObject>{extended_configuration_object}</ExtendedConfigurationObject>
+    </Properties>
+</mdclass:{xml_kind}>
+"#
+            ),
+        )
+        .expect("adopted metadata descriptor must be created");
     }
 
     fn add_common_command_descriptor(root: &tempfile::TempDir) {
@@ -2938,6 +3078,190 @@ mod graph_tests {
         assert_company_dependency_provenance(company_dependencies[0]);
         assert!(graph.diff(repeated.graph()).is_empty());
         assert!(result.diff(&repeated).is_empty());
+        assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn emits_metadata_extends_edges_for_adopted_objects() {
+        let root = create_edt_project();
+        add_adopted_document_descriptor(
+            &root,
+            "SalesExtension",
+            "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "SalesExtension",
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        );
+        add_adopted_catalog_descriptor(
+            &root,
+            "ProductsExtension",
+            "cccccccc-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "ProductsExtension",
+            "11111111-aaaa-bbbb-cccc-222222222222",
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+        let repeated = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph must build");
+        let graph = result.graph();
+        let sales = named_node(
+            graph,
+            NodeKind::Metadata(MetadataKind::Document),
+            "Sales",
+            "base document must exist",
+        );
+        let sales_extension = named_node(
+            graph,
+            NodeKind::Metadata(MetadataKind::Document),
+            "SalesExtension",
+            "adopted document must exist",
+        );
+        let products = named_node(
+            graph,
+            NodeKind::Metadata(MetadataKind::Catalog),
+            "Products",
+            "base catalog must exist",
+        );
+        let products_extension = named_node(
+            graph,
+            NodeKind::Metadata(MetadataKind::Catalog),
+            "ProductsExtension",
+            "adopted catalog must exist",
+        );
+
+        let document_edges = graph.outgoing_by_kind(sales_extension.id(), EdgeKind::Extends);
+        let catalog_edges = graph.outgoing_by_kind(products_extension.id(), EdgeKind::Extends);
+
+        assert_eq!(document_edges.len(), 1);
+        assert_eq!(catalog_edges.len(), 1);
+        assert_eq!(document_edges[0].target(), sales.id());
+        assert_eq!(catalog_edges[0].target(), products.id());
+        assert_eq!(
+            document_edges[0].provenance()[0].origin(),
+            FactOrigin::Resolved
+        );
+        assert_eq!(
+            document_edges[0].provenance()[0].resolution(),
+            ResolutionState::Resolved
+        );
+        assert!(
+            document_edges[0].provenance()[0]
+                .source()
+                .expect("extension edge source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Documents/SalesExtension/SalesExtension.mdo#metadata_object=bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee;edge=extends;origin=metadata_object_extension;source=bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee;target_kind=document;declared_target=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;target=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                )
+        );
+        assert_eq!(
+            expected_edge_id(sales_extension.id(), sales.id(), EdgeKind::Extends),
+            expected_edge_id(
+                named_node(
+                    repeated.graph(),
+                    NodeKind::Metadata(MetadataKind::Document),
+                    "SalesExtension",
+                    "repeated adopted document must exist",
+                )
+                .id(),
+                named_node(
+                    repeated.graph(),
+                    NodeKind::Metadata(MetadataKind::Document),
+                    "Sales",
+                    "repeated base document must exist",
+                )
+                .id(),
+                EdgeKind::Extends,
+            )
+        );
+        assert!(graph.diff(repeated.graph()).is_empty());
+        assert!(result.diff(&repeated).is_empty());
+        assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn metadata_extends_edges_do_not_replace_metadata_nodes() {
+        let root = create_edt_project();
+        add_adopted_document_descriptor(
+            &root,
+            "SalesExtension",
+            "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "SalesExtension",
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        );
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+                .into_iter()
+                .filter(|node| matches!(node.name().as_str(), "Sales" | "SalesExtension"))
+                .count(),
+            2
+        );
+        assert!(graph.edges().any(|edge| edge.kind() == EdgeKind::Extends));
+    }
+
+    #[test]
+    fn normal_metadata_does_not_emit_extends_edge() {
+        let root = create_edt_project();
+
+        let graph = FileSystemEdtSemanticGraphBuilder
+            .build_graph(root.path())
+            .expect("graph must build");
+
+        assert!(graph.edges().all(|edge| edge.kind() != EdgeKind::Extends));
+    }
+
+    #[test]
+    fn missing_metadata_extension_target_is_skipped() {
+        let root = create_edt_project();
+        add_adopted_document_descriptor(
+            &root,
+            "SalesExtension",
+            "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "SalesExtension",
+            "99999999-bbbb-cccc-dddd-eeeeeeeeeeee",
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+
+        assert!(
+            result
+                .graph()
+                .edges()
+                .all(|edge| edge.kind() != EdgeKind::Extends)
+        );
+        assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn incompatible_metadata_extension_target_kind_is_skipped() {
+        let root = create_edt_project();
+        add_adopted_document_descriptor(
+            &root,
+            "SalesExtension",
+            "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "SalesExtension",
+            "11111111-aaaa-bbbb-cccc-222222222222",
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+
+        assert!(
+            result
+                .graph()
+                .edges()
+                .all(|edge| edge.kind() != EdgeKind::Extends)
+        );
         assert!(result.diagnostics().is_empty());
     }
 

@@ -646,6 +646,10 @@ fn collect_metadata_object(
         insert_role_node(graph, &descriptor)?;
     }
 
+    if descriptor.kind() == MetadataKind::Subsystem {
+        insert_subsystem_node(graph, &descriptor)?;
+    }
+
     insert_standard_attribute_nodes(graph, &descriptor)?;
 
     insert_edge(
@@ -734,6 +738,21 @@ fn insert_role_node(
         descriptor.name().clone(),
         NodeKind::Role,
         declared_provenance(role_node_source_id(descriptor)?),
+    );
+
+    Ok(())
+}
+
+fn insert_subsystem_node(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+) -> Result<(), EdtGraphError> {
+    insert_node(
+        graph,
+        subsystem_node_id(descriptor)?,
+        descriptor.name().clone(),
+        NodeKind::Subsystem,
+        declared_provenance(subsystem_node_source_id(descriptor)?),
     );
 
     Ok(())
@@ -973,6 +992,24 @@ fn role_node_source_id(
         descriptor.descriptor_path(),
         format!(
             "metadata_object={};fact=role_node",
+            descriptor.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn subsystem_node_id(descriptor: &EdtMetadataObjectDescriptor) -> Result<EntityId, EdtGraphError> {
+    EntityId::new(format!("{}:subsystem", descriptor.id().as_str()))
+        .map_err(|_| EdtGraphError::InvalidIdentifier)
+}
+
+fn subsystem_node_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        descriptor.descriptor_path(),
+        format!(
+            "metadata_object={};fact=subsystem_node",
             descriptor.id().as_str()
         ),
         EdtGraphError::InvalidIdentifier,
@@ -1299,6 +1336,14 @@ mod graph_tests {
 </mdclass:Role>
 "#;
 
+    const SUBSYSTEM_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="ffffffff-1111-2222-3333-444444444444">
+    <name>SalesSubsystem</name>
+</mdclass:Subsystem>
+"#;
+
     const ACCUMULATION_REGISTER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mdclass:AccumulationRegister
     xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
@@ -1502,6 +1547,29 @@ mod graph_tests {
 "#,
         )
         .expect("second role descriptor must be created");
+    }
+
+    fn add_subsystem_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/Subsystems/SalesSubsystem");
+        fs::create_dir_all(&directory).expect("subsystem directory must be created");
+        fs::write(directory.join("SalesSubsystem.mdo"), SUBSYSTEM_XML)
+            .expect("subsystem descriptor must be created");
+    }
+
+    fn add_reports_subsystem_descriptor(root: &tempfile::TempDir) {
+        let directory = root.path().join("src/Subsystems/Reports");
+        fs::create_dir_all(&directory).expect("second subsystem directory must be created");
+        fs::write(
+            directory.join("Reports.mdo"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="ffffffff-aaaa-bbbb-cccc-555555555555">
+    <name>Reports</name>
+</mdclass:Subsystem>
+"#,
+        )
+        .expect("second subsystem descriptor must be created");
     }
 
     fn document_with_reference(reference_type: &str) -> String {
@@ -2064,6 +2132,98 @@ mod graph_tests {
                 )
         );
         assert!(graph.query().owner(&role_node_id).is_none());
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn emits_subsystem_semantic_nodes_alongside_metadata_subsystem_objects() {
+        let root = create_edt_project();
+        add_subsystem_descriptor(&root);
+        add_reports_subsystem_descriptor(&root);
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with subsystems must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let subsystem_metadata_id = NodeId::new("ffffffff-1111-2222-3333-444444444444");
+        let subsystem_node_id = NodeId::new("ffffffff-1111-2222-3333-444444444444:subsystem");
+        let subsystem_metadata = graph
+            .query()
+            .node(&subsystem_metadata_id)
+            .expect("metadata subsystem object must remain queryable by stable UUID");
+        let subsystem = graph
+            .query()
+            .node(&subsystem_node_id)
+            .expect("subsystem semantic node must be queryable by stable derived id");
+        let repeated_subsystem = second
+            .graph()
+            .query()
+            .node(&subsystem_node_id)
+            .expect("repeated build must preserve subsystem identity");
+        let subsystem_sources = subsystem
+            .provenance()
+            .iter()
+            .map(|provenance| {
+                provenance
+                    .source()
+                    .expect("subsystem provenance source must exist")
+                    .as_str()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+        let repeated_subsystem_sources = repeated_subsystem
+            .provenance()
+            .iter()
+            .map(|provenance| {
+                provenance
+                    .source()
+                    .expect("repeated subsystem provenance source must exist")
+                    .as_str()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+
+        assert!(first.diagnostics().is_empty());
+        assert_eq!(subsystem_metadata.name().as_str(), "SalesSubsystem");
+        assert_eq!(
+            subsystem_metadata.kind(),
+            NodeKind::Metadata(MetadataKind::Subsystem)
+        );
+        assert_eq!(subsystem.name().as_str(), "SalesSubsystem");
+        assert_eq!(subsystem.kind(), NodeKind::Subsystem);
+        assert_ne!(subsystem_metadata.id(), subsystem.id());
+        assert_eq!(subsystem.id(), repeated_subsystem.id());
+        assert_eq!(subsystem_sources, repeated_subsystem_sources);
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Subsystem))
+                .len(),
+            2
+        );
+        assert_eq!(graph.nodes_by_kind(NodeKind::Subsystem).len(), 2);
+        assert_eq!(
+            graph
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
+                .len(),
+            1
+        );
+        assert_eq!(subsystem.provenance().len(), 1);
+        assert_eq!(subsystem.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            subsystem.provenance()[0]
+                .source()
+                .expect("subsystem provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Subsystems/SalesSubsystem/SalesSubsystem.mdo#metadata_object=ffffffff-1111-2222-3333-444444444444;fact=subsystem_node"
+                )
+        );
+        assert!(graph.query().owner(&subsystem_node_id).is_none());
         assert!(first.validate().is_valid());
         assert!(graph.diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());

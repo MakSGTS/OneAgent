@@ -1395,8 +1395,8 @@ Commands embedded in another metadata descriptor similarly emit the flat
 The EDT pipeline currently emits:
 
 * top-level `NodeKind::Metadata(kind)` nodes for the directory registry above;
-* flat `Role` nodes derived from EDT role metadata objects while preserving the
-  original `NodeKind::Metadata(MetadataKind::Role)` object nodes;
+* flat `Role` and `Subsystem` nodes derived from their EDT metadata objects
+  while preserving the original `NodeKind::Metadata(...)` object nodes;
 * `Module`, `Procedure`, and `Function` nodes from known BSL module files and
   declaration extraction;
 * `Query` nodes from static BSL Query declarations inside known procedures or
@@ -1422,6 +1422,14 @@ provenance to the role `.mdo` descriptor with `fact=role_node` context. No
 ownership edge is emitted for the flat role node because the current graph
 validator does not require ownership for `NodeKind::Role`.
 
+EDT subsystem objects follow the same specialized-node convention. The pipeline
+preserves the original `NodeKind::Metadata(MetadataKind::Subsystem)` metadata
+object node and emits a flat `NodeKind::Subsystem` semantic node with identity
+`<subsystem_metadata_object_id>:subsystem`. Its provenance points to the
+subsystem `.mdo` descriptor with `fact=subsystem_node` context. Subsystem
+hierarchy, membership, command interface integration, and navigation behavior
+are not inferred by this node capability.
+
 Document metadata objects derive platform-provided `StandardAttribute` nodes
 for `Ref`, `DeletionMark`, `Date`, `Number`, and `Posted`. The node identity
 uses the existing graph-domain convention
@@ -1433,8 +1441,7 @@ graph validation time. The separate `ownership_relation.standard_attribute`
 capability remains a distinct High gap until ownership coverage is audited
 independently.
 
-The flat `Subsystem` variant and `Unknown` are not emitted by the EDT pipeline.
-EDT subsystems use `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
+The flat `Unknown` variant is not emitted by the EDT pipeline.
 
 ### Query entity contract
 
@@ -1770,9 +1777,16 @@ graph-domain model, preserves ordinary `Attribute` nodes, attaches member-level
 provenance, and verifies repeated-build determinism. Catalog, owner-dependent,
 and hierarchy-dependent standard attributes remain future scoped extensions.
 
-The EDT registry now reports 10 High gaps and retains 44 Medium gaps. Combined
+The former `semantic_node.subsystem` High gap is closed. The EDT pipeline now
+emits flat `NodeKind::Subsystem` nodes for every discovered subsystem metadata
+object while preserving the existing `NodeKind::Metadata(MetadataKind::Subsystem)`
+object node. Repeated builds preserve subsystem node identity, provenance, and
+graph/build-result diff stability. Subsystem hierarchy and membership remain
+separate future capabilities.
+
+The EDT registry now reports 9 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 10 High gaps, and 45 Medium gaps. Other fallback, flat-node,
+0 Critical gaps, 9 High gaps, and 45 Medium gaps. Other fallback, flat-node,
 ownership, and declared-edge capabilities remain independent typed gaps and are
 not reclassified by these focused coverage changes. Sprint 3 Integration Review
 remains blocked while High gaps remain.

@@ -685,8 +685,9 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::Resource
         | NodeKind::Measure
         | NodeKind::Role
-        | NodeKind::StandardAttribute => true,
-        NodeKind::Subsystem | NodeKind::Unknown => false,
+        | NodeKind::StandardAttribute
+        | NodeKind::Subsystem => true,
+        NodeKind::Unknown => false,
     }
 }
 
@@ -870,7 +871,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
     }
 
@@ -920,7 +921,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
     }
 
@@ -981,7 +982,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
     }
 
@@ -1031,7 +1032,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::StandardAttribute),
@@ -1044,10 +1044,10 @@ mod tests {
         ]);
 
         assert_eq!(actual_high_ids, expected_high_ids);
-        assert_eq!(high_gaps.len(), 10);
+        assert_eq!(high_gaps.len(), 9);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
         assert_eq!(
             first
@@ -1111,7 +1111,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::StandardAttribute),
@@ -1129,10 +1128,10 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_eq!(high_gaps.len(), 10);
+        assert_eq!(high_gaps.len(), 9);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
         assert_eq!(
             first
@@ -1201,11 +1200,11 @@ mod tests {
         let capability = first
             .capability(SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role))
             .expect("role node coverage must exist");
-        let subsystem = first
+        let unknown = first
             .capability(SemanticCoverageCapabilityId::SemanticNode(
-                NodeKind::Subsystem,
+                NodeKind::Unknown,
             ))
-            .expect("subsystem coverage must remain registered");
+            .expect("unknown coverage must remain registered");
 
         assert_eq!(first, second);
         assert!(first.is_consistent());
@@ -1219,22 +1218,22 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_eq!(subsystem.status(), SemanticCoverageStatus::Unsupported);
+        assert_eq!(unknown.status(), SemanticCoverageStatus::Unsupported);
         assert!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .iter()
-                .any(|gap| gap.capability_id() == subsystem.id())
+                .any(|gap| gap.capability_id() == unknown.id())
         );
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            10
+            9
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
         assert_eq!(
             first
@@ -1282,11 +1281,63 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            10
+            9
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                .len(),
+            44
+        );
+    }
+
+    #[test]
+    fn subsystem_node_production_closes_the_selected_high_gap() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let capability = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Subsystem,
+            ))
+            .expect("subsystem node coverage must exist");
+        let unknown = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Unknown,
+            ))
+            .expect("unknown node coverage must remain registered");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(
+            first
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+        assert_eq!(unknown.status(), SemanticCoverageStatus::Unsupported);
+        assert!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .iter()
+                .any(|gap| gap.capability_id() == unknown.id())
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .len(),
+            9
+        );
+        assert_eq!(
+            first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
         assert_eq!(
             first
@@ -1344,11 +1395,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            10
+            9
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
         assert_eq!(
             first
@@ -1397,11 +1448,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            10
+            9
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
         );
         assert_eq!(
             first

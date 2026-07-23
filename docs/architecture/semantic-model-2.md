@@ -1385,8 +1385,11 @@ not create synthetic unknown metadata entities or synthetic unknown metadata
 nodes for forward compatibility. Unknown source directories remain ignored by
 discovery, and reference-resolution failures are represented by typed
 diagnostics rather than fallback metadata nodes.
-This adapter-specific classification does not change the separate graph-domain
-or EDT capability for the flat `semantic_node.unknown` node kind.
+The separate graph-domain `semantic_node.unknown` capability remains supported
+as a source-independent model fallback, but the EDT-specific flat
+`semantic_node.unknown` capability is also `NotApplicable`: the adapter has no
+legitimate production source, identity contract, or provenance contract for
+emitting a flat unknown semantic node.
 Commands embedded in another metadata descriptor similarly emit the flat
 `NodeKind::Command` variant.
 
@@ -1441,7 +1444,12 @@ graph validation time. The separate `ownership_relation.standard_attribute`
 capability remains a distinct High gap until ownership coverage is audited
 independently.
 
-The flat `Unknown` variant is not emitted by the EDT pipeline.
+The flat `Unknown` variant is not emitted by the EDT pipeline. It is classified
+as `NotApplicable` for EDT rather than `Unsupported` because unsupported source
+directories are ignored by discovery and parser or resolution failures remain
+typed diagnostics instead of graph fallback nodes. This distinguishes a missing
+implementation for a valid EDT capability from an impossible adapter-specific
+production path.
 
 ### Query entity contract
 
@@ -1720,8 +1728,12 @@ unknown metadata entities. The former `semantic_node.metadata.unknown` High gap
 was the corresponding node-layer applicability gap: EDT has no production
 metadata entity, parsing path, graph emission contract, representative fixture,
 or error-recovery requirement for `NodeKind::Metadata(MetadataKind::Unknown)`,
-so it is also `NotApplicable`. The flat `semantic_node.unknown` capability
-remains a separate High gap.
+so it is also `NotApplicable`. The former flat `semantic_node.unknown` High gap
+was the corresponding graph-node sentinel classification gap: the graph domain
+can model `NodeKind::Unknown`, but EDT has no legitimate source artifact,
+identity semantics, provenance semantics, or error-recovery rule requiring such
+a node, so the EDT capability is now `NotApplicable` without changing graph
+construction.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
@@ -1784,11 +1796,11 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy and membership remain
 separate future capabilities.
 
-The EDT registry now reports 9 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 8 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 9 High gaps, and 45 Medium gaps. Other fallback, flat-node,
-ownership, and declared-edge capabilities remain independent typed gaps and are
-not reclassified by these focused coverage changes. Sprint 3 Integration Review
+0 Critical gaps, 8 High gaps, and 45 Medium gaps. Other ownership, flat-node,
+and declared-edge capabilities remain independent typed gaps and are not
+reclassified by these focused coverage changes. Sprint 3 Integration Review
 remains blocked while High gaps remain.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers

@@ -122,8 +122,8 @@ Ordered follow-up work:
 9. **High — completed:** emit flat EDT role semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Role)` object nodes.
 10. **High — completed:** derive EDT document `StandardAttribute` nodes with stable identity, ownership, and provenance.
 11. **High — completed:** emit flat EDT `Subsystem` semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Subsystem)` object nodes.
-12. **High — next:** classify or implement flat `Unknown` semantic nodes.
-13. **High:** review Measure ownership evidence independently from node emission.
+12. **High — completed:** classify fallback-only flat `semantic_node.unknown` as not applicable to EDT without emitting synthetic unknown nodes.
+13. **High — next:** review Measure ownership evidence independently from node emission.
 14. **High:** preserve tabular-section ownership for nested attributes.
 15. **High:** implement producer-specific support for each declared-only semantic edge.
 16. **Medium:** define and preserve complete typed metadata payloads.
@@ -131,13 +131,13 @@ Ordered follow-up work:
 18. **Medium:** decide and implement reference-request provenance ownership.
 19. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 9 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 8 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 9 High gaps, and 45 Medium gaps.
+gaps, 8 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
-The next typed backlog capability is `semantic_node.unknown`.
+The next typed backlog capability is `ownership_relation.measure`.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

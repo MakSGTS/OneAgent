@@ -246,6 +246,13 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         .with_metadata_kind(MetadataKind::Unknown);
     }
 
+    if kind == NodeKind::Unknown {
+        return not_applicable_node_capability(
+            kind,
+            "NodeKind::Unknown is a graph-domain fallback marker; EDT intentionally ignores unsupported source directories and has no production source, identity or provenance contract for flat unknown semantic nodes",
+        );
+    }
+
     if kind == NodeKind::Metadata(MetadataKind::Form) {
         return not_applicable_node_capability(kind, "The EDT adapter emits subordinate forms as NodeKind::Form and common forms as NodeKind::Metadata(MetadataKind::CommonForm)")
         .with_metadata_kind(MetadataKind::Form)
@@ -871,7 +878,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
     }
 
@@ -921,7 +928,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
     }
 
@@ -982,7 +989,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
     }
 
@@ -1032,7 +1039,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::StandardAttribute),
             SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::DependsOn),
@@ -1044,10 +1050,10 @@ mod tests {
         ]);
 
         assert_eq!(actual_high_ids, expected_high_ids);
-        assert_eq!(high_gaps.len(), 9);
+        assert_eq!(high_gaps.len(), 8);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first
@@ -1098,12 +1104,12 @@ mod tests {
             metadata_entity.status(),
             SemanticCoverageStatus::NotApplicable
         );
-        assert_eq!(flat_unknown.status(), SemanticCoverageStatus::Unsupported);
-        assert!(
-            flat_unknown
-                .missing_evidence()
-                .contains(&SemanticCoverageEvidence::NodeEmitted)
-        );
+        assert_eq!(flat_unknown.status(), SemanticCoverageStatus::NotApplicable);
+        assert!(flat_unknown.evidence().is_empty());
+        assert!(flat_unknown.required_evidence().is_empty());
+        assert!(flat_unknown.missing_evidence().is_empty());
+        assert!(flat_unknown.limitations().is_empty());
+        assert!(!flat_unknown.notes().is_empty());
 
         let high_gaps = first.gaps_by_priority(SemanticCoverageGapPriority::High);
         let actual_high_ids = high_gaps
@@ -1111,7 +1117,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure),
             SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::StandardAttribute),
             SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::DependsOn),
@@ -1128,16 +1133,89 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_eq!(high_gaps.len(), 9);
+        assert!(
+            high_gaps
+                .iter()
+                .all(|gap| gap.capability_id() != flat_unknown.id())
+        );
+        assert_eq!(high_gaps.len(), 8);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
             44
+        );
+    }
+
+    #[test]
+    fn flat_unknown_node_is_not_applicable_to_edt() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let capability = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Unknown,
+            ))
+            .expect("flat unknown node coverage must remain registered");
+        let measure_ownership = first
+            .capability(SemanticCoverageCapabilityId::OwnershipRelation(
+                NodeKind::Measure,
+            ))
+            .expect("measure ownership coverage must remain registered");
+        let reads = first
+            .capability(SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads))
+            .expect("reads edge coverage must remain registered");
+        let subsystem = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Subsystem,
+            ))
+            .expect("subsystem node coverage must remain supported");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+        assert_eq!(capability.status(), SemanticCoverageStatus::NotApplicable);
+        assert!(capability.evidence().is_empty());
+        assert!(capability.required_evidence().is_empty());
+        assert!(capability.missing_evidence().is_empty());
+        assert_eq!(capability.related_node_kind(), Some(NodeKind::Unknown));
+        assert!(capability.limitations().is_empty());
+        assert!(!capability.notes().is_empty());
+        assert!(capability.representative_tests().is_empty());
+
+        assert!(
+            first
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+        assert_eq!(
+            measure_ownership.status(),
+            SemanticCoverageStatus::Unsupported
+        );
+        assert_eq!(reads.status(), SemanticCoverageStatus::DeclaredOnly);
+        assert_eq!(subsystem.status(), SemanticCoverageStatus::Supported);
+
+        assert_eq!(
+            first
+                .summary()
+                .by_gap_priority()
+                .get(&SemanticCoverageGapPriority::High),
+            Some(&8)
+        );
+        assert_eq!(
+            first
+                .summary()
+                .by_gap_priority()
+                .get(&SemanticCoverageGapPriority::Medium),
+            Some(&44)
+        );
+        assert_eq!(
+            first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
     }
 
@@ -1218,22 +1296,22 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_eq!(unknown.status(), SemanticCoverageStatus::Unsupported);
+        assert_eq!(unknown.status(), SemanticCoverageStatus::NotApplicable);
         assert!(
             first
-                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .gaps()
                 .iter()
-                .any(|gap| gap.capability_id() == unknown.id())
+                .all(|gap| gap.capability_id() != unknown.id())
         );
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            9
+            8
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first
@@ -1281,11 +1359,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            9
+            8
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first
@@ -1322,22 +1400,22 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_eq!(unknown.status(), SemanticCoverageStatus::Unsupported);
+        assert_eq!(unknown.status(), SemanticCoverageStatus::NotApplicable);
         assert!(
             first
-                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .gaps()
                 .iter()
-                .any(|gap| gap.capability_id() == unknown.id())
+                .all(|gap| gap.capability_id() != unknown.id())
         );
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            9
+            8
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first
@@ -1395,11 +1473,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            9
+            8
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first
@@ -1448,11 +1526,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            9
+            8
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Unknown)
+            SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Measure)
         );
         assert_eq!(
             first

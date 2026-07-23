@@ -1699,6 +1699,14 @@ classification and supports optional `Contains` ownership propagation. `Grants`,
 `Includes`, and `Extends` are intentionally excluded from the first impact
 policy.
 
+`EdgeKind::DependsOn` is governed by
+`docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
+semantic dependency stored as `dependent --DependsOn--> dependency`. The first
+implementation slice is limited to resolved EDT metadata member type
+references, represented as dependencies from `Attribute`, `Dimension`, or
+`Resource` nodes to `Metadata(...)` nodes. The edge remains declared but not
+emitted by EDT until that separate production task is implemented.
+
 ### Provenance inventory
 
 EDT attaches provenance while creating metadata object nodes, child nodes,
@@ -1746,7 +1754,9 @@ The remaining thematic Semantic Coverage Completion backlog is:
    invalid-owner tests.
 2. **High — declared semantic edges.** Add producer-specific tasks for Reads,
    Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
-   task. Acceptance for each: extraction source, endpoint rule, provenance,
+   task. `DependsOn` now has an accepted architecture contract in
+   `docs/adr/0017-depends-on-semantics.md`; its first production slice remains
+   pending. Acceptance for each: extraction source, endpoint rule, provenance,
    Query semantics, Impact policy decision, and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:

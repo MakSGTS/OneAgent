@@ -120,22 +120,23 @@ Ordered follow-up work:
 7. **High — completed:** classify fallback-only `semantic_node.metadata.unknown` as not applicable to EDT without emitting synthetic metadata nodes.
 8. **High — completed:** emit static BSL Query declarations as stable, provenance-backed `NodeKind::Query` nodes; query-language parsing and data-access edges remain separate.
 9. **High — completed:** emit flat EDT role semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Role)` object nodes.
-10. **High — next:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
-11. **High:** review Measure ownership evidence independently from node emission.
-12. **High:** preserve tabular-section ownership for nested attributes.
-13. **High:** implement producer-specific support for each declared-only semantic edge.
-14. **Medium:** define and preserve complete typed metadata payloads.
-15. **Medium:** add successful fixtures for every mapped metadata reference target kind.
-16. **Medium:** decide and implement reference-request provenance ownership.
-17. **Medium:** replace permissive endpoint validation as new edge producers are added.
+10. **High — completed:** derive EDT document `StandardAttribute` nodes with stable identity, ownership, and provenance.
+11. **High — next:** emit flat EDT `Subsystem` semantic nodes or classify the flat variant as not applicable.
+12. **High:** review Measure ownership evidence independently from node emission.
+13. **High:** preserve tabular-section ownership for nested attributes.
+14. **High:** implement producer-specific support for each declared-only semantic edge.
+15. **Medium:** define and preserve complete typed metadata payloads.
+16. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+17. **Medium:** decide and implement reference-request provenance ownership.
+18. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 11 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 10 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 11 High gaps, and 45 Medium gaps.
+gaps, 10 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
-The next typed backlog capability is `semantic_node.standard_attribute`.
+The next typed backlog capability is `semantic_node.subsystem`.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

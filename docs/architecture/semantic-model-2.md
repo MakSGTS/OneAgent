@@ -1401,8 +1401,9 @@ The EDT pipeline currently emits:
   declaration extraction;
 * `Query` nodes from static BSL Query declarations inside known procedures or
   functions when the local binding and full query text are statically known;
-* `Attribute`, `TabularSection`, `Form`, `Command`, `Dimension`, `Resource`, and
-  `Measure` child nodes from metadata descriptors.
+* `Attribute`, `StandardAttribute`, `TabularSection`, `Form`, `Command`,
+  `Dimension`, `Resource`, and `Measure` child nodes from metadata descriptors
+  or deterministic metadata-object semantics.
 
 EDT represents an accounting-register measure as an
 `AccountingRegisterResource` in the `<resources>` collection. The generic
@@ -1421,10 +1422,19 @@ provenance to the role `.mdo` descriptor with `fact=role_node` context. No
 ownership edge is emitted for the flat role node because the current graph
 validator does not require ownership for `NodeKind::Role`.
 
-`StandardAttribute` has a graph-domain model and insertion tests, but the EDT
-structure reader does not extract or emit it. The flat `Subsystem` variant and
-`Unknown` are also not emitted by the EDT pipeline. EDT subsystems use
-`NodeKind::Metadata(MetadataKind::Subsystem)` instead.
+Document metadata objects derive platform-provided `StandardAttribute` nodes
+for `Ref`, `DeletionMark`, `Date`, `Number`, and `Posted`. The node identity
+uses the existing graph-domain convention
+`<metadata_object_id>:standard_attribute:<kind>`, and provenance points to the
+document `.mdo` descriptor with `member=standard_attribute:<kind>` context.
+Standard attributes are connected to their metadata object with the existing
+`Contains` relation because `NodeKind::StandardAttribute` requires an owner at
+graph validation time. The separate `ownership_relation.standard_attribute`
+capability remains a distinct High gap until ownership coverage is audited
+independently.
+
+The flat `Subsystem` variant and `Unknown` are not emitted by the EDT pipeline.
+EDT subsystems use `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
 
 ### Query entity contract
 
@@ -1708,32 +1718,28 @@ remains a separate High gap.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — Standard Attribute EDT contribution.** Extend metadata structure
-   extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
-   stable node identity, typed kind payload, owner edge, provenance, validation,
-   and representative tests.
-2. **High — Measure ownership evidence.** Review and test the existing generic
+1. **High — Measure ownership evidence.** Review and test the existing generic
    containment path independently from Measure node emission before changing
    `ownership_relation.measure` status.
-3. **High — nested Tabular Section ownership.** Preserve nested parent context
+2. **High — nested Tabular Section ownership.** Preserve nested parent context
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
-4. **High — declared semantic edges.** Add producer-specific tasks for Reads,
+3. **High — declared semantic edges.** Add producer-specific tasks for Reads,
    Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
    task. Acceptance for each: extraction source, endpoint rule, provenance,
    Query semantics, Impact policy decision, and tests.
-5. **Medium — metadata payload completion.** Define and preserve the typed
+4. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
    or recorded as a known limitation.
-6. **Medium — metadata reference fixtures.** Add successful fixtures for
+5. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.
-7. **Medium — reference-request provenance.** Decide whether pending reference
+6. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
-8. **Medium — broad endpoint validation.** Replace permissive rules for future
+7. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
 
@@ -1757,9 +1763,16 @@ Repeated builds preserve role node identity, provenance, and graph/build-result
 diff stability. Role access-right modeling and role-derived semantic edges
 remain separate future tasks.
 
-The EDT registry now reports 11 High gaps and retains 44 Medium gaps. Combined
+The former `semantic_node.standard_attribute` High gap is closed. The EDT
+pipeline now derives document standard attributes from real document metadata
+descriptors, emits `NodeKind::StandardAttribute` nodes through the existing
+graph-domain model, preserves ordinary `Attribute` nodes, attaches member-level
+provenance, and verifies repeated-build determinism. Catalog, owner-dependent,
+and hierarchy-dependent standard attributes remain future scoped extensions.
+
+The EDT registry now reports 10 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 11 High gaps, and 45 Medium gaps. Other fallback, flat-node,
+0 Critical gaps, 10 High gaps, and 45 Medium gaps. Other fallback, flat-node,
 ownership, and declared-edge capabilities remain independent typed gaps and are
 not reclassified by these focused coverage changes. Sprint 3 Integration Review
 remains blocked while High gaps remain.

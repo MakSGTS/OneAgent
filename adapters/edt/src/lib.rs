@@ -296,7 +296,8 @@ use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionError,
     ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphBuildDiff,
     SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
-    SemanticReferenceOutcome, SemanticReferenceStatistics,
+    SemanticReferenceOutcome, SemanticReferenceStatistics, StandardAttribute,
+    StandardAttributeKind,
 };
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -645,6 +646,8 @@ fn collect_metadata_object(
         insert_role_node(graph, &descriptor)?;
     }
 
+    insert_standard_attribute_nodes(graph, &descriptor)?;
+
     insert_edge(
         graph,
         configuration_id.clone(),
@@ -699,6 +702,28 @@ fn collect_metadata_object(
     Ok(collected)
 }
 
+fn insert_standard_attribute_nodes(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+) -> Result<(), EdtGraphError> {
+    for kind in standard_attribute_kinds(descriptor.kind()) {
+        let attribute = StandardAttribute::new(
+            descriptor.id().clone(),
+            *kind,
+            vec![declared_provenance(standard_attribute_source_id(
+                descriptor, *kind,
+            )?)],
+        )
+        .map_err(|_| EdtGraphError::InvalidIdentifier)?;
+
+        graph
+            .insert_standard_attribute(&attribute)
+            .map_err(EdtGraphError::Graph)?;
+    }
+
+    Ok(())
+}
+
 fn insert_role_node(
     graph: &mut SemanticGraph,
     descriptor: &EdtMetadataObjectDescriptor,
@@ -712,6 +737,19 @@ fn insert_role_node(
     );
 
     Ok(())
+}
+
+const fn standard_attribute_kinds(kind: MetadataKind) -> &'static [StandardAttributeKind] {
+    match kind {
+        MetadataKind::Document => &[
+            StandardAttributeKind::Ref,
+            StandardAttributeKind::DeletionMark,
+            StandardAttributeKind::Date,
+            StandardAttributeKind::Number,
+            StandardAttributeKind::Posted,
+        ],
+        _ => &[],
+    }
 }
 
 fn collect_metadata_child(
@@ -936,6 +974,21 @@ fn role_node_source_id(
         format!(
             "metadata_object={};fact=role_node",
             descriptor.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn standard_attribute_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+    kind: StandardAttributeKind,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        descriptor.descriptor_path(),
+        format!(
+            "metadata_object={};member=standard_attribute:{}",
+            descriptor.id().as_str(),
+            kind.as_str()
         ),
         EdtGraphError::InvalidIdentifier,
     )
@@ -1616,8 +1669,8 @@ mod graph_tests {
             .build_graph(root.path())
             .expect("graph must build");
 
-        assert_eq!(graph.node_count(), 19);
-        assert_eq!(graph.edge_count(), 23);
+        assert_eq!(graph.node_count(), 24);
+        assert_eq!(graph.edge_count(), 28);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -1648,6 +1701,7 @@ mod graph_tests {
             1
         );
         assert_eq!(graph.nodes_by_kind(NodeKind::Attribute).len(), 2);
+        assert_eq!(graph.nodes_by_kind(NodeKind::StandardAttribute).len(), 5);
         assert_eq!(graph.nodes_by_kind(NodeKind::TabularSection).len(), 1);
         assert_eq!(graph.nodes_by_kind(NodeKind::Form).len(), 1);
 
@@ -1656,6 +1710,12 @@ mod graph_tests {
                 .nodes_by_kind(NodeKind::Attribute)
                 .iter()
                 .any(|node| node.name().as_str() == "Company")
+        );
+        assert!(
+            graph
+                .nodes_by_kind(NodeKind::StandardAttribute)
+                .iter()
+                .any(|node| node.name().as_str() == "Number")
         );
         assert!(
             graph
@@ -2004,6 +2064,77 @@ mod graph_tests {
                 )
         );
         assert!(graph.query().owner(&role_node_id).is_none());
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn emits_document_standard_attribute_nodes_through_production_graph_builder() {
+        let root = create_edt_project();
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with document standard attributes must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let document_id = NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        let number_id =
+            NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:standard_attribute:number");
+        let catalog_code_id =
+            NodeId::new("11111111-aaaa-bbbb-cccc-222222222222:standard_attribute:code");
+        let number = graph
+            .query()
+            .node(&number_id)
+            .expect("document Number standard attribute must exist");
+        let repeated_number = second
+            .graph()
+            .query()
+            .node(&number_id)
+            .expect("repeated build must preserve standard attribute identity");
+        let owner = graph
+            .query()
+            .owner(&number_id)
+            .expect("document must own its standard attribute");
+        let standard_attributes = graph
+            .query()
+            .children_by_kind(&document_id, NodeKind::StandardAttribute);
+        let company = graph
+            .nodes_by_kind(NodeKind::Attribute)
+            .into_iter()
+            .find(|node| node.name().as_str() == "Company")
+            .expect("ordinary attribute must remain an Attribute node");
+
+        assert!(first.diagnostics().is_empty());
+        assert_eq!(graph.nodes_by_kind(NodeKind::StandardAttribute).len(), 5);
+        assert_eq!(
+            standard_attributes
+                .iter()
+                .map(|node| node.name().as_str())
+                .collect::<Vec<_>>(),
+            vec!["Date", "DeletionMark", "Number", "Posted", "Ref"]
+        );
+        assert_eq!(number.kind(), NodeKind::StandardAttribute);
+        assert_eq!(number.name().as_str(), "Number");
+        assert_eq!(number.id(), repeated_number.id());
+        assert_eq!(owner.id().as_str(), document_id.as_str());
+        assert_eq!(graph.query().owner_edges(&number_id).len(), 1);
+        assert_eq!(company.kind(), NodeKind::Attribute);
+        assert!(graph.query().node(&catalog_code_id).is_none());
+        assert_eq!(number.provenance().len(), 1);
+        assert_eq!(number.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            number.provenance()[0]
+                .source()
+                .expect("standard attribute provenance source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=standard_attribute:number"
+                )
+        );
+        assert_eq!(number.provenance(), repeated_number.provenance());
         assert!(first.validate().is_valid());
         assert!(graph.diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());
@@ -2767,9 +2898,9 @@ mod graph_tests {
 
         let children = graph.outgoing_by_kind(document.id(), EdgeKind::Contains);
 
-        // Two attributes, one tabular section, one form, one command,
-        // object module and manager module.
-        assert_eq!(children.len(), 7);
+        // Two attributes, five standard attributes, one tabular section, one form,
+        // one command, object module and manager module.
+        assert_eq!(children.len(), 12);
 
         let child_kinds = children
             .iter()
@@ -2787,6 +2918,14 @@ mod graph_tests {
                 .filter(|kind| **kind == NodeKind::Attribute)
                 .count(),
             2
+        );
+
+        assert_eq!(
+            child_kinds
+                .iter()
+                .filter(|kind| **kind == NodeKind::StandardAttribute)
+                .count(),
+            5
         );
 
         assert_eq!(
@@ -3166,7 +3305,7 @@ mod graph_tests {
                 ))
                 .expect("standard attribute coverage must exist")
                 .status(),
-            SemanticCoverageStatus::Unsupported
+            SemanticCoverageStatus::Supported
         );
         assert_eq!(
             coverage

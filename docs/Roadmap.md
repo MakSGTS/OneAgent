@@ -124,21 +124,22 @@ Ordered follow-up work:
 11. **High — completed:** emit flat EDT `Subsystem` semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Subsystem)` object nodes.
 12. **High — completed:** classify fallback-only flat `semantic_node.unknown` as not applicable to EDT without emitting synthetic unknown nodes.
 13. **High — completed:** recognize EDT accounting-register `Measure` ownership through the existing `Contains` edge from the owning metadata object.
-14. **High — next:** review Standard Attribute ownership evidence independently from node emission.
-15. **High:** preserve tabular-section ownership for nested attributes.
-16. **High:** implement producer-specific support for each declared-only semantic edge.
-17. **Medium:** define and preserve complete typed metadata payloads.
-18. **Medium:** add successful fixtures for every mapped metadata reference target kind.
-19. **Medium:** decide and implement reference-request provenance ownership.
-20. **Medium:** replace permissive endpoint validation as new edge producers are added.
+14. **High — completed:** recognize EDT document `StandardAttribute` ownership through the existing `Contains` edge from the owning metadata object.
+15. **High — next:** implement producer-specific support for declared `DependsOn` semantic edges.
+16. **High:** preserve tabular-section ownership for nested attributes.
+17. **High:** implement producer-specific support for remaining declared-only semantic edges.
+18. **Medium:** define and preserve complete typed metadata payloads.
+19. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+20. **Medium:** decide and implement reference-request provenance ownership.
+21. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 7 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 6 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 7 High gaps, and 45 Medium gaps.
+gaps, 6 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
-The next typed backlog capability is `ownership_relation.standard_attribute`.
+The next typed backlog capability is `semantic_edge.depends_on`.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

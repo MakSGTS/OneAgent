@@ -2301,6 +2301,82 @@ mod graph_tests {
     }
 
     #[test]
+    fn emits_document_standard_attribute_ownership_edges_through_production_graph_builder() {
+        let root = create_edt_project();
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with document standard attributes must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let graph = first.graph();
+        let repeated_graph = second.graph();
+        let document_id = NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        let standard_attribute_ids = [
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:standard_attribute:date",
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:standard_attribute:deletion_mark",
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:standard_attribute:number",
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:standard_attribute:posted",
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:standard_attribute:ref",
+        ];
+        let standard_attributes = graph
+            .query()
+            .children_by_kind(&document_id, NodeKind::StandardAttribute);
+
+        assert!(first.diagnostics().is_empty());
+        assert_eq!(standard_attributes.len(), standard_attribute_ids.len());
+
+        for attribute_id in standard_attribute_ids {
+            let attribute_id = NodeId::new(attribute_id);
+            let attribute = graph
+                .query()
+                .node(&attribute_id)
+                .expect("standard attribute node must exist");
+            let owner = graph
+                .query()
+                .owner(&attribute_id)
+                .expect("document must own each standard attribute");
+            let owner_edges = graph.query().owner_edges(&attribute_id);
+            let repeated_owner_edges = repeated_graph.query().owner_edges(&attribute_id);
+
+            assert_eq!(attribute.kind(), NodeKind::StandardAttribute);
+            assert_eq!(owner.id().as_str(), document_id.as_str());
+            assert_eq!(owner_edges.len(), 1);
+            assert_eq!(repeated_owner_edges.len(), 1);
+            assert_eq!(owner_edges[0].source().as_str(), document_id.as_str());
+            assert_eq!(owner_edges[0].target().as_str(), attribute_id.as_str());
+            assert_eq!(owner_edges[0].kind(), EdgeKind::Contains);
+            assert_eq!(owner_edges[0].source(), repeated_owner_edges[0].source());
+            assert_eq!(owner_edges[0].target(), repeated_owner_edges[0].target());
+            assert_eq!(owner_edges[0].kind(), repeated_owner_edges[0].kind());
+            assert_eq!(
+                owner_edges[0].provenance(),
+                repeated_owner_edges[0].provenance()
+            );
+            assert_eq!(owner_edges[0].provenance().len(), 1);
+            assert_eq!(owner_edges[0].provenance(), attribute.provenance());
+            assert_eq!(
+                owner_edges[0].provenance()[0].origin(),
+                FactOrigin::Declared
+            );
+            assert!(
+                owner_edges[0].provenance()[0]
+                    .source()
+                    .expect("standard attribute ownership provenance source must exist")
+                    .as_str()
+                    .contains(
+                        "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;member=standard_attribute:"
+                    )
+            );
+        }
+
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
     fn rejects_top_level_common_template_without_name() {
         let root = create_edt_project();
         let directory = root.path().join("src/CommonTemplates/BrokenTemplate");

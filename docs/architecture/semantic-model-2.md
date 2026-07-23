@@ -1440,9 +1440,10 @@ uses the existing graph-domain convention
 document `.mdo` descriptor with `member=standard_attribute:<kind>` context.
 Standard attributes are connected to their metadata object with the existing
 `Contains` relation because `NodeKind::StandardAttribute` requires an owner at
-graph validation time. The separate `ownership_relation.standard_attribute`
-capability remains a distinct High gap until ownership coverage is audited
-independently.
+graph validation time. The ownership edge uses the graph-domain
+`StandardAttribute` insertion path, keeps deterministic edge identity through
+source node, target node, and `EdgeKind::Contains`, and carries the same
+member-level provenance as the standard attribute fact.
 
 The flat `Unknown` variant is not emitted by the EDT pipeline. It is classified
 as `NotApplicable` for EDT rather than `Unsupported` because unsupported source
@@ -1648,9 +1649,8 @@ Impact Analysis can opt into child-to-owner and owner-to-child propagation.
 Attribute ownership is only partially supported. The XML reader recognizes
 nested attribute elements, but currently assigns the top-level metadata object
 as parent. Attributes nested in a tabular section therefore do not preserve the
-tabular-section owner. Standard Attribute ownership remains a separate
-ownership-coverage capability. Measure node conversion reuses generic child
-containment: an accounting-register metadata object owns each emitted
+tabular-section owner. Measure node conversion reuses generic child containment:
+an accounting-register metadata object owns each emitted
 `NodeKind::Measure` through the existing `EdgeKind::Contains` relation. The
 edge uses the same deterministic source, target, kind identity strategy as other
 graph edges and carries provenance pointing to the accounting-register `.mdo`
@@ -1740,28 +1740,25 @@ construction.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — Standard Attribute ownership evidence.** Review and test the
-   existing standard-attribute containment path independently from node
-   emission before changing `ownership_relation.standard_attribute` status.
-2. **High — nested Tabular Section ownership.** Preserve nested parent context
+1. **High — nested Tabular Section ownership.** Preserve nested parent context
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
-3. **High — declared semantic edges.** Add producer-specific tasks for Reads,
+2. **High — declared semantic edges.** Add producer-specific tasks for Reads,
    Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
    task. Acceptance for each: extraction source, endpoint rule, provenance,
    Query semantics, Impact policy decision, and tests.
-4. **Medium — metadata payload completion.** Define and preserve the typed
+3. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
    or recorded as a known limitation.
-5. **Medium — metadata reference fixtures.** Add successful fixtures for
+4. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.
-6. **Medium — reference-request provenance.** Decide whether pending reference
+5. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
-7. **Medium — broad endpoint validation.** Replace permissive rules for future
+6. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
 
@@ -1797,6 +1794,12 @@ graph-domain model, preserves ordinary `Attribute` nodes, attaches member-level
 provenance, and verifies repeated-build determinism. Catalog, owner-dependent,
 and hierarchy-dependent standard attributes remain future scoped extensions.
 
+The former `ownership_relation.standard_attribute` High gap is closed. The
+existing EDT standard-attribute production path emits exactly one `Contains`
+edge from the owning Document metadata node to each emitted `StandardAttribute`
+node, keeps edge identity stable across repeated builds, attaches deterministic
+member-level provenance, and satisfies the graph ownership validator.
+
 The former `semantic_node.subsystem` High gap is closed. The EDT pipeline now
 emits flat `NodeKind::Subsystem` nodes for every discovered subsystem metadata
 object while preserving the existing `NodeKind::Metadata(MetadataKind::Subsystem)`
@@ -1804,9 +1807,9 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy and membership remain
 separate future capabilities.
 
-The EDT registry now reports 7 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 6 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 7 High gaps, and 45 Medium gaps. Other ownership and
+0 Critical gaps, 6 High gaps, and 45 Medium gaps. Other ownership and
 declared-edge capabilities remain independent typed gaps and are not reclassified
 by these focused coverage changes. Sprint 3 Integration Review remains blocked
 while High gaps remain.

@@ -317,9 +317,10 @@ query-language sources and may produce dependencies involving `Query` and
 
 ## Follow-up implementation tasks
 
-1. Implement the first EDT slice for resolved metadata member type references.
-2. Add precise validator rules for the first slice.
-3. Add focused and integration tests for emission, provenance, deduplication,
+1. Completed: implement the first EDT slice for resolved metadata member type
+   references.
+2. Completed: add precise validator rules for the first slice.
+3. Completed: add focused and integration tests for emission, provenance, deduplication,
    repeated-build determinism, and Coverage Registry transition.
 4. Define a separate BSL dependency contract before materializing call-derived
    `DependsOn` edges.

@@ -284,6 +284,96 @@ fn invalid_edge_endpoint_combination_is_error() {
 }
 
 #[test]
+fn depends_on_accepts_first_slice_member_to_metadata_pairs() {
+    let mut graph = valid_graph(false);
+    let ids = FixtureIds::new();
+    let dimension_id = id("metadata.register.stock:dimension:Product");
+    let resource_id = id("metadata.register.stock:resource:Quantity");
+    let register_id = id("metadata.register.stock");
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        register_id.clone(),
+        name("Stock"),
+        NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        vec![provenance("metadata.register.stock")],
+    ));
+    for (member_id, member_name, member_kind) in [
+        (dimension_id.clone(), "Product", NodeKind::Dimension),
+        (resource_id.clone(), "Quantity", NodeKind::Resource),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            member_id.clone(),
+            name(member_name),
+            member_kind,
+            vec![provenance("metadata.register.stock")],
+        ));
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                register_id.clone(),
+                member_id,
+                EdgeKind::Contains,
+                vec![provenance("metadata.register.stock")],
+            ))
+            .expect("ownership edge must be stored");
+    }
+
+    for source_id in [ids.attribute, dimension_id, resource_id] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source_id,
+                ids.document.clone(),
+                EdgeKind::DependsOn,
+                vec![provenance("metadata.member.type")],
+            ))
+            .expect("depends_on edge must be stored");
+    }
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn depends_on_rejects_unrelated_endpoint_pairs() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.procedure.clone(),
+            ids.document.clone(),
+            EdgeKind::DependsOn,
+            vec![provenance("metadata.document.sales:object_module")],
+        ))
+        .expect("storage only validates endpoint existence");
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.attribute,
+            ids.function,
+            EdgeKind::DependsOn,
+            vec![provenance("metadata.document.sales")],
+        ))
+        .expect("storage only validates endpoint existence");
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert_eq!(result.error_count(), 2);
+    assert_eq!(
+        result
+            .issues()
+            .iter()
+            .filter(|issue| {
+                issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+                    && issue.edge_kind() == Some(EdgeKind::DependsOn)
+            })
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn child_without_owner_is_error() {
     let mut graph = SemanticGraph::new();
 

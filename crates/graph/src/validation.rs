@@ -432,12 +432,12 @@ impl SemanticGraphSchema {
             EdgeKind::Contains => allows_contains(source_kind, target_kind),
             EdgeKind::Calls => is_callable(source_kind) && is_callable(target_kind),
             EdgeKind::References => allows_reference(source_kind, target_kind),
+            EdgeKind::DependsOn => allows_depends_on(source_kind, target_kind),
             EdgeKind::Reads
             | EdgeKind::Writes
             | EdgeKind::Grants
             | EdgeKind::Includes
-            | EdgeKind::Extends
-            | EdgeKind::DependsOn => true,
+            | EdgeKind::Extends => true,
         }
     }
 }
@@ -860,6 +860,13 @@ const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
     matches!(source, NodeKind::Unknown)
         || matches!(target, NodeKind::Unknown | NodeKind::Metadata(_))
         || (is_reference_participant(source) && is_reference_participant(target))
+}
+
+const fn allows_depends_on(source: NodeKind, target: NodeKind) -> bool {
+    matches!(
+        source,
+        NodeKind::Attribute | NodeKind::Dimension | NodeKind::Resource
+    ) && matches!(target, NodeKind::Metadata(_))
 }
 
 const fn is_reference_participant(kind: NodeKind) -> bool {

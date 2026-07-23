@@ -125,23 +125,24 @@ Ordered follow-up work:
 12. **High — completed:** classify fallback-only flat `semantic_node.unknown` as not applicable to EDT without emitting synthetic unknown nodes.
 13. **High — completed:** recognize EDT accounting-register `Measure` ownership through the existing `Contains` edge from the owning metadata object.
 14. **High — completed:** recognize EDT document `StandardAttribute` ownership through the existing `Contains` edge from the owning metadata object.
-15. **High — next:** implement the first production slice for declared `DependsOn` semantic edges using the accepted contract in `docs/adr/0017-depends-on-semantics.md`.
+15. **High — completed:** implement the first production slice for declared `DependsOn` semantic edges using the accepted contract in `docs/adr/0017-depends-on-semantics.md`.
 16. **High:** preserve tabular-section ownership for nested attributes.
-17. **High:** implement producer-specific support for remaining declared-only semantic edges.
+17. **High — next typed:** implement producer-specific support for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
 18. **Medium:** define and preserve complete typed metadata payloads.
 19. **Medium:** add successful fixtures for every mapped metadata reference target kind.
 20. **Medium:** decide and implement reference-request provenance ownership.
 21. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 6 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 5 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 6 High gaps, and 45 Medium gaps.
+gaps, 5 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
-The architecture contract for `semantic_edge.depends_on` is defined, but EDT
-production emission remains pending and the capability remains a High gap. The
-next typed backlog capability is still `semantic_edge.depends_on`.
+The first production slice for `semantic_edge.depends_on` is implemented and
+the capability is supported. The next typed backlog capability is
+`semantic_edge.extends`. Its architecture contract is defined, but EDT parser
+support and production graph emission remain pending.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

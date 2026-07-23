@@ -779,11 +779,13 @@ fn collect_metadata_child(
 ) -> Result<(), EdtGraphError> {
     let child_source = metadata_child_source_id(descriptor, child)?;
 
+    let child_node_kind = semantic_child_node_kind(descriptor.kind(), child.kind());
+
     insert_node(
         graph,
         child.id().clone(),
         child.name().clone(),
-        semantic_child_node_kind(descriptor.kind(), child.kind()),
+        child_node_kind,
         declared_provenance(child_source),
     );
 
@@ -800,12 +802,7 @@ fn collect_metadata_child(
         )?),
     )?;
 
-    if matches!(
-        child.kind(),
-        EdtMetadataChildKind::Attribute
-            | EdtMetadataChildKind::Dimension
-            | EdtMetadataChildKind::Resource
-    ) {
+    if is_depends_on_metadata_member_source(child_node_kind) {
         for reference in child.references() {
             references.insert(PendingMetadataReference {
                 descriptor_path: descriptor.descriptor_path().to_path_buf(),
@@ -819,6 +816,13 @@ fn collect_metadata_child(
     }
 
     Ok(())
+}
+
+const fn is_depends_on_metadata_member_source(kind: NodeKind) -> bool {
+    matches!(
+        kind,
+        NodeKind::Attribute | NodeKind::Dimension | NodeKind::Resource
+    )
 }
 
 const fn semantic_child_node_kind(
@@ -876,12 +880,20 @@ fn resolve_metadata_references(
     };
 
     for (reference, target_id) in resolved_references {
+        let reference_source = metadata_reference_source_id(&reference)?;
         insert_edge(
             graph,
             reference.source_id.clone(),
-            target_id,
+            target_id.clone(),
             EdgeKind::References,
-            resolved_provenance(metadata_reference_source_id(&reference)?),
+            resolved_provenance(reference_source),
+        )?;
+        insert_edge(
+            graph,
+            reference.source_id.clone(),
+            target_id.clone(),
+            EdgeKind::DependsOn,
+            derived_provenance(metadata_dependency_source_id(&reference, &target_id)?),
         )?;
     }
 
@@ -947,6 +959,15 @@ fn resolved_provenance(source: EntityId) -> Provenance {
     graph_provenance(
         source,
         FactOrigin::Resolved,
+        Confidence::High,
+        ResolutionState::Resolved,
+    )
+}
+
+fn derived_provenance(source: EntityId) -> Provenance {
+    graph_provenance(
+        source,
+        FactOrigin::Derived,
         Confidence::High,
         ResolutionState::Resolved,
     )
@@ -1097,6 +1118,25 @@ fn metadata_reference_source_id(
     )
 }
 
+fn metadata_dependency_source_id(
+    reference: &PendingMetadataReference,
+    target_id: &EntityId,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        &reference.descriptor_path,
+        format!(
+            "metadata_object={};edge=depends_on;origin=metadata_member_type_reference;source={};role={};target_kind={};target_name={};target={}",
+            reference.metadata_object_id.as_str(),
+            reference.source_id.as_str(),
+            reference.role.as_str(),
+            reference.target_kind.as_str(),
+            reference.target_name.as_str(),
+            target_id.as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
 fn source_id_from_path_fragment(
     path: &Path,
     fragment: impl AsRef<str>,
@@ -1231,7 +1271,7 @@ impl From<EdtLoadError> for EdtGraphError {
 mod graph_tests {
     use oneagent_common::EntityName;
     use oneagent_graph::{
-        EdgeKind, FactOrigin, NodeId, NodeKind, ResolutionError, ResolutionState,
+        EdgeKind, FactOrigin, GraphEdge, NodeId, NodeKind, ResolutionError, ResolutionState,
         SemanticCoverageCapabilityId, SemanticCoverageStatus, SemanticDiagnosticCode,
         SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
         SemanticReferenceCapability,
@@ -1669,6 +1709,76 @@ mod graph_tests {
             .expect("identifier must be valid")
     }
 
+    fn expected_edge_id(
+        source: &oneagent_common::EntityId,
+        target: &oneagent_common::EntityId,
+        kind: EdgeKind,
+    ) -> String {
+        let kind_code = match kind {
+            EdgeKind::Contains => "contains",
+            EdgeKind::Calls => "calls",
+            EdgeKind::References => "references",
+            EdgeKind::Reads => "reads",
+            EdgeKind::Writes => "writes",
+            EdgeKind::Grants => "grants",
+            EdgeKind::Includes => "includes",
+            EdgeKind::Extends => "extends",
+            EdgeKind::DependsOn => "depends_on",
+        };
+
+        format!(
+            "edge:source#{}:{};target#{}:{};kind:{}",
+            source.as_str().len(),
+            source.as_str(),
+            target.as_str().len(),
+            target.as_str(),
+            kind_code
+        )
+    }
+
+    fn named_node<'graph>(
+        graph: &'graph SemanticGraph,
+        kind: NodeKind,
+        node_name: &str,
+        message: &str,
+    ) -> &'graph oneagent_graph::GraphNode {
+        graph
+            .nodes_by_kind(kind)
+            .into_iter()
+            .find(|node| node.name().as_str() == node_name)
+            .expect(message)
+    }
+
+    fn assert_company_reference_provenance(edge: &GraphEdge) {
+        assert_eq!(edge.provenance().len(), 1);
+        assert_eq!(edge.provenance()[0].origin(), FactOrigin::Resolved);
+        assert_eq!(edge.provenance()[0].resolution(), ResolutionState::Resolved);
+        assert!(
+            edge.provenance()[0]
+                .source()
+                .expect("reference edge source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=references;source=aaaaaaaa-1111-1111-1111-111111111111;role=type;target_kind=catalog;target_name=Products"
+                )
+        );
+    }
+
+    fn assert_company_dependency_provenance(edge: &GraphEdge) {
+        assert_eq!(edge.provenance().len(), 1);
+        assert_eq!(edge.provenance()[0].origin(), FactOrigin::Derived);
+        assert_eq!(edge.provenance()[0].resolution(), ResolutionState::Resolved);
+        assert!(
+            edge.provenance()[0]
+                .source()
+                .expect("dependency edge source must exist")
+                .as_str()
+                .ends_with(
+                    "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=depends_on;origin=metadata_member_type_reference;source=aaaaaaaa-1111-1111-1111-111111111111;role=type;target_kind=catalog;target_name=Products;target=11111111-aaaa-bbbb-cccc-222222222222"
+                )
+        );
+    }
+
     fn assert_metadata_member_provenance(graph: &SemanticGraph) {
         let metadata_member_expectations = [
             (
@@ -1738,7 +1848,7 @@ mod graph_tests {
             .expect("graph must build");
 
         assert_eq!(graph.node_count(), 24);
-        assert_eq!(graph.edge_count(), 28);
+        assert_eq!(graph.edge_count(), 32);
         assert_eq!(graph.nodes_by_kind(NodeKind::Module).len(), 3);
         assert_eq!(graph.nodes_by_kind(NodeKind::Procedure).len(), 2);
         assert_eq!(graph.nodes_by_kind(NodeKind::Function).len(), 1);
@@ -2515,7 +2625,16 @@ mod graph_tests {
         );
         assert!(query_api.edges_by_kind(EdgeKind::Reads).is_empty());
         assert!(query_api.edges_by_kind(EdgeKind::Writes).is_empty());
-        assert!(query_api.edges_by_kind(EdgeKind::DependsOn).is_empty());
+        assert!(
+            query_api
+                .outgoing_edges_by_kind(&before_write_query_id, EdgeKind::DependsOn)
+                .is_empty()
+        );
+        assert!(
+            query_api
+                .outgoing_edges_by_kind(&get_query_id, EdgeKind::DependsOn)
+                .is_empty()
+        );
         assert!(first.validate().is_valid());
         assert!(graph.diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());
@@ -2724,43 +2843,47 @@ mod graph_tests {
     }
 
     #[test]
-    fn resolves_metadata_reference_edges() {
+    fn resolves_metadata_reference_and_depends_on_edges() {
         let root = create_edt_project();
 
         let result = FileSystemEdtSemanticGraphBuilder
             .build_graph_with_diagnostics(root.path())
             .expect("graph must build");
+        let repeated = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph must build");
         let graph = result.graph();
-        let products = graph
-            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Catalog))
-            .into_iter()
-            .find(|node| node.name().as_str() == "Products")
-            .expect("Products catalog must exist");
-        let sales_document = graph
-            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Document))
-            .into_iter()
-            .find(|node| node.name().as_str() == "Sales")
-            .expect("Sales document must exist");
-        let company = graph
-            .nodes_by_kind(NodeKind::Attribute)
-            .into_iter()
-            .find(|node| node.name().as_str() == "Company")
-            .expect("Company attribute must exist");
-        let warehouse = graph
-            .nodes_by_kind(NodeKind::Attribute)
-            .into_iter()
-            .find(|node| node.name().as_str() == "Warehouse")
-            .expect("Warehouse attribute must exist");
-        let product_dimension = graph
-            .nodes_by_kind(NodeKind::Dimension)
-            .into_iter()
-            .find(|node| node.name().as_str() == "Product")
-            .expect("Product dimension must exist");
-        let quantity_resource = graph
-            .nodes_by_kind(NodeKind::Resource)
-            .into_iter()
-            .find(|node| node.name().as_str() == "Quantity")
-            .expect("Quantity resource must exist");
+        let products = named_node(
+            graph,
+            NodeKind::Metadata(MetadataKind::Catalog),
+            "Products",
+            "Products catalog must exist",
+        );
+        let sales_document = named_node(
+            graph,
+            NodeKind::Metadata(MetadataKind::Document),
+            "Sales",
+            "Sales document must exist",
+        );
+        let company = named_node(graph, NodeKind::Attribute, "Company", "Company must exist");
+        let warehouse = named_node(
+            graph,
+            NodeKind::Attribute,
+            "Warehouse",
+            "Warehouse must exist",
+        );
+        let product_dimension = named_node(
+            graph,
+            NodeKind::Dimension,
+            "Product",
+            "Product dimension must exist",
+        );
+        let quantity_resource = named_node(
+            graph,
+            NodeKind::Resource,
+            "Quantity",
+            "Quantity resource must exist",
+        );
 
         let company_references = graph.outgoing_by_kind(company.id(), EdgeKind::References);
         let warehouse_references = graph.outgoing_by_kind(warehouse.id(), EdgeKind::References);
@@ -2768,40 +2891,53 @@ mod graph_tests {
             graph.outgoing_by_kind(product_dimension.id(), EdgeKind::References);
         let quantity_references =
             graph.outgoing_by_kind(quantity_resource.id(), EdgeKind::References);
-        let incoming_references = graph
-            .incoming(products.id())
-            .into_iter()
-            .filter(|edge| edge.kind() == EdgeKind::References)
-            .collect::<Vec<_>>();
-
+        let company_dependencies = graph.outgoing_by_kind(company.id(), EdgeKind::DependsOn);
+        let warehouse_dependencies = graph.outgoing_by_kind(warehouse.id(), EdgeKind::DependsOn);
+        let product_dependencies =
+            graph.outgoing_by_kind(product_dimension.id(), EdgeKind::DependsOn);
+        let quantity_dependencies =
+            graph.outgoing_by_kind(quantity_resource.id(), EdgeKind::DependsOn);
         assert_eq!(company_references.len(), 1);
         assert_eq!(warehouse_references.len(), 1);
         assert_eq!(product_references.len(), 1);
         assert_eq!(quantity_references.len(), 1);
-        assert_eq!(incoming_references.len(), 3);
+        assert_eq!(company_dependencies.len(), 1);
+        assert_eq!(warehouse_dependencies.len(), 1);
+        assert_eq!(product_dependencies.len(), 1);
+        assert_eq!(quantity_dependencies.len(), 1);
         assert_eq!(company_references[0].target(), products.id());
         assert_eq!(warehouse_references[0].target(), products.id());
         assert_eq!(product_references[0].target(), products.id());
         assert_eq!(quantity_references[0].target(), sales_document.id());
-        assert_eq!(company.provenance().len(), 1);
-        assert_eq!(company_references[0].provenance().len(), 1);
+        assert_eq!(company_dependencies[0].target(), products.id());
+        assert_eq!(warehouse_dependencies[0].target(), products.id());
+        assert_eq!(product_dependencies[0].target(), products.id());
+        assert_eq!(quantity_dependencies[0].target(), sales_document.id());
         assert_eq!(
-            company_references[0].provenance()[0].origin(),
-            FactOrigin::Resolved
-        );
-        assert_eq!(
-            company_references[0].provenance()[0].resolution(),
-            ResolutionState::Resolved
-        );
-        assert!(
-            company_references[0].provenance()[0]
-                .source()
-                .expect("reference edge source must exist")
-                .as_str()
-                .ends_with(
-                    "/src/Documents/Sales/Sales.mdo#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=references;source=aaaaaaaa-1111-1111-1111-111111111111;role=type;target_kind=catalog;target_name=Products"
+            expected_edge_id(company.id(), products.id(), EdgeKind::DependsOn),
+            expected_edge_id(
+                named_node(
+                    repeated.graph(),
+                    NodeKind::Attribute,
+                    "Company",
+                    "repeated Company attribute must exist",
                 )
+                .id(),
+                named_node(
+                    repeated.graph(),
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                    "Products",
+                    "repeated Products catalog must exist",
+                )
+                .id(),
+                EdgeKind::DependsOn,
+            )
         );
+        assert_eq!(company.provenance().len(), 1);
+        assert_company_reference_provenance(company_references[0]);
+        assert_company_dependency_provenance(company_dependencies[0]);
+        assert!(graph.diff(repeated.graph()).is_empty());
+        assert!(result.diff(&repeated).is_empty());
         assert!(result.diagnostics().is_empty());
     }
 
@@ -2830,10 +2966,73 @@ mod graph_tests {
             .into_iter()
             .map(|edge| edge.target().clone())
             .collect::<Vec<_>>();
+        let dependency_targets = graph
+            .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+            .into_iter()
+            .map(|edge| edge.target().clone())
+            .collect::<Vec<_>>();
 
         assert_eq!(targets.len(), 2);
         assert!(targets.contains(products.id()));
         assert!(targets.contains(sales.id()));
+        assert_eq!(dependency_targets.len(), 2);
+        assert!(dependency_targets.contains(products.id()));
+        assert!(dependency_targets.contains(sales.id()));
+        assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn primitive_metadata_type_does_not_emit_depends_on_edge() {
+        let root = create_edt_project();
+        replace_document_descriptor(&root, &document_with_reference("String"));
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("primitive type must not fail graph build");
+        let company_id = company_attribute_id();
+
+        assert!(result.diagnostics().is_empty());
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .is_empty()
+        );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn duplicate_metadata_type_reference_creates_one_depends_on_edge() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_duplicate_reference("CatalogRef.Products"),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("duplicate resolved reference must not fail graph build");
+        let company_id = company_attribute_id();
+
+        assert_eq!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .len(),
+            1
+        );
+        assert_eq!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+                .len(),
+            1
+        );
         assert!(result.diagnostics().is_empty());
     }
 
@@ -2978,6 +3177,11 @@ mod graph_tests {
                 .outgoing_by_kind(&company_id, EdgeKind::References)
                 .is_empty()
         );
+        assert!(
+            graph
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+                .is_empty()
+        );
 
         let product_dimension = graph
             .nodes_by_kind(NodeKind::Dimension)
@@ -2987,6 +3191,12 @@ mod graph_tests {
         assert_eq!(
             graph
                 .outgoing_by_kind(product_dimension.id(), EdgeKind::References)
+                .len(),
+            1
+        );
+        assert_eq!(
+            graph
+                .outgoing_by_kind(product_dimension.id(), EdgeKind::DependsOn)
                 .len(),
             1
         );
@@ -3025,6 +3235,12 @@ mod graph_tests {
                 .outgoing_by_kind(&company_id, EdgeKind::References)
                 .is_empty()
         );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -3059,6 +3275,12 @@ mod graph_tests {
             result
                 .graph()
                 .outgoing_by_kind(&company_id, EdgeKind::References)
+                .is_empty()
+        );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
                 .is_empty()
         );
     }
@@ -3597,6 +3819,10 @@ mod graph_tests {
         );
         assert_eq!(
             coverage.observed().edges()[&EdgeKind::References].without_provenance(),
+            0
+        );
+        assert_eq!(
+            coverage.observed().edges()[&EdgeKind::DependsOn].without_provenance(),
             0
         );
         assert_eq!(

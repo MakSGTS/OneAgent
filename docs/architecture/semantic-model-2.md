@@ -1682,15 +1682,16 @@ edge.
 
 ### Edge, validation, query, and impact inventory
 
-The EDT pipeline emits `Contains`, `References`, and `Calls`, each with
-provenance. `Reads`, `Writes`, `Grants`, `Includes`, `Extends`, and `DependsOn`
-are declared but not emitted by EDT.
+The EDT pipeline emits `Contains`, `References`, `Calls`, and the first
+`DependsOn` slice, each with provenance. `Reads`, `Writes`, `Grants`,
+`Includes`, and `Extends` are declared but not emitted by EDT.
 
-Validation has explicit endpoint rules for `Contains`, `Calls`, and `References`.
-The remaining edge kinds are currently accepted by broad schema rules and are
-therefore structurally visible but not semantically constrained. Validation also
-checks missing endpoints, ownership, forbidden self-loops, ownership cycles,
-node and edge provenance, and build/report counter consistency.
+Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
+and the first `DependsOn` slice. The remaining edge kinds are currently accepted
+by broad schema rules and are therefore structurally visible but not
+semantically constrained. Validation also checks missing endpoints, ownership,
+forbidden self-loops, ownership cycles, node and edge provenance, and
+build/report counter consistency.
 
 The Query API exposes all stored edge kinds. Dependency and usage classification
 includes `Calls`, `References`, `Reads`, `Writes`, and `DependsOn`; `Contains` is
@@ -1701,11 +1702,26 @@ policy.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
-semantic dependency stored as `dependent --DependsOn--> dependency`. The first
-implementation slice is limited to resolved EDT metadata member type
-references, represented as dependencies from `Attribute`, `Dimension`, or
-`Resource` nodes to `Metadata(...)` nodes. The edge remains declared but not
-emitted by EDT until that separate production task is implemented.
+semantic dependency stored as `dependent --DependsOn--> dependency`. EDT emits
+the first implementation slice for resolved metadata member type references:
+`Attribute`, `Dimension`, or `Resource` nodes depend on resolved
+`Metadata(...)` target nodes. Primitive, built-in, unresolved, ambiguous, and
+incompatible type references do not emit `DependsOn`. The edge uses the
+standard `(source, target, EdgeKind::DependsOn)` identity and derived
+provenance identifying the metadata member type reference. Query/Data Access
+dependencies remain pending.
+
+`EdgeKind::Extends` is governed by
+`docs/adr/0018-extends-semantics.md`. It represents an explicit, resolved,
+direct extension relation stored as `extending entity --Extends--> directly
+extended base entity`. The first production slice is metadata-object extension:
+`NodeKind::Metadata(kind)` extends another resolved `NodeKind::Metadata(kind)`
+of the same kind when an EDT source artifact explicitly declares the base,
+borrowed, original, or extended metadata object. EDT does not currently parse
+that production fact and therefore still does not emit `Extends`. The future
+implementation must add parser support, precise endpoint validation,
+deterministic provenance, duplicate handling, and integration tests before
+`semantic_edge.extends` can become supported.
 
 ### Provenance inventory
 
@@ -1753,11 +1769,15 @@ The remaining thematic Semantic Coverage Completion backlog is:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
 2. **High — declared semantic edges.** Add producer-specific tasks for Reads,
-   Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
-   task. `DependsOn` now has an accepted architecture contract in
-   `docs/adr/0017-depends-on-semantics.md`; its first production slice remains
-   pending. Acceptance for each: extraction source, endpoint rule, provenance,
-   Query semantics, Impact policy decision, and tests.
+   Writes, Grants, Includes, and Extends rather than a generic edge task. The
+   first `DependsOn` slice is implemented according to
+   `docs/adr/0017-depends-on-semantics.md`; later call-derived and
+   query-derived dependency origins remain separate tasks. `Extends` now has an
+   accepted architecture contract in
+   `docs/adr/0018-extends-semantics.md`, but production parser support and graph
+   emission remain pending. Acceptance for each remaining edge: extraction
+   source, endpoint rule, provenance, Query semantics, Impact policy decision,
+   and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,

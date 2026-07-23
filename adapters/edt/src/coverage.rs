@@ -676,6 +676,7 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         NodeKind::Module
         | NodeKind::Procedure
         | NodeKind::Function
+        | NodeKind::Query
         | NodeKind::Form
         | NodeKind::Command
         | NodeKind::Attribute
@@ -683,11 +684,9 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::Dimension
         | NodeKind::Resource
         | NodeKind::Measure => true,
-        NodeKind::Query
-        | NodeKind::StandardAttribute
-        | NodeKind::Role
-        | NodeKind::Subsystem
-        | NodeKind::Unknown => false,
+        NodeKind::StandardAttribute | NodeKind::Role | NodeKind::Subsystem | NodeKind::Unknown => {
+            false
+        }
     }
 }
 
@@ -871,7 +870,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
         );
     }
 
@@ -921,7 +920,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
         );
     }
 
@@ -982,7 +981,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
         );
     }
 
@@ -1032,7 +1031,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::StandardAttribute),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem),
@@ -1048,10 +1046,10 @@ mod tests {
         ]);
 
         assert_eq!(actual_high_ids, expected_high_ids);
-        assert_eq!(high_gaps.len(), 13);
+        assert_eq!(high_gaps.len(), 12);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
         );
         assert_eq!(
             first
@@ -1115,7 +1113,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::StandardAttribute),
             SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem),
@@ -1136,10 +1133,10 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_eq!(high_gaps.len(), 13);
+        assert_eq!(high_gaps.len(), 12);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
         );
         assert_eq!(
             first
@@ -1202,6 +1199,68 @@ mod tests {
     }
 
     #[test]
+    fn query_node_production_closes_the_selected_high_gap() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let capability = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query))
+            .expect("query node coverage must exist");
+        let reads = first
+            .capability(SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads))
+            .expect("reads edge coverage must remain registered");
+        let writes = first
+            .capability(SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Writes))
+            .expect("writes edge coverage must remain registered");
+        let depends_on = first
+            .capability(SemanticCoverageCapabilityId::SemanticEdge(
+                EdgeKind::DependsOn,
+            ))
+            .expect("depends_on edge coverage must remain registered");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(
+            first
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+
+        for edge_capability in [reads, writes, depends_on] {
+            assert_eq!(
+                edge_capability.status(),
+                SemanticCoverageStatus::DeclaredOnly
+            );
+            assert!(
+                first
+                    .gaps_by_priority(SemanticCoverageGapPriority::High)
+                    .iter()
+                    .any(|gap| gap.capability_id() == edge_capability.id())
+            );
+        }
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .len(),
+            12
+        );
+        assert_eq!(
+            first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                .len(),
+            44
+        );
+    }
+
+    #[test]
     fn measure_node_production_closes_the_selected_high_gap() {
         let first = EdtSemanticCoverageRegistry::audit();
         let second = EdtSemanticCoverageRegistry::audit();
@@ -1240,11 +1299,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            13
+            12
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Query)
+            SemanticCoverageCapabilityId::SemanticNode(NodeKind::Role)
         );
         assert_eq!(
             first

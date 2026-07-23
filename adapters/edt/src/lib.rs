@@ -1314,6 +1314,14 @@ mod graph_tests {
             .expect("document descriptor must be replaced");
     }
 
+    fn replace_object_module(root: &tempfile::TempDir, source: &str) {
+        fs::write(
+            root.path().join("src/Documents/Sales/ObjectModule.bsl"),
+            source,
+        )
+        .expect("object module must be replaced");
+    }
+
     fn add_catalog_descriptor(
         root: &tempfile::TempDir,
         directory_name: &str,
@@ -1902,6 +1910,122 @@ mod graph_tests {
 
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].target(), check_access.id());
+    }
+
+    #[test]
+    fn emits_static_bsl_query_nodes_through_production_graph_builder() {
+        let root = create_edt_project();
+        replace_object_module(
+            &root,
+            concat!(
+                "Procedure BeforeWrite()\n",
+                "    Query = New Query;\n",
+                "    Query.Text = \"SELECT Ref FROM Catalog.Products\";\n",
+                "EndProcedure\n",
+                "\n",
+                "Function GetQuery()\n",
+                "    Query = New Query;\n",
+                "    Query.Text = \"SELECT Ref FROM Catalog.Products\";\n",
+                "    Return Query;\n",
+                "EndFunction",
+            ),
+        );
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with static BSL queries must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let before_write_query_id = NodeId::new(
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite:query:Query",
+        );
+        let get_query_id = NodeId::new(
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:function:GetQuery:query:Query",
+        );
+        let before_write_owner_id =
+            NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite");
+        let get_query_owner_id =
+            NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:function:GetQuery");
+        let graph = first.graph();
+        let query_api = graph.query();
+        let before_write_query = query_api
+            .node(&before_write_query_id)
+            .expect("BeforeWrite query node must exist");
+        let get_query = query_api
+            .node(&get_query_id)
+            .expect("GetQuery query node must exist");
+        let before_write_owner = query_api
+            .owner(&before_write_query_id)
+            .expect("BeforeWrite query owner must exist");
+        let get_query_owner = query_api
+            .owner(&get_query_id)
+            .expect("GetQuery query owner must exist");
+        let repeated_query = second
+            .graph()
+            .query()
+            .node(&before_write_query_id)
+            .expect("repeated build must preserve query identity");
+
+        assert!(first.diagnostics().is_empty());
+        assert_eq!(graph.nodes_by_kind(NodeKind::Query).len(), 2);
+        assert_eq!(before_write_query.kind(), NodeKind::Query);
+        assert_eq!(get_query.kind(), NodeKind::Query);
+        assert_eq!(before_write_query.name().as_str(), "Query");
+        assert_eq!(before_write_query.id(), repeated_query.id());
+        assert_eq!(
+            before_write_owner.id().as_str(),
+            before_write_owner_id.as_str()
+        );
+        assert_eq!(get_query_owner.id().as_str(), get_query_owner_id.as_str());
+        assert_ne!(before_write_query.id(), get_query.id());
+        assert_eq!(query_api.owner_edges(&before_write_query_id).len(), 1);
+        assert_eq!(query_api.owner_edges(&get_query_id).len(), 1);
+        assert_eq!(before_write_query.provenance().len(), 1);
+        assert_eq!(
+            before_write_query.provenance()[0].origin(),
+            FactOrigin::Declared
+        );
+        assert!(
+            before_write_query.provenance()[0]
+                .source()
+                .expect("query provenance source must exist")
+                .as_str()
+                .contains(
+                    "/src/Documents/Sales/ObjectModule.bsl#bsl_query=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite:query:Query;owner=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite;binding=Query"
+                )
+        );
+        assert!(query_api.edges_by_kind(EdgeKind::Reads).is_empty());
+        assert!(query_api.edges_by_kind(EdgeKind::Writes).is_empty());
+        assert!(query_api.edges_by_kind(EdgeKind::DependsOn).is_empty());
+        assert!(first.validate().is_valid());
+        assert!(graph.diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
+    }
+
+    #[test]
+    fn unsupported_bsl_query_patterns_do_not_emit_query_nodes() {
+        let root = create_edt_project();
+        replace_object_module(
+            &root,
+            concat!(
+                "Procedure BeforeWrite()\n",
+                "    Query = New Query;\n",
+                "    Query.Text = QueryText;\n",
+                "    OtherQuery = New Query;\n",
+                "    OtherQuery.Text = \"SELECT Ref FROM Catalog.Products\";\n",
+                "    OtherQuery.Text = \"SELECT Ref FROM Catalog.Services\";\n",
+                "    PlainText = \"SELECT Ref FROM Catalog.Products\";\n",
+                "EndProcedure",
+            ),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("unsupported query patterns must not fail graph build");
+
+        assert!(result.graph().nodes_by_kind(NodeKind::Query).is_empty());
+        assert!(result.validate().is_valid());
     }
 
     #[test]

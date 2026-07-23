@@ -179,6 +179,33 @@ fn valid_graph_has_no_issues() {
 }
 
 #[test]
+fn procedure_can_own_query_node() {
+    let ids = FixtureIds::new();
+    let query_id = id("metadata.document.sales:object_module:procedure:Post:query:Query");
+    let mut graph = valid_graph(false);
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        query_id.clone(),
+        name("Query"),
+        NodeKind::Query,
+        vec![provenance("metadata.document.sales:object_module#query")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.procedure,
+            query_id,
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales:object_module#query")],
+        ))
+        .expect("query ownership edge must be stored");
+
+    let result = SemanticGraphValidator::new().validate(&graph);
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
 fn validation_is_deterministic_across_repeated_runs_and_insertion_order() {
     let normal = valid_graph(false);
     let reversed = valid_graph(true);

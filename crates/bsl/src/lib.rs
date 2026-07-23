@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 
 mod calls;
 mod cross_module_resolution;
+mod queries;
 mod resolution;
 
 pub use calls::{BslCall, BslCallError, BslCallExtractor, LineBslCallExtractor};
@@ -12,6 +13,7 @@ pub use cross_module_resolution::{
     BslModuleSymbols, CrossModuleCallResolution, CrossModuleCallResolver, QualifiedBslCallResolver,
     ResolvedCrossModuleCall, UnresolvedCrossModuleCall, UnresolvedCrossModuleCallReason,
 };
+pub use queries::{BslQuery, BslQueryError, BslQueryExtractor, LineBslQueryExtractor};
 pub use resolution::{
     BslCallResolution, BslCallResolver, LocalBslCallResolver, ResolvedBslCall, UnresolvedBslCall,
     UnresolvedCallReason,

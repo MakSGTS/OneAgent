@@ -2,9 +2,10 @@
 
 use oneagent_bsl::{
     BslCall, BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor,
-    BslModuleSymbols, BslParseError, BslSymbol, BslSymbolKind, CrossModuleCallResolver,
-    LineBslCallExtractor, LineBslDeclarationExtractor, LocalBslCallResolver,
-    QualifiedBslCallResolver, UnresolvedBslCall, UnresolvedCrossModuleCall,
+    BslModuleSymbols, BslParseError, BslQuery, BslQueryError, BslQueryExtractor, BslSymbol,
+    BslSymbolKind, CrossModuleCallResolver, LineBslCallExtractor, LineBslDeclarationExtractor,
+    LineBslQueryExtractor, LocalBslCallResolver, QualifiedBslCallResolver, UnresolvedBslCall,
+    UnresolvedCrossModuleCall,
 };
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
@@ -31,6 +32,7 @@ pub struct AnalyzedBslModule {
     module_name: EntityName,
     symbols: Vec<BslSymbol>,
     calls: Vec<BslCall>,
+    queries: Vec<BslQuery>,
     source: Option<EntityId>,
 }
 
@@ -55,11 +57,32 @@ impl AnalyzedBslModule {
         calls: Vec<BslCall>,
         source: Option<EntityId>,
     ) -> Self {
+        Self::new_with_source_and_queries(
+            module_id,
+            module_name,
+            symbols,
+            calls,
+            Vec::new(),
+            source,
+        )
+    }
+
+    /// Creates an analyzed BSL module with queries and a source identifier.
+    #[must_use]
+    pub const fn new_with_source_and_queries(
+        module_id: EntityId,
+        module_name: EntityName,
+        symbols: Vec<BslSymbol>,
+        calls: Vec<BslCall>,
+        queries: Vec<BslQuery>,
+        source: Option<EntityId>,
+    ) -> Self {
         Self {
             module_id,
             module_name,
             symbols,
             calls,
+            queries,
             source,
         }
     }
@@ -86,6 +109,12 @@ impl AnalyzedBslModule {
     #[must_use]
     pub fn calls(&self) -> &[BslCall] {
         &self.calls
+    }
+
+    /// Returns static query declarations collected from the module.
+    #[must_use]
+    pub fn queries(&self) -> &[BslQuery] {
+        &self.queries
     }
 
     /// Returns the source identifier used for graph provenance.
@@ -123,11 +152,16 @@ pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule,
         .extract_calls(module.id(), &source)
         .map_err(EdtBslGraphError::ParseCalls)?;
 
-    Ok(AnalyzedBslModule::new_with_source(
+    let queries = LineBslQueryExtractor
+        .extract_queries(module.id(), &source)
+        .map_err(EdtBslGraphError::ParseQueries)?;
+
+    Ok(AnalyzedBslModule::new_with_source_and_queries(
         module.id().clone(),
         module.name().clone(),
         symbols,
         calls,
+        queries,
         Some(source_id_from_path(module.path())?),
     ))
 }
@@ -190,6 +224,7 @@ fn add_analyzed_modules(
     // Pass 1: insert declarations from every module.
     for module in modules {
         insert_declarations(graph, module)?;
+        insert_queries(graph, module)?;
     }
 
     let available_modules = modules
@@ -261,6 +296,31 @@ fn insert_declarations(
                 symbol.id().clone(),
                 EdgeKind::Contains,
                 declared_provenance(module.source()),
+            )
+            .map_err(EdtBslGraphError::Graph)?;
+    }
+
+    Ok(())
+}
+
+fn insert_queries(
+    graph: &mut SemanticGraph,
+    module: &AnalyzedBslModule,
+) -> Result<(), EdtBslGraphError> {
+    for query in module.queries() {
+        graph.insert_node_with_provenance(
+            query.id().clone(),
+            query.binding_name().clone(),
+            NodeKind::Query,
+            query_provenance(module.source(), query),
+        );
+
+        graph
+            .insert_edge_with_provenance(
+                query.owner_id().clone(),
+                query.id().clone(),
+                EdgeKind::Contains,
+                query_provenance(module.source(), query),
             )
             .map_err(EdtBslGraphError::Graph)?;
     }
@@ -451,6 +511,29 @@ fn unresolved_call_provenance(source: Option<&EntityId>, call: &BslCall) -> Prov
     )
 }
 
+fn query_provenance(source: Option<&EntityId>, query: &BslQuery) -> Provenance {
+    let source = source.map_or_else(
+        || query.id().clone(),
+        |source| {
+            EntityId::new(format!(
+                "{}#bsl_query={};owner={};binding={}",
+                source.as_str(),
+                query.id().as_str(),
+                query.owner_id().as_str(),
+                query.binding_name().as_str()
+            ))
+            .expect("a non-empty source and query context must produce a valid identifier")
+        },
+    );
+
+    bsl_provenance(
+        Some(&source),
+        FactOrigin::Declared,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    )
+}
+
 fn bsl_provenance(
     source: Option<&EntityId>,
     origin: FactOrigin,
@@ -488,6 +571,9 @@ pub enum EdtBslGraphError {
     /// BSL call extraction failed.
     ParseCalls(BslCallError),
 
+    /// BSL query extraction failed.
+    ParseQueries(BslQueryError),
+
     /// Semantic graph validation failed.
     Graph(GraphError),
 
@@ -514,6 +600,10 @@ impl Display for EdtBslGraphError {
                 write!(formatter, "failed to parse BSL calls: {error}")
             }
 
+            Self::ParseQueries(error) => {
+                write!(formatter, "failed to parse BSL queries: {error}")
+            }
+
             Self::Graph(error) => {
                 write!(formatter, "semantic graph error: {error}")
             }
@@ -531,6 +621,7 @@ impl std::error::Error for EdtBslGraphError {
             Self::ReadModule { source, .. } => Some(source),
             Self::ParseDeclarations(error) => Some(error),
             Self::ParseCalls(error) => Some(error),
+            Self::ParseQueries(error) => Some(error),
             Self::Graph(error) => Some(error),
             Self::InvalidSourceIdentifier => None,
         }

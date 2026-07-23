@@ -1397,6 +1397,8 @@ The EDT pipeline currently emits:
 * top-level `NodeKind::Metadata(kind)` nodes for the directory registry above;
 * `Module`, `Procedure`, and `Function` nodes from known BSL module files and
   declaration extraction;
+* `Query` nodes from static BSL Query declarations inside known procedures or
+  functions when the local binding and full query text are statically known;
 * `Attribute`, `TabularSection`, `Form`, `Command`, `Dimension`, `Resource`, and
   `Measure` child nodes from metadata descriptors.
 
@@ -1410,9 +1412,9 @@ its provenance identifies the original accounting-register descriptor and
 resource member.
 
 `StandardAttribute` has a graph-domain model and insertion tests, but the EDT
-structure reader does not extract or emit it. `Query`, the flat `Role` and
-`Subsystem` variants, and `Unknown` are also not emitted by the EDT pipeline.
-EDT roles and subsystems use `NodeKind::Metadata(MetadataKind::Role)` and
+structure reader does not extract or emit it. The flat `Role` and `Subsystem`
+variants, and `Unknown` are also not emitted by the EDT pipeline. EDT roles and
+subsystems use `NodeKind::Metadata(MetadataKind::Role)` and
 `NodeKind::Metadata(MetadataKind::Subsystem)` instead.
 
 ### Query entity contract
@@ -1423,10 +1425,14 @@ is not the public Semantic Query API, not an arbitrary string that happens to
 contain query text, not a BSL runtime `Query` object by itself, not a query
 execution event, and not a `Reads`, `Writes`, or `DependsOn` edge.
 
-The current EDT pipeline does not implement Query extraction or Query node
-emission. The `semantic_node.query` coverage capability therefore remains
-`Unsupported` until a production source path provides parsing, stable identity,
-provenance, graph emission, and representative integration evidence.
+The EDT pipeline implements the first Query source slice for static BSL Query
+declarations inside known procedures or functions. The supported syntax is a
+local binding initialized with `New Query("...")`, `Query = New Query;` followed
+by `Query.Text = "..."`, or the Russian equivalents `Новый Запрос` and
+`.Текст`. The extractor does not parse the 1C query language; it only proves
+that one complete query program is statically available for a stable local
+binding. The `semantic_node.query` coverage capability is `Supported` for this
+slice.
 
 #### Source categories
 
@@ -1435,7 +1441,7 @@ deterministically and attached to one structural owner. The accepted source
 categories are:
 
 * static BSL query declarations: complete query text supplied directly in a BSL
-  module through a statically extractable literal or literal composition;
+  module through the supported constructor or `.Text` literal assignment forms;
 * metadata-owned query declarations: complete query text stored inside a stable
   metadata member such as a report data-composition dataset or a dynamic-list
   query setting once the corresponding EDT metadata parser exists.
@@ -1447,10 +1453,10 @@ report internals beyond named data-composition datasets, form dynamic-list
 settings beyond their stable member path, and query text stored in external
 resources tracked by the workspace.
 
-Generated fragments, runtime-concatenated text, text loaded from an untracked
-external source, and partial query snippets MUST NOT produce Query nodes in the
-initial contract. They MAY later produce diagnostics or lower-confidence facts
-after a separate architecture decision.
+Generated fragments, runtime-concatenated text, reassigned local bindings, text
+loaded from an untracked external source, and partial query snippets MUST NOT
+produce Query nodes in the implemented first slice. They MAY later produce
+diagnostics or lower-confidence facts after a separate architecture decision.
 
 #### Canonical entity boundary
 
@@ -1478,12 +1484,12 @@ not runtime executions or individual executions of a reused query object.
 #### Ownership
 
 Every Query node MUST have exactly one structural owner represented by the
-existing `Contains` relation. For BSL sources, the owner SHOULD be the nearest
-procedure or function node; if a query is declared at module scope, the owner is
-the module node. For metadata sources, the owner SHOULD be the closest semantic
-metadata member node when such a node exists; otherwise the owner is the
-metadata object node and the Query provenance MUST include the nested member
-path that produced it.
+existing `Contains` relation. For the implemented BSL source slice, the owner
+MUST be the nearest known procedure or function node. Module-scope Query
+declarations are not emitted by the first slice. For future metadata sources,
+the owner SHOULD be the closest semantic metadata member node when such a node
+exists; otherwise the owner is the metadata object node and the Query provenance
+MUST include the nested member path that produced it.
 
 No new ownership edge kind is required for Query node support. Data-access
 relations derived from query-language analysis are separate semantic edges and
@@ -1529,6 +1535,11 @@ future implementation needs first-class ranges for BSL Query provenance, that
 range model is a separate prerequisite and MUST NOT be added implicitly by
 Query node emission.
 
+The implemented BSL slice uses the module source path plus a deterministic
+fragment containing the Query node id, owner id, and local binding name. The
+node and its `Contains` ownership edge receive `Declared` provenance from the
+EDT BSL graph contributor.
+
 #### Extraction boundary
 
 Query extraction is distinct from 1C query-language parsing. The minimum
@@ -1538,10 +1549,10 @@ complete raw query text or a pointer to it. Full query-language AST,
 referenced tables, parameters, read/write sets, temporary-table analysis, and
 dependency classification belong to later Data Access Graph work.
 
-The first Query node implementation MUST NOT require full query-language
-analysis. It SHOULD preserve enough raw source context so later analysis can
-derive `Reads`, `Writes`, `DependsOn`, query fields, query parameters, and
-diagnostics without changing the Query node identity.
+The first Query node implementation does not require full query-language
+analysis. It preserves the static raw query text in the extracted BSL model so
+later analysis can derive `Reads`, `Writes`, `DependsOn`, query fields, query
+parameters, and diagnostics without changing the Query node identity.
 
 #### Relation to Query API and semantic edges
 
@@ -1551,11 +1562,12 @@ Query nodes, once emitted, will be retrievable through the existing Query API
 like any other node kind unless a concrete API gap is found later.
 
 Query node support is independent from `Reads`, `Writes`, and `DependsOn`.
-Future extraction creates the `NodeKind::Query` node and its ownership edge.
-Future query-language analysis may then produce references and data-access
-facts. `Reads` and `Writes` describe data access derived from a Query or BSL
-symbol. `DependsOn` describes semantic dependency. None of these edges is a
-prerequisite for creating the Query node.
+Current extraction creates the `NodeKind::Query` node and its ownership edge for
+the supported BSL slice. Future query-language analysis may then produce
+references and data-access facts. `Reads` and `Writes` describe data access
+derived from a Query or BSL symbol. `DependsOn` describes semantic dependency.
+None of these edges is a prerequisite for creating the Query node, and they
+remain separate coverage gaps.
 
 #### Determinism, errors, and first slice
 
@@ -1567,35 +1579,29 @@ empty build-result diff when inputs are unchanged. Duplicate extraction of the
 same declaration MUST be deduplicated or diagnosed deterministically.
 
 Empty query text, malformed query language, unsupported source format,
-dynamically constructed text, partial snippets, missing owner identity, and
-missing provenance MUST NOT produce a supported Query node in the first
-implementation phase. Malformed query language MAY still produce a Query node
-when extraction has a complete source declaration; syntax diagnostics belong to
-future query-language analysis. Parser failures in extraction itself SHOULD
-produce typed diagnostics only after a diagnostics contract is added.
+dynamically constructed text, partial snippets, ambiguous reassignment, missing
+owner identity, and missing provenance do not produce a supported Query node in
+the implemented first slice. Malformed query language may still produce a Query
+node when extraction has a complete static source declaration; syntax
+diagnostics belong to future query-language analysis. Parser failures in
+extraction itself SHOULD produce typed diagnostics only after a diagnostics
+contract is added.
 
-The first implementation slice SHOULD target static BSL query declarations
-inside a known procedure or function. This source already has a real EDT input
-family, stable module ownership, existing BSL module discovery, an existing
-symbol owner model, and provenance source identifiers. The slice MUST be
-restricted to declarations with a stable local binding and complete statically
-available text, and it MUST NOT emit `Reads`, `Writes`, or `DependsOn`.
+The first implementation slice targets static BSL query declarations inside a
+known procedure or function. This source has a real EDT input family, stable
+module ownership, existing BSL module discovery, an existing symbol owner model,
+and provenance source identifiers. The slice is restricted to declarations with
+a stable local binding and complete statically available text, and it does not
+emit `Reads`, `Writes`, or `DependsOn`.
 
 The ordered follow-up tasks are:
 
-1. add a private extracted Query representation carrying owner, local identity,
-   raw text location, and provenance source;
-2. implement extraction for static BSL Query declarations with a stable local
-   binding inside procedure or function owners;
-3. contribute `NodeKind::Query` nodes and `Contains` ownership edges with
-   deterministic identity and provenance;
-4. add a representative EDT BSL fixture and integration tests for identity,
-   provenance, repeated builds, graph diff, and build-result diff;
-5. update Coverage Registry evidence and close `semantic_node.query`;
-6. add query-language parsing and diagnostics in a separate task;
-7. derive `Reads` and `Writes` from parsed query sources in separate edge
+1. add query-language parsing and diagnostics in a separate task;
+2. derive `Reads` and `Writes` from parsed query sources in separate edge
    capability tasks;
-8. derive `DependsOn` after data-access and dependency semantics are defined.
+3. derive `DependsOn` after data-access and dependency semantics are defined;
+4. add metadata-owned Query sources such as data-composition datasets or
+   dynamic-list query settings after their EDT parser contracts are defined.
 
 ### Ownership inventory
 
@@ -1693,35 +1699,32 @@ remains a separate High gap.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — Query EDT contribution applicability.** Determine whether
-   `NodeKind::Query` has a production EDT source in the current semantic graph
-   pipeline or should remain unsupported pending query extraction.
-2. **High — Standard Attribute EDT contribution.** Extend metadata structure
+1. **High — Standard Attribute EDT contribution.** Extend metadata structure
    extraction and EDT graph contribution for `StandardAttribute`. Acceptance:
    stable node identity, typed kind payload, owner edge, provenance, validation,
    and representative tests.
-3. **High — Measure ownership evidence.** Review and test the existing generic
+2. **High — Measure ownership evidence.** Review and test the existing generic
    containment path independently from Measure node emission before changing
    `ownership_relation.measure` status.
-4. **High — nested Tabular Section ownership.** Preserve nested parent context
+3. **High — nested Tabular Section ownership.** Preserve nested parent context
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
-5. **High — declared semantic edges.** Add producer-specific tasks for Reads,
+4. **High — declared semantic edges.** Add producer-specific tasks for Reads,
    Writes, Grants, Includes, Extends, and DependsOn rather than a generic edge
    task. Acceptance for each: extraction source, endpoint rule, provenance,
    Query semantics, Impact policy decision, and tests.
-6. **Medium — metadata payload completion.** Define and preserve the typed
+5. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
    or recorded as a known limitation.
-7. **Medium — metadata reference fixtures.** Add successful fixtures for
+6. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.
-8. **Medium — reference-request provenance.** Decide whether pending reference
+7. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
-9. **Medium — broad endpoint validation.** Replace permissive rules for future
+8. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
 
@@ -1731,9 +1734,16 @@ selection, stable UUID identity, source provenance, and repeated-build
 determinism. The node capability is `Supported`; ownership coverage remains a
 separate task.
 
-The EDT registry now reports 13 High gaps and retains 44 Medium gaps. Combined
+The former `semantic_node.query` High gap is closed. The EDT BSL pipeline now
+extracts static Query declarations with stable local bindings inside known
+procedures or functions, emits `NodeKind::Query` nodes with `Contains`
+ownership, preserves source provenance with owner and binding context, and
+verifies repeated-build determinism. Query-language parsing and data-access
+edges remain separate tasks.
+
+The EDT registry now reports 12 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 13 High gaps, and 45 Medium gaps. Other fallback, flat-node,
+0 Critical gaps, 12 High gaps, and 45 Medium gaps. Other fallback, flat-node,
 ownership, and declared-edge capabilities remain independent typed gaps and are
 not reclassified by these focused coverage changes. Sprint 3 Integration Review
 remains blocked while High gaps remain.

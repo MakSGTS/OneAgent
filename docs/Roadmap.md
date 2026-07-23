@@ -118,8 +118,8 @@ Ordered follow-up work:
 5. **High — completed:** classify fallback-only `metadata_entity.unknown` as not applicable to EDT without emitting synthetic entities.
 6. **High — completed:** map EDT accounting-register resources to stable, provenance-backed `Measure` nodes (`semantic_node.measure`); ownership coverage remains separate.
 7. **High — completed:** classify fallback-only `semantic_node.metadata.unknown` as not applicable to EDT without emitting synthetic metadata nodes.
-8. **High — architecture completed, implementation next:** `semantic_node.query` remains `Unsupported`; the canonical Query entity contract is defined, and the next implementation slice is static BSL Query declarations with stable local bindings.
-9. **High:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
+8. **High — completed:** emit static BSL Query declarations as stable, provenance-backed `NodeKind::Query` nodes; query-language parsing and data-access edges remain separate.
+9. **High — next:** emit EDT `StandardAttribute` nodes, ownership, and provenance.
 10. **High:** review Measure ownership evidence independently from node emission.
 11. **High:** preserve tabular-section ownership for nested attributes.
 12. **High:** implement producer-specific support for each declared-only semantic edge.
@@ -128,17 +128,13 @@ Ordered follow-up work:
 15. **Medium:** decide and implement reference-request provenance ownership.
 16. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 13 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 12 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 13 High gaps, and 45 Medium gaps.
+gaps, 12 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
-The next typed backlog capability remains `semantic_node.query`. Its
-architecture prerequisite is complete, but production support still requires a
-private extracted Query representation, static BSL Query extraction, graph node
-contribution, stable identity, provenance, and representative integration tests
-before Coverage Registry evidence can change.
+The next typed backlog capability is `semantic_node.standard_attribute`.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

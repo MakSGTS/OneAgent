@@ -851,6 +851,7 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
         | NodeKind::Command => matches!(source, NodeKind::Metadata(_)),
         NodeKind::Attribute => matches!(source, NodeKind::Metadata(_) | NodeKind::TabularSection),
         NodeKind::Procedure | NodeKind::Function => matches!(source, NodeKind::Module),
+        NodeKind::Query => matches!(source, NodeKind::Procedure | NodeKind::Function),
         _ => false,
     }
 }

@@ -1759,6 +1759,36 @@ Supported by the EDT Coverage Registry.
 authorization, denied access, inherited access, user assignment, access groups,
 and BSP access-profile semantics.
 
+`EdgeKind::Includes` is governed by
+`docs/adr/0020-includes-semantics.md`. It represents direct, explicit,
+source-declared composition membership. The accepted EDT source contract is a
+direct repeated `mdclass:Subsystem/content` value in a top-level
+`src/Subsystems/<Name>/<Name>.mdo` descriptor, stored as
+`NodeKind::Subsystem --Includes--> NodeKind::Metadata(kind)`. The source is the
+existing flat Subsystem node. A `Role.<Name>` token resolves to
+`NodeKind::Metadata(MetadataKind::Role)`, never to the flat `NodeKind::Role`
+access-control subject. Direction is from the declaring Subsystem to the direct
+member, standard edge identity is `(source, target, EdgeKind::Includes)`, and
+transitive closure is not stored.
+
+The accepted first production slice is restricted to top-level Subsystem
+discovery and direct `<content>` targets whose serialized prefix maps to a
+top-level metadata kind already discovered and emitted by the EDT adapter.
+Metadata Subsystem targets, nested Subsystem discovery, hierarchy fields,
+unsupported metadata families, and derived membership remain deferred. The
+future producer must resolve by exact metadata kind and local name, must not
+invent placeholder targets, and must attach deterministic resolved provenance.
+Includes is distinct from `Contains` ownership, `References` linkage, `Grants`
+authorization, and `DependsOn` dependency. It remains excluded from dependency
+and Impact traversal; generic outgoing, incoming, and all-edge queries are
+sufficient for direct membership navigation.
+
+This accepted contract partially supersedes only ADR-0017's older classification
+of Subsystem membership as `Contains`; ADR-0017's `DependsOn` decisions remain
+unchanged, as do ADR-0007 configuration ownership and ADR-0019 access-grant
+semantics. EDT production parsing and emission are not implemented yet, so
+`semantic_edge.includes` remains `DeclaredOnly`.
+
 ### Provenance inventory
 
 EDT attaches provenance while creating metadata object nodes, child nodes,
@@ -1813,8 +1843,11 @@ The remaining thematic Semantic Coverage Completion backlog is:
    The first `Grants` slice is implemented according to
    `docs/adr/0019-grants-semantics.md`: real EDT role-right sources produce
    scoped `AccessRight` nodes, precise canonical edges, resolved provenance,
-   deterministic duplicate aggregation, and Coverage evidence. Acceptance for
-   each remaining edge:
+   deterministic duplicate aggregation, and Coverage evidence. Includes is
+   defined by `docs/adr/0020-includes-semantics.md`; its next task is the
+   top-level direct Subsystem `<content>` production slice. Architecture
+   acceptance does not change its `DeclaredOnly` status. Acceptance for each
+   remaining edge:
    extraction source, endpoint rule, provenance, Query semantics, Impact policy
    decision, and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed

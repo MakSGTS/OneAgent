@@ -19,6 +19,9 @@ stricter safety policy.
 - Do not add dependencies unless the task scope requires them and the Change
   Contract identifies the impact.
 - Do not perform broad formatting unrelated to touched files.
+- Apply changes to different files through separate atomic `apply_patch` calls.
+  Before each patch, inspect the file's current context so a mismatch in one
+  file cannot reject or obscure changes intended for another file.
 - Report unexpected repository state before proceeding when it may affect scope
   or user-owned changes.
 - Print final `git status --short` in the final report.

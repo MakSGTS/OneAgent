@@ -62,6 +62,7 @@ gantt
     Navigation and symbol search            :m4, after m3, 12d
     AI chat and context panel               :m5, after m4, 12d
     EDT integration prototype               :m6, after m5, 20d
+    External AI client compatibility        :m7, after m6, 12d
 
     section v0.7 Intelligence
     Diagnostics engine                      :i1, 2027-06-01, 15d
@@ -97,6 +98,10 @@ Context engine, LLM abstraction, LM Studio, Ollama and OpenAI-compatible endpoin
 
 ### v0.6 — MCP and IDE
 MCP server, VS Code extension, EDT integration, navigation and semantic tools.
+OneAgent should expose its semantic graph, query, validation, diagnostics,
+impact, and context capabilities through MCP so external AI clients such as
+Codex, Cursor, and cloud agents can consume OneAgent without product-specific
+core integrations.
 
 ### v0.7 — Intelligence
 Diagnostics, impact analysis, planning, refactoring and safe edit transactions.

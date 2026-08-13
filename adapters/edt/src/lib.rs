@@ -765,11 +765,16 @@ fn collect_metadata_object(
         )?),
     )?;
 
-    for child in structure_reader
+    let children = structure_reader
         .read_children(&descriptor)
-        .map_err(EdtGraphError::MetadataStructure)?
-    {
-        collect_metadata_child(graph, &descriptor, &child, &mut collected.references)?;
+        .map_err(EdtGraphError::MetadataStructure)?;
+
+    for child in &children {
+        collect_metadata_child(graph, &descriptor, child, &mut collected.references)?;
+    }
+
+    for child in &children {
+        collect_metadata_child_ownership(graph, &descriptor, child)?;
     }
 
     let modules = module_reader
@@ -974,19 +979,6 @@ fn collect_metadata_child(
         declared_provenance(child_source),
     );
 
-    insert_edge(
-        graph,
-        child.parent_id().clone(),
-        child.id().clone(),
-        EdgeKind::Contains,
-        declared_provenance(contains_edge_source_id(
-            descriptor.descriptor_path(),
-            descriptor.id(),
-            child.parent_id(),
-            child.id(),
-        )?),
-    )?;
-
     if is_depends_on_metadata_member_source(child_node_kind) {
         for reference in child.references() {
             references.insert(PendingMetadataReference {
@@ -999,6 +991,27 @@ fn collect_metadata_child(
             });
         }
     }
+
+    Ok(())
+}
+
+fn collect_metadata_child_ownership(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+    child: &EdtMetadataChildDescriptor,
+) -> Result<(), EdtGraphError> {
+    insert_edge(
+        graph,
+        child.parent_id().clone(),
+        child.id().clone(),
+        EdgeKind::Contains,
+        declared_provenance(contains_edge_source_id(
+            descriptor.descriptor_path(),
+            descriptor.id(),
+            child.parent_id(),
+            child.id(),
+        )?),
+    )?;
 
     Ok(())
 }

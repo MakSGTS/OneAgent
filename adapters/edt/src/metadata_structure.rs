@@ -108,7 +108,7 @@ impl EdtMetadataChildDescriptor {
         self.kind
     }
 
-    /// Returns the containing metadata object identifier.
+    /// Returns the immediate semantic owner identifier.
     #[must_use]
     pub const fn parent_id(&self) -> &EntityId {
         &self.parent_id
@@ -229,6 +229,7 @@ struct PendingChild {
     uuid: Option<String>,
     name: Option<String>,
     references: Vec<EdtMetadataReferenceDescriptor>,
+    nested_attributes: Vec<PendingChild>,
     depth: usize,
 }
 
@@ -256,6 +257,7 @@ fn parse_children(
                         uuid: read_uuid(&reader, &event)?,
                         name: None,
                         references: Vec::new(),
+                        nested_attributes: Vec::new(),
                         depth: path.len(),
                     });
                 }
@@ -320,7 +322,14 @@ fn parse_children(
 
             Ok(Event::End(_)) => {
                 if let Some(child) = pending.pop_if(|child| child.depth == path.len()) {
-                    children.push(finish_child(child, parent_id, descriptor_path)?);
+                    if child.kind == EdtMetadataChildKind::Attribute
+                        && let Some(owner) = pending.last_mut()
+                        && owner.kind == EdtMetadataChildKind::TabularSection
+                    {
+                        owner.nested_attributes.push(child);
+                    } else {
+                        children.extend(finish_child(child, parent_id, descriptor_path)?);
+                    }
                 }
 
                 path.pop();
@@ -347,10 +356,11 @@ fn parse_children(
 }
 
 fn finish_child(
-    child: PendingChild,
+    mut child: PendingChild,
     parent_id: &EntityId,
     descriptor_path: &Path,
-) -> Result<EdtMetadataChildDescriptor, EdtMetadataStructureError> {
+) -> Result<Vec<EdtMetadataChildDescriptor>, EdtMetadataStructureError> {
+    let nested_attributes = std::mem::take(&mut child.nested_attributes);
     let raw_name = child
         .name
         .ok_or_else(|| EdtMetadataStructureError::MissingName {
@@ -377,13 +387,20 @@ fn finish_child(
         identifier: raw_id,
     })?;
 
-    Ok(EdtMetadataChildDescriptor::new(
-        id,
-        name,
-        child.kind,
-        parent_id.clone(),
-        child.references,
-    ))
+    let descriptor =
+        EdtMetadataChildDescriptor::new(id, name, child.kind, parent_id.clone(), child.references);
+    let immediate_owner_id = descriptor.id().clone();
+    let mut descriptors = vec![descriptor];
+
+    for nested_attribute in nested_attributes {
+        descriptors.extend(finish_child(
+            nested_attribute,
+            &immediate_owner_id,
+            descriptor_path,
+        )?);
+    }
+
+    Ok(descriptors)
 }
 
 fn parse_metadata_reference_type(
@@ -682,6 +699,86 @@ mod tests {
                 .iter()
                 .any(|child| child.name().as_str() == "Goods")
         );
+    }
+
+    #[test]
+    fn preserves_immediate_parent_for_nested_attributes() {
+        let root = tempdir().expect("temporary directory must be created");
+        let descriptor_path = root.path().join("Sales.mdo");
+
+        fs::write(
+            &descriptor_path,
+            r#"<mdclass:Document xmlns:mdclass="urn:test" uuid="document-sales">
+    <name>Sales</name>
+    <attributes uuid="top-level-company">
+        <name>Company</name>
+    </attributes>
+    <tabularSections>
+        <name>Goods</name>
+        <attributes>
+            <name>Item</name>
+            <type><types>CatalogRef.Products</types></type>
+        </attributes>
+        <attributes uuid="nested-quantity">
+            <name>Quantity</name>
+        </attributes>
+    </tabularSections>
+    <tabularSections>
+        <name>Services</name>
+        <attributes>
+            <name>Item</name>
+        </attributes>
+    </tabularSections>
+</mdclass:Document>"#,
+        )
+        .expect("descriptor must be written");
+
+        let document_id = EntityId::new("document-sales").expect("identifier must be valid");
+        let descriptor = EdtMetadataObjectDescriptor::new(
+            document_id.clone(),
+            EntityName::new("Sales").expect("name must be valid"),
+            None,
+            MetadataKind::Document,
+            None,
+            descriptor_path,
+        );
+
+        let first = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("metadata children must be read");
+        let repeated = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("repeated metadata read must succeed");
+
+        assert_eq!(first, repeated);
+        assert_eq!(first.len(), 6);
+        assert_eq!(
+            first
+                .iter()
+                .map(|child| child.id().as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "top-level-company",
+                "document-sales:tabular_section:Goods",
+                "document-sales:tabular_section:Goods:attribute:Item",
+                "nested-quantity",
+                "document-sales:tabular_section:Services",
+                "document-sales:tabular_section:Services:attribute:Item",
+            ]
+        );
+        assert_eq!(first[0].parent_id(), &document_id);
+        assert_eq!(first[1].parent_id(), &document_id);
+        assert_eq!(first[2].parent_id(), first[1].id());
+        assert_eq!(first[3].parent_id(), first[1].id());
+        assert_eq!(first[4].parent_id(), &document_id);
+        assert_eq!(first[5].parent_id(), first[4].id());
+        assert_ne!(first[2].id(), first[5].id());
+        assert_eq!(first[2].references().len(), 1);
+        assert_eq!(
+            first[2].references()[0].target_kind(),
+            MetadataKind::Catalog
+        );
+        assert_eq!(first[2].references()[0].target_name().as_str(), "Products");
     }
 
     #[test]

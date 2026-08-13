@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:core="http://g5.1c.ru/v8/dt/mcore" xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="20000000-0000-0000-0000-000000000000">
+  <producedTypes>
+    <objectType typeId="20000000-0000-0000-0000-000000000001" valueTypeId="20000000-0000-0000-0000-000000000002"/>
+    <refType typeId="20000000-0000-0000-0000-000000000003" valueTypeId="20000000-0000-0000-0000-000000000004"/>
+  </producedTypes>
+  <name>Sales</name>
+  <attributes uuid="21000000-0000-0000-0000-000000000000">
+    <name>Company</name>
+    <type>
+      <types>DocumentRef.Sales</types>
+    </type>
+    <minValue xsi:type="core:UndefinedValue"/>
+    <maxValue xsi:type="core:UndefinedValue"/>
+  </attributes>
+  <tabularSections uuid="22000000-0000-0000-0000-000000000000">
+    <producedTypes>
+      <objectType typeId="22000000-0000-0000-0000-000000000001" valueTypeId="22000000-0000-0000-0000-000000000002"/>
+      <rowType typeId="22000000-0000-0000-0000-000000000003" valueTypeId="22000000-0000-0000-0000-000000000004"/>
+    </producedTypes>
+    <name>Products</name>
+    <standardAttributes>
+      <name>LineNumber</name>
+      <minValue xsi:type="core:UndefinedValue"/>
+      <maxValue xsi:type="core:UndefinedValue"/>
+    </standardAttributes>
+    <attributes uuid="23000000-0000-0000-0000-000000000000">
+      <name>Product</name>
+      <type>
+        <types>DocumentRef.Sales</types>
+        <types>DocumentRef.Sales</types>
+      </type>
+      <minValue xsi:type="core:UndefinedValue"/>
+      <maxValue xsi:type="core:UndefinedValue"/>
+    </attributes>
+    <attributes uuid="24000000-0000-0000-0000-000000000000">
+      <name>Quantity</name>
+      <type>
+        <types>Number</types>
+        <numberQualifiers>
+          <precision>15</precision>
+          <scale>3</scale>
+        </numberQualifiers>
+      </type>
+      <minValue xsi:type="core:UndefinedValue"/>
+      <maxValue xsi:type="core:UndefinedValue"/>
+    </attributes>
+    <lineNumberLength>9</lineNumberLength>
+  </tabularSections>
+</mdclass:Document>

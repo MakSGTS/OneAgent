@@ -1646,11 +1646,15 @@ metadata-object-to-child relations with provenance. Validation constrains
 containment endpoints and single-owner rules; Query exposes owners and children;
 Impact Analysis can opt into child-to-owner and owner-to-child propagation.
 
-Attribute ownership is only partially supported. The XML reader recognizes
-nested attribute elements, but currently assigns the top-level metadata object
-as parent. Attributes nested in a tabular section therefore do not preserve the
-tabular-section owner. Measure node conversion reuses generic child containment:
-an accounting-register metadata object owns each emitted
+Attribute ownership preserves the immediate semantic owner. Top-level
+attributes remain owned by their metadata object, while an attribute nested in
+a tabular section is owned only by the nearest enclosing `TabularSection` node.
+The XML reader emits each tabular section before its buffered nested attributes,
+uses the immediate owner in UUID-less fallback identity, and keeps source UUIDs
+unchanged. The EDT contributor inserts all child nodes and collects their type
+references before it emits ownership edges, so graph construction does not
+depend on nested XML completion order. Measure node conversion reuses generic
+child containment: an accounting-register metadata object owns each emitted
 `NodeKind::Measure` through the existing `EdgeKind::Contains` relation. The
 edge uses the same deterministic source, target, kind identity strategy as other
 graph edges and carries provenance pointing to the accounting-register `.mdo`
@@ -1853,13 +1857,17 @@ identity semantics, provenance semantics, or error-recovery rule requiring such
 a node, so the EDT capability is now `NotApplicable` without changing graph
 construction.
 
+The former `ownership_relation.attribute` gap is closed. A repository-owned
+real-format EDT fixture proves top-level attribute ownership, immediate
+tabular-section ownership for nested attributes, the absence of a companion
+metadata-object ownership edge, generic owner and children queries, nested type
+reference resolution, deterministic node and edge provenance, graph validation,
+and repeated-build stability. Positive, incompatible-owner, and multiple-owner
+validator tests cover the canonical ownership invariant.
+
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — nested Tabular Section ownership.** Preserve nested parent context
-   so tabular-section attributes are owned by the tabular section. Acceptance:
-   correct `Contains` direction, owner validation, provenance, and positive and
-   invalid-owner tests.
-2. **High — declared semantic edges.** Add producer-specific tasks for Reads and
+1. **High — declared semantic edges.** Add producer-specific tasks for Reads and
    Writes rather than a generic edge task. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
@@ -1876,17 +1884,17 @@ The remaining thematic Semantic Coverage Completion backlog is:
    remaining edge:
    extraction source, endpoint rule, provenance, Query semantics, Impact policy
    decision, and tests.
-3. **Medium — metadata payload completion.** Define and preserve the typed
+2. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
    or recorded as a known limitation.
-4. **Medium — metadata reference fixtures.** Add successful fixtures for
+3. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.
-5. **Medium — reference-request provenance.** Decide whether pending reference
+4. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
-6. **Medium — broad endpoint validation.** Replace permissive rules for future
+5. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
 
@@ -1935,9 +1943,9 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 2 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 2 High gaps and retains 43 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 2 High gaps, and 45 Medium gaps. Other ownership and
+0 Critical gaps, 2 High gaps, and 44 Medium gaps. Other ownership and
 declared-edge capabilities remain independent typed gaps and are not reclassified
 by these focused coverage changes. Sprint 3 Integration Review remains blocked
 while High gaps remain.

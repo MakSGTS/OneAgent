@@ -206,6 +206,48 @@ fn procedure_can_own_query_node() {
 }
 
 #[test]
+fn tabular_section_can_own_attribute() {
+    let ids = FixtureIds::new();
+    let tabular_section_id = id("metadata.document.sales:tabular_section:Products");
+    let nested_attribute_id = id("metadata.document.sales:tabular_section:Products:attribute:Item");
+    let mut graph = valid_graph(false);
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        tabular_section_id.clone(),
+        name("Products"),
+        NodeKind::TabularSection,
+        vec![provenance("metadata.document.sales")],
+    ));
+    graph.insert_node(GraphNode::new_with_provenance(
+        nested_attribute_id.clone(),
+        name("Item"),
+        NodeKind::Attribute,
+        vec![provenance("metadata.document.sales")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.document,
+            tabular_section_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales")],
+        ))
+        .expect("TabularSection ownership edge must be stored");
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            tabular_section_id,
+            nested_attribute_id,
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales")],
+        ))
+        .expect("nested Attribute ownership edge must be stored");
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
 fn validation_is_deterministic_across_repeated_runs_and_insertion_order() {
     let normal = valid_graph(false);
     let reversed = valid_graph(true);
@@ -695,6 +737,82 @@ fn child_without_owner_is_error() {
     assert!(result.issues().iter().any(|issue| {
         issue.code() == SemanticGraphValidationCode::InvalidOwner
             && issue.invariant() == "mandatory owner edge"
+    }));
+}
+
+#[test]
+fn module_cannot_own_attribute() {
+    let ids = FixtureIds::new();
+    let nested_attribute_id = id("metadata.document.sales:attribute:WrongOwner");
+    let mut graph = valid_graph(false);
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        nested_attribute_id.clone(),
+        name("WrongOwner"),
+        NodeKind::Attribute,
+        vec![provenance("metadata.document.sales")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.module,
+            nested_attribute_id,
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales:object_module")],
+        ))
+        .expect("storage only validates endpoint existence");
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+            && issue.source_kind() == Some(NodeKind::Module)
+            && issue.target_kind() == Some(NodeKind::Attribute)
+            && issue.edge_kind() == Some(EdgeKind::Contains)
+    }));
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::InvalidOwner
+            && issue.source_kind() == Some(NodeKind::Module)
+            && issue.target_kind() == Some(NodeKind::Attribute)
+    }));
+}
+
+#[test]
+fn attribute_with_multiple_valid_owners_is_error() {
+    let ids = FixtureIds::new();
+    let tabular_section_id = id("metadata.document.sales:tabular_section:Products");
+    let mut graph = valid_graph(false);
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        tabular_section_id.clone(),
+        name("Products"),
+        NodeKind::TabularSection,
+        vec![provenance("metadata.document.sales")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.document,
+            tabular_section_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales")],
+        ))
+        .expect("TabularSection ownership edge must be stored");
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            tabular_section_id,
+            ids.attribute.clone(),
+            EdgeKind::Contains,
+            vec![provenance("metadata.document.sales")],
+        ))
+        .expect("second valid ownership edge must be stored");
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::MultipleOwners
+            && issue.nodes().contains(&ids.attribute)
+            && issue.edge_kind() == Some(EdgeKind::Contains)
     }));
 }
 

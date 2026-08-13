@@ -401,7 +401,6 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
 fn ownership_capability(child: NodeKind) -> SemanticCoverageCapability {
     use SemanticCoverageEvidence as Evidence;
 
-    let partial = child == NodeKind::Attribute;
     let required = [
         Evidence::OwnerResolved,
         Evidence::OwnershipEdgeEmitted,
@@ -411,28 +410,20 @@ fn ownership_capability(child: NodeKind) -> SemanticCoverageCapability {
         Evidence::PositiveTestExists,
         Evidence::IntegrationTestExists,
     ];
-    let mut evidence = required.to_vec();
-    if partial {
-        evidence.retain(|item| *item != Evidence::IntegrationTestExists);
-    }
 
     let capability = SemanticCoverageCapability::new(
         SemanticCoverageCapabilityId::OwnershipRelation(child),
         format!("{} ownership relation", node_title(child)),
-        if partial {
-            SemanticCoverageStatus::PartiallySupported
-        } else {
-            SemanticCoverageStatus::Supported
-        },
-        evidence,
+        SemanticCoverageStatus::Supported,
+        required,
         required,
     )
     .with_node_kind(child)
     .with_edge_kind(EdgeKind::Contains);
 
-    if partial {
-        capability.with_limitation(
-            "Attributes nested in tabular sections are currently attached to the top-level metadata object instead of the tabular section",
+    if child == NodeKind::Attribute {
+        capability.with_representative_test(
+            "oneagent_edt::ownership::tabular_section_ownership_fixture_builds_with_immediate_owners",
         )
     } else if child == NodeKind::StandardAttribute {
         capability.with_representative_test(
@@ -1072,7 +1063,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1154,7 +1145,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1223,7 +1214,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&44)
+            Some(&43)
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
@@ -1281,7 +1272,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&44)
+            Some(&43)
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
@@ -1328,7 +1319,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1430,7 +1421,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1484,7 +1475,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1536,7 +1527,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1607,7 +1598,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 
@@ -1693,7 +1684,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            44
+            43
         );
     }
 }

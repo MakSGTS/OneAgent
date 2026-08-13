@@ -1,4 +1,4 @@
-//! BSL source model and declaration extraction for `OneAgent`.
+//! BSL source models, extraction, and minimum query-language parsing for `OneAgent`.
 
 use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 mod calls;
 mod cross_module_resolution;
 mod queries;
+mod query_language;
 mod resolution;
 
 pub use calls::{BslCall, BslCallError, BslCallExtractor, LineBslCallExtractor};
@@ -14,6 +15,11 @@ pub use cross_module_resolution::{
     ResolvedCrossModuleCall, UnresolvedCrossModuleCall, UnresolvedCrossModuleCallReason,
 };
 pub use queries::{BslQuery, BslQueryError, BslQueryExtractor, LineBslQueryExtractor};
+pub use query_language::{
+    ParsedQueryProgram, QueryLanguageDiagnostic, QueryLanguageDiagnosticKind,
+    QueryLanguageParseResult, QueryLanguageParser, QuerySourceCategory, QuerySourceOccurrence,
+    QueryStatementKind, QueryTextRange,
+};
 pub use resolution::{
     BslCallResolution, BslCallResolver, LocalBslCallResolver, ResolvedBslCall, UnresolvedBslCall,
     UnresolvedCallReason,

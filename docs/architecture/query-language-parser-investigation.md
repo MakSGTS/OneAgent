@@ -2,10 +2,11 @@
 
 ## Status and scope
 
-This investigation defines the minimum evidence-backed 1C query-language
-contract needed before implementing the first `Reads` slice accepted by
-ADR-0021. It does not define a complete 1C query grammar and does not change BSL
-extraction, graph construction, metadata resolution, or edge emission.
+This investigation defines the minimum evidence-backed 1C query-language and
+query-source resolution contract needed before implementing the first `Reads`
+slice accepted by ADR-0021. It does not define a complete 1C query grammar and
+does not change BSL extraction, graph construction, metadata resolution, or edge
+emission.
 
 Evidence labels used below are:
 
@@ -13,6 +14,11 @@ Evidence labels used below are:
   `OneAgent_EDTproject/src`;
 - **Confirmed by an existing repository test**: asserted by committed Rust test
   code;
+- **Confirmed by the current prerequisite implementation**: represented by the
+  user-owned query-language parser changes in the working tree, without claiming
+  that those changes are committed;
+- **Accepted architecture decision**: deterministic OneAgent behavior selected
+  where repository or platform evidence does not define an implementable rule;
 - **Accepted by ADR-0021 but not yet represented by source evidence**: required
   policy without a repository-owned raw syntax example;
 - **Unknown**: repository evidence is insufficient to choose a contract.
@@ -58,6 +64,8 @@ such a range.
 |---|---|---|---|
 | Direct English Catalog source | `OneAgent_EDTproject/src/Catalogs/AdditionalReportsAndDataProcessors/Forms/QuickAccessToAdditionalReportsAndDataProcessors/Module.bsl:140-144` contains one static line with `FROM Catalog.Users`; `crates/bsl/src/queries.rs:455-474` and `adapters/edt/src/lib.rs:3461-3477` use `Catalog.Products` | Confirmed by real repository source and an existing repository test | `Catalog.<Name>` is repository-backed |
 | Direct English Information Register source and alias | `OneAgent_EDTproject/src/CommonModules/MarkedObjectsDeletionInternal/Module.bsl:764-771` contains `FROM InformationRegister.ObjectsToDelete AS Tab` | Confirmed by real repository source | `InformationRegister.<Name>` and an optional `AS` alias are repository-backed |
+| Query source and EDT technical-name pairs | `Catalog.Users` matches `<name>Users</name>` in `OneAgent_EDTproject/src/Catalogs/Users/Users.mdo:10`; `InformationRegister.ObjectsToDelete` matches `<name>ObjectsToDelete</name>` in `OneAgent_EDTproject/src/InformationRegisters/ObjectsToDelete/ObjectsToDelete.mdo:12` | Confirmed by real repository source | Resolution uses the EDT technical `<name>`, not a synonym or directory spelling |
+| Case differences in representative source pairs | A case-insensitive scan of direct `Catalog`, `InformationRegister`, `Справочник`, and `РегистрСведений` source forms found no production source whose local name differed by case from its corresponding EDT technical name | Confirmed negative repository search, not a platform semantic claim | Repository source neither proves nor disproves case-insensitive metadata-name lookup |
 | Scalar parameter outside a source position | `OneAgent_EDTproject/src/CommonModules/MarkedObjectsDeletionInternal/Module.bsl:337-352` contains `&UnlockTime` in `WHERE` and a direct Information Register source | Confirmed by real repository source | ADR-0021 permits it only after the entire expression and source set are parsed; no raw fixture is available because the evidence is multiline |
 | English keywords | The preceding ranges show `SELECT`, `FROM`, `AS`, `WHERE`, `TOP`, `NOT`, and `AND` | Confirmed by real repository source | Only observed spellings are evidence-backed; this is not a complete keyword list |
 | Russian keywords and Catalog namespace | `crates/bsl/src/queries.rs:477-496` contains `ВЫБРАТЬ Ссылка ИЗ Справочник.Номенклатура` | Confirmed by an existing repository test | `ВЫБРАТЬ`, `ИЗ`, and `Справочник` are repository-backed parser inputs |
@@ -74,6 +82,24 @@ such a range.
 | Dynamically replaced source text | `OneAgent_EDTproject/src/CommonModules/FilesOperations/Module.bsl:2235-2247` replaces `&CatalogName`; `OneAgent_EDTproject/src/Reports/SalesAnalytics/ObjectModule.bsl:306-317` replaces part of `Query.Text`; `OneAgent_EDTproject/src/CommonModules/MarkedObjectsDeletionInternal/Module.bsl:337-352` replaces conditions | Confirmed by real repository source | This is a BSL extraction/evidence failure when complete static text is unavailable, not query-language malformed syntax |
 | Malformed static query text | No committed raw malformed query-language example was found | Accepted by ADR-0021 but not yet represented by source evidence | A syntax diagnostic is required, but exact malformed examples and recovery behavior remain a fixture blocker |
 | Incomplete BSL Query declaration | `crates/bsl/src/queries.rs:518-552` covers dynamic, ambiguous, module-scope, and missing-static-text patterns | Confirmed by an existing repository test | These patterns produce no parser input and must not be reported as query-language syntax failures |
+
+## Authoritative and implementation references
+
+The official 1C:Enterprise Developer Guide states that module-language names
+and keywords are case-insensitive, while the official query-language overview
+directs readers to the platform's built-in query help. Neither inspected source
+states an exact Unicode comparison algorithm for query metadata identifiers.
+Module-language behavior is therefore adjacent evidence only and is not promoted
+to a query-language fact:
+
+- [1C:Enterprise Developer Guide, module format](https://kb.1ci.com/1C_Enterprise_Platform/Guides/Developer_Guides/1C_Enterprise_8.3.23_Developer_Guide/Chapter_4._1C_Enterprise_language/4.2._Format_of_module_source_text/4.2.4._Module_format/?language=en);
+- [1C:Enterprise query-language overview](https://1c-dn.com/library/tutorials/practical_developer_guide_query_language/).
+
+Rust defines [`str::to_lowercase`](https://doc.rust-lang.org/std/primitive.str.html#method.to_lowercase)
+as Unicode lowercase conversion that can expand characters, handles contextual
+Greek sigma, and does not apply locale-specific Turkish or Azeri casing. This is
+the authoritative implementation behavior selected below; it is not evidence
+that the 1C platform uses the same Unicode algorithm.
 
 ## Minimum lexical observations
 
@@ -154,37 +180,201 @@ boundary: it normally prevents an existing static Query parser input. It is not
 the same outcome as malformed static query text attached to an existing Query
 node. Neither outcome authorizes a partial source set or a `Reads` edge.
 
-## Identifier and case evidence
+## Identifier evidence and accepted lookup contract
 
 Evidence establishes dotted qualified names and aliases with the exact spellings
 shown in the inventory. It does not establish quoted identifiers, non-ASCII
 metadata identifiers in real query source, or identifier character rules.
 
-The BSL extractor lowercases BSL constructor/property keywords internally, but
-that is not evidence for query-language case semantics. The inspected
+The BSL extractor lowercases BSL constructor/property keywords internally, and
+the local and cross-module call resolvers use `str::to_lowercase`. Those are
+repository precedents, not proof of query-language case semantics. The inspected
 query-language examples use uppercase keywords and consistently cased namespace
-and metadata names. ADR-0021 requires deterministic case normalization, but the
-repository does not prove whether query keywords, namespaces, or identifiers are
-case-insensitive or which Unicode mapping applies. Case normalization therefore
-remains **Unknown** and must be decided and fixture-backed before metadata
-resolution is implemented. Raw spelling must be retained regardless of that
-decision.
+and metadata names. No inspected authoritative 1C source specifies Unicode
+normalization or case folding for query metadata identifiers.
 
-## Source-location alternatives
+The first-slice resolver adopts the following **Accepted architecture decision**
+to make lookup deterministic without claiming complete platform equivalence:
+
+```rust
+fn query_source_lookup_key(value: &str) -> String {
+    value.to_lowercase()
+}
+```
+
+The contract is exact:
+
+1. Local metadata-name matching is case-insensitive under equality of this
+   lookup key. Both `QuerySourceOccurrence::local_name()` and each graph node's
+   complete `EntityName` are transformed independently.
+2. Conversion is Rust Unicode lowercase over the complete `str`, not ASCII-only
+   folding and not Unicode Default Case Folding. It is independent of process,
+   user, operating-system, database, and 1C session locale.
+3. The conversion may expand one Unicode scalar value into multiple scalar
+   values. The complete expanded sequence is part of the key; for example,
+   `İ` lowercases to `i` followed by U+0307 COMBINING DOT ABOVE. No character is
+   truncated and no combining mark is removed.
+4. No NFC, NFD, NFKC, or NFKD normalization is applied before or after
+   lowercasing. Canonically or compatibility-equivalent spellings remain
+   different keys unless `str::to_lowercase()` alone makes them byte-identical.
+5. Already-lowercase English and Russian names remain unchanged. English
+   `A`-`Z`, Russian `А`-`Я`, and `Ё` use their Rust Unicode lowercase mappings;
+   uncased non-ASCII scalar values remain unchanged. The same algorithm applies
+   to every accepted identifier rather than branching by script.
+6. The raw namespace, local name, and qualified spelling remain unchanged in
+   `QuerySourceOccurrence` for diagnostics and later provenance. A lookup key is
+   derived data and must not replace, rewrite, or become part of Query identity.
+
+Namespace handling is deliberately separate. The parser remains the sole owner
+of the explicit mapping from raw namespace spelling to `QuerySourceCategory`.
+The current minimum parser accepts only the exact allowlist spellings represented
+by its fixtures; therefore namespace matching is case-sensitive at this parser
+boundary. The metadata resolver consumes `QuerySourceCategory`, never
+reclassifies `namespace()`, never infers an additional namespace, and never uses
+the raw namespace as a graph lookup key. A later evidence-backed parser expansion
+may compare namespace tokens case-insensitively, but it must normalize both the
+candidate and explicit allowlist entries inside the parser and must not move the
+allowlist into metadata resolution.
+
+English and Russian case variants are contract tests for the resolver rather
+than claimed production-source facts. The existing accepted queries can resolve
+against graph technical names such as `products` and `номенклатура`; compatible
+nodes named `Products` and `PRODUCTS`, or `Номенклатура` and `НОМЕНКЛАТУРА`, must
+exercise collision behavior. No new raw parser fixture is required merely to
+test graph-name normalization.
+
+### Candidate index and exact-kind filtering
+
+The resolver builds a private immutable index from one completed graph snapshot:
+
+```text
+lookup key -> deterministically ordered graph-node candidates
+```
+
+Candidate IDs are stored in `BTreeSet<EntityId>` or an equivalent total ordering.
+The index retains each candidate's original name and `NodeKind`; it does not
+insert normalized names into `SemanticGraph`. The expected kind comes only from
+the parsed category:
+
+| Parsed category | Exact compatible target kind |
+|---|---|
+| `QuerySourceCategory::Catalog` | `NodeKind::Metadata(MetadataKind::Catalog)` |
+| `QuerySourceCategory::InformationRegister` | `NodeKind::Metadata(MetadataKind::InformationRegister)` |
+
+No other metadata kind, metadata member, flat semantic node, `Unknown`, external,
+placeholder, synonym, display name, historical name, or lower-confidence target
+is compatible.
+
+Exact kind partitions candidates before cardinality is evaluated. This preserves
+the existing `SemanticResolutionIndex::resolve_name_of_kind` precedent:
+
+- exactly one compatible candidate succeeds even when one or more incompatible
+  nodes have the same lookup key;
+- two or more compatible candidates produce a typed ambiguous outcome containing
+  only compatible candidate IDs, sorted by `EntityId`;
+- no compatible candidate and one or more incompatible candidates produce a
+  typed incompatible-kind outcome; if that outcome carries candidate details,
+  they must also be sorted by `EntityId`;
+- collisions exclusively among incompatible kinds do not become compatible
+  ambiguity because the parsed namespace has already fixed the required kind.
+
+Thus a normalized-name collision across compatible and incompatible kinds is
+deterministic: a unique exact-kind candidate wins; compatible multiplicity wins
+the ambiguous precedence; and incompatible candidates matter only when no exact
+kind is present.
+
+### Failure precedence and partial workspace
+
+Resolution is all-or-nothing at the parsed-program boundary. It starts only when
+`QueryLanguageParseResult::is_source_set_complete()` is true, a program exists,
+there are no parser diagnostics, and every source occurrence belongs to the
+accepted category set. It starts only after the EDT builder has completed
+insertion of all top-level metadata nodes for the supplied workspace snapshot.
+No resolver diagnostic is produced for rejected or partial parser output.
+
+For each accepted occurrence, outcomes use this precedence:
+
+1. two or more exact-kind candidates: ambiguous;
+2. exactly one exact-kind candidate: resolved;
+3. no exact-kind candidate but at least one differently typed candidate:
+   incompatible kind;
+4. no candidate of any kind and an explicit partial-workspace signal:
+   partial-workspace absence;
+5. no candidate of any kind and an explicit complete-workspace signal: missing
+   target.
+
+The private implementation must represent these states with an equivalent typed
+shape; the names below are canonical for the implementation task unless nearby
+code requires a strictly private naming adjustment:
+
+```rust
+enum QuerySourceResolutionOutcome {
+    Resolved { target_id: EntityId },
+    MissingTarget,
+    AmbiguousTarget { candidates: Vec<EntityId> },
+    IncompatibleTargetKind { candidates: Vec<EntityId> },
+    PartialWorkspaceTargetAbsent,
+}
+
+enum WorkspaceResolutionScope {
+    Complete,
+    Partial,
+}
+```
+
+Both candidate vectors are sorted and deduplicated by `EntityId`. Resolved maps
+to `ResolutionState::Resolved`, ambiguous to `ResolutionState::Ambiguous`,
+partial-workspace absence to `ResolutionState::Partial`, and missing or
+incompatible to `ResolutionState::Unresolved` when these outcomes are later
+adapted into graph diagnostics.
+
+Partial-workspace absence is not inferred from a missing metadata directory, an
+empty candidate set, or an unresolved name. The private resolver input must carry
+an explicit complete-versus-partial workspace scope supplied by the caller. A
+successful full-project EDT scan supplies complete scope; a future partial
+importer must supply partial scope. Incompatible or ambiguous in-graph evidence
+takes precedence over workspace completeness. All four failures are typed, emit
+no target or edge, and retain the raw source spelling and Query identity.
+
+### Resolver ownership and dependency direction
+
+The implementation belongs in a private `oneagent-edt` module, expected as
+`adapters/edt/src/query_source_resolution.rs`, invoked from the existing EDT BSL
+graph integration after top-level metadata collection and accepted query parsing.
+This is the narrowest production layer that can consume both
+`oneagent_bsl::QuerySourceOccurrence` and `oneagent_graph::SemanticGraph`:
+
+- `oneagent-bsl` depends only on `oneagent-common` and cannot depend on
+  `oneagent-graph` without reversing its source-analysis boundary;
+- `oneagent-graph` is source-independent and must not depend on query-language
+  types;
+- `oneagent-edt` already depends on both crates and owns graph construction phase
+  ordering and workspace-scope evidence;
+- `oneagent-analysis` also depends on both crates, but it does not own the EDT
+  production graph-construction phase or workspace completeness.
+
+The first implementation uses the private query-source index described above.
+It must not extend `SemanticResolutionIndex`, change the public Query API, or add
+a graph resolution API while the case and partial-workspace policy remains
+query-source-specific. A later task may generalize the index only after another
+producer proves the same normalization and collision contract. The resolver-only
+task returns typed outcomes and emits no `Reads`, `References`, `DependsOn`, or
+other graph edge.
+
+## Accepted source-location boundary
 
 | Alternative | Repository evidence | Decision |
 |---|---|---|
 | One-based line and column in raw query text | Existing BSL models expose a one-based BSL declaration line, but no query-text column or multiline mapping | Insufficient |
 | Unicode scalar offsets | Rust code uses character iteration while decoding one-line BSL literals, but exposes no offset contract | Insufficient |
-| UTF-8 byte offsets | Rust `str` slicing uses UTF-8 byte indices internally, but no public source-position model relies on them | Insufficient |
+| UTF-8 byte offsets | The current prerequisite parser defines `QueryTextRange` as zero-based, half-open UTF-8 byte offsets and tests slicing of English and Russian raw input | Accepted by the prerequisite implementation |
 
-No source-location contract can be recommended safely now. The parser task is
-blocked on choosing a raw-query coordinate system, including whether ranges are
-half-open, whether line/column values are zero- or one-based, how CRLF is
-normalized, and how a raw-query range maps back to a BSL literal. The choice must
-be tested with ASCII and Russian fixtures before typed diagnostics or provenance
-depend on it. The existing one-based `BslQuery::line()` may identify the wrapper
-declaration, but it cannot substitute for a query-text location.
+The accepted parser coordinate system is the original raw query `str` with a
+zero-based inclusive `start_byte` and exclusive `end_byte`. The parser does not
+normalize input, so original whitespace and CRLF bytes contribute to offsets and
+token boundaries remain UTF-8 boundaries. This range does not imply a mapping
+back to a BSL literal. The existing one-based `BslQuery::line()` identifies the
+wrapper declaration only; multiline BSL-to-query mapping remains deferred.
 
 ## Diagnostic taxonomy
 
@@ -200,9 +390,10 @@ these names to become Rust API variants:
 | Query source classification | Virtual table source | A register virtual table/invocation is parsed |
 | Query source classification | Temporary table | A temporary-table declaration or source is parsed |
 | Query source classification | External or parameter data source | A parameter or caller-supplied table occupies a source position |
-| Metadata resolution | Missing metadata target | An allowlisted parsed source has no compatible graph target |
+| Metadata resolution | Missing metadata target | An allowlisted parsed source has no candidate of any kind in an explicitly complete workspace scope |
 | Metadata resolution | Ambiguous metadata target | More than one compatible target remains, with deterministically ordered candidates |
-| Metadata resolution | Incompatible metadata target kind | A name resolves only at a disallowed kind |
+| Metadata resolution | Incompatible metadata target kind | One or more names match the lookup key, but all occur at disallowed kinds |
+| Metadata resolution | Partial-workspace absence | No in-graph candidate exists and the caller explicitly marks the workspace scope partial |
 
 Every query-language diagnostic must identify the existing Query identity and a
 query-text location once that blocked contract is decided. Diagnostics and
@@ -248,34 +439,75 @@ virtual tables, and malformed syntax are explicit evidence gaps.
 | Temporary-table detection | Confirmed only in multiline BSL source | None | Temporary declaration/source | Temporary table | Raw fixture |
 | Virtual-table detection | Confirmed only in multiline BSL source | None | Virtual table source | Virtual table source | Raw fixture and invocation grammar |
 | Malformed static input | Accepted by ADR-0021, not source-evidenced | None | No complete parsed program | Malformed query syntax | Evidence-backed malformed corpus and recovery policy |
-| Deterministic query-text location | Unknown | All future diagnostic fixtures | Location attached to token/source/diagnostic | Applicable typed diagnostic | Coordinate and BSL mapping contract |
-| Case normalization | Unknown | None | Preserved raw spelling plus normalized lookup key | Resolver diagnostic only after parsing | Case and Unicode normalization policy |
+| Deterministic query-text location | Accepted by current prerequisite parser | Existing English and Russian fixtures plus inline parser tests | Zero-based half-open UTF-8 byte range in unchanged raw query text | Applicable typed diagnostic | BSL multiline source mapping remains deferred |
+| Case normalization | Accepted architecture decision | Existing accepted English and Russian queries can be paired with case-variant graph names in resolver tests | Preserved raw spelling plus locale-independent Rust Unicode lowercase key; no NFC/NFKC | Typed resolver outcome only after complete parsing | Resolver tests must cover English, Russian, expansion, no-normalization, and collisions |
+| Exact-kind resolution | Accepted by ADR-0021 and existing graph precedent | Future private resolver tests | Catalog or Information Register exact-kind candidate partition | Missing, ambiguous, incompatible, or partial-workspace | Resolver-only implementation |
 
 ## Readiness conclusion and next task boundary
 
-The repository contains enough evidence to begin a deliberately narrow parser
-for the two ADR-0021 target categories in English: Catalog and Information
-Register. It also contains test-backed Russian `ВЫБРАТЬ`, `ИЗ`, and `Справочник`
-forms and a non-query metadata-type mapping for `РегистрСведений`. It does not
-contain sufficient evidence to claim a complete bilingual
-namespace contract, general expression grammar, case policy, multiline BSL
-decoding, or deterministic query-text locations.
+The current prerequisite parser establishes complete-source proof, raw spelling,
+typed source categories, and deterministic raw-query byte locations for its
+minimum fixture-backed forms. This investigation now supplies the previously
+missing local-name normalization, collision, failure-precedence, workspace-scope,
+and layer-placement decisions. The next ordered task may implement the private
+resolver in `oneagent-edt` without changing the parser, graph resolution API,
+validator, graph emission, or Coverage status.
 
-The next parser implementation task may introduce a private typed lexer/parser
-and fixture-driven tests for the four raw fixtures in this corpus, provided it:
+That resolver-only task must:
 
-- consumes the complete input;
-- keeps the source-location decision explicit and resolves it before asserting
-  typed diagnostic locations;
-- returns a complete-source proof only for the exact accepted fixture shapes;
-- returns the typed parameter-source diagnostic for the unsupported fixture;
-- rejects all unimplemented tails and structures instead of extracting a partial
-  source;
-- does not add metadata resolution, graph validation, or `Reads` emission.
+- accept only a completely parsed source set and resolve only after all top-level
+  metadata nodes exist;
+- derive keys with exact `str::to_lowercase()` behavior and retain raw spelling;
+- test English and Russian case differences, multi-scalar expansion, absence of
+  NFC/NFKC normalization, compatible collisions, cross-kind partitioning, and
+  deterministic candidate order;
+- implement typed missing, ambiguous, incompatible, and explicitly signaled
+  partial-workspace outcomes with the precedence defined above;
+- resolve only exact Catalog and Information Register metadata kinds;
+- produce no placeholder, `Unknown`, external, or lower-confidence target;
+- emit no `Reads`, `Writes`, `References`, or query-derived `DependsOn` edge.
 
-Before expanding that slice, add repository-backed raw fixtures for comments,
-strings, scalar parameters, statement boundaries, joins, unions, nesting,
-temporary tables, virtual tables, malformed input, case variants, and the Russian
-Information Register form. ADR-0021 remains the authority for graph semantics;
-this investigation does not infer `Reads`, `Writes`, `References`, or
-`DependsOn` behavior beyond it.
+## Rejected alternatives
+
+1. Exact case-sensitive local-name lookup is rejected because ADR-0021 requires
+   deterministic case normalization and it would make ordinary English and
+   Russian case variants unresolved.
+2. ASCII-only lowercase is rejected because it cannot normalize the accepted
+   Russian identifier corpus.
+3. Locale-sensitive casing is rejected because results would depend on runtime
+   environment rather than graph input.
+4. NFC, NFKC, or another Unicode normalization pass is rejected for the first
+   slice because neither repository nor inspected platform evidence authorizes
+   canonical or compatibility equivalence.
+5. Full Unicode case folding or a new ICU dependency is rejected because it is
+   not repository precedent, is not required for the accepted English/Russian
+   slice, and has no proven 1C equivalence.
+6. Treating every cross-kind normalized collision as ambiguous is rejected
+   because the parsed namespace fixes the exact metadata kind and the existing
+   graph resolver filters by exact kind before cardinality.
+7. Extending `SemanticResolutionIndex` now is rejected because its public exact
+   `EntityName` semantics are shared and source-independent.
+8. Placing the resolver in `oneagent-bsl`, `oneagent-graph`, or
+   `oneagent-analysis` is rejected because none owns both the EDT production
+   phase and explicit workspace-scope evidence without weakening dependency
+   boundaries.
+
+## Unknown and deferred behavior
+
+The exact Unicode comparison algorithm used internally by the 1C platform for
+query metadata identifiers remains **Unknown**. Therefore `str::to_lowercase()`
+is an accepted deterministic OneAgent contract, not a claim of full platform
+equivalence. Turkish/Azeri casing, Greek sigma equivalence, German sharp-s, and
+other behavior outside the accepted English and Russian slice remain deferred;
+the specified key still handles them deterministically and may conservatively
+produce a missing or collision outcome.
+
+Case-insensitive namespace variants, the Russian Information Register query
+form, general expression grammar, multiline BSL decoding and mapping, comments,
+strings, batches, joins, unions, nesting, temporary tables, virtual tables, and
+malformed-input recovery retain their existing evidence status. They do not
+block the resolver because it runs only for the parser's completely accepted
+source set. ADR-0021 remains authoritative for graph semantics; no architecture
+decision here changes `Reads`, `Writes`, `References`, or `DependsOn` behavior,
+Coverage status, or production output. Both `semantic_edge.reads` and
+`semantic_edge.writes` remain `DeclaredOnly`.

@@ -1683,13 +1683,12 @@ edge.
 ### Edge, validation, query, and impact inventory
 
 The EDT pipeline emits `Contains`, `References`, `Calls`, the first
-`DependsOn` slice, and the first `Extends` slice, each with provenance.
-`Reads`, `Writes`, `Grants`, and `Includes` are declared but not emitted by
-EDT.
+`DependsOn`, `Extends`, and `Grants` slices, each with provenance. `Reads`,
+`Writes`, and `Includes` are declared but not emitted by EDT.
 
 Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
-the first `DependsOn` slice, and the first `Extends` slice. The remaining edge
-kinds are currently accepted by broad schema rules and are therefore
+the first `DependsOn`, `Extends`, and `Grants` slices. The remaining edge kinds
+are currently accepted by broad schema rules and are therefore
 structurally visible but not semantically constrained. Validation also checks
 missing endpoints, ownership, forbidden self-loops, ownership cycles, node and
 edge provenance, and build/report counter consistency.
@@ -1741,12 +1740,20 @@ stored as a deterministic component-preserving `EntityId` independent from
 display name, provenance, parser state, insertion order, or random UUIDs. A direct
 `Role --Grants--> Metadata(...)` edge is not accepted because it would collapse
 multiple rights on the same protected resource into one graph edge identity.
-The graph validator accepts only the precise future endpoint shape
+The graph validator accepts only the precise endpoint shape
 `NodeKind::Role --Grants--> NodeKind::AccessRight`; broad metadata targets and
-unrelated source kinds are rejected. EDT production support is not implemented
-yet; the future implementation must parse real EDT role-right sources, resolve
-protected resources, attach provenance to emitted access-right nodes and grant
-edges, and then transition `semantic_edge.grants` through the Coverage Registry.
+unrelated source kinds are rejected. EDT production support reads the adjacent
+`Rights.rights` for every discovered Role, accepts only explicit `true`
+declarations, and supports `Configuration`, `Catalog`, `Document`,
+`InformationRegister`, and `AccumulationRegister` protected-resource prefixes.
+Resolved declarations emit one shared scoped access-right node per
+resource/right pair, one Grants edge per role/access-right pair, and a companion
+`AccessRight --References--> Metadata(...)` edge. Provenance is aggregated,
+sorted, and deduplicated before graph insertion. False values, default flags,
+and RLS expressions do not alter identity or add other authorization facts;
+missing, ambiguous, incompatible, and unsupported targets create no grant or
+placeholder node. `semantic_node.access_right` and `semantic_edge.grants` are
+Supported by the EDT Coverage Registry.
 `Grants` is distinct from `Includes` membership, `Contains` ownership,
 `Reads`/`Writes` data access, `DependsOn` dependencies, effective runtime
 authorization, denied access, inherited access, user assignment, access groups,
@@ -1798,16 +1805,16 @@ The remaining thematic Semantic Coverage Completion backlog is:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
 2. **High — declared semantic edges.** Add producer-specific tasks for Reads,
-   Writes, Grants, and Includes rather than a generic edge task. The
+   Writes, and Includes rather than a generic edge task. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
    query-derived dependency origins remain separate tasks. The first `Extends`
    slice is implemented according to `docs/adr/0018-extends-semantics.md`.
-   `Grants` now has an accepted architecture contract in
-   `docs/adr/0019-grants-semantics.md`, and the scoped `AccessRight` target
-   node plus precise validator endpoint rule exist in the graph domain. Production
-   parser support, graph emission, provenance from real role-right sources, and
-   Coverage transition remain pending. Acceptance for each remaining edge:
+   The first `Grants` slice is implemented according to
+   `docs/adr/0019-grants-semantics.md`: real EDT role-right sources produce
+   scoped `AccessRight` nodes, precise canonical edges, resolved provenance,
+   deterministic duplicate aggregation, and Coverage evidence. Acceptance for
+   each remaining edge:
    extraction source, endpoint rule, provenance, Query semantics, Impact policy
    decision, and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed
@@ -1869,9 +1876,9 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy and membership remain
 separate future capabilities.
 
-The EDT registry now reports 4 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 3 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 4 High gaps, and 45 Medium gaps. Other ownership and
+0 Critical gaps, 3 High gaps, and 45 Medium gaps. Other ownership and
 declared-edge capabilities remain independent typed gaps and are not reclassified
 by these focused coverage changes. Sprint 3 Integration Review remains blocked
 while High gaps remain.

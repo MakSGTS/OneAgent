@@ -133,22 +133,23 @@ Ordered follow-up work:
 15. **High — completed:** implement the first production slice for declared `DependsOn` semantic edges using the accepted contract in `docs/adr/0017-depends-on-semantics.md`.
 16. **High:** preserve tabular-section ownership for nested attributes.
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
-18. **High — next typed:** implement producer-specific support for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; the architecture and scoped `AccessRight` target node contract are defined, but production parser support, graph emission, and Coverage transition remain pending.
+18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
 19. **Medium:** define and preserve complete typed metadata payloads.
 20. **Medium:** add successful fixtures for every mapped metadata reference target kind.
 21. **Medium:** decide and implement reference-request provenance ownership.
 22. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 4 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 3 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 4 High gaps, and 45 Medium gaps.
+gaps, 3 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
 The first production slice for `semantic_edge.depends_on` is implemented and
 the capability is supported. The first production slice for
-`semantic_edge.extends` is implemented and supported. The next typed backlog
-capability is `semantic_edge.grants`.
+`semantic_edge.extends` and `semantic_edge.grants` are implemented and
+supported. The next typed declared-edge backlog capability is
+`semantic_edge.includes`.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

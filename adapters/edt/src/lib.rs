@@ -299,8 +299,8 @@ mod tests {
 }
 
 use oneagent_graph::{
-    Confidence, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionError,
-    ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphBuildDiff,
+    AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, NodeKind, ProducerId, Provenance,
+    ResolutionError, ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphBuildDiff,
     SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
     SemanticReferenceOutcome, SemanticReferenceStatistics, StandardAttribute,
     StandardAttributeKind,
@@ -464,6 +464,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut configuration_modules = Vec::new();
         let mut metadata_references = BTreeSet::new();
         let mut metadata_extensions = BTreeSet::new();
+        let mut role_rights = Vec::new();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
 
@@ -522,6 +523,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             configuration_modules.extend(collected.modules);
             metadata_references.extend(collected.references);
             metadata_extensions.extend(collected.extensions);
+            role_rights.extend(collected.role_rights);
         }
 
         resolve_metadata_extensions(&mut graph, &metadata_extensions)?;
@@ -529,6 +531,13 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         resolve_metadata_references(
             &mut graph,
             &metadata_references,
+            &mut diagnostics,
+            &mut reference_statistics,
+        )?;
+
+        emit_role_grants(
+            &mut graph,
+            &role_rights,
             &mut diagnostics,
             &mut reference_statistics,
         )?;
@@ -579,6 +588,7 @@ struct CollectedTopLevelMetadata {
     modules: Vec<EdtModuleDescriptor>,
     references: BTreeSet<PendingMetadataReference>,
     extensions: BTreeSet<PendingMetadataExtension>,
+    role_rights: Vec<EdtRoleRightsDescriptor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -633,6 +643,7 @@ fn collect_top_level_metadata(
         collected.modules.extend(object.modules);
         collected.references.extend(object.references);
         collected.extensions.extend(object.extensions);
+        collected.role_rights.extend(object.role_rights);
     }
 
     Ok(collected)
@@ -664,6 +675,11 @@ fn collect_metadata_object(
 
     if descriptor.kind() == MetadataKind::Role {
         insert_role_node(graph, &descriptor)?;
+        collected.role_rights.push(
+            FileSystemEdtRoleRightsReader
+                .read(object_directory, descriptor.id())
+                .map_err(EdtGraphError::RoleRights)?,
+        );
     }
 
     if descriptor.kind() == MetadataKind::Subsystem {
@@ -962,6 +978,232 @@ fn resolve_metadata_extensions(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ResolvedRoleGrantObservation {
+    rights_path: PathBuf,
+    role_id: EntityId,
+    role_node_id: EntityId,
+    declared_resource_name: EntityName,
+    resource_id: EntityId,
+    right_id: EntityId,
+}
+
+fn emit_role_grants(
+    graph: &mut SemanticGraph,
+    role_rights: &[EdtRoleRightsDescriptor],
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<(), EdtGraphError> {
+    let observations =
+        resolve_role_grant_observations(graph, role_rights, diagnostics, reference_statistics)?;
+
+    insert_resolved_role_grants(graph, &observations)
+}
+
+fn resolve_role_grant_observations(
+    graph: &SemanticGraph,
+    role_rights: &[EdtRoleRightsDescriptor],
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<BTreeSet<ResolvedRoleGrantObservation>, EdtGraphError> {
+    let index = graph.resolution_index();
+    let mut observations = BTreeSet::new();
+
+    for descriptor in role_rights {
+        let role_node_id = role_node_id_from_metadata_id(descriptor.role_id())?;
+
+        for object in descriptor.objects() {
+            let Some((target_kind, target_name)) =
+                protected_resource_reference(object.resource_name())?
+            else {
+                continue;
+            };
+
+            for right in object.rights().iter().filter(|right| right.value()) {
+                let right_id = EntityId::new(right.name().as_str())
+                    .map_err(|_| EdtGraphError::InvalidIdentifier)?;
+                let reference_context = SemanticReference::Name(object.resource_name().clone());
+
+                match index.resolve_name_of_kind(&target_name, NodeKind::Metadata(target_kind)) {
+                    Ok(target) => {
+                        reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+                        observations.insert(ResolvedRoleGrantObservation {
+                            rights_path: descriptor.source_path().to_path_buf(),
+                            role_id: descriptor.role_id().clone(),
+                            role_node_id: role_node_id.clone(),
+                            declared_resource_name: object.resource_name().clone(),
+                            resource_id: target.id().clone(),
+                            right_id,
+                        });
+                    }
+                    Err(error) => {
+                        reference_statistics.record(
+                            SemanticReferenceOutcome::from_resolution_error(&error),
+                            true,
+                        );
+                        diagnostics.insert(role_grant_diagnostic(
+                            descriptor,
+                            &role_node_id,
+                            object.resource_name(),
+                            &right_id,
+                            target_kind,
+                            error,
+                            reference_context,
+                        )?);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(observations)
+}
+
+fn insert_resolved_role_grants(
+    graph: &mut SemanticGraph,
+    observations: &BTreeSet<ResolvedRoleGrantObservation>,
+) -> Result<(), EdtGraphError> {
+    let mut access_right_sources = BTreeMap::<(EntityId, EntityId), BTreeSet<EntityId>>::new();
+    let mut reference_sources = BTreeMap::<(EntityId, EntityId), BTreeSet<EntityId>>::new();
+    let mut grant_sources = BTreeMap::<(EntityId, EntityId, EntityId), BTreeSet<EntityId>>::new();
+
+    for observation in observations {
+        let access_key = (
+            observation.resource_id.clone(),
+            observation.right_id.clone(),
+        );
+        access_right_sources
+            .entry(access_key.clone())
+            .or_default()
+            .insert(role_grant_source_id(observation, "fact=access_right")?);
+        reference_sources
+            .entry(access_key.clone())
+            .or_default()
+            .insert(role_grant_source_id(observation, "edge=references")?);
+        grant_sources
+            .entry((observation.role_node_id.clone(), access_key.0, access_key.1))
+            .or_default()
+            .insert(role_grant_source_id(observation, "edge=grants")?);
+    }
+
+    let mut access_right_ids = BTreeMap::<(EntityId, EntityId), EntityId>::new();
+
+    for ((resource_id, right_id), sources) in access_right_sources {
+        let provenance = sources.into_iter().map(resolved_provenance).collect();
+        let access_right = AccessRight::new(resource_id.clone(), right_id.clone(), provenance)
+            .map_err(|_| EdtGraphError::InvalidIdentifier)?;
+        let access_right_id = access_right.id().clone();
+        graph.insert_access_right(&access_right);
+        access_right_ids.insert((resource_id, right_id), access_right_id);
+    }
+
+    for ((resource_id, right_id), sources) in reference_sources {
+        let access_right_id = access_right_ids
+            .get(&(resource_id.clone(), right_id))
+            .expect("aggregated access right must exist")
+            .clone();
+        let provenance = sources.into_iter().map(resolved_provenance).collect();
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                access_right_id,
+                resource_id,
+                EdgeKind::References,
+                provenance,
+            ))
+            .map_err(EdtGraphError::Graph)?;
+    }
+
+    for ((role_node_id, resource_id, right_id), sources) in grant_sources {
+        let access_right_id = access_right_ids
+            .get(&(resource_id, right_id))
+            .expect("aggregated access right must exist")
+            .clone();
+        let provenance = sources.into_iter().map(resolved_provenance).collect();
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                role_node_id,
+                access_right_id,
+                EdgeKind::Grants,
+                provenance,
+            ))
+            .map_err(EdtGraphError::Graph)?;
+    }
+
+    Ok(())
+}
+
+fn protected_resource_reference(
+    qualified_name: &EntityName,
+) -> Result<Option<(MetadataKind, EntityName)>, EdtGraphError> {
+    let Some((prefix, local_name)) = qualified_name.as_str().split_once('.') else {
+        return Ok(None);
+    };
+    if local_name.is_empty() {
+        return Ok(None);
+    }
+
+    let kind = match prefix {
+        "Configuration" => MetadataKind::Configuration,
+        "Catalog" => MetadataKind::Catalog,
+        "Document" => MetadataKind::Document,
+        "InformationRegister" => MetadataKind::InformationRegister,
+        "AccumulationRegister" => MetadataKind::AccumulationRegister,
+        _ => return Ok(None),
+    };
+    let name = EntityName::new(local_name).map_err(|_| EdtGraphError::InvalidName)?;
+
+    Ok(Some((kind, name)))
+}
+
+fn role_grant_diagnostic(
+    descriptor: &EdtRoleRightsDescriptor,
+    role_node_id: &EntityId,
+    declared_resource_name: &EntityName,
+    right_id: &EntityId,
+    target_kind: MetadataKind,
+    error: ResolutionError,
+    reference_context: SemanticReference,
+) -> Result<SemanticDiagnostic, EdtGraphError> {
+    let source = role_grant_source_id(
+        &ResolvedRoleGrantObservation {
+            rights_path: descriptor.source_path().to_path_buf(),
+            role_id: descriptor.role_id().clone(),
+            role_node_id: role_node_id.clone(),
+            declared_resource_name: declared_resource_name.clone(),
+            resource_id: EntityId::new("unresolved")
+                .map_err(|_| EdtGraphError::InvalidIdentifier)?,
+            right_id: right_id.clone(),
+        },
+        "fact=grant_resolution",
+    )?;
+
+    Ok(
+        SemanticDiagnostic::from_resolution_error_with_reference(error, Some(reference_context))
+            .with_source_node(role_node_id.clone())
+            .with_expected_kinds(vec![NodeKind::Metadata(target_kind)])
+            .with_provenance(vec![resolved_provenance(source)]),
+    )
+}
+
+fn role_grant_source_id(
+    observation: &ResolvedRoleGrantObservation,
+    fact_kind: &str,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        &observation.rights_path,
+        format!(
+            "role_metadata={};role={};protected_resource={};resolved_resource={};right={};value=true;accepted_explicit_allow=true;{}",
+            observation.role_id.as_str(),
+            observation.role_node_id.as_str(),
+            observation.declared_resource_name.as_str(),
+            observation.resource_id.as_str(),
+            observation.right_id.as_str(),
+            fact_kind,
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
 fn metadata_reference_diagnostic(
     reference: &PendingMetadataReference,
     error: ResolutionError,
@@ -1064,7 +1306,11 @@ fn metadata_object_source_id(
 }
 
 fn role_node_id(descriptor: &EdtMetadataObjectDescriptor) -> Result<EntityId, EdtGraphError> {
-    EntityId::new(format!("{}:role", descriptor.id().as_str()))
+    role_node_id_from_metadata_id(descriptor.id())
+}
+
+fn role_node_id_from_metadata_id(metadata_id: &EntityId) -> Result<EntityId, EdtGraphError> {
+    EntityId::new(format!("{}:role", metadata_id.as_str()))
         .map_err(|_| EdtGraphError::InvalidIdentifier)
 }
 
@@ -1270,6 +1516,9 @@ pub enum EdtGraphError {
     /// A metadata object module could not be read.
     Module(EdtModuleError),
 
+    /// A role-right artifact could not be read.
+    RoleRights(EdtRoleRightsError),
+
     /// Semantic graph validation failed.
     Graph(oneagent_graph::GraphError),
 
@@ -1314,6 +1563,9 @@ impl Display for EdtGraphError {
             Self::Module(error) => {
                 write!(formatter, "failed to read EDT module: {error}")
             }
+            Self::RoleRights(error) => {
+                write!(formatter, "failed to read EDT role rights: {error}")
+            }
             Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
             Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
             Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
@@ -1334,6 +1586,7 @@ impl std::error::Error for EdtGraphError {
             Self::MetadataObject(error) => Some(error),
             Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
+            Self::RoleRights(error) => Some(error),
             Self::Graph(error) => Some(error),
             Self::InvalidIdentifier | Self::InvalidName => None,
             Self::Bsl(error) => Some(error),
@@ -1454,6 +1707,14 @@ mod graph_tests {
     uuid="eeeeeeee-1111-2222-3333-444444444444">
     <name>SalesManager</name>
 </mdclass:Role>
+"#;
+
+    const DEFAULT_ROLE_RIGHTS_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Rights xmlns="http://v8.1c.ru/8.2/roles">
+    <setForNewObjects>false</setForNewObjects>
+    <setForAttributesByDefault>false</setForAttributesByDefault>
+    <independentRightsOfChildObjects>false</independentRightsOfChildObjects>
+</Rights>
 "#;
 
     const SUBSYSTEM_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1717,6 +1978,8 @@ mod graph_tests {
         fs::create_dir_all(&directory).expect("role directory must be created");
         fs::write(directory.join("SalesManager.mdo"), ROLE_XML)
             .expect("role descriptor must be created");
+        fs::write(directory.join("Rights.rights"), DEFAULT_ROLE_RIGHTS_XML)
+            .expect("role rights must be created");
     }
 
     fn add_read_only_role_descriptor(root: &tempfile::TempDir) {
@@ -1733,6 +1996,8 @@ mod graph_tests {
 "#,
         )
         .expect("second role descriptor must be created");
+        fs::write(directory.join("Rights.rights"), DEFAULT_ROLE_RIGHTS_XML)
+            .expect("second role rights must be created");
     }
 
     fn add_subsystem_descriptor(root: &tempfile::TempDir) {

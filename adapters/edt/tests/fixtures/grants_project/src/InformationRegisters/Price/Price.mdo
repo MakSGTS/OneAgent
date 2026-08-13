@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:InformationRegister xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:core="http://g5.1c.ru/v8/dt/mcore" xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="ba19cd8b-8fcf-4a25-840a-2bc19425c1a3">
+  <producedTypes>
+    <selectionType typeId="8a6eba16-9e98-4145-8677-9069d7927ad4" valueTypeId="7fadb612-949f-4edf-90b2-2f4b01ec874a"/>
+    <listType typeId="94368991-3af1-4fb0-8396-52accd062d57" valueTypeId="521fdf85-c99f-4c6a-9625-8b8ab69927e2"/>
+    <managerType typeId="6c45eb66-3072-4617-8c86-7bad1a6149f6" valueTypeId="e49a3b04-4c1c-4abb-a456-f4010a7bf090"/>
+    <recordSetType typeId="352a9de3-05f9-4768-b20f-bde3dd3356d9" valueTypeId="c11399a5-803f-4fdf-9a39-a511ef44a4c5"/>
+    <recordKeyType typeId="93474963-4a2e-4758-b0c0-c4b1be2e5e91" valueTypeId="31dc0154-4176-4bb4-9e23-9bb02e498ff0"/>
+    <recordType typeId="d004324d-0aae-4762-b51a-717825e155a0" valueTypeId="a4b6b829-519a-4a10-a44d-beaadf573691"/>
+    <recordManagerType typeId="fefd92f2-d00f-4072-9267-204bf81aede8" valueTypeId="87ee0091-88af-4bb0-8efa-e194f0a4e28c"/>
+  </producedTypes>
+  <name>Price</name>
+  <synonym>
+    <key>ru</key>
+    <value>Price</value>
+  </synonym>
+  <useStandardCommands>true</useStandardCommands>
+  <editType>InDialog</editType>
+  <dataLockControlMode>Managed</dataLockControlMode>
+  <dimensions uuid="270c3010-ff13-40a0-80df-fb05a758ec0a">
+    <name>Product</name>
+    <synonym>
+      <key>ru</key>
+      <value>Product</value>
+    </synonym>
+    <type>
+      <types>CatalogRef.Product</types>
+    </type>
+    <minValue xsi:type="core:UndefinedValue"/>
+    <maxValue xsi:type="core:UndefinedValue"/>
+    <fullTextSearch>Use</fullTextSearch>
+    <dataHistory>Use</dataHistory>
+    <fillValue xsi:type="core:UndefinedValue"/>
+    <mainFilter>true</mainFilter>
+  </dimensions>
+</mdclass:InformationRegister>

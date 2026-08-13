@@ -1,34 +1,40 @@
 # Implementation Task Template
 
-Continue OneAgent.
+## Purpose
 
-Read and follow:
-- docs/codex/core/repository-safety.md
-- docs/codex/core/repository-investigation.md
-- docs/codex/core/change-contract.md
-- docs/codex/core/validation.md
-- docs/codex/core/final-report.md
-- docs/codex/workflows/implementation.md
+Use this template for implementing one accepted capability or behavior.
 
-Authoritative documents:
-- <Accepted ADR or architecture document>
+## Recommended profile
 
-Task:
-<Implement one coherent accepted capability or behavior.>
+- `docs/codex/profiles/implementation.md`
 
-Scope:
-<Allowed implementation scope.>
+## Required task-specific sections
 
-Do not:
-<Implementation exclusions and unrelated areas.>
+- Authoritative ADRs / architecture documents
+- Task
+- Scope
+- Included
+- Excluded
+- Acceptance Criteria
+- Task-specific Validation
+- Suggested commit message
 
-Acceptance criteria:
-<Behavior, tests, docs, and coverage criteria.>
+## Additional acceptance requirements
 
-Validation additions:
-<Task-specific focused tests or commands.>
+- Preserve accepted architecture.
+- Implement one coherent slice.
+- Add focused tests and regression tests appropriate to the change.
+- Update documentation only when behavior or public contracts change.
 
-Suggested commit message:
-<Conventional Commit message>
+## Additional report sections
 
-The final user-visible report must be written in Russian.
+- Implementation summary
+- Production path
+- Tests added or changed
+- Coverage transition, if any
+
+## Additional validation
+
+- Run focused checks first.
+- Run affected package checks when public APIs or crate behavior change.
+- Run full workspace validation when required by `docs/codex/core/validation.md`.

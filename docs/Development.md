@@ -12,5 +12,5 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
 Codex task workflow rules live in `docs/codex/README.md`. Task prompts should
-select the required framework modules explicitly instead of duplicating the
-full permanent rule set.
+select the smallest sufficient Profile and Template instead of duplicating Core
+rules, Workflow rules, validation requirements, and final-report requirements.

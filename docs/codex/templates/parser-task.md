@@ -1,35 +1,40 @@
 # Parser Task Template
 
-Continue OneAgent.
+## Purpose
 
-Read and follow:
-- docs/codex/core/repository-safety.md
-- docs/codex/core/repository-investigation.md
-- docs/codex/core/change-contract.md
-- docs/codex/core/validation.md
-- docs/codex/core/final-report.md
-- docs/codex/workflows/implementation.md
-- docs/codex/workflows/parser.md
+Use this template for parsing one real serialized source artifact family.
 
-Authoritative documents:
-- <Accepted parser or source-format contract>
+## Recommended profile
 
-Task:
-<Implement parsing for one source artifact family.>
+- `docs/codex/profiles/parser-implementation.md`
 
-Scope:
-<Source files, fields, fixtures, and parsed domain model.>
+## Required task-specific sections
 
-Do not:
-<Graph emission, unrelated parsing, and speculative fields.>
+- Authoritative ADRs / source-format documents
+- Task
+- Source evidence / fixtures
+- Scope
+- Included
+- Excluded
+- Acceptance Criteria
+- Task-specific Validation
+- Suggested commit message
 
-Acceptance criteria:
-<Real-source evidence, positive tests, negative tests, determinism, and docs.>
+## Additional acceptance requirements
 
-Validation additions:
-<Parser-focused tests or commands.>
+- Use real source evidence; do not invent formats.
+- Define supported fields and explicitly unknown fields.
+- Define malformed, missing, optional, duplicate, and ordering behavior.
+- Keep parsing separate from graph emission unless explicitly included.
 
-Suggested commit message:
-<Conventional Commit message>
+## Additional report sections
 
-The final user-visible report must be written in Russian.
+- Source evidence
+- Parsed contract
+- Unsupported or unknown source cases
+- Fixture coverage
+
+## Additional validation
+
+- Run parser-focused tests and fixture checks.
+- Run affected crate checks when parser behavior changes.

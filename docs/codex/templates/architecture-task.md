@@ -1,34 +1,41 @@
 # Architecture Task Template
 
-Continue OneAgent.
+## Purpose
 
-Read and follow:
-- docs/codex/core/repository-safety.md
-- docs/codex/core/repository-investigation.md
-- docs/codex/core/change-contract.md
-- docs/codex/core/validation.md
-- docs/codex/core/final-report.md
-- docs/codex/workflows/architecture.md
+Use this template for architecture-only tasks: ADRs, source contracts, semantic
+contracts, endpoint matrices, roadmap architecture, and implementation
+prerequisites.
 
-Authoritative documents:
-- <ADR or architecture document>
+## Recommended profile
 
-Task:
-<Define the architecture outcome to produce.>
+- `docs/codex/profiles/architecture.md`
 
-Scope:
-<What this architecture task may decide or document.>
+## Required task-specific sections
 
-Do not:
-<Architecture and implementation exclusions.>
+- Authoritative ADRs / architecture documents
+- Task
+- Scope
+- Included
+- Excluded
+- Acceptance Criteria
+- Task-specific Validation
+- Suggested commit message
 
-Acceptance criteria:
-<Observable documentation and decision criteria.>
+## Additional acceptance requirements
 
-Validation additions:
-<Task-specific checks beyond the framework.>
+- State the canonical decision or contract.
+- Record rejected alternatives when alternatives were evaluated.
+- Define deferred scope and implementation prerequisites.
+- Identify Coverage Registry impact when relevant.
 
-Suggested commit message:
-<Conventional Commit message>
+## Additional report sections
 
-The final user-visible report must be written in Russian.
+- Architecture decision
+- Rejected alternatives
+- Deferred scope
+- Implementation prerequisites
+
+## Additional validation
+
+- Validate Markdown consistency and internal references.
+- Do not run production tests unless implementation files are changed.

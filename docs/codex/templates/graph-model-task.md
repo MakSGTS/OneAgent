@@ -1,35 +1,41 @@
 # Graph Model Task Template
 
-Continue OneAgent.
+## Purpose
 
-Read and follow:
-- docs/codex/core/repository-safety.md
-- docs/codex/core/repository-investigation.md
-- docs/codex/core/change-contract.md
-- docs/codex/core/validation.md
-- docs/codex/core/final-report.md
-- docs/codex/workflows/implementation.md
-- docs/codex/workflows/graph-model.md
+Use this template for graph model changes involving `NodeKind`, `EdgeKind`, graph
+identity, endpoint compatibility, validation infrastructure, query/filter
+behavior, serialization, or public graph APIs.
 
-Authoritative documents:
-- <Accepted graph model ADR or architecture document>
+## Recommended profile
 
-Task:
-<Implement or revise one coherent graph model concept.>
+- `docs/codex/profiles/graph-implementation.md`
 
-Scope:
-<Node kinds, edge kinds, identity, validation, query, report, or serialization scope.>
+## Required task-specific sections
 
-Do not:
-<Parser, producer, or unrelated graph exclusions.>
+- Authoritative ADRs / architecture documents
+- Task
+- Scope
+- Included
+- Excluded
+- Acceptance Criteria
+- Task-specific Validation
+- Suggested commit message
 
-Acceptance criteria:
-<Identity, validation, query, regression, docs, and coverage criteria.>
+## Additional acceptance requirements
 
-Validation additions:
-<Graph-focused tests or commands.>
+- Define deterministic identity and collision behavior.
+- Preserve existing identifiers unless the task explicitly changes them.
+- Define validation, query, equality, ordering, and serialization impact.
+- Do not change parser or producer behavior unless explicitly included.
 
-Suggested commit message:
-<Conventional Commit message>
+## Additional report sections
 
-The final user-visible report must be written in Russian.
+- Graph model impact
+- Public API impact
+- Validation/query behavior
+- Serialization impact, if any
+
+## Additional validation
+
+- Run graph crate tests and any affected producer tests.
+- Run full workspace validation when graph public APIs change.

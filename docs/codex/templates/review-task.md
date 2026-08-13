@@ -1,33 +1,37 @@
 # Review Task Template
 
-Continue OneAgent.
+## Purpose
 
-Read and follow:
-- docs/codex/core/repository-safety.md
-- docs/codex/core/repository-investigation.md
-- docs/codex/core/validation.md
-- docs/codex/core/final-report.md
-- docs/codex/workflows/review.md
+Use this template for review-only tasks over an implementation, document set,
+diff, architecture decision, or completed capability.
 
-Authoritative documents:
-- <Accepted ADR or architecture document>
+## Recommended profile
 
-Task:
-<Review one completed implementation, document set, or diff.>
+- `docs/codex/profiles/review.md`
 
-Scope:
-<Files, behavior, or capability to review.>
+## Required task-specific sections
 
-Do not:
-<Changes, redesign, or unrelated review areas.>
+- Authoritative ADRs / architecture documents
+- Review target
+- Scope
+- Excluded
+- Review Criteria
+- Task-specific Validation, if any
 
-Acceptance criteria:
-<Expected review evidence and report contents.>
+## Additional acceptance requirements
 
-Validation additions:
-<Optional review-specific commands.>
+- Do not modify files unless explicitly requested.
+- Prioritize confirmed findings by severity.
+- Separate defects, missing evidence, and open questions.
+- Compare behavior against accepted architecture and task scope.
 
-Suggested commit message:
-<Only if the user later requests changes and a commit>
+## Additional report sections
 
-The final user-visible report must be written in Russian.
+- Findings
+- Missing evidence
+- Risk assessment
+- Recommended next action
+
+## Additional validation
+
+- Run only review-appropriate checks unless the user asks to fix issues.

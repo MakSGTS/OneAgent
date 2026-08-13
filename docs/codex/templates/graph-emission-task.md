@@ -1,35 +1,45 @@
 # Graph Emission Task Template
 
-Continue OneAgent.
+## Purpose
 
-Read and follow:
-- docs/codex/core/repository-safety.md
-- docs/codex/core/repository-investigation.md
-- docs/codex/core/change-contract.md
-- docs/codex/core/validation.md
-- docs/codex/core/final-report.md
-- docs/codex/workflows/implementation.md
-- docs/codex/workflows/graph-emission.md
+Use this template for production emission of semantic nodes or edges, including
+resolution, provenance, deduplication, diagnostics, validation, and Coverage
+evidence.
 
-Authoritative documents:
-- <Accepted graph emission ADR or architecture document>
+## Recommended profile
 
-Task:
-<Emit one coherent semantic node or edge production slice.>
+- `docs/codex/profiles/graph-implementation.md`
 
-Scope:
-<Source facts, resolution, graph emission, provenance, validation, and tests.>
+## Required task-specific sections
 
-Do not:
-<Parser/model/coverage changes outside accepted scope.>
+- Authoritative ADRs / architecture documents
+- Task
+- Source contract / production source
+- Scope
+- Included
+- Excluded
+- Acceptance Criteria
+- Task-specific Validation
+- Suggested commit message
 
-Acceptance criteria:
-<Emission, identity, provenance, deduplication, repeated-build, negative, regression, and coverage criteria.>
+## Additional acceptance requirements
 
-Validation additions:
-<Focused graph-emission tests or commands.>
+- Reuse existing canonical resolution and identity conventions.
+- Attach provenance using the accepted provenance model.
+- Preserve repeated-build determinism.
+- Add positive, negative, regression, and repeated-build tests as applicable.
+- Transition Coverage Registry only after complete evidence exists.
 
-Suggested commit message:
-<Conventional Commit message>
+## Additional report sections
 
-The final user-visible report must be written in Russian.
+- Production path
+- Identity strategy
+- Provenance strategy
+- Coverage transition
+- Remaining gaps
+
+## Additional validation
+
+- Run focused producer and graph tests first.
+- Run affected crate checks and full workspace validation when production Rust
+  behavior changes.

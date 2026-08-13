@@ -1783,10 +1783,22 @@ authorization, and `DependsOn` dependency. It remains excluded from dependency
 and Impact traversal; generic outgoing, incoming, and all-edge queries are
 sufficient for direct membership navigation.
 
+Direct source extraction is implemented by `EdtSubsystemContentReader`. The
+reader accepts an already discovered top-level Subsystem metadata descriptor,
+requires the `mdclass:Subsystem` root, and returns the Subsystem metadata ID,
+descriptor path, and only direct child `<content>` observations. Raw tokens are
+XML-decoded without trimming, case conversion, aliasing, localization, or
+qualified-name splitting; empty observations are preserved, while equivalent
+observations are sorted and deduplicated deterministically. Missing direct
+content is valid, descendant content and nested Subsystems are ignored, and
+malformed or wrong-kind descriptors return typed reader errors.
+
 This accepted contract partially supersedes only ADR-0017's older classification
 of Subsystem membership as `Contains`; ADR-0017's `DependsOn` decisions remain
 unchanged, as do ADR-0007 configuration ownership and ADR-0019 access-grant
-semantics. EDT production parsing and emission are not implemented yet, so
+semantics. Source extraction is implemented, but target normalization,
+kind-and-name resolution, pending graph observations, production Includes
+emission, validator tightening, and Coverage transition remain pending, so
 `semantic_edge.includes` remains `DeclaredOnly`.
 
 ### Provenance inventory
@@ -1844,10 +1856,11 @@ The remaining thematic Semantic Coverage Completion backlog is:
    `docs/adr/0019-grants-semantics.md`: real EDT role-right sources produce
    scoped `AccessRight` nodes, precise canonical edges, resolved provenance,
    deterministic duplicate aggregation, and Coverage evidence. Includes is
-   defined by `docs/adr/0020-includes-semantics.md`; its next task is the
-   top-level direct Subsystem `<content>` production slice. Architecture
-   acceptance does not change its `DeclaredOnly` status. Acceptance for each
-   remaining edge:
+   defined by `docs/adr/0020-includes-semantics.md`; direct top-level Subsystem
+   `<content>` source extraction is implemented, while normalization,
+   resolution, production graph emission, validator tightening, and Coverage
+   transition remain pending. Architecture acceptance and parser-only progress
+   do not change its `DeclaredOnly` status. Acceptance for each remaining edge:
    extraction source, endpoint rule, provenance, Query semantics, Impact policy
    decision, and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed

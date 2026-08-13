@@ -134,7 +134,7 @@ Ordered follow-up work:
 16. **High:** preserve tabular-section ownership for nested attributes.
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
 18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
-19. **High — architecture accepted, implementation pending:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the exact next prerequisite is direct field extraction plus exact kind-and-name resolution to existing metadata nodes before graph emission or Coverage transition.
+19. **High — parser prerequisite completed, graph implementation pending:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; direct field extraction now preserves deterministic unique raw observations, while qualified-token normalization, exact kind-and-name resolution, graph emission, validator tightening, and Coverage transition remain pending.
 20. **Medium:** define and preserve complete typed metadata payloads.
 21. **Medium:** add successful fixtures for every mapped metadata reference target kind.
 22. **Medium:** decide and implement reference-request provenance ownership.
@@ -150,11 +150,11 @@ The first production slice for `semantic_edge.depends_on` is implemented and
 the capability is supported. The first production slice for
 `semantic_edge.extends` and `semantic_edge.grants` are implemented and
 supported. The semantic contract for `semantic_edge.includes` is accepted in
-`docs/adr/0020-includes-semantics.md`, but production extraction, resolution,
-validation, and emission remain pending, so the capability remains
-`DeclaredOnly`. The next implementation prerequisite is direct `<content>`
-extraction from already discovered top-level Subsystem descriptors and exact
-qualified-name resolution to existing metadata nodes.
+`docs/adr/0020-includes-semantics.md`. Direct `<content>` extraction from
+already discovered top-level Subsystem descriptors is implemented, but
+qualified-token normalization, exact kind-and-name resolution, production
+Includes emission, validator tightening, and Coverage transition remain
+pending, so the capability remains `DeclaredOnly`.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

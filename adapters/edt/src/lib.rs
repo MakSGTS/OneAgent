@@ -6,6 +6,7 @@ mod metadata_object;
 mod metadata_structure;
 mod module_reader;
 mod role_rights;
+mod subsystem_content;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
@@ -25,6 +26,11 @@ pub use module_reader::{
 pub use role_rights::{
     EdtRoleObjectRights, EdtRoleRightDeclaration, EdtRoleRightsDescriptor, EdtRoleRightsError,
     EdtRoleRightsReader, EdtRoleRowRestriction, FileSystemEdtRoleRightsReader,
+};
+
+pub use subsystem_content::{
+    EdtSubsystemContentDescriptor, EdtSubsystemContentError, EdtSubsystemContentReader,
+    FileSystemEdtSubsystemContentReader,
 };
 
 pub use bsl_graph::{

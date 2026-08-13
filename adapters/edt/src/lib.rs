@@ -5,6 +5,9 @@ mod coverage;
 mod metadata_object;
 mod metadata_structure;
 mod module_reader;
+// The resolver is a production prerequisite for the later Reads emission task.
+#[allow(dead_code)]
+mod query_source_resolution;
 mod role_rights;
 mod subsystem_content;
 

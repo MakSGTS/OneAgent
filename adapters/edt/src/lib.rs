@@ -5,6 +5,7 @@ mod coverage;
 mod metadata_object;
 mod metadata_structure;
 mod module_reader;
+mod role_rights;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
@@ -19,6 +20,11 @@ pub use metadata_structure::{
 
 pub use module_reader::{
     EdtModuleDescriptor, EdtModuleError, EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader,
+};
+
+pub use role_rights::{
+    EdtRoleObjectRights, EdtRoleRightDeclaration, EdtRoleRightsDescriptor, EdtRoleRightsError,
+    EdtRoleRightsReader, EdtRoleRowRestriction, FileSystemEdtRoleRightsReader,
 };
 
 pub use bsl_graph::{

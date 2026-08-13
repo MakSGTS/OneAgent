@@ -1683,12 +1683,12 @@ edge.
 ### Edge, validation, query, and impact inventory
 
 The EDT pipeline emits `Contains`, `References`, `Calls`, the first
-`DependsOn`, `Extends`, and `Grants` slices, each with provenance. `Reads`,
-`Writes`, and `Includes` are declared but not emitted by EDT.
+`DependsOn`, `Extends`, `Grants`, and `Includes` slices, each with provenance.
+`Reads` and `Writes` are declared but not emitted by EDT.
 
 Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
-the first `DependsOn`, `Extends`, and `Grants` slices. The remaining edge kinds
-are currently accepted by broad schema rules and are therefore
+the first `DependsOn`, `Extends`, `Grants`, and `Includes` slices. The remaining
+edge kinds are currently accepted by broad schema rules and are therefore
 structurally visible but not semantically constrained. Validation also checks
 missing endpoints, ownership, forbidden self-loops, ownership cycles, node and
 edge provenance, and build/report counter consistency.
@@ -1771,13 +1771,15 @@ access-control subject. Direction is from the declaring Subsystem to the direct
 member, standard edge identity is `(source, target, EdgeKind::Includes)`, and
 transitive closure is not stored.
 
-The accepted first production slice is restricted to top-level Subsystem
+The implemented first production slice is restricted to top-level Subsystem
 discovery and direct `<content>` targets whose serialized prefix maps to a
 top-level metadata kind already discovered and emitted by the EDT adapter.
 Metadata Subsystem targets, nested Subsystem discovery, hierarchy fields,
 unsupported metadata families, and derived membership remain deferred. The
-future producer must resolve by exact metadata kind and local name, must not
-invent placeholder targets, and must attach deterministic resolved provenance.
+producer resolves by exact metadata kind and local name, does not invent
+placeholder targets, and attaches deterministic resolved provenance containing
+the project-relative descriptor path, raw token, parsed target, resolved node,
+and a stable subsystem-content resolution producer stage.
 Includes is distinct from `Contains` ownership, `References` linkage, `Grants`
 authorization, and `DependsOn` dependency. It remains excluded from dependency
 and Impact traversal; generic outgoing, incoming, and all-edge queries are
@@ -1793,13 +1795,24 @@ observations are sorted and deduplicated deterministically. Missing direct
 content is valid, descendant content and nested Subsystems are ignored, and
 malformed or wrong-kind descriptors return typed reader errors.
 
+The production builder collects deterministic pending observations while
+processing discovered top-level Subsystems, normalizes only the explicit
+ADR-0020 prefix allowlist, and resolves after all top-level metadata and flat
+Subsystem nodes exist. Malformed qualified tokens and unsupported or deferred
+prefixes use distinct typed diagnostics and reference-statistics outcomes;
+missing, ambiguous, and incompatible targets reuse the exact graph resolution
+categories. Resolved source-target pairs are aggregated through canonical edge
+identity, and equivalent provenance is sorted and deduplicated before insertion.
+The graph validator accepts only
+`NodeKind::Subsystem --Includes--> NodeKind::Metadata(allowlisted kind)`.
+
 This accepted contract partially supersedes only ADR-0017's older classification
 of Subsystem membership as `Contains`; ADR-0017's `DependsOn` decisions remain
 unchanged, as do ADR-0007 configuration ownership and ADR-0019 access-grant
-semantics. Source extraction is implemented, but target normalization,
-kind-and-name resolution, pending graph observations, production Includes
-emission, validator tightening, and Coverage transition remain pending, so
-`semantic_edge.includes` remains `DeclaredOnly`.
+semantics. The production path, exact resolution, canonical emission, validator,
+generic query evidence, dependency and Impact exclusions, negative outcomes,
+determinism evidence, and real-format integration fixture are implemented, so
+`semantic_edge.includes` is `Supported` by the EDT Coverage Registry.
 
 ### Provenance inventory
 
@@ -1846,8 +1859,8 @@ The remaining thematic Semantic Coverage Completion backlog is:
    so tabular-section attributes are owned by the tabular section. Acceptance:
    correct `Contains` direction, owner validation, provenance, and positive and
    invalid-owner tests.
-2. **High — declared semantic edges.** Add producer-specific tasks for Reads,
-   Writes, and Includes rather than a generic edge task. The
+2. **High — declared semantic edges.** Add producer-specific tasks for Reads and
+   Writes rather than a generic edge task. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
    query-derived dependency origins remain separate tasks. The first `Extends`
@@ -1855,12 +1868,12 @@ The remaining thematic Semantic Coverage Completion backlog is:
    The first `Grants` slice is implemented according to
    `docs/adr/0019-grants-semantics.md`: real EDT role-right sources produce
    scoped `AccessRight` nodes, precise canonical edges, resolved provenance,
-   deterministic duplicate aggregation, and Coverage evidence. Includes is
-   defined by `docs/adr/0020-includes-semantics.md`; direct top-level Subsystem
-   `<content>` source extraction is implemented, while normalization,
-   resolution, production graph emission, validator tightening, and Coverage
-   transition remain pending. Architecture acceptance and parser-only progress
-   do not change its `DeclaredOnly` status. Acceptance for each remaining edge:
+   deterministic duplicate aggregation, and Coverage evidence. The first
+   Includes slice is implemented according to
+   `docs/adr/0020-includes-semantics.md`: direct top-level Subsystem `<content>`
+   declarations produce exact, provenance-backed membership edges with typed
+   negative outcomes and precise endpoint validation. Acceptance for each
+   remaining edge:
    extraction source, endpoint rule, provenance, Query semantics, Impact policy
    decision, and tests.
 3. **Medium — metadata payload completion.** Define and preserve the typed
@@ -1919,12 +1932,12 @@ The former `semantic_node.subsystem` High gap is closed. The EDT pipeline now
 emits flat `NodeKind::Subsystem` nodes for every discovered subsystem metadata
 object while preserving the existing `NodeKind::Metadata(MetadataKind::Subsystem)`
 object node. Repeated builds preserve subsystem node identity, provenance, and
-graph/build-result diff stability. Subsystem hierarchy and membership remain
-separate future capabilities.
+graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
+discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 3 High gaps and retains 44 Medium gaps. Combined
+The EDT registry now reports 2 High gaps and retains 44 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 3 High gaps, and 45 Medium gaps. Other ownership and
+0 Critical gaps, 2 High gaps, and 45 Medium gaps. Other ownership and
 declared-edge capabilities remain independent typed gaps and are not reclassified
 by these focused coverage changes. Sprint 3 Integration Review remains blocked
 while High gaps remain.

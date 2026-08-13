@@ -413,6 +413,44 @@ fn edge_filter_limits_dependency_propagation() {
 }
 
 #[test]
+fn includes_is_excluded_from_impact_dependency_propagation() {
+    let mut previous = SemanticGraph::new();
+    let mut current = SemanticGraph::new();
+
+    for (graph, member_name) in [(&mut previous, "Member"), (&mut current, "MemberRenamed")] {
+        add_node(
+            graph,
+            "metadata.subsystem.sales:subsystem",
+            "Sales",
+            NodeKind::Subsystem,
+        );
+        add_node(
+            graph,
+            "metadata.document.member",
+            member_name,
+            NodeKind::Unknown,
+        );
+        add_edge(
+            graph,
+            "metadata.subsystem.sales:subsystem",
+            "metadata.document.member",
+            EdgeKind::Includes,
+        );
+    }
+
+    let diff = previous.diff(&current);
+    let result =
+        SemanticImpactAnalyzer::analyze(&previous, &current, &diff, &SemanticImpactOptions::new(2))
+            .expect("impact must succeed");
+
+    assert_eq!(result.affected_nodes().len(), 1);
+    assert_eq!(
+        result.affected_nodes()[0].node_id().as_str(),
+        "metadata.document.member"
+    );
+}
+
+#[test]
 fn ownership_propagation_is_explicitly_configured() {
     let previous = dependency_graph("Callee", false);
     let mut current = dependency_graph("Callee", false);

@@ -400,6 +400,10 @@ impl DiagnosticSummary {
 /// Outcome of one processed semantic reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SemanticReferenceOutcome {
+    /// The raw reference does not have the required source format.
+    MalformedFormat,
+    /// The raw reference uses a source prefix unsupported by the producer.
+    UnsupportedPrefix,
     /// The reference was resolved to one target.
     Resolved,
     /// The reference did not resolve to any target.
@@ -435,6 +439,8 @@ impl SemanticReferenceOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SemanticReferenceStatistics {
     total: usize,
+    malformed_format: usize,
+    unsupported_prefix: usize,
     resolved: usize,
     unresolved: usize,
     ambiguous: usize,
@@ -457,6 +463,8 @@ impl SemanticReferenceStatistics {
     pub const fn new() -> Self {
         Self {
             total: 0,
+            malformed_format: 0,
+            unsupported_prefix: 0,
             resolved: 0,
             unresolved: 0,
             ambiguous: 0,
@@ -476,6 +484,8 @@ impl SemanticReferenceStatistics {
     pub fn record(&mut self, outcome: SemanticReferenceOutcome, has_provenance: bool) {
         self.total += 1;
         match outcome {
+            SemanticReferenceOutcome::MalformedFormat => self.malformed_format += 1,
+            SemanticReferenceOutcome::UnsupportedPrefix => self.unsupported_prefix += 1,
             SemanticReferenceOutcome::Resolved => self.resolved += 1,
             SemanticReferenceOutcome::Unresolved => self.unresolved += 1,
             SemanticReferenceOutcome::Ambiguous => self.ambiguous += 1,
@@ -501,6 +511,18 @@ impl SemanticReferenceStatistics {
     #[must_use]
     pub const fn total(self) -> usize {
         self.total
+    }
+
+    /// Returns the number of raw references with malformed source format.
+    #[must_use]
+    pub const fn malformed_format(self) -> usize {
+        self.malformed_format
+    }
+
+    /// Returns the number of raw references using unsupported source prefixes.
+    #[must_use]
+    pub const fn unsupported_prefix(self) -> usize {
+        self.unsupported_prefix
     }
 
     /// Returns the number of successfully resolved references.
@@ -554,7 +576,9 @@ impl SemanticReferenceStatistics {
     /// Returns the sum of all recorded resolution outcomes.
     #[must_use]
     pub const fn outcome_total(self) -> usize {
-        self.resolved
+        self.malformed_format
+            + self.unsupported_prefix
+            + self.resolved
             + self.unresolved
             + self.ambiguous
             + self.incompatible_target_kind
@@ -886,6 +910,8 @@ mod tests {
     #[test]
     fn reference_statistics_track_all_outcomes_and_rate() {
         let mut statistics = SemanticReferenceStatistics::new();
+        statistics.record(SemanticReferenceOutcome::MalformedFormat, true);
+        statistics.record(SemanticReferenceOutcome::UnsupportedPrefix, true);
         statistics.record(SemanticReferenceOutcome::Resolved, true);
         statistics.record(SemanticReferenceOutcome::Unresolved, true);
         statistics.record(SemanticReferenceOutcome::Ambiguous, false);
@@ -893,7 +919,9 @@ mod tests {
         statistics.record(SemanticReferenceOutcome::InvalidOwnerReference, false);
         statistics.record(SemanticReferenceOutcome::DuplicateEdgeRequest, true);
 
-        assert_eq!(statistics.total(), 6);
+        assert_eq!(statistics.total(), 8);
+        assert_eq!(statistics.malformed_format(), 1);
+        assert_eq!(statistics.unsupported_prefix(), 1);
         assert_eq!(statistics.resolved(), 1);
         assert_eq!(statistics.unresolved(), 1);
         assert_eq!(statistics.ambiguous(), 1);
@@ -901,10 +929,10 @@ mod tests {
         assert_eq!(statistics.invalid_owner_reference(), 1);
         assert_eq!(statistics.duplicate_edge_request(), 1);
         assert_eq!(statistics.outcome_total(), statistics.total());
-        assert_eq!(statistics.with_provenance(), 4);
+        assert_eq!(statistics.with_provenance(), 6);
         assert_eq!(statistics.without_provenance(), 2);
         assert_eq!(statistics.resolution_rate().numerator(), 1);
-        assert_eq!(statistics.resolution_rate().denominator(), 6);
+        assert_eq!(statistics.resolution_rate().denominator(), 8);
         assert!(statistics.resolution_rate().is_defined());
     }
 

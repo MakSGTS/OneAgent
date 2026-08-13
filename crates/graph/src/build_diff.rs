@@ -575,6 +575,10 @@ impl<K> CountChange<K> {
 pub enum ResolutionStatisticsMetric {
     /// Total processed references.
     TotalReferences,
+    /// Raw references with malformed source format.
+    MalformedFormatReferences,
+    /// Raw references using unsupported source prefixes.
+    UnsupportedPrefixReferences,
     /// Successfully resolved references.
     ResolvedReferences,
     /// Unresolved references.
@@ -611,6 +615,16 @@ impl ResolutionStatisticsDiff {
                 ResolutionStatisticsMetric::TotalReferences,
                 previous.total(),
                 current.total(),
+            ),
+            (
+                ResolutionStatisticsMetric::MalformedFormatReferences,
+                previous.malformed_format(),
+                current.malformed_format(),
+            ),
+            (
+                ResolutionStatisticsMetric::UnsupportedPrefixReferences,
+                previous.unsupported_prefix(),
+                current.unsupported_prefix(),
             ),
             (
                 ResolutionStatisticsMetric::ResolvedReferences,
@@ -1210,6 +1224,8 @@ mod tests {
             SemanticReferenceOutcome::Resolved,
         ]);
         let current_statistics = statistics(&[
+            SemanticReferenceOutcome::MalformedFormat,
+            SemanticReferenceOutcome::UnsupportedPrefix,
             SemanticReferenceOutcome::Resolved,
             SemanticReferenceOutcome::Unresolved,
             SemanticReferenceOutcome::Ambiguous,
@@ -1238,6 +1254,20 @@ mod tests {
             CountChangeDirection::Decreased
         );
         assert_eq!(resolved.delta().magnitude(), 1);
+        for metric in [
+            crate::ResolutionStatisticsMetric::MalformedFormatReferences,
+            crate::ResolutionStatisticsMetric::UnsupportedPrefixReferences,
+        ] {
+            let change = diff
+                .resolution()
+                .changed_metrics()
+                .iter()
+                .find(|change| *change.key() == metric)
+                .expect("new typed outcome count must change");
+            assert_eq!(change.previous(), 0);
+            assert_eq!(change.current(), 1);
+            assert_eq!(change.delta().direction(), CountChangeDirection::Increased);
+        }
     }
 
     #[test]

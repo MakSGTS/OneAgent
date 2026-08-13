@@ -1,9 +1,9 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
-    ResolutionState, SemanticGraph, SemanticGraphReport, SemanticGraphValidationCode,
-    SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity, SemanticGraphValidator,
-    SemanticReferenceOutcome, SemanticReferenceStatistics,
+    ResolutionState, SemanticGraph, SemanticGraphReport, SemanticGraphSchema,
+    SemanticGraphValidationCode, SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity,
+    SemanticGraphValidator, SemanticReferenceOutcome, SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 
@@ -591,6 +591,91 @@ fn grants_rejects_unrelated_endpoint_pairs() {
             .count(),
         7
     );
+}
+
+#[test]
+fn includes_accepts_only_subsystem_to_first_slice_metadata_kinds() {
+    let schema = SemanticGraphSchema;
+    let allowed = [
+        MetadataKind::Catalog,
+        MetadataKind::Document,
+        MetadataKind::Enumeration,
+        MetadataKind::CommonModule,
+        MetadataKind::Report,
+        MetadataKind::DataProcessor,
+        MetadataKind::InformationRegister,
+        MetadataKind::AccumulationRegister,
+        MetadataKind::AccountingRegister,
+        MetadataKind::CalculationRegister,
+        MetadataKind::BusinessProcess,
+        MetadataKind::Task,
+        MetadataKind::Role,
+        MetadataKind::Command,
+        MetadataKind::CommonForm,
+        MetadataKind::Template,
+        MetadataKind::HttpService,
+        MetadataKind::WebService,
+        MetadataKind::XdtoPackage,
+    ];
+
+    for metadata_kind in allowed {
+        assert!(schema.allows(
+            NodeKind::Subsystem,
+            EdgeKind::Includes,
+            NodeKind::Metadata(metadata_kind),
+        ));
+    }
+
+    for target_kind in [
+        NodeKind::Metadata(MetadataKind::Configuration),
+        NodeKind::Metadata(MetadataKind::Subsystem),
+        NodeKind::Metadata(MetadataKind::Form),
+        NodeKind::Metadata(MetadataKind::Unknown),
+        NodeKind::Role,
+        NodeKind::Subsystem,
+        NodeKind::Unknown,
+    ] {
+        assert!(!schema.allows(NodeKind::Subsystem, EdgeKind::Includes, target_kind));
+    }
+    for source_kind in [
+        NodeKind::Metadata(MetadataKind::Subsystem),
+        NodeKind::Role,
+        NodeKind::Unknown,
+    ] {
+        assert!(!schema.allows(
+            source_kind,
+            EdgeKind::Includes,
+            NodeKind::Metadata(MetadataKind::Document),
+        ));
+    }
+}
+
+#[test]
+fn includes_self_loop_is_rejected_defensively() {
+    let subsystem_id = id("metadata.subsystem.sales:subsystem");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(GraphNode::new_with_provenance(
+        subsystem_id.clone(),
+        name("Sales"),
+        NodeKind::Subsystem,
+        vec![provenance("metadata.subsystem.sales")],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            subsystem_id.clone(),
+            subsystem_id,
+            EdgeKind::Includes,
+            vec![provenance("metadata.subsystem.sales#content")],
+        ))
+        .expect("storage allows self-loop");
+
+    let result = graph.validate();
+
+    assert!(!result.is_valid());
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::ForbiddenSelfLoop
+            && issue.edge_kind() == Some(EdgeKind::Includes)
+    }));
 }
 
 #[test]

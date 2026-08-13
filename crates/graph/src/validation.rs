@@ -435,7 +435,8 @@ impl SemanticGraphSchema {
             EdgeKind::DependsOn => allows_depends_on(source_kind, target_kind),
             EdgeKind::Extends => allows_extends(source_kind, target_kind),
             EdgeKind::Grants => allows_grants(source_kind, target_kind),
-            EdgeKind::Reads | EdgeKind::Writes | EdgeKind::Includes => true,
+            EdgeKind::Includes => allows_includes(source_kind, target_kind),
+            EdgeKind::Reads | EdgeKind::Writes => true,
         }
     }
 }
@@ -927,10 +928,38 @@ const fn allows_grants(source_kind: NodeKind, target_kind: NodeKind) -> bool {
     )
 }
 
+const fn allows_includes(source_kind: NodeKind, target_kind: NodeKind) -> bool {
+    matches!(source_kind, NodeKind::Subsystem)
+        && matches!(
+            target_kind,
+            NodeKind::Metadata(
+                MetadataKind::Catalog
+                    | MetadataKind::Document
+                    | MetadataKind::Enumeration
+                    | MetadataKind::CommonModule
+                    | MetadataKind::Report
+                    | MetadataKind::DataProcessor
+                    | MetadataKind::InformationRegister
+                    | MetadataKind::AccumulationRegister
+                    | MetadataKind::AccountingRegister
+                    | MetadataKind::CalculationRegister
+                    | MetadataKind::BusinessProcess
+                    | MetadataKind::Task
+                    | MetadataKind::Role
+                    | MetadataKind::Command
+                    | MetadataKind::CommonForm
+                    | MetadataKind::Template
+                    | MetadataKind::HttpService
+                    | MetadataKind::WebService
+                    | MetadataKind::XdtoPackage
+            )
+        )
+}
+
 const fn forbids_self_loop(kind: EdgeKind) -> bool {
     matches!(
         kind,
-        EdgeKind::Contains | EdgeKind::Calls | EdgeKind::Extends
+        EdgeKind::Contains | EdgeKind::Calls | EdgeKind::Includes | EdgeKind::Extends
     )
 }
 

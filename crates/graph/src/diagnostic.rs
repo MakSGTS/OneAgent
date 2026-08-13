@@ -11,6 +11,10 @@ use crate::{
 /// Stable machine-readable semantic diagnostic code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SemanticDiagnosticCode {
+    /// A raw semantic reference does not have the required source format.
+    ReferenceMalformedFormat,
+    /// A raw semantic reference uses a source prefix unsupported by the producer.
+    ReferenceUnsupportedPrefix,
     /// A semantic reference has no resolved target.
     ReferenceUnresolved,
     /// A semantic reference has multiple possible targets.
@@ -28,6 +32,8 @@ impl SemanticDiagnosticCode {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ReferenceMalformedFormat => "semantic.reference.malformed_format",
+            Self::ReferenceUnsupportedPrefix => "semantic.reference.unsupported_prefix",
             Self::ReferenceUnresolved => "semantic.reference.unresolved",
             Self::ReferenceAmbiguous => "semantic.reference.ambiguous",
             Self::ReferenceIncompatibleKind => "semantic.reference.incompatible_kind",
@@ -53,6 +59,10 @@ pub enum SemanticDiagnosticSeverity {
 /// Typed semantic diagnostic category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SemanticDiagnosticKind {
+    /// A raw semantic reference does not have the required source format.
+    MalformedReferenceFormat,
+    /// A raw semantic reference uses a source prefix unsupported by the producer.
+    UnsupportedReferencePrefix,
     /// A semantic reference has no resolved target.
     UnresolvedTarget,
     /// A semantic reference has multiple possible targets.
@@ -344,6 +354,14 @@ mod tests {
 
     #[test]
     fn diagnostic_code_is_stable() {
+        assert_eq!(
+            SemanticDiagnosticCode::ReferenceMalformedFormat.as_str(),
+            "semantic.reference.malformed_format"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::ReferenceUnsupportedPrefix.as_str(),
+            "semantic.reference.unsupported_prefix"
+        );
         assert_eq!(
             SemanticDiagnosticCode::ReferenceUnresolved.as_str(),
             "semantic.reference.unresolved"

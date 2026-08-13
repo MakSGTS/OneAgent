@@ -134,27 +134,27 @@ Ordered follow-up work:
 16. **High:** preserve tabular-section ownership for nested attributes.
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
 18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
-19. **High — parser prerequisite completed, graph implementation pending:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; direct field extraction now preserves deterministic unique raw observations, while qualified-token normalization, exact kind-and-name resolution, graph emission, validator tightening, and Coverage transition remain pending.
+19. **High — completed:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the production builder now normalizes the explicit allowlist, resolves exact metadata targets, emits deterministic provenance-backed Includes edges, reports typed negative outcomes, enforces the precise validator matrix, and verifies generic queries and Impact exclusion.
 20. **Medium:** define and preserve complete typed metadata payloads.
 21. **Medium:** add successful fixtures for every mapped metadata reference target kind.
 22. **Medium:** decide and implement reference-request provenance ownership.
 23. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
-The EDT Coverage Registry currently contains 3 High gaps and 44 Medium gaps.
+The EDT Coverage Registry currently contains 2 High gaps and 44 Medium gaps.
 Combined with the Graph Domain registry, Semantic Coverage contains 0 Critical
-gaps, 3 High gaps, and 45 Medium gaps.
+gaps, 2 High gaps, and 45 Medium gaps.
 Sprint 3 Integration Review remains blocked until all High gaps are resolved or
 correctly classified as not applicable.
 
 The first production slice for `semantic_edge.depends_on` is implemented and
 the capability is supported. The first production slice for
 `semantic_edge.extends` and `semantic_edge.grants` are implemented and
-supported. The semantic contract for `semantic_edge.includes` is accepted in
-`docs/adr/0020-includes-semantics.md`. Direct `<content>` extraction from
-already discovered top-level Subsystem descriptors is implemented, but
-qualified-token normalization, exact kind-and-name resolution, production
-Includes emission, validator tightening, and Coverage transition remain
-pending, so the capability remains `DeclaredOnly`.
+supported. The first production slice for `semantic_edge.includes` is also
+implemented and supported: direct `<content>` observations from discovered
+top-level Subsystem descriptors are normalized through the explicit allowlist,
+resolved by exact metadata kind and name, emitted as canonical Includes edges,
+and covered by precise validation, typed failures, deterministic provenance,
+generic query, and Impact-exclusion evidence.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

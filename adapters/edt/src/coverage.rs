@@ -341,6 +341,7 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             | EdgeKind::Calls
             | EdgeKind::References
             | EdgeKind::Grants
+            | EdgeKind::Includes
             | EdgeKind::Extends
             | EdgeKind::DependsOn
     );
@@ -386,6 +387,9 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             }
             EdgeKind::Grants => {
                 "oneagent_edt::grants::grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance"
+            }
+            EdgeKind::Includes => {
+                "oneagent_edt::includes::includes_real_edt_fixture_emits_direct_metadata_members_with_stable_provenance"
             }
             _ => "oneagent_edt::graph_tests",
         })
@@ -893,7 +897,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
     }
 
@@ -943,7 +947,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
     }
 
@@ -1004,7 +1008,7 @@ mod tests {
             .expect("a High gap must remain");
         assert_eq!(
             next_high_gap.capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
     }
 
@@ -1054,16 +1058,15 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes),
             SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads),
             SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Writes),
         ]);
 
         assert_eq!(actual_high_ids, expected_high_ids);
-        assert_eq!(high_gaps.len(), 3);
+        assert_eq!(high_gaps.len(), 2);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first
@@ -1127,7 +1130,6 @@ mod tests {
             .map(|gap| gap.capability_id())
             .collect::<BTreeSet<_>>();
         let expected_high_ids = BTreeSet::from([
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes),
             SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads),
             SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Writes),
         ]);
@@ -1143,10 +1145,10 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != flat_unknown.id())
         );
-        assert_eq!(high_gaps.len(), 3);
+        assert_eq!(high_gaps.len(), 2);
         assert_eq!(
             high_gaps[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first
@@ -1214,7 +1216,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::High),
-            Some(&3)
+            Some(&2)
         );
         assert_eq!(
             first
@@ -1225,7 +1227,7 @@ mod tests {
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
     }
 
@@ -1272,7 +1274,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::High),
-            Some(&3)
+            Some(&2)
         );
         assert_eq!(
             first
@@ -1283,7 +1285,50 @@ mod tests {
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
+        );
+    }
+
+    #[test]
+    fn includes_edge_production_closes_the_selected_high_gap() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let includes = first
+            .capability(SemanticCoverageCapabilityId::SemanticEdge(
+                EdgeKind::Includes,
+            ))
+            .expect("Includes edge coverage must exist");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert_eq!(includes.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(includes.evidence(), includes.required_evidence());
+        assert!(includes.missing_evidence().is_empty());
+        assert!(includes.representative_tests().iter().any(|test| {
+            test == "oneagent_edt::includes::includes_real_edt_fixture_emits_direct_metadata_members_with_stable_provenance"
+        }));
+        assert!(
+            first
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != includes.id())
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .iter()
+                .map(|gap| gap.capability_id())
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([
+                SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads),
+                SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Writes),
+            ])
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                .len(),
+            44
         );
     }
 
@@ -1375,11 +1420,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            3
+            2
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first
@@ -1429,11 +1474,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            3
+            2
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first
@@ -1481,11 +1526,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            3
+            2
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first
@@ -1552,11 +1597,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            3
+            2
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first
@@ -1593,7 +1638,7 @@ mod tests {
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
     }
 
@@ -1638,11 +1683,11 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::High)
                 .len(),
-            3
+            2
         );
         assert_eq!(
             first.gaps_by_priority(SemanticCoverageGapPriority::High)[0].capability_id(),
-            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes)
+            SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Reads)
         );
         assert_eq!(
             first

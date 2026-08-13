@@ -316,6 +316,9 @@ fn dependencies_and_usages_follow_dependency_edge_policy() {
     assert!(!SemanticGraphQuery::is_dependency_edge_kind(
         EdgeKind::Contains
     ));
+    assert!(!SemanticGraphQuery::is_dependency_edge_kind(
+        EdgeKind::Includes
+    ));
     assert_eq!(dependencies.len(), 4);
     assert_eq!(call_dependencies.len(), 2);
     assert!(ownership_dependencies.is_empty());

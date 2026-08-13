@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="b72ed007-5756-4a1d-b27d-e74aef13083f">
+  <name>TestObject</name>
+  <content>Document.EmptyDocument</content>
+  <content>Role.Document_EmptyDocument_Posting</content>
+  <content>Document.TestDocument</content>
+</mdclass:Subsystem>

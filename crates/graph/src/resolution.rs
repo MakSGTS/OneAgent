@@ -9,6 +9,8 @@ use crate::{EdgeKind, GraphNode, NodeId, NodeKind, SemanticGraph};
 /// Semantic reference resolved against a graph.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SemanticReference {
+    /// Raw source token that has not been normalized into a semantic name.
+    Raw(String),
     /// Reference by stable node identifier.
     NodeId(String),
     /// Reference by exact semantic name.

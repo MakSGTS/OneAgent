@@ -306,7 +306,8 @@ mod tests {
 
 use oneagent_graph::{
     AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, NodeKind, ProducerId, Provenance,
-    ResolutionError, ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphBuildDiff,
+    ResolutionError, ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode,
+    SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphBuildDiff,
     SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
     SemanticReferenceOutcome, SemanticReferenceStatistics, StandardAttribute,
     StandardAttributeKind,
@@ -315,6 +316,7 @@ use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
 
 const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
+const EDT_SUBSYSTEM_CONTENT_RESOLUTION_PRODUCER: &str = "oneagent.edt.subsystem-content-resolution";
 
 /// Result of building an EDT semantic graph.
 ///
@@ -470,6 +472,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut configuration_modules = Vec::new();
         let mut metadata_references = BTreeSet::new();
         let mut metadata_extensions = BTreeSet::new();
+        let mut subsystem_content = BTreeSet::new();
         let mut role_rights = Vec::new();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
@@ -524,15 +527,28 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
                 continue;
             };
 
-            let collected =
-                collect_top_level_metadata(&entry.path(), kind, &configuration_id, &mut graph)?;
+            let collected = collect_top_level_metadata(
+                project_root,
+                &entry.path(),
+                kind,
+                &configuration_id,
+                &mut graph,
+            )?;
             configuration_modules.extend(collected.modules);
             metadata_references.extend(collected.references);
             metadata_extensions.extend(collected.extensions);
+            subsystem_content.extend(collected.subsystem_content);
             role_rights.extend(collected.role_rights);
         }
 
         resolve_metadata_extensions(&mut graph, &metadata_extensions)?;
+
+        emit_subsystem_includes(
+            &mut graph,
+            &subsystem_content,
+            &mut diagnostics,
+            &mut reference_statistics,
+        )?;
 
         resolve_metadata_references(
             &mut graph,
@@ -594,6 +610,7 @@ struct CollectedTopLevelMetadata {
     modules: Vec<EdtModuleDescriptor>,
     references: BTreeSet<PendingMetadataReference>,
     extensions: BTreeSet<PendingMetadataExtension>,
+    subsystem_content: BTreeSet<PendingSubsystemContentObservation>,
     role_rights: Vec<EdtRoleRightsDescriptor>,
 }
 
@@ -615,7 +632,30 @@ struct PendingMetadataExtension {
     target_id: EntityId,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PendingSubsystemContentObservation {
+    descriptor_path: PathBuf,
+    subsystem_id: EntityId,
+    subsystem_node_id: EntityId,
+    raw_token: String,
+    target: SubsystemContentTarget,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum SubsystemContentTarget {
+    Malformed,
+    Unsupported {
+        prefix: String,
+        deferred: bool,
+    },
+    Resolvable {
+        metadata_kind: MetadataKind,
+        local_name: EntityName,
+    },
+}
+
 fn collect_top_level_metadata(
+    project_root: &Path,
     directory: &Path,
     kind: MetadataKind,
     configuration_id: &EntityId,
@@ -644,11 +684,18 @@ fn collect_top_level_metadata(
         }
 
         let object_directory = entry.path();
-        let object = collect_metadata_object(&object_directory, kind, configuration_id, graph)?;
+        let object = collect_metadata_object(
+            project_root,
+            &object_directory,
+            kind,
+            configuration_id,
+            graph,
+        )?;
 
         collected.modules.extend(object.modules);
         collected.references.extend(object.references);
         collected.extensions.extend(object.extensions);
+        collected.subsystem_content.extend(object.subsystem_content);
         collected.role_rights.extend(object.role_rights);
     }
 
@@ -656,6 +703,7 @@ fn collect_top_level_metadata(
 }
 
 fn collect_metadata_object(
+    project_root: &Path,
     object_directory: &Path,
     kind: MetadataKind,
     configuration_id: &EntityId,
@@ -690,6 +738,7 @@ fn collect_metadata_object(
 
     if descriptor.kind() == MetadataKind::Subsystem {
         insert_subsystem_node(graph, &descriptor)?;
+        collect_subsystem_content(project_root, &descriptor, &mut collected.subsystem_content)?;
     }
 
     if let Some(extension) = descriptor.extension() {
@@ -755,6 +804,91 @@ fn collect_metadata_object(
     collected.modules.extend(modules);
 
     Ok(collected)
+}
+
+fn collect_subsystem_content(
+    project_root: &Path,
+    descriptor: &EdtMetadataObjectDescriptor,
+    observations: &mut BTreeSet<PendingSubsystemContentObservation>,
+) -> Result<(), EdtGraphError> {
+    let content = FileSystemEdtSubsystemContentReader
+        .read(descriptor)
+        .map_err(EdtGraphError::SubsystemContent)?;
+    let descriptor_path = content
+        .descriptor_path()
+        .strip_prefix(project_root)
+        .map_err(|_| EdtGraphError::SubsystemDescriptorOutsideProject {
+            project_root: project_root.to_path_buf(),
+            path: content.descriptor_path().to_path_buf(),
+        })?
+        .to_path_buf();
+    let subsystem_node_id = subsystem_node_id(descriptor)?;
+
+    for raw_token in content.raw_content() {
+        observations.insert(PendingSubsystemContentObservation {
+            descriptor_path: descriptor_path.clone(),
+            subsystem_id: content.subsystem_id().clone(),
+            subsystem_node_id: subsystem_node_id.clone(),
+            raw_token: raw_token.clone(),
+            target: normalize_subsystem_content_target(raw_token),
+        });
+    }
+
+    Ok(())
+}
+
+fn normalize_subsystem_content_target(raw_token: &str) -> SubsystemContentTarget {
+    let mut components = raw_token.split('.');
+    let prefix = components.next().unwrap_or_default();
+    let Some(local_name) = components.next() else {
+        return SubsystemContentTarget::Malformed;
+    };
+
+    if prefix.is_empty() || local_name.is_empty() || components.next().is_some() {
+        return SubsystemContentTarget::Malformed;
+    }
+
+    let metadata_kind = match prefix {
+        "Catalog" => MetadataKind::Catalog,
+        "Document" => MetadataKind::Document,
+        "Enum" => MetadataKind::Enumeration,
+        "CommonModule" => MetadataKind::CommonModule,
+        "Report" => MetadataKind::Report,
+        "DataProcessor" => MetadataKind::DataProcessor,
+        "InformationRegister" => MetadataKind::InformationRegister,
+        "AccumulationRegister" => MetadataKind::AccumulationRegister,
+        "AccountingRegister" => MetadataKind::AccountingRegister,
+        "CalculationRegister" => MetadataKind::CalculationRegister,
+        "BusinessProcess" => MetadataKind::BusinessProcess,
+        "Task" => MetadataKind::Task,
+        "Role" => MetadataKind::Role,
+        "CommonCommand" => MetadataKind::Command,
+        "CommonForm" => MetadataKind::CommonForm,
+        "CommonTemplate" => MetadataKind::Template,
+        "HTTPService" => MetadataKind::HttpService,
+        "WebService" => MetadataKind::WebService,
+        "XDTOPackage" => MetadataKind::XdtoPackage,
+        "Subsystem" => {
+            return SubsystemContentTarget::Unsupported {
+                prefix: prefix.to_owned(),
+                deferred: true,
+            };
+        }
+        _ => {
+            return SubsystemContentTarget::Unsupported {
+                prefix: prefix.to_owned(),
+                deferred: false,
+            };
+        }
+    };
+    let Ok(local_name) = EntityName::new(local_name) else {
+        return SubsystemContentTarget::Malformed;
+    };
+
+    SubsystemContentTarget::Resolvable {
+        metadata_kind,
+        local_name,
+    }
 }
 
 fn insert_standard_attribute_nodes(
@@ -949,6 +1083,155 @@ fn resolve_metadata_references(
     }
 
     Ok(())
+}
+
+fn emit_subsystem_includes(
+    graph: &mut SemanticGraph,
+    observations: &BTreeSet<PendingSubsystemContentObservation>,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<(), EdtGraphError> {
+    let resolved_sources = {
+        let index = graph.resolution_index();
+        let mut resolved_sources = BTreeMap::<(EntityId, EntityId), BTreeSet<EntityId>>::new();
+
+        for observation in observations {
+            let source = graph.node(&observation.subsystem_node_id).ok_or_else(|| {
+                EdtGraphError::InvalidSubsystemSource {
+                    subsystem_id: observation.subsystem_id.clone(),
+                    subsystem_node_id: observation.subsystem_node_id.clone(),
+                    actual_kind: None,
+                }
+            })?;
+            if source.kind() != NodeKind::Subsystem {
+                return Err(EdtGraphError::InvalidSubsystemSource {
+                    subsystem_id: observation.subsystem_id.clone(),
+                    subsystem_node_id: observation.subsystem_node_id.clone(),
+                    actual_kind: Some(source.kind()),
+                });
+            }
+
+            match &observation.target {
+                SubsystemContentTarget::Malformed => {
+                    reference_statistics.record(SemanticReferenceOutcome::MalformedFormat, true);
+                    diagnostics.insert(subsystem_content_input_diagnostic(
+                        observation,
+                        SemanticDiagnosticCode::ReferenceMalformedFormat,
+                        SemanticDiagnosticKind::MalformedReferenceFormat,
+                        "EDT Subsystem content reference must contain exactly one `.` separator with non-empty components",
+                    )?);
+                }
+                SubsystemContentTarget::Unsupported { prefix, deferred } => {
+                    reference_statistics.record(SemanticReferenceOutcome::UnsupportedPrefix, true);
+                    let message = if *deferred {
+                        format!(
+                            "EDT Subsystem content prefix `{prefix}` is recognized but deferred"
+                        )
+                    } else {
+                        format!("EDT Subsystem content prefix `{prefix}` is unsupported")
+                    };
+                    diagnostics.insert(subsystem_content_input_diagnostic(
+                        observation,
+                        SemanticDiagnosticCode::ReferenceUnsupportedPrefix,
+                        SemanticDiagnosticKind::UnsupportedReferencePrefix,
+                        message,
+                    )?);
+                }
+                SubsystemContentTarget::Resolvable {
+                    metadata_kind,
+                    local_name,
+                } => match index
+                    .resolve_name_of_kind(local_name, NodeKind::Metadata(*metadata_kind))
+                {
+                    Ok(target) => {
+                        reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+                        let source_id = subsystem_content_source_id(
+                            observation,
+                            "resolved",
+                            Some(target.id()),
+                        )?;
+                        resolved_sources
+                            .entry((observation.subsystem_node_id.clone(), target.id().clone()))
+                            .or_default()
+                            .insert(source_id);
+                    }
+                    Err(error) => {
+                        reference_statistics.record(
+                            SemanticReferenceOutcome::from_resolution_error(&error),
+                            true,
+                        );
+                        diagnostics.insert(subsystem_content_resolution_diagnostic(
+                            observation,
+                            *metadata_kind,
+                            error,
+                        )?);
+                    }
+                },
+            }
+        }
+
+        resolved_sources
+    };
+
+    for ((source_id, target_id), sources) in resolved_sources {
+        let provenance = sources
+            .into_iter()
+            .map(|source| subsystem_content_provenance(source, ResolutionState::Resolved))
+            .collect();
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source_id,
+                target_id,
+                EdgeKind::Includes,
+                provenance,
+            ))
+            .map_err(EdtGraphError::Graph)?;
+    }
+
+    Ok(())
+}
+
+fn subsystem_content_input_diagnostic(
+    observation: &PendingSubsystemContentObservation,
+    code: SemanticDiagnosticCode,
+    kind: SemanticDiagnosticKind,
+    message: impl Into<String>,
+) -> Result<SemanticDiagnostic, EdtGraphError> {
+    Ok(SemanticDiagnostic::new(
+        code,
+        SemanticDiagnosticSeverity::Error,
+        kind,
+        message,
+        SemanticReference::Raw(observation.raw_token.clone()),
+    )
+    .with_source_node(observation.subsystem_node_id.clone())
+    .with_provenance(vec![subsystem_content_provenance(
+        subsystem_content_source_id(observation, "rejected", None)?,
+        ResolutionState::Unresolved,
+    )]))
+}
+
+fn subsystem_content_resolution_diagnostic(
+    observation: &PendingSubsystemContentObservation,
+    metadata_kind: MetadataKind,
+    error: ResolutionError,
+) -> Result<SemanticDiagnostic, EdtGraphError> {
+    let resolution = if matches!(&error, ResolutionError::AmbiguousTarget { .. }) {
+        ResolutionState::Ambiguous
+    } else {
+        ResolutionState::Unresolved
+    };
+
+    Ok(SemanticDiagnostic::from_resolution_error_with_reference(
+        error,
+        Some(SemanticReference::Raw(observation.raw_token.clone())),
+    )
+    .with_source_node(observation.subsystem_node_id.clone())
+    .with_expected_kinds(vec![NodeKind::Metadata(metadata_kind)])
+    .with_provenance(vec![subsystem_content_provenance(
+        subsystem_content_source_id(observation, "unresolved", None)?,
+        resolution,
+    )]))
 }
 
 fn resolve_metadata_extensions(
@@ -1298,6 +1581,64 @@ fn graph_provenance(
     )
 }
 
+fn subsystem_content_provenance(source: EntityId, resolution: ResolutionState) -> Provenance {
+    Provenance::new(
+        Some(source),
+        ProducerId::new(EDT_SUBSYSTEM_CONTENT_RESOLUTION_PRODUCER),
+        FactOrigin::Resolved,
+        Confidence::Exact,
+        resolution,
+    )
+}
+
+fn subsystem_content_source_id(
+    observation: &PendingSubsystemContentObservation,
+    outcome: &str,
+    resolved_target: Option<&EntityId>,
+) -> Result<EntityId, EdtGraphError> {
+    let mut fields = vec![
+        encoded_source_field("stage", "subsystem_content_resolution"),
+        encoded_source_field("subsystem_metadata_uuid", observation.subsystem_id.as_str()),
+        encoded_source_field("subsystem_node", observation.subsystem_node_id.as_str()),
+        encoded_source_field("field", "mdclass:Subsystem/content"),
+        encoded_source_field("raw", &observation.raw_token),
+    ];
+
+    match &observation.target {
+        SubsystemContentTarget::Malformed => {
+            fields.push(encoded_source_field("format", "malformed"));
+        }
+        SubsystemContentTarget::Unsupported { prefix, deferred } => {
+            fields.push(encoded_source_field("prefix", prefix));
+            fields.push(encoded_source_field(
+                "support",
+                if *deferred { "deferred" } else { "unsupported" },
+            ));
+        }
+        SubsystemContentTarget::Resolvable {
+            metadata_kind,
+            local_name,
+        } => {
+            fields.push(encoded_source_field("target_kind", metadata_kind.as_str()));
+            fields.push(encoded_source_field("target_name", local_name.as_str()));
+        }
+    }
+    if let Some(target) = resolved_target {
+        fields.push(encoded_source_field("resolved_target", target.as_str()));
+    }
+    fields.push(encoded_source_field("outcome", outcome));
+
+    source_id_from_path_fragment(
+        &observation.descriptor_path,
+        fields.join(";"),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn encoded_source_field(name: &str, value: &str) -> String {
+    format!("{name}#{}:{value}", value.len())
+}
+
 fn metadata_object_source_id(
     descriptor: &EdtMetadataObjectDescriptor,
 ) -> Result<EntityId, EdtGraphError> {
@@ -1522,6 +1863,27 @@ pub enum EdtGraphError {
     /// A metadata object module could not be read.
     Module(EdtModuleError),
 
+    /// Direct Subsystem content declarations could not be read.
+    SubsystemContent(EdtSubsystemContentError),
+
+    /// A discovered Subsystem descriptor is outside the project root.
+    SubsystemDescriptorOutsideProject {
+        /// EDT project root.
+        project_root: PathBuf,
+        /// Discovered Subsystem descriptor path.
+        path: PathBuf,
+    },
+
+    /// The flat Subsystem source required for Includes emission is invalid.
+    InvalidSubsystemSource {
+        /// Declaring Subsystem metadata object identifier.
+        subsystem_id: EntityId,
+        /// Expected flat Subsystem node identifier.
+        subsystem_node_id: EntityId,
+        /// Actual node kind, or `None` when the node is missing.
+        actual_kind: Option<NodeKind>,
+    },
+
     /// A role-right artifact could not be read.
     RoleRights(EdtRoleRightsError),
 
@@ -1569,6 +1931,23 @@ impl Display for EdtGraphError {
             Self::Module(error) => {
                 write!(formatter, "failed to read EDT module: {error}")
             }
+            Self::SubsystemContent(error) => {
+                write!(formatter, "failed to read EDT Subsystem content: {error}")
+            }
+            Self::SubsystemDescriptorOutsideProject { project_root, path } => write!(
+                formatter,
+                "EDT Subsystem descriptor {} is outside project root {}",
+                path.display(),
+                project_root.display()
+            ),
+            Self::InvalidSubsystemSource {
+                subsystem_id,
+                subsystem_node_id,
+                actual_kind,
+            } => write!(
+                formatter,
+                "flat Subsystem source `{subsystem_node_id}` for metadata object `{subsystem_id}` is invalid; actual kind: {actual_kind:?}"
+            ),
             Self::RoleRights(error) => {
                 write!(formatter, "failed to read EDT role rights: {error}")
             }
@@ -1592,9 +1971,13 @@ impl std::error::Error for EdtGraphError {
             Self::MetadataObject(error) => Some(error),
             Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
+            Self::SubsystemContent(error) => Some(error),
             Self::RoleRights(error) => Some(error),
             Self::Graph(error) => Some(error),
-            Self::InvalidIdentifier | Self::InvalidName => None,
+            Self::InvalidIdentifier
+            | Self::InvalidName
+            | Self::SubsystemDescriptorOutsideProject { .. }
+            | Self::InvalidSubsystemSource { .. } => None,
             Self::Bsl(error) => Some(error),
         }
     }
@@ -1608,19 +1991,23 @@ impl From<EdtLoadError> for EdtGraphError {
 
 #[cfg(test)]
 mod graph_tests {
-    use oneagent_common::EntityName;
+    use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         EdgeKind, FactOrigin, GraphEdge, NodeId, NodeKind, ResolutionError, ResolutionState,
         SemanticCoverageCapabilityId, SemanticCoverageStatus, SemanticDiagnosticCode,
         SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
-        SemanticReferenceCapability,
+        SemanticReferenceCapability, SemanticReferenceStatistics,
     };
     use oneagent_metadata::MetadataKind;
+    use std::collections::BTreeSet;
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     use super::{
-        EdtSemanticGraphBuildResult, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder,
+        EdtGraphError, EdtSemanticGraphBuildResult, EdtSemanticGraphBuilder,
+        FileSystemEdtSemanticGraphBuilder, PendingSubsystemContentObservation,
+        SubsystemContentTarget, emit_subsystem_includes, normalize_subsystem_content_target,
     };
 
     const CONFIGURATION_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1768,6 +2155,107 @@ mod graph_tests {
     </resources>
 </mdclass:AccountingRegister>
 "#;
+
+    #[test]
+    fn subsystem_content_normalization_uses_the_explicit_first_slice_allowlist() {
+        let mappings = [
+            ("Catalog", MetadataKind::Catalog),
+            ("Document", MetadataKind::Document),
+            ("Enum", MetadataKind::Enumeration),
+            ("CommonModule", MetadataKind::CommonModule),
+            ("Report", MetadataKind::Report),
+            ("DataProcessor", MetadataKind::DataProcessor),
+            ("InformationRegister", MetadataKind::InformationRegister),
+            ("AccumulationRegister", MetadataKind::AccumulationRegister),
+            ("AccountingRegister", MetadataKind::AccountingRegister),
+            ("CalculationRegister", MetadataKind::CalculationRegister),
+            ("BusinessProcess", MetadataKind::BusinessProcess),
+            ("Task", MetadataKind::Task),
+            ("Role", MetadataKind::Role),
+            ("CommonCommand", MetadataKind::Command),
+            ("CommonForm", MetadataKind::CommonForm),
+            ("CommonTemplate", MetadataKind::Template),
+            ("HTTPService", MetadataKind::HttpService),
+            ("WebService", MetadataKind::WebService),
+            ("XDTOPackage", MetadataKind::XdtoPackage),
+        ];
+
+        for (prefix, expected_kind) in mappings {
+            assert_eq!(
+                normalize_subsystem_content_target(&format!("{prefix}.ExactName")),
+                SubsystemContentTarget::Resolvable {
+                    metadata_kind: expected_kind,
+                    local_name: EntityName::new("ExactName").expect("name must be valid"),
+                }
+            );
+        }
+
+        assert_eq!(
+            normalize_subsystem_content_target("Subsystem.Child"),
+            SubsystemContentTarget::Unsupported {
+                prefix: "Subsystem".to_owned(),
+                deferred: true,
+            }
+        );
+        for prefix in ["Configuration", "Form", "Unknown", "document"] {
+            assert_eq!(
+                normalize_subsystem_content_target(&format!("{prefix}.ExactName")),
+                SubsystemContentTarget::Unsupported {
+                    prefix: prefix.to_owned(),
+                    deferred: false,
+                }
+            );
+        }
+        for raw in [
+            "",
+            "Document",
+            ".ExactName",
+            "Document.",
+            "Document.Too.Many",
+            "Document. ",
+        ] {
+            assert_eq!(
+                normalize_subsystem_content_target(raw),
+                SubsystemContentTarget::Malformed
+            );
+        }
+    }
+
+    #[test]
+    fn subsystem_content_missing_flat_source_is_a_build_invariant_error() {
+        let subsystem_id = EntityId::new("b72ed007-5756-4a1d-b27d-e74aef13083f")
+            .expect("identifier must be valid");
+        let subsystem_node_id =
+            EntityId::new(format!("{subsystem_id}:subsystem")).expect("identifier must be valid");
+        let observations = BTreeSet::from([PendingSubsystemContentObservation {
+            descriptor_path: PathBuf::from("src/Subsystems/TestObject/TestObject.mdo"),
+            subsystem_id: subsystem_id.clone(),
+            subsystem_node_id: subsystem_node_id.clone(),
+            raw_token: "Document.Target".to_owned(),
+            target: SubsystemContentTarget::Resolvable {
+                metadata_kind: MetadataKind::Document,
+                local_name: EntityName::new("Target").expect("name must be valid"),
+            },
+        }]);
+        let mut graph = SemanticGraph::new();
+        let mut diagnostics = BTreeSet::new();
+        let mut statistics = SemanticReferenceStatistics::new();
+
+        let error =
+            emit_subsystem_includes(&mut graph, &observations, &mut diagnostics, &mut statistics)
+                .expect_err("missing flat Subsystem source must fail the build");
+
+        assert!(matches!(
+            error,
+            EdtGraphError::InvalidSubsystemSource {
+                subsystem_id: actual_metadata_id,
+                subsystem_node_id: actual_node_id,
+                actual_kind: None,
+            } if actual_metadata_id == subsystem_id && actual_node_id == subsystem_node_id
+        ));
+        assert!(diagnostics.is_empty());
+        assert!(statistics.is_empty());
+    }
 
     fn create_edt_project() -> tempfile::TempDir {
         let root = tempdir().expect("temporary directory must be created");

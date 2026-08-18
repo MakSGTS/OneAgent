@@ -1330,8 +1330,9 @@ used only when a stage is intentionally outside the semantic meaning of a
 capability. `DeclaredOnly` means that a graph enum variant exists but the EDT
 Coverage Registry has not yet been transitioned to production support. It
 ordinarily indicates that the EDT pipeline does not emit the capability; the
-task-separated Reads sequence temporarily has completed production evidence
-while its registry-only transition remains pending.
+task-separated Reads sequence temporarily has production emission for the
+current fixture-backed forms while required multiline unsupported-category
+negative evidence and the later registry transition remain pending.
 
 Capabilities use typed identities based on `MetadataKind`, `NodeKind`,
 `EdgeKind`, validation codes, query capabilities, provenance paths, and typed
@@ -1763,11 +1764,16 @@ DependsOn edge, or ownership projection is added by the first slice.
 
 `semantic_edge.reads` remains `DeclaredOnly`. Parser investigation, typed
 parsing and diagnostics, exact metadata resolution, precise validation,
-production EDT emission, provenance aggregation, positive and negative tests,
-Query and Impact evidence, full-builder integration, and repeated-build
-determinism are complete for the current fixture-backed forms. Only the separate
-registry transition remains. Production completion does not itself change the
-Coverage Registry status or aggregate counts.
+production EDT emission, provenance aggregation, positive tests, the existing
+fixture-backed negative cases, Query and Impact evidence, full-builder
+integration, and repeated-build determinism are complete for the current
+fixture-backed forms. ADR-0021 still requires explicit unsupported-structure,
+virtual-table, and temporary-table negative evidence. Repository examples for
+those categories are multiline BSL literals, and their exact decoding and source
+mapping remain unresolved. Multiline extraction, typed category diagnostics,
+and full-builder negative tests must precede the separate registry transition.
+Production completion for the current forms does not itself change the Coverage
+Registry status or aggregate counts.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
@@ -1937,9 +1943,11 @@ The remaining thematic Semantic Coverage Completion backlog is:
    in `docs/adr/0021-reads-semantics.md`: focused query-language investigation,
    typed parsing and diagnostics, metadata source resolution, precise
    validation, EDT emission, deterministic provenance, and production tests are
-   complete for the current fixture-backed forms. The registry-only
-   `semantic_edge.reads` Coverage transition remains. Writes remains a
-   separate architecture and implementation capability. The
+   complete for the current fixture-backed forms. Before the
+   `semantic_edge.reads` Coverage transition, the multiline BSL decoding
+   contract, unsupported-structure, virtual-table, and temporary-table typed
+   diagnostics, and corresponding parser/full-builder negative tests remain.
+   Writes remains a separate architecture and implementation capability. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
    query-derived dependency origins remain separate tasks. The first `Extends`

@@ -352,9 +352,12 @@ use oneagent_graph::{
     AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload,
     GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionError, ResolutionState,
     SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
-    SemanticGraph, SemanticGraphBuildDiff, SemanticGraphReport, SemanticGraphValidationResult,
-    SemanticGraphValidator, SemanticReference, SemanticReferenceOutcome,
-    SemanticReferenceStatistics, StandardAttribute, StandardAttributeKind,
+    SemanticGraph, SemanticGraphBuildDiff, SemanticGraphBuildSnapshot, SemanticGraphReport,
+    SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
+    SemanticReferenceCategory, SemanticReferenceOutcome, SemanticReferenceRequest,
+    SemanticReferenceRequestError, SemanticReferenceRequestId, SemanticReferenceRequestLedger,
+    SemanticReferenceRequestOutcome, SemanticReferenceRequestQuery, SemanticReferenceStatistics,
+    StandardAttribute, StandardAttributeKind,
 };
 use oneagent_metadata::{
     CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataPayload,
@@ -364,6 +367,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
 const EDT_SUBSYSTEM_CONTENT_RESOLUTION_PRODUCER: &str = "oneagent.edt.subsystem-content-resolution";
+const EDT_METADATA_REFERENCE_COLLECTION_PRODUCER: &str =
+    "oneagent.edt.metadata-reference-collection";
 
 /// Result of building an EDT semantic graph.
 ///
@@ -374,6 +379,8 @@ const EDT_SUBSYSTEM_CONTENT_RESOLUTION_PRODUCER: &str = "oneagent.edt.subsystem-
 pub struct EdtSemanticGraphBuildResult {
     graph: SemanticGraph,
     diagnostics: Vec<SemanticDiagnostic>,
+    reference_requests: SemanticReferenceRequestLedger,
+    legacy_reference_statistics: SemanticReferenceStatistics,
     reference_statistics: SemanticReferenceStatistics,
 }
 
@@ -384,6 +391,8 @@ impl EdtSemanticGraphBuildResult {
         Self {
             graph,
             diagnostics,
+            reference_requests: SemanticReferenceRequestLedger::new(),
+            legacy_reference_statistics: SemanticReferenceStatistics::new(),
             reference_statistics: SemanticReferenceStatistics::new(),
         }
     }
@@ -398,6 +407,31 @@ impl EdtSemanticGraphBuildResult {
         Self {
             graph,
             diagnostics,
+            reference_requests: SemanticReferenceRequestLedger::new(),
+            legacy_reference_statistics: reference_statistics,
+            reference_statistics,
+        }
+    }
+
+    /// Creates a build result with canonical accepted requests and legacy observations.
+    ///
+    /// `legacy_reference_statistics` must exclude every accepted request in
+    /// `reference_requests`.
+    #[must_use]
+    pub fn new_with_reference_requests(
+        graph: SemanticGraph,
+        diagnostics: Vec<SemanticDiagnostic>,
+        reference_requests: SemanticReferenceRequestLedger,
+        legacy_reference_statistics: SemanticReferenceStatistics,
+    ) -> Self {
+        let reference_statistics =
+            SemanticReferenceStatistics::from_reference_requests(&reference_requests)
+                .including_legacy_observations(legacy_reference_statistics);
+        Self {
+            graph,
+            diagnostics,
+            reference_requests,
+            legacy_reference_statistics,
             reference_statistics,
         }
     }
@@ -426,29 +460,48 @@ impl EdtSemanticGraphBuildResult {
         &self.reference_statistics
     }
 
+    /// Returns canonical accepted semantic reference requests in stable order.
+    #[must_use]
+    pub fn reference_requests(&self) -> &[SemanticReferenceRequest] {
+        self.reference_requests.requests()
+    }
+
+    /// Returns an immutable query view over canonical reference requests.
+    #[must_use]
+    pub fn reference_request_query(&self) -> SemanticReferenceRequestQuery<'_> {
+        self.reference_requests.query()
+    }
+
     /// Builds a deterministic report for this EDT graph build result.
     ///
     /// The report combines graph metrics, recoverable semantic diagnostics and
     /// reference outcome counters captured during graph construction.
     #[must_use]
     pub fn report(&self) -> SemanticGraphReport {
-        SemanticGraphReport::from_graph_diagnostics_and_references(
+        SemanticGraphReport::from_graph_diagnostics_reference_requests_and_legacy_observations(
             &self.graph,
             &self.diagnostics,
-            self.reference_statistics,
+            &self.reference_requests,
+            self.legacy_reference_statistics,
         )
     }
 
     /// Compares this EDT graph build result with a newer build result.
     #[must_use]
     pub fn diff(&self, current: &Self) -> SemanticGraphBuildDiff {
-        SemanticGraphBuildDiff::between(
-            &self.graph,
-            &self.diagnostics,
-            self.reference_statistics,
-            &current.graph,
-            &current.diagnostics,
-            current.reference_statistics,
+        SemanticGraphBuildDiff::between_with_reference_requests(
+            SemanticGraphBuildSnapshot::with_legacy_observations(
+                &self.graph,
+                &self.diagnostics,
+                &self.reference_requests,
+                self.legacy_reference_statistics,
+            ),
+            SemanticGraphBuildSnapshot::with_legacy_observations(
+                &current.graph,
+                &current.diagnostics,
+                &current.reference_requests,
+                current.legacy_reference_statistics,
+            ),
         )
     }
 
@@ -460,11 +513,13 @@ impl EdtSemanticGraphBuildResult {
     /// build-result state.
     #[must_use]
     pub fn validate(&self) -> SemanticGraphValidationResult {
-        SemanticGraphValidator::new().validate_build_result(
-            &self.graph,
-            &self.diagnostics,
-            self.reference_statistics,
-        )
+        SemanticGraphValidator::new()
+            .validate_build_result_with_reference_requests_and_legacy_observations(
+                &self.graph,
+                &self.diagnostics,
+                &self.reference_requests,
+                self.legacy_reference_statistics,
+            )
     }
 
     /// Builds a deterministic Semantic Coverage Audit for this EDT build.
@@ -519,7 +574,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut graph = SemanticGraph::new();
         let mut configuration_modules = Vec::new();
         let mut configuration_writes_sources = Vec::new();
-        let mut metadata_references = BTreeSet::new();
+        let mut metadata_references = MetadataReferenceCollection::default();
         let mut metadata_extensions = BTreeSet::new();
         let mut subsystem_content = BTreeSet::new();
         let mut role_rights = Vec::new();
@@ -575,7 +630,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             )?;
             configuration_modules.extend(collected.modules);
             configuration_writes_sources.extend(collected.writes_sources);
-            metadata_references.extend(collected.references);
+            metadata_references.extend(collected.references)?;
             metadata_extensions.extend(collected.extensions);
             subsystem_content.extend(collected.subsystem_content);
             role_rights.extend(collected.role_rights);
@@ -590,11 +645,11 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
-        resolve_metadata_references(
+        let reference_requests = resolve_metadata_references(
             &mut graph,
             &metadata_references,
             &mut diagnostics,
-            &mut reference_statistics,
+            query_source_resolution::WorkspaceResolutionScope::Complete,
         )?;
 
         emit_role_grants(
@@ -618,6 +673,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             &configuration_writes_sources,
             diagnostics,
             reference_statistics,
+            reference_requests,
         )
     }
 }
@@ -652,6 +708,7 @@ fn finish_configuration_graph_build(
     sources: &[writes_emission::EdtWritesSource],
     mut diagnostics: BTreeSet<SemanticDiagnostic>,
     mut reference_statistics: SemanticReferenceStatistics,
+    reference_requests: SemanticReferenceRequestLedger,
 ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
     writes_emission::emit_resolved_writes(
         &mut graph,
@@ -660,9 +717,10 @@ fn finish_configuration_graph_build(
         &mut diagnostics,
         &mut reference_statistics,
     )?;
-    Ok(EdtSemanticGraphBuildResult::new_with_reference_statistics(
+    Ok(EdtSemanticGraphBuildResult::new_with_reference_requests(
         graph,
         diagnostics.into_iter().collect(),
+        reference_requests,
         reference_statistics,
     ))
 }
@@ -696,20 +754,79 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
 struct CollectedTopLevelMetadata {
     modules: Vec<EdtModuleDescriptor>,
     writes_sources: Vec<writes_emission::EdtWritesSource>,
-    references: BTreeSet<PendingMetadataReference>,
+    references: MetadataReferenceCollection,
     extensions: BTreeSet<PendingMetadataExtension>,
     subsystem_content: BTreeSet<PendingSubsystemContentObservation>,
     role_rights: Vec<EdtRoleRightsDescriptor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct PendingMetadataReference {
+struct MetadataReferenceProjectionEvidence {
     descriptor_path: PathBuf,
     metadata_object_id: EntityId,
     source_id: EntityId,
     role: EdtMetadataReferenceRole,
     target_kind: MetadataKind,
     target_name: EntityName,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct MetadataReferenceCollection {
+    requests: SemanticReferenceRequestLedger,
+    evidence: BTreeMap<SemanticReferenceRequestId, BTreeSet<MetadataReferenceProjectionEvidence>>,
+}
+
+impl MetadataReferenceCollection {
+    fn insert(
+        &mut self,
+        evidence: MetadataReferenceProjectionEvidence,
+    ) -> Result<(), EdtGraphError> {
+        let request = SemanticReferenceRequest::collected(
+            evidence.source_id.clone(),
+            SemanticReferenceCategory::MetadataType,
+            SemanticReference::Name(evidence.target_name.clone()),
+            [NodeKind::Metadata(evidence.target_kind)],
+            [metadata_reference_collection_provenance(
+                metadata_reference_collection_source_id(&evidence)?,
+            )],
+        )
+        .map_err(EdtGraphError::ReferenceRequest)?;
+        let request_id = request.id().clone();
+        self.requests
+            .insert(request)
+            .map_err(EdtGraphError::ReferenceRequest)?;
+        self.evidence
+            .entry(request_id)
+            .or_default()
+            .insert(evidence);
+        Ok(())
+    }
+
+    fn extend(&mut self, other: Self) -> Result<(), EdtGraphError> {
+        for request in other.requests.requests().iter().cloned() {
+            self.requests
+                .insert(request)
+                .map_err(EdtGraphError::ReferenceRequest)?;
+        }
+        for (request_id, evidence) in other.evidence {
+            self.evidence
+                .entry(request_id)
+                .or_default()
+                .extend(evidence);
+        }
+        Ok(())
+    }
+
+    const fn requests(&self) -> &SemanticReferenceRequestLedger {
+        &self.requests
+    }
+
+    fn evidence(
+        &self,
+        request_id: &SemanticReferenceRequestId,
+    ) -> Option<&BTreeSet<MetadataReferenceProjectionEvidence>> {
+        self.evidence.get(request_id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -782,7 +899,7 @@ fn collect_top_level_metadata(
 
         collected.modules.extend(object.modules);
         collected.writes_sources.extend(object.writes_sources);
-        collected.references.extend(object.references);
+        collected.references.extend(object.references)?;
         collected.extensions.extend(object.extensions);
         collected.subsystem_content.extend(object.subsystem_content);
         collected.role_rights.extend(object.role_rights);
@@ -1096,7 +1213,7 @@ fn collect_metadata_child(
     graph: &mut SemanticGraph,
     descriptor: &EdtMetadataObjectDescriptor,
     child: &EdtMetadataChildDescriptor,
-    references: &mut BTreeSet<PendingMetadataReference>,
+    references: &mut MetadataReferenceCollection,
 ) -> Result<(), EdtGraphError> {
     let child_source = metadata_child_source_id(descriptor, child)?;
 
@@ -1112,14 +1229,14 @@ fn collect_metadata_child(
 
     if is_depends_on_metadata_member_source(child_node_kind) {
         for reference in child.references() {
-            references.insert(PendingMetadataReference {
+            references.insert(MetadataReferenceProjectionEvidence {
                 descriptor_path: descriptor.descriptor_path().to_path_buf(),
                 metadata_object_id: descriptor.id().clone(),
                 source_id: child.id().clone(),
                 role: reference.role(),
                 target_kind: reference.target_kind(),
                 target_name: reference.target_name().clone(),
-            });
+            })?;
         }
     }
 
@@ -1173,60 +1290,150 @@ const fn semantic_child_node_kind(
 
 fn resolve_metadata_references(
     graph: &mut SemanticGraph,
-    references: &BTreeSet<PendingMetadataReference>,
+    references: &MetadataReferenceCollection,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
-    reference_statistics: &mut SemanticReferenceStatistics,
-) -> Result<(), EdtGraphError> {
+    workspace_scope: query_source_resolution::WorkspaceResolutionScope,
+) -> Result<SemanticReferenceRequestLedger, EdtGraphError> {
     let resolved_references = {
         let index = graph.resolution_index();
         let mut resolved_references = Vec::new();
+        let mut terminal_requests = SemanticReferenceRequestLedger::new();
 
-        for reference in references {
-            let reference_context = SemanticReference::Name(reference.target_name.clone());
-            match index.resolve_name_of_kind(
-                &reference.target_name,
-                NodeKind::Metadata(reference.target_kind),
-            ) {
+        for request in references.requests().requests() {
+            let evidence = references.evidence(request.id()).ok_or_else(|| {
+                EdtGraphError::InvalidMetadataReferenceRequest {
+                    request_id: request.id().clone(),
+                }
+            })?;
+            let SemanticReference::Name(target_name) = request.reference() else {
+                return Err(EdtGraphError::InvalidMetadataReferenceRequest {
+                    request_id: request.id().clone(),
+                });
+            };
+            let resolver_provenance =
+                metadata_reference_resolver_provenance(evidence, ResolutionState::Resolved)?;
+            let expected_kind = request.expected_kinds()[0];
+            match index.resolve_name_of_kind(target_name, expected_kind) {
                 Ok(target) => {
-                    reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
-                    resolved_references.push((reference.clone(), target.id().clone()));
+                    let terminal = request
+                        .clone()
+                        .into_resolved(target.id().clone(), target.kind(), resolver_provenance)
+                        .map_err(EdtGraphError::ReferenceRequest)?;
+                    resolved_references.push((terminal.clone(), evidence, target.id().clone()));
+                    terminal_requests
+                        .insert(terminal)
+                        .map_err(EdtGraphError::ReferenceRequest)?;
                 }
                 Err(error) => {
-                    reference_statistics.record(
-                        SemanticReferenceOutcome::from_resolution_error(&error),
-                        true,
-                    );
-                    diagnostics.insert(metadata_reference_diagnostic(
-                        reference,
-                        error,
-                        reference_context,
-                    )?);
+                    let terminal = terminal_metadata_reference_request(
+                        request,
+                        evidence,
+                        &error,
+                        workspace_scope,
+                    )?;
+                    if terminal.outcome() != SemanticReferenceRequestOutcome::PartialWorkspace {
+                        diagnostics.insert(metadata_reference_diagnostic(&terminal, error));
+                    }
+                    terminal_requests
+                        .insert(terminal)
+                        .map_err(EdtGraphError::ReferenceRequest)?;
                 }
             }
         }
 
-        resolved_references
+        (terminal_requests, resolved_references)
     };
 
-    for (reference, target_id) in resolved_references {
-        let reference_source = metadata_reference_source_id(&reference)?;
-        insert_edge(
-            graph,
-            reference.source_id.clone(),
-            target_id.clone(),
-            EdgeKind::References,
-            resolved_provenance(reference_source),
-        )?;
-        insert_edge(
-            graph,
-            reference.source_id.clone(),
-            target_id.clone(),
-            EdgeKind::DependsOn,
-            derived_provenance(metadata_dependency_source_id(&reference, &target_id)?),
-        )?;
+    for (request, evidence, target_id) in resolved_references.1 {
+        let reference_provenance =
+            metadata_reference_resolver_provenance(evidence, ResolutionState::Resolved)?;
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                request.source_node().clone(),
+                target_id.clone(),
+                EdgeKind::References,
+                reference_provenance,
+            ))
+            .map_err(EdtGraphError::Graph)?;
+        let dependency_provenance = evidence
+            .iter()
+            .map(|evidence| {
+                metadata_dependency_source_id(evidence, &target_id).map(derived_provenance)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                request.source_node().clone(),
+                target_id,
+                EdgeKind::DependsOn,
+                dependency_provenance,
+            ))
+            .map_err(EdtGraphError::Graph)?;
     }
 
-    Ok(())
+    Ok(resolved_references.0)
+}
+
+fn terminal_metadata_reference_request(
+    request: &SemanticReferenceRequest,
+    evidence: &BTreeSet<MetadataReferenceProjectionEvidence>,
+    error: &ResolutionError,
+    workspace_scope: query_source_resolution::WorkspaceResolutionScope,
+) -> Result<SemanticReferenceRequest, EdtGraphError> {
+    let (state, candidates) = match error {
+        ResolutionError::MissingTarget { .. }
+            if workspace_scope == query_source_resolution::WorkspaceResolutionScope::Partial =>
+        {
+            (ResolutionState::Partial, Vec::new())
+        }
+        ResolutionError::MissingTarget { .. } => (ResolutionState::Unresolved, Vec::new()),
+        ResolutionError::AmbiguousTarget { candidates, .. } => {
+            (ResolutionState::Ambiguous, candidates.clone())
+        }
+        ResolutionError::IncompatibleNodeKind { id, .. } => {
+            (ResolutionState::Unresolved, vec![id.clone()])
+        }
+        ResolutionError::InvalidOwnerReference { owner, child } => (
+            ResolutionState::Unresolved,
+            vec![owner.clone(), child.clone()],
+        ),
+    };
+    let provenance = metadata_reference_resolver_provenance(evidence, state)?;
+
+    let terminal = match error {
+        ResolutionError::MissingTarget { .. }
+            if workspace_scope == query_source_resolution::WorkspaceResolutionScope::Partial =>
+        {
+            request
+                .clone()
+                .into_partial_workspace(candidates, provenance)
+        }
+        ResolutionError::MissingTarget { .. } => request.clone().into_missing_target(provenance),
+        ResolutionError::AmbiguousTarget { .. } => request
+            .clone()
+            .into_ambiguous_target(candidates, provenance),
+        ResolutionError::IncompatibleNodeKind { .. } => request
+            .clone()
+            .into_incompatible_target_kind(candidates, provenance),
+        ResolutionError::InvalidOwnerReference { .. } => request
+            .clone()
+            .into_invalid_owner_reference(candidates, provenance),
+    };
+    terminal.map_err(EdtGraphError::ReferenceRequest)
+}
+
+fn metadata_reference_resolver_provenance(
+    evidence: &BTreeSet<MetadataReferenceProjectionEvidence>,
+    resolution: ResolutionState,
+) -> Result<Vec<Provenance>, EdtGraphError> {
+    evidence
+        .iter()
+        .map(|evidence| {
+            metadata_reference_source_id(evidence).map(|source| {
+                graph_provenance(source, FactOrigin::Resolved, Confidence::High, resolution)
+            })
+        })
+        .collect()
 }
 
 fn emit_subsystem_includes(
@@ -1638,18 +1845,23 @@ fn role_grant_source_id(
 }
 
 fn metadata_reference_diagnostic(
-    reference: &PendingMetadataReference,
+    request: &SemanticReferenceRequest,
     error: ResolutionError,
-    reference_context: SemanticReference,
-) -> Result<SemanticDiagnostic, EdtGraphError> {
-    Ok(
-        SemanticDiagnostic::from_resolution_error_with_reference(error, Some(reference_context))
-            .with_source_node(reference.source_id.clone())
-            .with_expected_kinds(vec![NodeKind::Metadata(reference.target_kind)])
-            .with_provenance(vec![resolved_provenance(metadata_reference_source_id(
-                reference,
-            )?)]),
+) -> SemanticDiagnostic {
+    let resolver_provenance = request
+        .provenance()
+        .iter()
+        .filter(|provenance| provenance.origin() == FactOrigin::Resolved)
+        .cloned()
+        .collect();
+    SemanticDiagnostic::from_resolution_error_with_reference(
+        error,
+        Some(request.reference().clone()),
     )
+    .with_source_node(request.source_node().clone())
+    .with_expected_kinds(request.expected_kinds().to_vec())
+    .with_candidates(request.candidates().to_vec())
+    .with_provenance(resolver_provenance)
 }
 
 fn insert_node(
@@ -1921,7 +2133,7 @@ fn contains_edge_source_id(
 }
 
 fn metadata_reference_source_id(
-    reference: &PendingMetadataReference,
+    reference: &MetadataReferenceProjectionEvidence,
 ) -> Result<EntityId, EdtGraphError> {
     source_id_from_path_fragment(
         &reference.descriptor_path,
@@ -1938,7 +2150,7 @@ fn metadata_reference_source_id(
 }
 
 fn metadata_dependency_source_id(
-    reference: &PendingMetadataReference,
+    reference: &MetadataReferenceProjectionEvidence,
     target_id: &EntityId,
 ) -> Result<EntityId, EdtGraphError> {
     source_id_from_path_fragment(
@@ -1953,6 +2165,33 @@ fn metadata_dependency_source_id(
             target_id.as_str()
         ),
         EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn metadata_reference_collection_source_id(
+    reference: &MetadataReferenceProjectionEvidence,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        &reference.descriptor_path,
+        format!(
+            "metadata_object={};fact=reference_request_collection;source={};role={};target_kind={};target_name={}",
+            reference.metadata_object_id.as_str(),
+            reference.source_id.as_str(),
+            reference.role.as_str(),
+            reference.target_kind.as_str(),
+            reference.target_name.as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn metadata_reference_collection_provenance(source: EntityId) -> Provenance {
+    Provenance::new(
+        Some(source),
+        ProducerId::new(EDT_METADATA_REFERENCE_COLLECTION_PRODUCER),
+        FactOrigin::Declared,
+        Confidence::Exact,
+        ResolutionState::Unresolved,
     )
 }
 
@@ -2054,6 +2293,15 @@ pub enum EdtGraphError {
     /// Semantic graph validation failed.
     Graph(oneagent_graph::GraphError),
 
+    /// A public semantic reference request invariant failed.
+    ReferenceRequest(SemanticReferenceRequestError),
+
+    /// Adapter projection evidence is missing or incompatible with a request.
+    InvalidMetadataReferenceRequest {
+        /// Stable request identity.
+        request_id: SemanticReferenceRequestId,
+    },
+
     /// Typed metadata payload conflicts with its graph node kind.
     NodePayload(GraphNodePayloadError),
 
@@ -2121,6 +2369,13 @@ impl Display for EdtGraphError {
             Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
             Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
             Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
+            Self::ReferenceRequest(error) => {
+                write!(formatter, "semantic reference request error: {error}")
+            }
+            Self::InvalidMetadataReferenceRequest { request_id } => write!(
+                formatter,
+                "metadata reference projection evidence is invalid for request `{request_id}`"
+            ),
             Self::NodePayload(error) => write!(formatter, "semantic graph node error: {error}"),
             Self::Bsl(error) => {
                 write!(formatter, "failed to add BSL symbols to graph: {error}")
@@ -2142,9 +2397,11 @@ impl std::error::Error for EdtGraphError {
             Self::SubsystemContent(error) => Some(error),
             Self::RoleRights(error) => Some(error),
             Self::Graph(error) => Some(error),
+            Self::ReferenceRequest(error) => Some(error),
             Self::NodePayload(error) => Some(error),
             Self::InvalidIdentifier
             | Self::InvalidName
+            | Self::InvalidMetadataReferenceRequest { .. }
             | Self::SubsystemDescriptorOutsideProject { .. }
             | Self::InvalidSubsystemSource { .. } => None,
             Self::Bsl(error) => Some(error),
@@ -2165,7 +2422,8 @@ mod graph_tests {
         EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, NodeModifiedAspect,
         ResolutionError, ResolutionState, SemanticCoverageCapabilityId, SemanticCoverageStatus,
         SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph,
-        SemanticReference, SemanticReferenceCapability, SemanticReferenceStatistics,
+        SemanticReference, SemanticReferenceCapability, SemanticReferenceCategory,
+        SemanticReferenceRequestOutcome, SemanticReferenceStatistics,
     };
     use oneagent_metadata::{MetadataKind, MetadataSpecificPayload};
     use std::collections::BTreeSet;
@@ -2175,9 +2433,11 @@ mod graph_tests {
     use tempfile::tempdir;
 
     use super::{
-        EdtGraphError, EdtSemanticGraphBuildResult, EdtSemanticGraphBuilder,
-        FileSystemEdtSemanticGraphBuilder, PendingSubsystemContentObservation,
+        EdtGraphError, EdtMetadataReferenceRole, EdtSemanticGraphBuildResult,
+        EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder, MetadataReferenceCollection,
+        MetadataReferenceProjectionEvidence, PendingSubsystemContentObservation,
         SubsystemContentTarget, emit_subsystem_includes, normalize_subsystem_content_target,
+        resolve_metadata_references,
     };
 
     const CONFIGURATION_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -4436,9 +4696,50 @@ mod graph_tests {
         assert_eq!(company.provenance().len(), 1);
         assert_company_reference_provenance(company_references[0]);
         assert_company_dependency_provenance(company_dependencies[0]);
+        assert_reference_request_observability(&result, &repeated);
         assert!(graph.diff(repeated.graph()).is_empty());
         assert!(result.diff(&repeated).is_empty());
         assert!(result.diagnostics().is_empty());
+    }
+
+    fn assert_reference_request_observability(
+        result: &EdtSemanticGraphBuildResult,
+        repeated: &EdtSemanticGraphBuildResult,
+    ) {
+        assert_eq!(result.reference_requests().len(), 4);
+        assert_eq!(result.reference_requests(), repeated.reference_requests());
+        assert_eq!(
+            result
+                .reference_request_query()
+                .by_category(SemanticReferenceCategory::MetadataType)
+                .len(),
+            4
+        );
+        for request in result.reference_requests() {
+            assert_eq!(request.category(), SemanticReferenceCategory::MetadataType);
+            assert_eq!(request.outcome(), SemanticReferenceRequestOutcome::Resolved);
+            assert_eq!(request.state(), ResolutionState::Resolved);
+            assert_eq!(request.candidates().len(), 1);
+            assert_eq!(request.provenance().len(), 2);
+            let collection = request
+                .provenance()
+                .iter()
+                .find(|provenance| provenance.origin() == FactOrigin::Declared)
+                .expect("collection provenance must exist");
+            let resolution = request
+                .provenance()
+                .iter()
+                .find(|provenance| provenance.origin() == FactOrigin::Resolved)
+                .expect("resolver provenance must exist");
+            assert_eq!(
+                collection.producer().as_str(),
+                super::EDT_METADATA_REFERENCE_COLLECTION_PRODUCER
+            );
+            assert_eq!(collection.resolution(), ResolutionState::Unresolved);
+            assert_eq!(resolution.resolution(), ResolutionState::Resolved);
+        }
+        assert_eq!(result.reference_statistics().total(), 5);
+        assert!(result.validate().is_valid());
     }
 
     fn assert_mapped_metadata_reference_case(
@@ -4920,6 +5221,14 @@ mod graph_tests {
         }));
         assert!(diff.summary().edge_changes() > 0);
         assert_eq!(diff.summary().diagnostic_changes(), 1);
+        assert_eq!(diff.reference_requests().added().len(), 2);
+        assert_eq!(diff.reference_requests().removed().len(), 1);
+        assert_eq!(diff.reference_requests().modified().len(), 2);
+        assert!(diff.reference_requests().modified().iter().all(|change| {
+            change.modified_aspects()
+                == [oneagent_graph::ReferenceRequestModifiedAspect::Provenance]
+        }));
+        assert_eq!(diff.summary().reference_request_changes(), 5);
     }
 
     #[test]
@@ -4972,6 +5281,26 @@ mod graph_tests {
             diagnostics[0].reference(),
             SemanticReference::Name(name) if name.as_str() == "MissingProducts"
         ));
+        let request = result
+            .reference_request_query()
+            .by_source(&company_id)
+            .into_iter()
+            .next()
+            .expect("missing request must be observable");
+        assert_eq!(
+            request.outcome(),
+            SemanticReferenceRequestOutcome::MissingTarget
+        );
+        assert_eq!(request.state(), ResolutionState::Unresolved);
+        assert!(request.candidates().is_empty());
+        assert!(request.provenance().iter().any(|provenance| {
+            provenance.origin() == FactOrigin::Declared
+                && provenance.resolution() == ResolutionState::Unresolved
+        }));
+        assert!(request.provenance().iter().any(|provenance| {
+            provenance.origin() == FactOrigin::Resolved
+                && provenance.resolution() == ResolutionState::Unresolved
+        }));
         assert!(graph.node(&company_id).is_some());
         assert!(
             graph
@@ -4995,12 +5324,63 @@ mod graph_tests {
                 .len(),
             1
         );
+        assert!(result.validate().is_valid());
         assert_eq!(
             graph
                 .outgoing_by_kind(product_dimension.id(), EdgeKind::DependsOn)
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn partial_workspace_preserves_request_without_failure_projection() {
+        let source_id = EntityId::new("attribute.partial").expect("source id must be valid");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            source_id.clone(),
+            EntityName::new("PartialAttribute").expect("source name must be valid"),
+            NodeKind::Attribute,
+        ));
+        let mut collected = MetadataReferenceCollection::default();
+        collected
+            .insert(MetadataReferenceProjectionEvidence {
+                descriptor_path: PathBuf::from("src/Documents/Partial/Partial.mdo"),
+                metadata_object_id: EntityId::new("document.partial")
+                    .expect("metadata object id must be valid"),
+                source_id: source_id.clone(),
+                role: EdtMetadataReferenceRole::Type,
+                target_kind: MetadataKind::Catalog,
+                target_name: EntityName::new("AbsentInPartialWorkspace")
+                    .expect("target name must be valid"),
+            })
+            .expect("accepted request must be collected");
+        let collected_id = collected.requests().requests()[0].id().clone();
+        let mut diagnostics = BTreeSet::new();
+
+        let terminal = resolve_metadata_references(
+            &mut graph,
+            &collected,
+            &mut diagnostics,
+            super::query_source_resolution::WorkspaceResolutionScope::Partial,
+        )
+        .expect("partial resolution must succeed");
+        let request = terminal
+            .query()
+            .request(&collected_id)
+            .expect("terminal request must preserve identity");
+
+        assert_eq!(
+            request.outcome(),
+            SemanticReferenceRequestOutcome::PartialWorkspace
+        );
+        assert_eq!(request.state(), ResolutionState::Partial);
+        assert!(request.candidates().is_empty());
+        assert!(diagnostics.is_empty());
+        assert!(graph.edges().next().is_none());
+        let statistics = SemanticReferenceStatistics::from_reference_requests(&terminal);
+        assert_eq!(statistics.total(), 1);
+        assert_eq!(statistics.unresolved(), 1);
     }
 
     #[test]
@@ -5036,6 +5416,27 @@ mod graph_tests {
                 .outgoing_by_kind(&company_id, EdgeKind::References)
                 .is_empty()
         );
+        let request = result
+            .reference_request_query()
+            .by_source(&company_id)
+            .into_iter()
+            .next()
+            .expect("ambiguous request must be observable");
+        assert_eq!(
+            request.outcome(),
+            SemanticReferenceRequestOutcome::AmbiguousTarget
+        );
+        assert_eq!(request.state(), ResolutionState::Ambiguous);
+        assert_eq!(request.candidates().len(), 2);
+        assert_eq!(
+            diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.source_node() == Some(&company_id))
+                .expect("Company diagnostic must exist")
+                .candidates(),
+            request.candidates()
+        );
+        assert!(result.validate().is_valid());
         assert!(
             result
                 .graph()
@@ -5072,12 +5473,26 @@ mod graph_tests {
             diagnostics[0].expected_kinds(),
             &[NodeKind::Metadata(MetadataKind::Document)]
         );
+        let request = result
+            .reference_request_query()
+            .by_source(&company_id)
+            .into_iter()
+            .next()
+            .expect("incompatible request must be observable");
+        assert_eq!(
+            request.outcome(),
+            SemanticReferenceRequestOutcome::IncompatibleTargetKind
+        );
+        assert_eq!(request.state(), ResolutionState::Unresolved);
+        assert_eq!(request.candidates().len(), 1);
+        assert_eq!(diagnostics[0].candidates(), request.candidates());
         assert!(
             result
                 .graph()
                 .outgoing_by_kind(&company_id, EdgeKind::References)
                 .is_empty()
         );
+        assert!(result.validate().is_valid());
         assert!(
             result
                 .graph()
@@ -5103,6 +5518,15 @@ mod graph_tests {
             result.diagnostics()[0].code(),
             SemanticDiagnosticCode::ReferenceUnresolved
         );
+        assert_eq!(
+            result
+                .reference_request_query()
+                .by_source(&company_attribute_id())
+                .len(),
+            1
+        );
+        assert_eq!(result.reference_statistics().unresolved(), 1);
+        assert!(result.validate().is_valid());
     }
 
     #[test]

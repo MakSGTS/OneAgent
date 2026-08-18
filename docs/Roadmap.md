@@ -109,6 +109,134 @@ Diagnostics, impact analysis, planning, refactoring and safe edit transactions.
 ### v1.0 — Stable Platform
 Stable APIs, plugin SDK, performance/security hardening, documentation and examples.
 
+## Sprint execution roadmap
+
+Versions define product outcomes and release boundaries. Sprints are the primary
+execution units inside those versions. Each sprint has one focused goal, explicit
+dependencies, implementation and validation work, and an integration review
+before it is marked complete. A version closes with a release integration review
+after its final sprint; release gates are not separate numbered sprints unless
+they acquire independent implementation scope.
+
+Sprint status uses three values:
+
+- `completed` — implementation and integration review are complete;
+- `next` — the next planning and kickoff target, but not yet active;
+- `planned` — ordered future work whose detailed scope is defined at kickoff.
+
+### Completed sprints
+
+| Sprint | Version | Goal | Status |
+|---|---|---|---|
+| Sprint 1 — Foundation | v0.1 | Establish the Cargo workspace, quality gates, Runtime foundation, workspace discovery, EDT configuration reader, and metadata domain model. | completed |
+| Sprint 2 — Semantic Core Foundation | v0.2 | Establish the typed semantic graph, EDT metadata and module nodes, BSL declaration extraction, and local and cross-module call resolution. | completed |
+| Sprint 3 — Semantic Coverage | v0.2 | Audit and complete graph-domain and EDT semantic coverage, close all Critical, High, and Medium gaps, and complete the integration review. | completed |
+
+### Current planning focus
+
+| Sprint | Version | Goal | Status |
+|---|---|---|---|
+| Sprint 4 — Semantic Index | v0.2 | Build the semantic index over the completed graph and EDT semantic model. | next |
+
+Sprint 4 is the next dependency-ordered target. It becomes `active` only after
+its architecture boundary, task decomposition, acceptance criteria, and
+validation plan are approved.
+
+### Planned sprints
+
+#### v0.2 — Semantic Core
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 5 — Incremental Indexing | Update the semantic index deterministically from workspace changes without rebuilding unaffected state. | planned |
+
+The v0.2 release integration review follows Sprint 5.
+
+#### v0.3 — 1C Knowledge Model
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 6 — Attributes and Tabular Sections | Expand the knowledge model for attributes, tabular sections, ownership, identity, and references. | planned |
+| Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | planned |
+| Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | planned |
+| Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
+| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
+| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
+| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
+| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
+
+The v0.3 release integration review follows Sprint 13.
+
+#### v0.4 — Runtime API
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 14 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | planned |
+| Sprint 15 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | planned |
+| Sprint 16 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | planned |
+| Sprint 17 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | planned |
+| Sprint 18 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | planned |
+| Sprint 19 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | planned |
+
+The v0.4 release integration review follows Sprint 19.
+
+#### v0.5 — AI Integration
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 20 — Context Engine | Build deterministic semantic context selection and assembly. | planned |
+| Sprint 21 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | planned |
+| Sprint 22 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | planned |
+| Sprint 23 — LM Studio Integration | Add local LM Studio discovery and execution support. | planned |
+| Sprint 24 — Ollama Integration | Add local Ollama discovery and execution support. | planned |
+| Sprint 25 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | planned |
+
+The v0.5 release integration review follows Sprint 25.
+
+#### v0.6 — MCP and IDE
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 26 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | planned |
+| Sprint 27 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | planned |
+| Sprint 28 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | planned |
+| Sprint 29 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | planned |
+| Sprint 30 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |
+| Sprint 31 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
+| Sprint 32 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
+
+The v0.6 release integration review follows Sprint 32.
+
+#### v0.7 — Intelligence
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 33 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | planned |
+| Sprint 34 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | planned |
+| Sprint 35 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
+| Sprint 36 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
+| Sprint 37 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
+
+The v0.7 release integration review follows Sprint 37.
+
+#### v1.0 — Stable Platform
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 38 — Public API Stabilization | Stabilize supported public APIs and compatibility policy. | planned |
+| Sprint 39 — Plugin SDK | Define and publish the supported extension SDK. | planned |
+| Sprint 40 — Performance and Security Hardening | Complete profiling, performance, threat-model, and security hardening work. | planned |
+| Sprint 41 — Documentation and Examples | Complete user, operator, contributor, and API documentation with examples. | planned |
+| Sprint 42 — OneAgent 1.0 Release | Complete final release validation, packaging, and publication. | planned |
+
+The v1.0 release integration review and release decision are part of Sprint 42.
+
+Deferred Sprint 3 scope is not implicitly promoted by this schedule. Query-derived
+`DependsOn` and broader Query sources belong to Sprint 8 only after an accepted
+contract; deny, inheritance, and effective authorization belong to Sprint 9;
+Subsystem hierarchy and transitive membership belong to Sprint 10; other
+reference-request families migrate in the sprint that owns their source contract.
+
 ## Sprint 3 Semantic Coverage
 
 - [x] Add a deterministic Semantic Coverage Audit for graph-domain and EDT-specific capabilities.

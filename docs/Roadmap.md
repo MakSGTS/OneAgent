@@ -112,7 +112,7 @@ Stable APIs, plugin SDK, performance/security hardening, documentation and examp
 ## Sprint 3 Semantic Coverage
 
 - [x] Add a deterministic Semantic Coverage Audit for graph-domain and EDT-specific capabilities.
-- [ ] Complete Semantic Coverage; the audit does not mark completion itself.
+- [x] Complete Semantic Coverage; the audit does not mark completion itself.
 
 Ordered follow-up work:
 
@@ -168,8 +168,8 @@ Ordered follow-up work:
     unchanged.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
-1 Medium gap. Combined with the Graph Domain registry, Semantic Coverage
-contains 0 Critical gaps, 0 High gaps, and 1 Medium gap. Sprint 3 Integration
+0 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
+contains 0 Critical gaps, 0 High gaps, and 0 Medium gaps. Sprint 3 Integration
 Review is no longer blocked by High gaps; this status does not mean that the
 review itself has been performed.
 

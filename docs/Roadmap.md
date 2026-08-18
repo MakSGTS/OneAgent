@@ -168,8 +168,8 @@ Ordered follow-up work:
     unchanged.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
-10 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
-contains 0 Critical gaps, 0 High gaps, and 10 Medium gaps. Sprint 3 Integration
+9 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
+contains 0 Critical gaps, 0 High gaps, and 9 Medium gaps. Sprint 3 Integration
 Review is no longer blocked by High gaps; this status does not mean that the
 review itself has been performed.
 

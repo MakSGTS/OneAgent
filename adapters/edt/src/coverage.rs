@@ -576,6 +576,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
         MetadataKind::Enumeration,
         MetadataKind::Report,
         MetadataKind::DataProcessor,
+        MetadataKind::InformationRegister,
     ])
 }
 
@@ -781,6 +782,11 @@ mod tests {
     }
 
     #[test]
+    fn information_register_metadata_node_has_complete_production_evidence() {
+        assert_metadata_node_has_complete_production_evidence(MetadataKind::InformationRegister);
+    }
+
+    #[test]
     fn registry_is_deterministic_unique_and_consistent() {
         let first = EdtSemanticCoverageRegistry::audit();
         let second = EdtSemanticCoverageRegistry::audit();
@@ -891,7 +897,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -902,7 +908,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            10
+            9
         );
     }
 
@@ -949,7 +955,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -978,7 +984,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            10
+            9
         );
     }
 
@@ -1211,7 +1217,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1286,7 +1292,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1355,7 +1361,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&10)
+            Some(&9)
         );
         assert!(
             first
@@ -1414,7 +1420,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&10)
+            Some(&9)
         );
         assert!(
             first
@@ -1459,7 +1465,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1557,7 +1563,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1607,7 +1613,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1655,7 +1661,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1728,7 +1734,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 
@@ -1811,7 +1817,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            10
+            9
         );
     }
 }

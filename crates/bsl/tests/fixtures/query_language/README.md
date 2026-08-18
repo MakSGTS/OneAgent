@@ -25,17 +25,24 @@ No multiline fixture was added by the focused decoding investigation. The
 official [1C:Enterprise 8.3.27 Developer Guide](https://1c-dn.com/download-trial/files/guides/developer_guide.pdf)
 confirms multiline string constants, continuation lines beginning with `|`, and
 doubled-quote decoding. The official [line-wrapping standard](https://kb.1ci.com/1C_Enterprise_Platform/Guides/Developer_Guides/1C_Enterprise_Development_Standards/Code_conventions/Using_1C_Enterprise_language_structures/Line_wrapping/)
-shows indented continuation markers. Neither source defines the exact runtime
-contribution of the marker or preceding indentation, newline code units,
-LF/CRLF behavior, empty continuation lines, or decoded-to-BSL source mapping.
+shows indented continuation markers. Controlled execution on the officially
+distributed 1C:Enterprise `8.3.27.2214` platform establishes the missing runtime
+contract: each physical fragment boundary contributes LF, indentation before
+`|` and the marker itself contribute nothing, spaces after `|` are preserved,
+each empty continuation contributes one LF, doubled quotes collapse to one
+quote, and LF and CRLF source-import inputs produce identical values. The full
+probe source, numeric output, UTF-8 bytes, repeatability evidence, and Accepted
+private source-map model are recorded in
+`docs/architecture/query-language-parser-investigation.md`.
 
 The complete direct constructor at
 `OneAgent_EDTproject/src/CommonModules/wms_mobile_ProductsPicking/Module.bsl:397-479`
 and the complete returned program at
 `OneAgent_EDTproject/src/Reports/TransferOfProduct/Forms/ReportForm/Module.bsl:169-359`
-remain the preferred repository-owned candidates after that contract is proven.
-Until then, deriving `.query` bytes by stripping `|` prefixes would not be a
-reproducible source-preserving transformation.
+remain the preferred repository-owned candidates for the next implementation
+task. Their raw `.query` derivatives may be added only together with the
+confirmed decoder and its source-map tests; this evidence-only task deliberately
+does not precompute or add them.
 
 ## Deliberate evidence gaps
 
@@ -43,11 +50,11 @@ No raw fixture currently represents `JOIN`, `UNION`, a nested query, a batch,
 temporary tables, virtual tables, scalar parameters outside source positions,
 query comments, keyword-like query string literals, or dynamically replaced
 multiline text. Real repository evidence for these forms is encoded inside BSL
-multiline strings, while the current extractor defines no multiline decoding
-contract. Removing `|` prefixes would be a speculative transformation. This
-blocks raw negative fixtures for `JOIN`, `UNION`, nested queries, batches,
-temporary tables, and virtual tables separately; the source structures are
-Confirmed, but their decoded raw programs remain Unknown.
+multiline strings. Their pipe-style decoding is now Confirmed, but the current
+extractor has not implemented it and this task was prohibited from creating raw
+fixtures. The next implementation may derive fixtures through the confirmed
+decoder; dynamic replacement still remains outside the static extractor
+boundary.
 
 Malformed static query text is Accepted by ADR-0021 as a required diagnostic
 case, but no repository-owned malformed raw input was established. Its fixture

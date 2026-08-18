@@ -135,7 +135,7 @@ Ordered follow-up work:
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
 18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
 19. **High — completed:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the production builder now normalizes the explicit allowlist, resolves exact metadata targets, emits deterministic provenance-backed Includes edges, reports typed negative outcomes, enforces the precise validator matrix, and verifies generic queries and Impact exclusion.
-20. **High — negative evidence pending:** complete the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md`; current fixture-backed parsing, resolution, validation, emission, provenance, and production tests are implemented, but authoritative multiline BSL decoding, unsupported-structure, virtual-table, and temporary-table typed diagnostics, and parser/full-builder negative tests must be completed before the separate `semantic_edge.reads` Coverage transition.
+20. **High — multiline implementation and negative evidence pending:** complete the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md`; current fixture-backed parsing, resolution, validation, emission, provenance, and production tests are implemented, and official-platform evidence now confirms the multiline BSL decoding contract, but the decoder and private source map, unsupported-structure, virtual-table, and temporary-table typed diagnostics, raw fixtures, and parser/full-builder negative tests must be completed before the separate `semantic_edge.reads` Coverage transition.
 21. **High — pending:** define and implement `Writes` as a separate capability after the Reads source contract is proven; do not infer writes or query-derived `DependsOn` from Reads architecture alone.
 22. **Medium:** define and preserve complete typed metadata payloads.
 23. **Medium:** add successful fixtures for every mapped metadata reference target kind.
@@ -165,8 +165,9 @@ Information Register source. Parser investigation, typed diagnostics, exact
 resolution, precise endpoint validation, emission, Query and Impact behavior,
 negative outcomes, and repeated-build production evidence are complete for the
 current fixture-backed forms. The capability remains `DeclaredOnly`; its
-multiline BSL decoding prerequisite and explicit unsupported-structure,
-virtual-table, and temporary-table negative evidence remain before the
+confirmed multiline BSL decoding contract still requires extractor and private
+source-map implementation, and explicit unsupported-structure, virtual-table,
+and temporary-table negative evidence remains before the
 registry-only Coverage transition, so aggregate counts are unchanged.
 `semantic_edge.writes` remains a separate `DeclaredOnly` capability, and its
 broad endpoint acceptance is unchanged.

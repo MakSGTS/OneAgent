@@ -1331,8 +1331,9 @@ capability. `DeclaredOnly` means that a graph enum variant exists but the EDT
 Coverage Registry has not yet been transitioned to production support. It
 ordinarily indicates that the EDT pipeline does not emit the capability; the
 task-separated Reads sequence temporarily has production emission for the
-current fixture-backed forms while required multiline unsupported-category
-negative evidence and the later registry transition remain pending.
+current fixture-backed forms while the now-authorized multiline extractor,
+unsupported-category negative evidence, and the later registry transition
+remain pending.
 
 Capabilities use typed identities based on `MetadataKind`, `NodeKind`,
 `EdgeKind`, validation codes, query capabilities, provenance paths, and typed
@@ -1769,9 +1770,11 @@ fixture-backed negative cases, Query and Impact evidence, full-builder
 integration, and repeated-build determinism are complete for the current
 fixture-backed forms. ADR-0021 still requires explicit unsupported-structure,
 virtual-table, and temporary-table negative evidence. Repository examples for
-those categories are multiline BSL literals, and their exact decoding and source
-mapping remain unresolved. Multiline extraction, typed category diagnostics,
-and full-builder negative tests must precede the separate registry transition.
+those categories are multiline BSL literals. Controlled execution on official
+1C:Enterprise `8.3.27.2214` has confirmed their pipe-style byte-decoding rules,
+and the private source-map model is accepted. Multiline extraction and mapping,
+typed category diagnostics, raw fixtures, and full-builder negative tests must
+precede the separate registry transition.
 Production completion for the current forms does not itself change the Coverage
 Registry status or aggregate counts.
 
@@ -1944,9 +1947,10 @@ The remaining thematic Semantic Coverage Completion backlog is:
    typed parsing and diagnostics, metadata source resolution, precise
    validation, EDT emission, deterministic provenance, and production tests are
    complete for the current fixture-backed forms. Before the
-   `semantic_edge.reads` Coverage transition, the multiline BSL decoding
-   contract, unsupported-structure, virtual-table, and temporary-table typed
-   diagnostics, and corresponding parser/full-builder negative tests remain.
+   `semantic_edge.reads` Coverage transition, the confirmed multiline BSL
+   decoding contract must be implemented together with its private source map;
+   unsupported-structure, virtual-table, and temporary-table typed diagnostics
+   and corresponding parser/full-builder negative tests also remain.
    Writes remains a separate architecture and implementation capability. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and

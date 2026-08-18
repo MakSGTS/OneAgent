@@ -3,17 +3,22 @@
 use oneagent_common::EntityId;
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphEdge, GraphError, NodeKind, ProducerId, Provenance,
-    ResolutionState, SemanticGraph,
+    ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
+    SemanticDiagnosticSeverity, SemanticGraph, SemanticReference, SemanticReferenceOutcome,
+    SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use crate::metadata_object::{
     EdtDocumentRegisterDeclaration, EdtDocumentRegisterDeclarationProvenance,
 };
 use crate::query_source_resolution::WorkspaceResolutionScope;
-use crate::writes::{EdtWritesCandidate, EdtWritesParseOutcome, extract_writes_candidates};
+use crate::writes::{
+    EdtWritesCandidate, EdtWritesParseOutcome, EdtWritesRejection, EdtWritesRejectionReason,
+    extract_writes_candidates,
+};
 use crate::writes_resolution::{EdtWritesResolutionIndex, EdtWritesResolutionOutcome};
 use crate::{EdtBslGraphError, EdtGraphError, EdtMetadataObjectDescriptor, EdtModuleDescriptor};
 
@@ -43,6 +48,8 @@ pub(crate) fn emit_resolved_writes(
     graph: &mut SemanticGraph,
     sources: &[EdtWritesSource],
     workspace_scope: WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<usize, EdtGraphError> {
     let owners = unique_owners(sources);
     let mut candidates = Vec::new();
@@ -56,18 +63,25 @@ pub(crate) fn emit_resolved_writes(
                 })
             })?;
 
-            candidates.extend(
-                extract_writes_candidates(&source.owner, module, &module_source)
-                    .into_iter()
-                    .filter_map(|outcome| match outcome {
-                        EdtWritesParseOutcome::Candidate(candidate) => Some(*candidate),
-                        EdtWritesParseOutcome::Rejected(_) => None,
-                    }),
-            );
+            for outcome in extract_writes_candidates(&source.owner, module, &module_source) {
+                match outcome {
+                    EdtWritesParseOutcome::Candidate(candidate) => candidates.push(*candidate),
+                    EdtWritesParseOutcome::Rejected(rejection) => {
+                        record_writes_rejection(&rejection, diagnostics, reference_statistics)?;
+                    }
+                }
+            }
         }
     }
 
-    emit_resolved_candidates(graph, &owners, &candidates, workspace_scope)
+    emit_resolved_candidates(
+        graph,
+        &owners,
+        &candidates,
+        workspace_scope,
+        diagnostics,
+        reference_statistics,
+    )
 }
 
 fn unique_owners(sources: &[EdtWritesSource]) -> Vec<EdtMetadataObjectDescriptor> {
@@ -93,6 +107,8 @@ fn emit_resolved_candidates(
     owners: &[EdtMetadataObjectDescriptor],
     candidates: &[EdtWritesCandidate],
     workspace_scope: WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<usize, EdtGraphError> {
     for candidate in candidates {
         require_node_kind(
@@ -109,7 +125,14 @@ fn emit_resolved_candidates(
     let mut evidence_by_edge = BTreeMap::<(EntityId, EntityId, EdgeKind), Vec<Provenance>>::new();
 
     for (candidate, outcome) in candidates.iter().zip(outcomes) {
-        contribute_resolution_outcome(graph, candidate, outcome, &mut evidence_by_edge)?;
+        contribute_resolution_outcome(
+            graph,
+            candidate,
+            outcome,
+            &mut evidence_by_edge,
+            diagnostics,
+            reference_statistics,
+        )?;
     }
 
     let mut inserted = 0;
@@ -133,13 +156,24 @@ fn contribute_resolution_outcome(
     candidate: &EdtWritesCandidate,
     outcome: EdtWritesResolutionOutcome,
     evidence_by_edge: &mut BTreeMap<(EntityId, EntityId, EdgeKind), Vec<Provenance>>,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<(), EdtGraphError> {
-    let EdtWritesResolutionOutcome::Resolved {
-        declaration,
-        target_id,
-    } = outcome
-    else {
-        return Ok(());
+    let (declaration, target_id) = match outcome {
+        EdtWritesResolutionOutcome::Resolved {
+            declaration,
+            target_id,
+        } => {
+            reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+            (declaration, target_id)
+        }
+        outcome => {
+            let (diagnostic, statistics_outcome) =
+                writes_resolution_diagnostic(candidate, &outcome)?;
+            diagnostics.insert(diagnostic);
+            reference_statistics.record(statistics_outcome, true);
+            return Ok(());
+        }
     };
 
     require_node_kind(
@@ -158,6 +192,400 @@ fn contribute_resolution_outcome(
         .push(writes_provenance(candidate, &declaration, &target_id)?);
 
     Ok(())
+}
+
+fn record_writes_rejection(
+    rejection: &EdtWritesRejection,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<(), EdtGraphError> {
+    let (code, kind, outcome, message) = match rejection.reason {
+        EdtWritesRejectionReason::MalformedOrIncompleteStatement => (
+            SemanticDiagnosticCode::ReferenceMalformedFormat,
+            SemanticDiagnosticKind::MalformedReferenceFormat,
+            SemanticReferenceOutcome::MalformedFormat,
+            "Writes statement is malformed or incomplete".to_owned(),
+        ),
+        reason => (
+            SemanticDiagnosticCode::ReferenceUnsupportedPrefix,
+            SemanticDiagnosticKind::UnsupportedReferencePrefix,
+            SemanticReferenceOutcome::UnsupportedPrefix,
+            format!(
+                "Writes observation uses an unsupported first-slice form: {}",
+                writes_rejection_reason_name(reason)
+            ),
+        ),
+    };
+    let mut diagnostic = SemanticDiagnostic::new(
+        code,
+        SemanticDiagnosticSeverity::Error,
+        kind,
+        message,
+        SemanticReference::Raw(rejection.raw_statement.clone()),
+    )
+    .with_provenance(vec![writes_rejection_provenance(rejection)?]);
+
+    if let Some(source_node) = &rejection.containing_symbol_id {
+        diagnostic = diagnostic.with_source_node(source_node.clone());
+    }
+    if rejection.local_name.is_some() {
+        diagnostic = diagnostic
+            .with_expected_kinds(vec![NodeKind::Metadata(MetadataKind::AccumulationRegister)]);
+    }
+
+    diagnostics.insert(diagnostic);
+    reference_statistics.record(outcome, true);
+    Ok(())
+}
+
+fn writes_resolution_diagnostic(
+    candidate: &EdtWritesCandidate,
+    outcome: &EdtWritesResolutionOutcome,
+) -> Result<(SemanticDiagnostic, SemanticReferenceOutcome), EdtGraphError> {
+    let classification = match outcome {
+        EdtWritesResolutionOutcome::MissingOwner => WritesDiagnosticClassification::unresolved(
+            "missing_owner",
+            "Writes owning Document could not be resolved",
+        ),
+        EdtWritesResolutionOutcome::AmbiguousOwner { .. } => {
+            WritesDiagnosticClassification::ambiguous(
+                "ambiguous_owner",
+                "Writes owning Document is ambiguous",
+            )
+        }
+        EdtWritesResolutionOutcome::MissingDeclaration => {
+            WritesDiagnosticClassification::unresolved(
+                "missing_declaration",
+                "Writes target has no matching Document register declaration",
+            )
+        }
+        EdtWritesResolutionOutcome::UnsupportedDeclaration { .. } => {
+            WritesDiagnosticClassification::unsupported(
+                "unsupported_declaration",
+                "Writes target uses an unsupported Document register declaration",
+            )
+        }
+        EdtWritesResolutionOutcome::AmbiguousDeclaration { .. } => {
+            WritesDiagnosticClassification::ambiguous(
+                "ambiguous_declaration",
+                "Writes target has ambiguous Document register declarations",
+            )
+        }
+        EdtWritesResolutionOutcome::MissingTarget => WritesDiagnosticClassification::unresolved(
+            "missing_target",
+            "Writes metadata target could not be resolved",
+        ),
+        EdtWritesResolutionOutcome::PartialWorkspaceTargetAbsent => {
+            WritesDiagnosticClassification::partial(
+                "partial_workspace_target_absent",
+                "Writes metadata target is absent from the partial workspace",
+            )
+        }
+        EdtWritesResolutionOutcome::IncompatibleTargetKind { .. } => {
+            WritesDiagnosticClassification::incompatible(
+                "incompatible_target_kind",
+                "Writes metadata target has an incompatible kind",
+            )
+        }
+        EdtWritesResolutionOutcome::AmbiguousTarget { .. } => {
+            WritesDiagnosticClassification::ambiguous(
+                "ambiguous_target",
+                "Writes metadata target is ambiguous",
+            )
+        }
+        EdtWritesResolutionOutcome::Resolved { .. } => {
+            unreachable!("resolved Writes observations do not produce diagnostics")
+        }
+    };
+
+    let mut diagnostic = SemanticDiagnostic::new(
+        classification.code,
+        classification.severity,
+        classification.kind,
+        classification.message,
+        SemanticReference::Raw(candidate.raw_statement.clone()),
+    )
+    .with_source_node(candidate.procedure_id.clone())
+    .with_expected_kinds(vec![NodeKind::Metadata(MetadataKind::AccumulationRegister)])
+    .with_provenance(vec![writes_resolution_provenance(
+        candidate,
+        outcome,
+        classification.outcome_name,
+        classification.resolution,
+    )?]);
+
+    match outcome {
+        EdtWritesResolutionOutcome::IncompatibleTargetKind { candidates }
+        | EdtWritesResolutionOutcome::AmbiguousTarget { candidates } => {
+            diagnostic = diagnostic.with_candidates(candidates.clone());
+        }
+        EdtWritesResolutionOutcome::Resolved { .. }
+        | EdtWritesResolutionOutcome::MissingOwner
+        | EdtWritesResolutionOutcome::AmbiguousOwner { .. }
+        | EdtWritesResolutionOutcome::MissingDeclaration
+        | EdtWritesResolutionOutcome::UnsupportedDeclaration { .. }
+        | EdtWritesResolutionOutcome::AmbiguousDeclaration { .. }
+        | EdtWritesResolutionOutcome::MissingTarget
+        | EdtWritesResolutionOutcome::PartialWorkspaceTargetAbsent => {}
+    }
+
+    Ok((diagnostic, classification.statistics_outcome))
+}
+
+struct WritesDiagnosticClassification {
+    code: SemanticDiagnosticCode,
+    kind: SemanticDiagnosticKind,
+    severity: SemanticDiagnosticSeverity,
+    statistics_outcome: SemanticReferenceOutcome,
+    resolution: ResolutionState,
+    outcome_name: &'static str,
+    message: &'static str,
+}
+
+impl WritesDiagnosticClassification {
+    const fn unresolved(outcome_name: &'static str, message: &'static str) -> Self {
+        Self {
+            code: SemanticDiagnosticCode::ReferenceUnresolved,
+            kind: SemanticDiagnosticKind::UnresolvedTarget,
+            severity: SemanticDiagnosticSeverity::Error,
+            statistics_outcome: SemanticReferenceOutcome::Unresolved,
+            resolution: ResolutionState::Unresolved,
+            outcome_name,
+            message,
+        }
+    }
+
+    const fn ambiguous(outcome_name: &'static str, message: &'static str) -> Self {
+        Self {
+            code: SemanticDiagnosticCode::ReferenceAmbiguous,
+            kind: SemanticDiagnosticKind::AmbiguousTarget,
+            severity: SemanticDiagnosticSeverity::Error,
+            statistics_outcome: SemanticReferenceOutcome::Ambiguous,
+            resolution: ResolutionState::Ambiguous,
+            outcome_name,
+            message,
+        }
+    }
+
+    const fn unsupported(outcome_name: &'static str, message: &'static str) -> Self {
+        Self {
+            code: SemanticDiagnosticCode::ReferenceUnsupportedPrefix,
+            kind: SemanticDiagnosticKind::UnsupportedReferencePrefix,
+            severity: SemanticDiagnosticSeverity::Error,
+            statistics_outcome: SemanticReferenceOutcome::UnsupportedPrefix,
+            resolution: ResolutionState::Unresolved,
+            outcome_name,
+            message,
+        }
+    }
+
+    const fn partial(outcome_name: &'static str, message: &'static str) -> Self {
+        Self {
+            code: SemanticDiagnosticCode::ReferenceUnresolved,
+            kind: SemanticDiagnosticKind::UnresolvedTarget,
+            severity: SemanticDiagnosticSeverity::Warning,
+            statistics_outcome: SemanticReferenceOutcome::Unresolved,
+            resolution: ResolutionState::Partial,
+            outcome_name,
+            message,
+        }
+    }
+
+    const fn incompatible(outcome_name: &'static str, message: &'static str) -> Self {
+        Self {
+            code: SemanticDiagnosticCode::ReferenceIncompatibleKind,
+            kind: SemanticDiagnosticKind::IncompatibleTargetKind,
+            severity: SemanticDiagnosticSeverity::Error,
+            statistics_outcome: SemanticReferenceOutcome::IncompatibleTargetKind,
+            resolution: ResolutionState::Unresolved,
+            outcome_name,
+            message,
+        }
+    }
+}
+
+fn writes_rejection_provenance(
+    rejection: &EdtWritesRejection,
+) -> Result<Provenance, EdtGraphError> {
+    let mut context = rejection.module_path.to_string_lossy().replace('\\', "/");
+    context.push_str("#writes");
+    append_context(&mut context, "owner_id", rejection.owner_id.as_str());
+    append_context(&mut context, "owner_name", rejection.owner_name.as_str());
+    append_context(&mut context, "owner_kind", rejection.owner_kind.as_str());
+    append_context(&mut context, "module_id", rejection.module_id.as_str());
+    append_context(&mut context, "module_kind", rejection.module_kind.as_str());
+    append_context(
+        &mut context,
+        "module_artifact",
+        &rejection.module_path.to_string_lossy().replace('\\', "/"),
+    );
+    if let Some(symbol_id) = &rejection.containing_symbol_id {
+        append_context(&mut context, "containing_symbol_id", symbol_id.as_str());
+    }
+    if let Some(symbol_name) = &rejection.containing_symbol_name {
+        append_context(&mut context, "containing_symbol_name", symbol_name.as_str());
+    }
+    if let Some(symbol_kind) = rejection.containing_symbol_kind {
+        append_context(&mut context, "containing_symbol_kind", symbol_kind.as_str());
+    }
+    append_context(
+        &mut context,
+        "candidate_line",
+        &rejection.location.line.to_string(),
+    );
+    append_context(
+        &mut context,
+        "candidate_column",
+        &rejection.location.column.to_string(),
+    );
+    append_context(&mut context, "raw_statement", &rejection.raw_statement);
+    append_optional_context(
+        &mut context,
+        "receiver_spelling",
+        rejection.receiver_spelling.as_deref(),
+    );
+    append_optional_context(
+        &mut context,
+        "method_spelling",
+        rejection.method_spelling.as_deref(),
+    );
+    append_optional_context(
+        &mut context,
+        "register_name",
+        rejection.local_name.as_deref(),
+    );
+    append_optional_context(
+        &mut context,
+        "normalized_register",
+        rejection.lookup_key.as_deref(),
+    );
+    append_context(&mut context, "parser_outcome", "rejected");
+    append_context(
+        &mut context,
+        "rejection_reason",
+        &writes_rejection_reason_name(rejection.reason),
+    );
+    append_producer_context(&mut context);
+
+    provenance_from_context(context, FactOrigin::Parsed, ResolutionState::Unresolved)
+}
+
+fn writes_resolution_provenance(
+    candidate: &EdtWritesCandidate,
+    outcome: &EdtWritesResolutionOutcome,
+    outcome_name: &str,
+    resolution: ResolutionState,
+) -> Result<Provenance, EdtGraphError> {
+    let mut context = candidate.module_path.to_string_lossy().replace('\\', "/");
+    context.push_str("#writes");
+    append_candidate_context(&mut context, candidate);
+    append_context(&mut context, "resolver_outcome", outcome_name);
+
+    match outcome {
+        EdtWritesResolutionOutcome::AmbiguousOwner { descriptor_paths } => {
+            for (index, path) in descriptor_paths.iter().enumerate() {
+                append_context(
+                    &mut context,
+                    &format!("owner_candidate_{index}"),
+                    &path.to_string_lossy().replace('\\', "/"),
+                );
+            }
+        }
+        EdtWritesResolutionOutcome::UnsupportedDeclaration { declarations }
+        | EdtWritesResolutionOutcome::AmbiguousDeclaration { declarations } => {
+            append_declarations_context(&mut context, declarations);
+        }
+        EdtWritesResolutionOutcome::IncompatibleTargetKind { candidates }
+        | EdtWritesResolutionOutcome::AmbiguousTarget { candidates } => {
+            for (index, candidate_id) in candidates.iter().enumerate() {
+                append_context(
+                    &mut context,
+                    &format!("target_candidate_{index}"),
+                    candidate_id.as_str(),
+                );
+            }
+        }
+        EdtWritesResolutionOutcome::Resolved { .. }
+        | EdtWritesResolutionOutcome::MissingOwner
+        | EdtWritesResolutionOutcome::MissingDeclaration
+        | EdtWritesResolutionOutcome::MissingTarget
+        | EdtWritesResolutionOutcome::PartialWorkspaceTargetAbsent => {}
+    }
+    append_producer_context(&mut context);
+
+    provenance_from_context(context, FactOrigin::Resolved, resolution)
+}
+
+fn append_declarations_context(
+    context: &mut String,
+    declarations: &[EdtDocumentRegisterDeclaration],
+) {
+    for (index, declaration) in declarations.iter().enumerate() {
+        let evidence = format!(
+            "descriptor={};raw={};namespace={};local_name={};lookup_key={};kind={};ordinals={}",
+            declaration
+                .descriptor_path
+                .to_string_lossy()
+                .replace('\\', "/"),
+            declaration.raw_value,
+            declaration.namespace,
+            declaration.local_name,
+            declaration.lookup_key,
+            declaration.kind.map_or("unsupported", MetadataKind::as_str),
+            declaration_ordinals(declaration),
+        );
+        append_context(
+            context,
+            &format!("declaration_candidate_{index}"),
+            &evidence,
+        );
+    }
+}
+
+fn append_optional_context(context: &mut String, key: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        append_context(context, key, value);
+    }
+}
+
+fn writes_rejection_reason_name(reason: EdtWritesRejectionReason) -> String {
+    match reason {
+        EdtWritesRejectionReason::MalformedOrIncompleteStatement => {
+            "malformed_or_incomplete_statement".to_owned()
+        }
+        EdtWritesRejectionReason::ExpressionRemainder => "expression_remainder".to_owned(),
+        EdtWritesRejectionReason::ComputedReceiver => "computed_receiver".to_owned(),
+        EdtWritesRejectionReason::ExtraReceiverComponents => "extra_receiver_components".to_owned(),
+        EdtWritesRejectionReason::CollectionLevelWrite => "collection_level_write".to_owned(),
+        EdtWritesRejectionReason::RequiresValueFlow => "requires_value_flow".to_owned(),
+        EdtWritesRejectionReason::UnsupportedReceiver => "unsupported_receiver".to_owned(),
+        EdtWritesRejectionReason::NonEmptyArguments => "non_empty_arguments".to_owned(),
+        EdtWritesRejectionReason::MissingContainingSymbol => "missing_containing_symbol".to_owned(),
+        EdtWritesRejectionReason::UnsupportedContainingSymbol(kind) => {
+            format!("unsupported_containing_symbol.{}", kind.as_str())
+        }
+        EdtWritesRejectionReason::UnsupportedModuleKind(kind) => {
+            format!("unsupported_module_kind.{}", kind.as_str())
+        }
+        EdtWritesRejectionReason::UnsupportedOwnerKind(kind) => {
+            format!("unsupported_owner_kind.{}", kind.as_str())
+        }
+    }
+}
+
+fn provenance_from_context(
+    context: String,
+    origin: FactOrigin,
+    resolution: ResolutionState,
+) -> Result<Provenance, EdtGraphError> {
+    let source = EntityId::new(context).map_err(|_| EdtGraphError::InvalidIdentifier)?;
+    Ok(Provenance::new(
+        Some(source),
+        ProducerId::new(WRITES_CONTRIBUTOR_STAGE),
+        origin,
+        Confidence::Exact,
+        resolution,
+    ))
 }
 
 fn require_node_kind(
@@ -324,10 +752,11 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         Confidence, EdgeKind, FactOrigin, GraphError, GraphNode, NodeKind, ResolutionState,
-        SemanticGraph,
+        SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticSeverity, SemanticGraph,
+        SemanticReferenceStatistics,
     };
     use oneagent_metadata::MetadataKind;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::fs;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
@@ -355,6 +784,22 @@ mod tests {
 
     fn writes_project_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/writes_project")
+    }
+
+    fn emit_writes_without_observability(
+        graph: &mut SemanticGraph,
+        sources: &[EdtWritesSource],
+        workspace_scope: WorkspaceResolutionScope,
+    ) -> Result<usize, EdtGraphError> {
+        let mut diagnostics = BTreeSet::<SemanticDiagnostic>::new();
+        let mut statistics = SemanticReferenceStatistics::new();
+        emit_resolved_writes(
+            graph,
+            sources,
+            workspace_scope,
+            &mut diagnostics,
+            &mut statistics,
+        )
     }
 
     fn write_source(
@@ -562,7 +1007,7 @@ mod tests {
         let node_count = graph.node_count();
 
         assert_eq!(
-            emit_resolved_writes(
+            emit_writes_without_observability(
                 &mut graph,
                 std::slice::from_ref(&source),
                 WorkspaceResolutionScope::Complete,
@@ -599,11 +1044,37 @@ mod tests {
             },
         ];
         let mut evidence = BTreeMap::new();
+        let mut diagnostics = BTreeSet::new();
+        let mut statistics = SemanticReferenceStatistics::new();
         for outcome in outcomes {
-            contribute_resolution_outcome(&graph, &candidate, outcome, &mut evidence)
-                .expect("non-resolved outcome must not fail");
+            contribute_resolution_outcome(
+                &graph,
+                &candidate,
+                outcome,
+                &mut evidence,
+                &mut diagnostics,
+                &mut statistics,
+            )
+            .expect("non-resolved outcome must not fail");
         }
         assert!(evidence.is_empty());
+        assert_eq!(diagnostics.len(), 9);
+        assert_eq!(statistics.total(), 9);
+        assert_eq!(statistics.unresolved(), 4);
+        assert_eq!(statistics.ambiguous(), 3);
+        assert_eq!(statistics.unsupported_prefix(), 1);
+        assert_eq!(statistics.incompatible_target_kind(), 1);
+        let partial = diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic
+                    .provenance()
+                    .iter()
+                    .any(|provenance| provenance.resolution() == ResolutionState::Partial)
+            })
+            .expect("partial-workspace outcome must retain partial provenance");
+        assert_eq!(partial.code(), SemanticDiagnosticCode::ReferenceUnresolved);
+        assert_eq!(partial.severity(), SemanticDiagnosticSeverity::Warning);
         assert_eq!(graph.node_count(), node_count);
     }
 
@@ -625,7 +1096,7 @@ mod tests {
         let mut missing = SemanticGraph::new();
         let procedure_id = insert_source_context(&mut missing, &source, None);
         insert_accumulation_register(&mut missing, "target.stock", "Stock");
-        let error = emit_resolved_writes(
+        let error = emit_writes_without_observability(
             &mut missing,
             std::slice::from_ref(&source),
             WorkspaceResolutionScope::Complete,
@@ -639,7 +1110,7 @@ mod tests {
         let mut wrong_kind = SemanticGraph::new();
         insert_source_context(&mut wrong_kind, &source, Some(NodeKind::Function));
         insert_accumulation_register(&mut wrong_kind, "target.stock", "Stock");
-        let error = emit_resolved_writes(
+        let error = emit_writes_without_observability(
             &mut wrong_kind,
             std::slice::from_ref(&source),
             WorkspaceResolutionScope::Complete,
@@ -675,11 +1146,15 @@ mod tests {
         insert_accumulation_register(&mut graph, "target.stock", "Stock");
         let node_count = graph.node_count();
 
+        let mut diagnostics = BTreeSet::new();
+        let mut statistics = SemanticReferenceStatistics::new();
         assert_eq!(
             emit_resolved_writes(
                 &mut graph,
                 &[source.clone(), source],
                 WorkspaceResolutionScope::Complete,
+                &mut diagnostics,
+                &mut statistics,
             )
             .expect("duplicate evidence must emit"),
             1
@@ -688,6 +1163,9 @@ mod tests {
         let writes = writes_snapshot(&graph);
         assert_eq!(writes.len(), 1);
         assert_eq!(writes[0].2.len(), 2);
+        assert!(diagnostics.is_empty());
+        assert_eq!(statistics.total(), 4);
+        assert_eq!(statistics.resolved(), 4);
         assert_eq!(graph.node_count(), node_count);
         let provenance_sources = writes[0]
             .2
@@ -752,24 +1230,34 @@ mod tests {
         insert_accumulation_register(&mut second, "target.beta", "Beta");
         insert_source_context(&mut second, &source, Some(NodeKind::Procedure));
 
+        let mut first_diagnostics = BTreeSet::new();
+        let mut first_statistics = SemanticReferenceStatistics::new();
         emit_resolved_candidates(
             &mut first,
             &owners,
             &candidates,
             WorkspaceResolutionScope::Complete,
+            &mut first_diagnostics,
+            &mut first_statistics,
         )
         .expect("normal order must emit");
         candidates.reverse();
         let mut reversed_owners = owners;
         reversed_owners.reverse();
+        let mut second_diagnostics = BTreeSet::new();
+        let mut second_statistics = SemanticReferenceStatistics::new();
         emit_resolved_candidates(
             &mut second,
             &reversed_owners,
             &candidates,
             WorkspaceResolutionScope::Complete,
+            &mut second_diagnostics,
+            &mut second_statistics,
         )
         .expect("reversed order must emit");
 
         assert_eq!(writes_snapshot(&first), writes_snapshot(&second));
+        assert_eq!(first_diagnostics, second_diagnostics);
+        assert_eq!(first_statistics, second_statistics);
     }
 }

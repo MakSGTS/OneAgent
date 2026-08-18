@@ -581,26 +581,33 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         )
         .map_err(EdtGraphError::Bsl)?;
 
-        emit_configuration_writes(&mut graph, &configuration_writes_sources)?;
-
-        Ok(EdtSemanticGraphBuildResult::new_with_reference_statistics(
+        finish_configuration_graph_build(
             graph,
-            diagnostics.into_iter().collect(),
+            &configuration_writes_sources,
+            diagnostics,
             reference_statistics,
-        ))
+        )
     }
 }
 
-fn emit_configuration_writes(
-    graph: &mut SemanticGraph,
+fn finish_configuration_graph_build(
+    mut graph: SemanticGraph,
     sources: &[writes_emission::EdtWritesSource],
-) -> Result<(), EdtGraphError> {
+    mut diagnostics: BTreeSet<SemanticDiagnostic>,
+    mut reference_statistics: SemanticReferenceStatistics,
+) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
     writes_emission::emit_resolved_writes(
-        graph,
+        &mut graph,
         sources,
         query_source_resolution::WorkspaceResolutionScope::Complete,
+        &mut diagnostics,
+        &mut reference_statistics,
     )?;
-    Ok(())
+    Ok(EdtSemanticGraphBuildResult::new_with_reference_statistics(
+        graph,
+        diagnostics.into_iter().collect(),
+        reference_statistics,
+    ))
 }
 
 fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {

@@ -10,7 +10,7 @@ use crate::{EdtMetadataObjectDescriptor, EdtModuleDescriptor, EdtModuleKind};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EdtWritesParseOutcome {
     Candidate(Box<EdtWritesCandidate>),
-    Rejected(EdtWritesRejection),
+    Rejected(Box<EdtWritesRejection>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,7 +33,20 @@ pub(crate) struct EdtWritesCandidate {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct EdtWritesRejection {
+    pub(crate) owner_id: EntityId,
+    pub(crate) owner_name: EntityName,
+    pub(crate) owner_kind: MetadataKind,
+    pub(crate) module_id: EntityId,
+    pub(crate) module_path: PathBuf,
+    pub(crate) module_kind: EdtModuleKind,
+    pub(crate) containing_symbol_id: Option<EntityId>,
+    pub(crate) containing_symbol_name: Option<EntityName>,
+    pub(crate) containing_symbol_kind: Option<BslSymbolKind>,
     pub(crate) raw_statement: String,
+    pub(crate) receiver_spelling: Option<String>,
+    pub(crate) local_name: Option<String>,
+    pub(crate) method_spelling: Option<String>,
+    pub(crate) lookup_key: Option<String>,
     pub(crate) location: EdtWritesSourceLocation,
     pub(crate) reason: EdtWritesRejectionReason,
 }
@@ -147,14 +160,17 @@ fn classify_write(
     method_position: usize,
 ) -> EdtWritesParseOutcome {
     let open_parenthesis = method_position + 1;
+    let chain = receiver_chain(tokens, method_position);
+    let reject =
+        |reason, chain| rejection(owner, module, containing_symbol, statement, reason, chain);
     let Some(close_parenthesis) = matching_parenthesis(tokens, open_parenthesis) else {
-        return rejection(
-            statement,
+        return reject(
             EdtWritesRejectionReason::MalformedOrIncompleteStatement,
+            chain.as_ref(),
         );
     };
 
-    let Some(chain) = receiver_chain(tokens, method_position) else {
+    let Some(chain) = chain else {
         let reason =
             if method_position >= 2 && matches!(tokens[method_position - 1].kind, TokenKind::Dot) {
                 EdtWritesRejectionReason::ComputedReceiver
@@ -162,61 +178,67 @@ fn classify_write(
                 EdtWritesRejectionReason::UnsupportedReceiver
             };
 
-        return rejection(statement, reason);
+        return reject(reason, None);
     };
 
     if has_expression_remainder(tokens, chain.start, close_parenthesis) {
-        return rejection(statement, EdtWritesRejectionReason::ExpressionRemainder);
+        return reject(EdtWritesRejectionReason::ExpressionRemainder, Some(&chain));
     }
 
     let receiver_components = &chain.components[..chain.components.len() - 1];
 
     if receiver_components.len() > 2 {
-        return rejection(statement, EdtWritesRejectionReason::ExtraReceiverComponents);
+        return reject(
+            EdtWritesRejectionReason::ExtraReceiverComponents,
+            Some(&chain),
+        );
     }
 
     if receiver_components.len() == 1
         && receiver_components[0].eq_ignore_ascii_case("RegisterRecords")
     {
-        return rejection(statement, EdtWritesRejectionReason::CollectionLevelWrite);
+        return reject(EdtWritesRejectionReason::CollectionLevelWrite, Some(&chain));
     }
 
     if receiver_components.len() == 1 {
-        return rejection(statement, EdtWritesRejectionReason::RequiresValueFlow);
+        return reject(EdtWritesRejectionReason::RequiresValueFlow, Some(&chain));
     }
 
     if receiver_components.len() != 2
         || !receiver_components[0].eq_ignore_ascii_case("RegisterRecords")
     {
-        return rejection(statement, EdtWritesRejectionReason::UnsupportedReceiver);
+        return reject(EdtWritesRejectionReason::UnsupportedReceiver, Some(&chain));
     }
 
     if close_parenthesis > open_parenthesis + 1 {
-        return rejection(statement, EdtWritesRejectionReason::NonEmptyArguments);
+        return reject(EdtWritesRejectionReason::NonEmptyArguments, Some(&chain));
     }
 
     let Some(symbol) = containing_symbol else {
-        return rejection(statement, EdtWritesRejectionReason::MissingContainingSymbol);
+        return reject(
+            EdtWritesRejectionReason::MissingContainingSymbol,
+            Some(&chain),
+        );
     };
 
     if symbol.kind != BslSymbolKind::Procedure {
-        return rejection(
-            statement,
+        return reject(
             EdtWritesRejectionReason::UnsupportedContainingSymbol(symbol.kind),
+            Some(&chain),
         );
     }
 
     if module.kind() != EdtModuleKind::Object {
-        return rejection(
-            statement,
+        return reject(
             EdtWritesRejectionReason::UnsupportedModuleKind(module.kind()),
+            Some(&chain),
         );
     }
 
     if owner.kind() != MetadataKind::Document {
-        return rejection(
-            statement,
+        return reject(
             EdtWritesRejectionReason::UnsupportedOwnerKind(owner.kind()),
+            Some(&chain),
         );
     }
 
@@ -244,12 +266,43 @@ fn classify_write(
     }))
 }
 
-fn rejection(statement: &Statement, reason: EdtWritesRejectionReason) -> EdtWritesParseOutcome {
-    EdtWritesParseOutcome::Rejected(EdtWritesRejection {
+fn rejection(
+    owner: &EdtMetadataObjectDescriptor,
+    module: &EdtModuleDescriptor,
+    containing_symbol: Option<&ContainingSymbol>,
+    statement: &Statement,
+    reason: EdtWritesRejectionReason,
+    chain: Option<&ReceiverChain>,
+) -> EdtWritesParseOutcome {
+    let receiver_spelling =
+        chain.map(|chain| chain.components[..chain.components.len() - 1].join("."));
+    let local_name = chain.and_then(|chain| {
+        let receiver_components = &chain.components[..chain.components.len() - 1];
+        (receiver_components.len() >= 2
+            && receiver_components[0].eq_ignore_ascii_case("RegisterRecords"))
+        .then(|| receiver_components[1].clone())
+    });
+    let method_spelling = chain.and_then(|chain| chain.components.last().cloned());
+    let lookup_key = local_name.as_ref().map(|name| name.to_lowercase());
+
+    EdtWritesParseOutcome::Rejected(Box::new(EdtWritesRejection {
+        owner_id: owner.id().clone(),
+        owner_name: owner.name().clone(),
+        owner_kind: owner.kind(),
+        module_id: module.id().clone(),
+        module_path: module.path().to_path_buf(),
+        module_kind: module.kind(),
+        containing_symbol_id: containing_symbol.map(|symbol| symbol.id.clone()),
+        containing_symbol_name: containing_symbol.map(|symbol| symbol.name.clone()),
+        containing_symbol_kind: containing_symbol.map(|symbol| symbol.kind),
         raw_statement: statement.raw.clone(),
+        receiver_spelling,
+        local_name,
+        method_spelling,
+        lookup_key,
         location: statement.location,
         reason,
-    })
+    }))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -14,7 +14,9 @@ use oneagent_metadata::MetadataKind;
 
 use crate::{
     Confidence, EdgeId, EdgeKind, FactOrigin, NodeKind, ProducerId, Provenance, ResolutionState,
-    SemanticDiagnostic, SemanticGraph, SemanticGraphReport, SemanticReferenceStatistics,
+    SemanticDiagnostic, SemanticDiagnosticKind, SemanticGraph, SemanticGraphReport,
+    SemanticReferenceCategory, SemanticReferenceRequest, SemanticReferenceRequestId,
+    SemanticReferenceRequestLedger, SemanticReferenceRequestOutcome, SemanticReferenceStatistics,
 };
 
 /// Stable machine-readable validation issue code.
@@ -44,6 +46,20 @@ pub enum SemanticGraphValidationCode {
     InconsistentDiagnosticStatistics,
     /// A supplied graph report is inconsistent with graph, diagnostics or counters.
     InconsistentReport,
+    /// A build-boundary request has not reached a terminal outcome.
+    NonTerminalReferenceRequest,
+    /// A request source node is absent from the graph snapshot.
+    MissingReferenceRequestSource,
+    /// A request candidate node is absent from the graph snapshot.
+    MissingReferenceRequestCandidate,
+    /// A resolved or ambiguous candidate kind is not accepted by the request.
+    IncompatibleReferenceRequestCandidate,
+    /// A resolved request has no matching direct edge projection.
+    MissingReferenceRequestEdgeProjection,
+    /// A non-resolved request has a direct edge projection.
+    UnexpectedReferenceRequestEdgeProjection,
+    /// A failed terminal request has no matching typed diagnostic projection.
+    MissingReferenceRequestDiagnosticProjection,
 }
 
 impl SemanticGraphValidationCode {
@@ -67,6 +83,23 @@ impl SemanticGraphValidationCode {
                 "graph.build.inconsistent_diagnostic_statistics"
             }
             Self::InconsistentReport => "graph.build.inconsistent_report",
+            Self::NonTerminalReferenceRequest => "graph.build.reference_request.non_terminal",
+            Self::MissingReferenceRequestSource => "graph.build.reference_request.missing_source",
+            Self::MissingReferenceRequestCandidate => {
+                "graph.build.reference_request.missing_candidate"
+            }
+            Self::IncompatibleReferenceRequestCandidate => {
+                "graph.build.reference_request.incompatible_candidate"
+            }
+            Self::MissingReferenceRequestEdgeProjection => {
+                "graph.build.reference_request.missing_edge_projection"
+            }
+            Self::UnexpectedReferenceRequestEdgeProjection => {
+                "graph.build.reference_request.unexpected_edge_projection"
+            }
+            Self::MissingReferenceRequestDiagnosticProjection => {
+                "graph.build.reference_request.missing_diagnostic_projection"
+            }
         }
     }
 }
@@ -113,6 +146,7 @@ pub struct SemanticGraphValidationIssue {
     target_kind: Option<NodeKind>,
     edge_kind: Option<EdgeKind>,
     provenance: Vec<Provenance>,
+    reference_request_id: Option<SemanticReferenceRequestId>,
     invariant: &'static str,
 }
 
@@ -135,6 +169,7 @@ impl SemanticGraphValidationIssue {
             target_kind: None,
             edge_kind: None,
             provenance: Vec::new(),
+            reference_request_id: None,
             invariant,
         }
     }
@@ -199,6 +234,12 @@ impl SemanticGraphValidationIssue {
         &self.provenance
     }
 
+    /// Returns the related reference request identity, when applicable.
+    #[must_use]
+    pub const fn reference_request_id(&self) -> Option<&SemanticReferenceRequestId> {
+        self.reference_request_id.as_ref()
+    }
+
     /// Returns the invariant context checked by this issue.
     #[must_use]
     pub const fn invariant(&self) -> &'static str {
@@ -237,6 +278,11 @@ impl SemanticGraphValidationIssue {
         self
     }
 
+    fn with_reference_request_id(mut self, id: SemanticReferenceRequestId) -> Self {
+        self.reference_request_id = Some(id);
+        self
+    }
+
     fn provenance_key(&self) -> Vec<ProvenanceKey> {
         self.provenance
             .iter()
@@ -259,6 +305,7 @@ impl Ord for SemanticGraphValidationIssue {
             self.kind,
             &self.nodes,
             &self.edge_id,
+            &self.reference_request_id,
             self.edge_kind,
             self.source_kind,
             self.target_kind,
@@ -272,6 +319,7 @@ impl Ord for SemanticGraphValidationIssue {
                 other.kind,
                 &other.nodes,
                 &other.edge_id,
+                &other.reference_request_id,
                 other.edge_kind,
                 other.source_kind,
                 other.target_kind,
@@ -515,6 +563,198 @@ impl SemanticGraphValidator {
         );
 
         SemanticGraphValidationResult::new(issues)
+    }
+
+    /// Validates a build snapshot whose accepted references are canonical requests.
+    #[must_use]
+    pub fn validate_build_result_with_reference_requests(
+        &self,
+        graph: &SemanticGraph,
+        diagnostics: &[SemanticDiagnostic],
+        requests: &SemanticReferenceRequestLedger,
+    ) -> SemanticGraphValidationResult {
+        self.validate_build_result_with_reference_requests_and_legacy_observations(
+            graph,
+            diagnostics,
+            requests,
+            SemanticReferenceStatistics::new(),
+        )
+    }
+
+    /// Validates a request-aware build snapshot during producer migration.
+    ///
+    /// `legacy_observations` must exclude accepted references already present
+    /// in `requests`.
+    #[must_use]
+    pub fn validate_build_result_with_reference_requests_and_legacy_observations(
+        &self,
+        graph: &SemanticGraph,
+        diagnostics: &[SemanticDiagnostic],
+        requests: &SemanticReferenceRequestLedger,
+        legacy_observations: SemanticReferenceStatistics,
+    ) -> SemanticGraphValidationResult {
+        let report =
+            SemanticGraphReport::from_graph_diagnostics_reference_requests_and_legacy_observations(
+                graph,
+                diagnostics,
+                requests,
+                legacy_observations,
+            );
+        self.validate_build_result_with_reference_requests_and_report(
+            graph,
+            diagnostics,
+            requests,
+            legacy_observations,
+            &report,
+        )
+    }
+
+    /// Validates request projections and a supplied request-aware report.
+    #[must_use]
+    pub fn validate_build_result_with_reference_requests_and_report(
+        &self,
+        graph: &SemanticGraph,
+        diagnostics: &[SemanticDiagnostic],
+        requests: &SemanticReferenceRequestLedger,
+        legacy_observations: SemanticReferenceStatistics,
+        report: &SemanticGraphReport,
+    ) -> SemanticGraphValidationResult {
+        let statistics = SemanticReferenceStatistics::from_reference_requests(requests)
+            .including_legacy_observations(legacy_observations);
+        let mut issues = self
+            .validate_build_result_with_report(graph, diagnostics, statistics, report)
+            .issues()
+            .to_vec();
+        Self::validate_reference_requests(graph, diagnostics, requests, &mut issues);
+        SemanticGraphValidationResult::new(issues)
+    }
+
+    fn validate_reference_requests(
+        graph: &SemanticGraph,
+        diagnostics: &[SemanticDiagnostic],
+        requests: &SemanticReferenceRequestLedger,
+        issues: &mut Vec<SemanticGraphValidationIssue>,
+    ) {
+        for request in requests.requests() {
+            Self::validate_reference_request_nodes(graph, request, issues);
+            Self::validate_reference_request_edge(graph, request, issues);
+            Self::validate_reference_request_diagnostic(diagnostics, request, issues);
+        }
+    }
+
+    fn validate_reference_request_nodes(
+        graph: &SemanticGraph,
+        request: &SemanticReferenceRequest,
+        issues: &mut Vec<SemanticGraphValidationIssue>,
+    ) {
+        if request.outcome() == SemanticReferenceRequestOutcome::Collected {
+            issues.push(reference_request_issue(
+                SemanticGraphValidationCode::NonTerminalReferenceRequest,
+                "semantic reference request has not reached a terminal outcome",
+                "terminal reference request lifecycle",
+                request,
+            ));
+        }
+
+        if graph.node(request.source_node()).is_none() {
+            issues.push(reference_request_issue(
+                SemanticGraphValidationCode::MissingReferenceRequestSource,
+                "semantic reference request source node is missing",
+                "reference request source existence",
+                request,
+            ));
+        }
+
+        for candidate in request.candidates() {
+            let Some(node) = graph.node(candidate) else {
+                issues.push(reference_request_issue(
+                    SemanticGraphValidationCode::MissingReferenceRequestCandidate,
+                    "semantic reference request candidate node is missing",
+                    "reference request candidate existence",
+                    request,
+                ));
+                continue;
+            };
+            if matches!(
+                request.outcome(),
+                SemanticReferenceRequestOutcome::Resolved
+                    | SemanticReferenceRequestOutcome::AmbiguousTarget
+            ) && !request.expected_kinds().contains(&node.kind())
+            {
+                issues.push(
+                    reference_request_issue(
+                        SemanticGraphValidationCode::IncompatibleReferenceRequestCandidate,
+                        "semantic reference request candidate kind is incompatible",
+                        "reference request candidate kind compatibility",
+                        request,
+                    )
+                    .with_target_kind(node.kind()),
+                );
+            }
+        }
+    }
+
+    fn validate_reference_request_edge(
+        graph: &SemanticGraph,
+        request: &SemanticReferenceRequest,
+        issues: &mut Vec<SemanticGraphValidationIssue>,
+    ) {
+        let edge_kind = reference_request_edge_kind(request.category());
+        let has_projection = request.candidates().iter().any(|candidate| {
+            graph.edges().any(|edge| {
+                edge.source() == request.source_node()
+                    && edge.target() == candidate
+                    && edge.kind() == edge_kind
+            })
+        });
+
+        if request.outcome() == SemanticReferenceRequestOutcome::Resolved && !has_projection {
+            issues.push(
+                reference_request_issue(
+                    SemanticGraphValidationCode::MissingReferenceRequestEdgeProjection,
+                    "resolved semantic reference request has no direct edge projection",
+                    "resolved reference request edge projection",
+                    request,
+                )
+                .with_edge_kind(edge_kind),
+            );
+        } else if request.outcome() != SemanticReferenceRequestOutcome::Resolved && has_projection {
+            issues.push(
+                reference_request_issue(
+                    SemanticGraphValidationCode::UnexpectedReferenceRequestEdgeProjection,
+                    "non-resolved semantic reference request has a direct edge projection",
+                    "non-resolved reference request edge projection",
+                    request,
+                )
+                .with_edge_kind(edge_kind),
+            );
+        }
+    }
+
+    fn validate_reference_request_diagnostic(
+        diagnostics: &[SemanticDiagnostic],
+        request: &SemanticReferenceRequest,
+        issues: &mut Vec<SemanticGraphValidationIssue>,
+    ) {
+        let Some(expected_kind) = reference_request_diagnostic_kind(request.outcome()) else {
+            return;
+        };
+        let has_projection = diagnostics.iter().any(|diagnostic| {
+            diagnostic.kind() == expected_kind
+                && diagnostic.source_node() == Some(request.source_node())
+                && diagnostic.reference() == request.reference()
+                && diagnostic.expected_kinds() == request.expected_kinds()
+                && diagnostic.candidates() == request.candidates()
+                && !diagnostic.provenance().is_empty()
+        });
+        if !has_projection {
+            issues.push(reference_request_issue(
+                SemanticGraphValidationCode::MissingReferenceRequestDiagnosticProjection,
+                "failed semantic reference request has no matching typed diagnostic projection",
+                "failed reference request diagnostic projection",
+                request,
+            ));
+        }
     }
 
     fn validate_edges(graph: &SemanticGraph, issues: &mut Vec<SemanticGraphValidationIssue>) {
@@ -818,6 +1058,63 @@ impl SemanticGraphValidator {
 impl Default for SemanticGraphValidator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn reference_request_issue(
+    code: SemanticGraphValidationCode,
+    message: &'static str,
+    invariant: &'static str,
+    request: &SemanticReferenceRequest,
+) -> SemanticGraphValidationIssue {
+    SemanticGraphValidationIssue::new(
+        code,
+        SemanticGraphValidationSeverity::Error,
+        SemanticGraphValidationIssueKind::BuildConsistency,
+        message,
+        invariant,
+    )
+    .with_nodes(
+        std::iter::once(request.source_node().clone())
+            .chain(request.candidates().iter().cloned())
+            .collect(),
+    )
+    .with_provenance(request.provenance())
+    .with_reference_request_id(request.id().clone())
+}
+
+const fn reference_request_edge_kind(category: SemanticReferenceCategory) -> EdgeKind {
+    match category {
+        SemanticReferenceCategory::MetadataType | SemanticReferenceCategory::ProtectedResource => {
+            EdgeKind::References
+        }
+        SemanticReferenceCategory::Callable => EdgeKind::Calls,
+        SemanticReferenceCategory::QuerySource => EdgeKind::Reads,
+        SemanticReferenceCategory::WriteTarget => EdgeKind::Writes,
+        SemanticReferenceCategory::SubsystemMember => EdgeKind::Includes,
+        SemanticReferenceCategory::ExtensionTarget => EdgeKind::Extends,
+    }
+}
+
+const fn reference_request_diagnostic_kind(
+    outcome: SemanticReferenceRequestOutcome,
+) -> Option<SemanticDiagnosticKind> {
+    match outcome {
+        SemanticReferenceRequestOutcome::MissingTarget => {
+            Some(SemanticDiagnosticKind::UnresolvedTarget)
+        }
+        SemanticReferenceRequestOutcome::AmbiguousTarget => {
+            Some(SemanticDiagnosticKind::AmbiguousTarget)
+        }
+        SemanticReferenceRequestOutcome::IncompatibleTargetKind => {
+            Some(SemanticDiagnosticKind::IncompatibleTargetKind)
+        }
+        SemanticReferenceRequestOutcome::InvalidOwnerReference => {
+            Some(SemanticDiagnosticKind::InvalidOwnerReference)
+        }
+        SemanticReferenceRequestOutcome::Collected
+        | SemanticReferenceRequestOutcome::Resolved
+        | SemanticReferenceRequestOutcome::PartialWorkspace => None,
     }
 }
 

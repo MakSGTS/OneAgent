@@ -8,19 +8,70 @@ use crate::{
     Confidence, EdgeKind, FactOrigin, GraphDiffSummary, NodeKind, ProducerId, Provenance,
     ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
     SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphDiff, SemanticGraphReport,
-    SemanticReference, SemanticReferenceStatistics,
+    SemanticReference, SemanticReferenceRequest, SemanticReferenceRequestId,
+    SemanticReferenceRequestLedger, SemanticReferenceStatistics,
 };
+
+/// Borrowed inputs for a request-aware semantic build snapshot.
+#[derive(Debug, Clone, Copy)]
+pub struct SemanticGraphBuildSnapshot<'snapshot> {
+    graph: &'snapshot SemanticGraph,
+    diagnostics: &'snapshot [SemanticDiagnostic],
+    requests: &'snapshot SemanticReferenceRequestLedger,
+    legacy_observations: SemanticReferenceStatistics,
+}
+
+impl<'snapshot> SemanticGraphBuildSnapshot<'snapshot> {
+    /// Creates a snapshot whose reference statistics come only from requests.
+    #[must_use]
+    pub const fn from_reference_requests(
+        graph: &'snapshot SemanticGraph,
+        diagnostics: &'snapshot [SemanticDiagnostic],
+        requests: &'snapshot SemanticReferenceRequestLedger,
+    ) -> Self {
+        Self {
+            graph,
+            diagnostics,
+            requests,
+            legacy_observations: SemanticReferenceStatistics::new(),
+        }
+    }
+
+    /// Creates a transitional snapshot with non-migrated reference counters.
+    ///
+    /// `legacy_observations` must exclude accepted requests in `requests`.
+    #[must_use]
+    pub const fn with_legacy_observations(
+        graph: &'snapshot SemanticGraph,
+        diagnostics: &'snapshot [SemanticDiagnostic],
+        requests: &'snapshot SemanticReferenceRequestLedger,
+        legacy_observations: SemanticReferenceStatistics,
+    ) -> Self {
+        Self {
+            graph,
+            diagnostics,
+            requests,
+            legacy_observations,
+        }
+    }
+
+    fn statistics(self) -> SemanticReferenceStatistics {
+        SemanticReferenceStatistics::from_reference_requests(self.requests)
+            .including_legacy_observations(self.legacy_observations)
+    }
+}
 
 /// Deterministic diff between two complete semantic graph build snapshots.
 ///
 /// The diff is directional: `previous -> current`. It reuses
 /// [`SemanticGraphDiff`] for node and edge comparison, then compares semantic
-/// diagnostics, reference resolution counters, graph quality report aggregates
-/// and provenance coverage aggregates.
+/// diagnostics, reference requests, reference resolution counters, graph
+/// quality report aggregates and provenance coverage aggregates.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticGraphBuildDiff {
     graph: SemanticGraphDiff,
     diagnostics: DiagnosticDiff,
+    requests: ReferenceRequestDiff,
     resolution: ResolutionStatisticsDiff,
     report: GraphReportDiff,
     provenance: ProvenanceCoverageDiff,
@@ -40,6 +91,44 @@ impl SemanticGraphBuildDiff {
         current_graph: &SemanticGraph,
         current_diagnostics: &[SemanticDiagnostic],
         current_resolution: SemanticReferenceStatistics,
+    ) -> Self {
+        Self::between_parts(
+            previous_graph,
+            previous_diagnostics,
+            previous_resolution,
+            current_graph,
+            current_diagnostics,
+            current_resolution,
+            ReferenceRequestDiff::default(),
+        )
+    }
+
+    /// Compares request-aware build snapshots in the `previous -> current` direction.
+    #[must_use]
+    pub fn between_with_reference_requests(
+        previous: SemanticGraphBuildSnapshot<'_>,
+        current: SemanticGraphBuildSnapshot<'_>,
+    ) -> Self {
+        let requests = ReferenceRequestDiff::between(previous.requests, current.requests);
+        Self::between_parts(
+            previous.graph,
+            previous.diagnostics,
+            previous.statistics(),
+            current.graph,
+            current.diagnostics,
+            current.statistics(),
+            requests,
+        )
+    }
+
+    fn between_parts(
+        previous_graph: &SemanticGraph,
+        previous_diagnostics: &[SemanticDiagnostic],
+        previous_resolution: SemanticReferenceStatistics,
+        current_graph: &SemanticGraph,
+        current_diagnostics: &[SemanticDiagnostic],
+        current_resolution: SemanticReferenceStatistics,
+        requests: ReferenceRequestDiff,
     ) -> Self {
         let graph = SemanticGraphDiff::between(previous_graph, current_graph);
         let diagnostics = DiagnosticDiff::between(previous_diagnostics, current_diagnostics);
@@ -62,6 +151,7 @@ impl SemanticGraphBuildDiff {
         let summary = BuildDiffSummary::new(
             graph.summary(),
             diagnostics.summary(),
+            requests.summary().total_changes(),
             resolution.changed_metrics().len(),
             report.changed_metric_count(),
             provenance.changed_metrics().len(),
@@ -70,6 +160,7 @@ impl SemanticGraphBuildDiff {
         Self {
             graph,
             diagnostics,
+            requests,
             resolution,
             report,
             provenance,
@@ -87,6 +178,12 @@ impl SemanticGraphBuildDiff {
     #[must_use]
     pub const fn diagnostics(&self) -> &DiagnosticDiff {
         &self.diagnostics
+    }
+
+    /// Returns semantic reference request changes.
+    #[must_use]
+    pub const fn reference_requests(&self) -> &ReferenceRequestDiff {
+        &self.requests
     }
 
     /// Returns reference resolution counter changes.
@@ -122,15 +219,16 @@ impl SemanticGraphBuildDiff {
 
 /// Compact counters for a full build result diff.
 ///
-/// `total_changes` is the sum of changed graph entities, diagnostic records,
-/// changed resolution metrics, changed report metrics and changed provenance
-/// coverage metrics. Numeric delta magnitudes are not counted as separate
-/// events.
+/// `total_changes` is the sum of changed graph entities, diagnostic and request
+/// records, changed resolution metrics, changed report metrics and changed
+/// provenance coverage metrics. Numeric delta magnitudes are not counted as
+/// separate events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuildDiffSummary {
     nodes: usize,
     edges: usize,
     diagnostics: usize,
+    requests: usize,
     resolution_metrics: usize,
     report_metrics: usize,
     provenance_coverage: usize,
@@ -140,6 +238,7 @@ impl BuildDiffSummary {
     const fn new(
         graph: GraphDiffSummary,
         diagnostics: DiagnosticDiffSummary,
+        request_changes: usize,
         resolution_metric_changes: usize,
         report_metric_changes: usize,
         provenance_coverage_changes: usize,
@@ -148,6 +247,7 @@ impl BuildDiffSummary {
             nodes: graph.nodes_added() + graph.nodes_removed() + graph.nodes_modified(),
             edges: graph.edges_added() + graph.edges_removed() + graph.edges_modified(),
             diagnostics: diagnostics.total_changes(),
+            requests: request_changes,
             resolution_metrics: resolution_metric_changes,
             report_metrics: report_metric_changes,
             provenance_coverage: provenance_coverage_changes,
@@ -170,6 +270,12 @@ impl BuildDiffSummary {
     #[must_use]
     pub const fn diagnostic_changes(self) -> usize {
         self.diagnostics
+    }
+
+    /// Returns added, removed and modified reference requests.
+    #[must_use]
+    pub const fn reference_request_changes(self) -> usize {
+        self.requests
     }
 
     /// Returns changed resolution metric entries.
@@ -196,9 +302,250 @@ impl BuildDiffSummary {
         self.nodes
             + self.edges
             + self.diagnostics
+            + self.requests
             + self.resolution_metrics
             + self.report_metrics
             + self.provenance_coverage
+    }
+}
+
+/// Deterministic semantic reference request diff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceRequestDiff {
+    added: Vec<ReferenceRequestChange>,
+    removed: Vec<ReferenceRequestChange>,
+    modified: Vec<ReferenceRequestChange>,
+    summary: ReferenceRequestDiffSummary,
+}
+
+impl ReferenceRequestDiff {
+    /// Compares canonical ledgers by stable request identity.
+    #[must_use]
+    pub fn between(
+        previous: &SemanticReferenceRequestLedger,
+        current: &SemanticReferenceRequestLedger,
+    ) -> Self {
+        let previous = reference_request_index(previous);
+        let current = reference_request_index(current);
+        let mut added = Vec::new();
+        let mut removed = Vec::new();
+        let mut modified = Vec::new();
+
+        for (id, previous_request) in &previous {
+            match current.get(id) {
+                Some(current_request) => {
+                    let aspects =
+                        reference_request_modified_aspects(previous_request, current_request);
+                    if !aspects.is_empty() {
+                        modified.push(ReferenceRequestChange::modified(
+                            id.clone(),
+                            previous_request.clone(),
+                            current_request.clone(),
+                            aspects,
+                        ));
+                    }
+                }
+                None => removed.push(ReferenceRequestChange::removed(
+                    id.clone(),
+                    previous_request.clone(),
+                )),
+            }
+        }
+
+        for (id, current_request) in &current {
+            if !previous.contains_key(id) {
+                added.push(ReferenceRequestChange::added(
+                    id.clone(),
+                    current_request.clone(),
+                ));
+            }
+        }
+
+        let summary = ReferenceRequestDiffSummary::new(added.len(), removed.len(), modified.len());
+        Self {
+            added,
+            removed,
+            modified,
+            summary,
+        }
+    }
+
+    /// Returns requests present only in the current snapshot.
+    #[must_use]
+    pub fn added(&self) -> &[ReferenceRequestChange] {
+        &self.added
+    }
+
+    /// Returns requests present only in the previous snapshot.
+    #[must_use]
+    pub fn removed(&self) -> &[ReferenceRequestChange] {
+        &self.removed
+    }
+
+    /// Returns requests whose mutable content changed under one identity.
+    #[must_use]
+    pub fn modified(&self) -> &[ReferenceRequestChange] {
+        &self.modified
+    }
+
+    /// Returns compact request change counters.
+    #[must_use]
+    pub const fn summary(&self) -> ReferenceRequestDiffSummary {
+        self.summary
+    }
+}
+
+impl Default for ReferenceRequestDiff {
+    fn default() -> Self {
+        Self {
+            added: Vec::new(),
+            removed: Vec::new(),
+            modified: Vec::new(),
+            summary: ReferenceRequestDiffSummary::new(0, 0, 0),
+        }
+    }
+}
+
+/// Direction of one reference request change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ReferenceRequestChangeKind {
+    /// The request exists only in the current snapshot.
+    Added,
+    /// The request exists only in the previous snapshot.
+    Removed,
+    /// Mutable request content changed under the same identity.
+    Modified,
+}
+
+/// Mutable request aspects compared by request diffs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ReferenceRequestModifiedAspect {
+    /// Candidate identities changed.
+    Candidates,
+    /// Resolution state changed.
+    State,
+    /// Typed lifecycle outcome changed.
+    Outcome,
+    /// Collection or resolver evidence changed.
+    Provenance,
+}
+
+/// Owned added, removed, or modified reference request record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceRequestChange {
+    id: SemanticReferenceRequestId,
+    kind: ReferenceRequestChangeKind,
+    previous: Option<SemanticReferenceRequest>,
+    current: Option<SemanticReferenceRequest>,
+    modified_aspects: Vec<ReferenceRequestModifiedAspect>,
+}
+
+impl ReferenceRequestChange {
+    fn added(id: SemanticReferenceRequestId, current: SemanticReferenceRequest) -> Self {
+        Self {
+            id,
+            kind: ReferenceRequestChangeKind::Added,
+            previous: None,
+            current: Some(current),
+            modified_aspects: Vec::new(),
+        }
+    }
+
+    fn removed(id: SemanticReferenceRequestId, previous: SemanticReferenceRequest) -> Self {
+        Self {
+            id,
+            kind: ReferenceRequestChangeKind::Removed,
+            previous: Some(previous),
+            current: None,
+            modified_aspects: Vec::new(),
+        }
+    }
+
+    fn modified(
+        id: SemanticReferenceRequestId,
+        previous: SemanticReferenceRequest,
+        current: SemanticReferenceRequest,
+        modified_aspects: Vec<ReferenceRequestModifiedAspect>,
+    ) -> Self {
+        Self {
+            id,
+            kind: ReferenceRequestChangeKind::Modified,
+            previous: Some(previous),
+            current: Some(current),
+            modified_aspects,
+        }
+    }
+
+    /// Returns the stable request identity.
+    #[must_use]
+    pub const fn id(&self) -> &SemanticReferenceRequestId {
+        &self.id
+    }
+
+    /// Returns the change direction.
+    #[must_use]
+    pub const fn kind(&self) -> ReferenceRequestChangeKind {
+        self.kind
+    }
+
+    /// Returns the previous request for removed and modified records.
+    #[must_use]
+    pub const fn previous(&self) -> Option<&SemanticReferenceRequest> {
+        self.previous.as_ref()
+    }
+
+    /// Returns the current request for added and modified records.
+    #[must_use]
+    pub const fn current(&self) -> Option<&SemanticReferenceRequest> {
+        self.current.as_ref()
+    }
+
+    /// Returns changed mutable aspects in deterministic enum order.
+    #[must_use]
+    pub fn modified_aspects(&self) -> &[ReferenceRequestModifiedAspect] {
+        &self.modified_aspects
+    }
+}
+
+/// Compact counters for a reference request diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReferenceRequestDiffSummary {
+    added: usize,
+    removed: usize,
+    modified: usize,
+}
+
+impl ReferenceRequestDiffSummary {
+    const fn new(added: usize, removed: usize, modified: usize) -> Self {
+        Self {
+            added,
+            removed,
+            modified,
+        }
+    }
+
+    /// Returns added request count.
+    #[must_use]
+    pub const fn added(self) -> usize {
+        self.added
+    }
+
+    /// Returns removed request count.
+    #[must_use]
+    pub const fn removed(self) -> usize {
+        self.removed
+    }
+
+    /// Returns modified request count.
+    #[must_use]
+    pub const fn modified(self) -> usize {
+        self.modified
+    }
+
+    /// Returns the total number of request changes.
+    #[must_use]
+    pub const fn total_changes(self) -> usize {
+        self.added + self.removed + self.modified
     }
 }
 
@@ -948,6 +1295,37 @@ impl ProvenanceCoverageDiff {
     pub fn changed_metrics(&self) -> &[CountChange<ProvenanceCoverageMetric>] {
         &self.changed_metrics
     }
+}
+
+fn reference_request_index(
+    ledger: &SemanticReferenceRequestLedger,
+) -> BTreeMap<SemanticReferenceRequestId, SemanticReferenceRequest> {
+    ledger
+        .requests()
+        .iter()
+        .cloned()
+        .map(|request| (request.id().clone(), request))
+        .collect()
+}
+
+fn reference_request_modified_aspects(
+    previous: &SemanticReferenceRequest,
+    current: &SemanticReferenceRequest,
+) -> Vec<ReferenceRequestModifiedAspect> {
+    let mut aspects = Vec::new();
+    if previous.candidates() != current.candidates() {
+        aspects.push(ReferenceRequestModifiedAspect::Candidates);
+    }
+    if previous.state() != current.state() {
+        aspects.push(ReferenceRequestModifiedAspect::State);
+    }
+    if previous.outcome() != current.outcome() {
+        aspects.push(ReferenceRequestModifiedAspect::Outcome);
+    }
+    if previous.provenance() != current.provenance() {
+        aspects.push(ReferenceRequestModifiedAspect::Provenance);
+    }
+    aspects
 }
 
 fn diagnostic_index(

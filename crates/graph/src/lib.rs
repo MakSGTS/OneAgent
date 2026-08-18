@@ -26,8 +26,10 @@ pub use build_diff::{
     BuildDiffSummary, CountChange, CountChangeDirection, CountDelta, DiagnosticChange,
     DiagnosticChangeKind, DiagnosticDiff, DiagnosticDiffSummary, DiagnosticIdentity,
     DiagnosticModifiedAspect, GraphReportDiff, GraphReportMetric, ProvenanceCoverageDiff,
-    ProvenanceCoverageMetric, ResolutionStatisticsDiff, ResolutionStatisticsMetric,
-    SemanticGraphBuildDiff,
+    ProvenanceCoverageMetric, ReferenceRequestChange, ReferenceRequestChangeKind,
+    ReferenceRequestDiff, ReferenceRequestDiffSummary, ReferenceRequestModifiedAspect,
+    ResolutionStatisticsDiff, ResolutionStatisticsMetric, SemanticGraphBuildDiff,
+    SemanticGraphBuildSnapshot,
 };
 pub use coverage::{
     SemanticCoverageCapability, SemanticCoverageCapabilityId, SemanticCoverageCategory,

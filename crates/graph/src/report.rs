@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     EdgeKind, ResolutionError, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
-    SemanticDiagnosticSeverity, SemanticGraph,
+    SemanticDiagnosticSeverity, SemanticGraph, SemanticReferenceRequestLedger,
+    SemanticReferenceRequestOutcome,
 };
 
 use crate::NodeKind;
@@ -84,6 +85,43 @@ impl SemanticGraphReport {
             resolution: reference_statistics,
             provenance,
         }
+    }
+
+    /// Builds a report whose accepted-reference statistics are derived from
+    /// canonical terminal requests.
+    ///
+    /// Collected requests are not terminal and therefore do not contribute to
+    /// resolution statistics. Use build validation to reject a build snapshot
+    /// that still contains collected requests.
+    #[must_use]
+    pub fn from_graph_diagnostics_and_reference_requests(
+        graph: &SemanticGraph,
+        diagnostics: &[SemanticDiagnostic],
+        requests: &SemanticReferenceRequestLedger,
+    ) -> Self {
+        Self::from_graph_diagnostics_and_references(
+            graph,
+            diagnostics,
+            SemanticReferenceStatistics::from_reference_requests(requests),
+        )
+    }
+
+    /// Builds a request-aware report during migration from legacy counters.
+    ///
+    /// `legacy_observations` must contain only reference observations not
+    /// represented in `requests`. Accepted requests are always counted from the
+    /// canonical ledger, so edge and diagnostic projections cannot increment
+    /// them again.
+    #[must_use]
+    pub fn from_graph_diagnostics_reference_requests_and_legacy_observations(
+        graph: &SemanticGraph,
+        diagnostics: &[SemanticDiagnostic],
+        requests: &SemanticReferenceRequestLedger,
+        legacy_observations: SemanticReferenceStatistics,
+    ) -> Self {
+        let statistics = SemanticReferenceStatistics::from_reference_requests(requests)
+            .including_legacy_observations(legacy_observations);
+        Self::from_graph_diagnostics_and_references(graph, diagnostics, statistics)
     }
 
     /// Returns graph-wide counters.
@@ -473,6 +511,61 @@ impl SemanticReferenceStatistics {
             duplicate_edge_request: 0,
             with_provenance: 0,
             without_provenance: 0,
+        }
+    }
+
+    /// Derives statistics exactly once from canonical terminal requests.
+    ///
+    /// Partial-workspace requests map to the existing unresolved counter.
+    /// Collected requests are deliberately omitted because they are not a
+    /// terminal processed outcome.
+    #[must_use]
+    pub fn from_reference_requests(requests: &SemanticReferenceRequestLedger) -> Self {
+        let mut statistics = Self::new();
+        for request in requests.requests() {
+            let outcome = match request.outcome() {
+                SemanticReferenceRequestOutcome::Collected => continue,
+                SemanticReferenceRequestOutcome::Resolved => SemanticReferenceOutcome::Resolved,
+                SemanticReferenceRequestOutcome::MissingTarget
+                | SemanticReferenceRequestOutcome::PartialWorkspace => {
+                    SemanticReferenceOutcome::Unresolved
+                }
+                SemanticReferenceRequestOutcome::AmbiguousTarget => {
+                    SemanticReferenceOutcome::Ambiguous
+                }
+                SemanticReferenceRequestOutcome::IncompatibleTargetKind => {
+                    SemanticReferenceOutcome::IncompatibleTargetKind
+                }
+                SemanticReferenceRequestOutcome::InvalidOwnerReference => {
+                    SemanticReferenceOutcome::InvalidOwnerReference
+                }
+            };
+            statistics.record(outcome, !request.provenance().is_empty());
+        }
+        statistics
+    }
+
+    /// Combines canonical request statistics with non-migrated observations.
+    ///
+    /// The caller must ensure `legacy_observations` excludes every accepted
+    /// request already represented by the canonical ledger.
+    #[must_use]
+    pub const fn including_legacy_observations(self, legacy_observations: Self) -> Self {
+        Self {
+            total: self.total + legacy_observations.total,
+            malformed_format: self.malformed_format + legacy_observations.malformed_format,
+            unsupported_prefix: self.unsupported_prefix + legacy_observations.unsupported_prefix,
+            resolved: self.resolved + legacy_observations.resolved,
+            unresolved: self.unresolved + legacy_observations.unresolved,
+            ambiguous: self.ambiguous + legacy_observations.ambiguous,
+            incompatible_target_kind: self.incompatible_target_kind
+                + legacy_observations.incompatible_target_kind,
+            invalid_owner_reference: self.invalid_owner_reference
+                + legacy_observations.invalid_owner_reference,
+            duplicate_edge_request: self.duplicate_edge_request
+                + legacy_observations.duplicate_edge_request,
+            with_provenance: self.with_provenance + legacy_observations.with_provenance,
+            without_provenance: self.without_provenance + legacy_observations.without_provenance,
         }
     }
 

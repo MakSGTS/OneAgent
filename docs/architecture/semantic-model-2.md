@@ -2057,10 +2057,12 @@ determinism evidence, and real-format integration fixture are implemented, so
 
 EDT attaches provenance while creating metadata object nodes, child nodes,
 module nodes, symbol nodes, ownership edges, resolved reference edges, and
-resolution diagnostics. Pending metadata references preserve enough source
-context to construct provenance, but the pending request itself does not carry a
-public graph-domain `Provenance` value. This request-level gap is partial rather
-than a missing provenance gap on emitted nodes or edges.
+resolution diagnostics. Accepted metadata type references are converted at
+collection time into public graph-domain `SemanticReferenceRequest` values with
+collection provenance. The deterministic request ledger preserves that evidence
+through resolution, terminal projection, reporting, validation, and diffing for
+the accepted metadata-reference first slice. Other reference-request families
+remain private until their source and lifecycle contracts are defined.
 
 ### Known limitations and ordered completion backlog
 
@@ -2106,7 +2108,7 @@ matrix, preserves typed failure outcomes, and has deterministic production,
 Query, Impact, negative, duplicate, and repeated-build evidence. Its registry
 capability is `Supported` with complete evidence.
 
-The remaining thematic Semantic Coverage Completion backlog is:
+The completed thematic Semantic Coverage work is:
 
 1. **Medium — metadata payload — completed.** The ADR-0023 domain,
    graph integration, EDT conversion, and complete per-kind production evidence
@@ -2141,15 +2143,18 @@ The former `semantic_node.query` High gap is closed. The EDT BSL pipeline now
 extracts static Query declarations with stable local bindings inside known
 procedures or functions, emits `NodeKind::Query` nodes with `Contains`
 ownership, preserves source provenance with owner and binding context, and
-verifies repeated-build determinism. Query-language parsing and data-access
-edges remain separate tasks.
+verifies repeated-build determinism. The accepted first query-language parsing
+and `Reads` slice is also complete. Query-derived `DependsOn`, broader grammar,
+and additional query source families remain deferred.
 
 The former `semantic_node.role` High gap is closed. The EDT pipeline now emits
 flat `NodeKind::Role` nodes for every discovered role metadata object while
 preserving the existing `NodeKind::Metadata(MetadataKind::Role)` object node.
 Repeated builds preserve role node identity, provenance, and graph/build-result
-diff stability. Role access-right modeling and role-derived semantic edges
-remain separate future tasks.
+diff stability. The accepted role access-right slice is also complete: EDT role
+declarations resolve to scoped `NodeKind::AccessRight` nodes and canonical
+`Grants` edges. Deny semantics, inheritance, and effective authorization remain
+deferred.
 
 The former `semantic_node.standard_attribute` High gap is closed. The EDT
 pipeline now derives document standard attributes from real document metadata
@@ -2177,8 +2182,8 @@ reports 0 Critical gaps, 0 High gaps, and 0 Medium gaps. All 21 applicable
 metadata-entity capabilities and the nine completed metadata-reference
 capabilities are `Supported`; Form and Unknown metadata entities remain
 `NotApplicable`.
-Sprint 3 Integration Review is no longer blocked by High gaps; this statement
-does not record that the review itself has been performed.
+Sprint 3 Semantic Coverage Integration Review is complete with no blocking
+findings.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable
@@ -2186,10 +2191,13 @@ Common Template descriptors through the generic top-level path, emits stable
 edges with provenance, and verifies deterministic Query API results. The
 capability is `Supported` with complete typed payload preservation evidence.
 
-The audit intentionally does not implement these backlog items, add serialization
-or a CLI, scan source code at runtime, introduce quality percentages, or change
-Semantic Resolution, Validation, Query, Impact Analysis, graph identity, or EDT
-graph construction.
+Completion does not broaden the accepted first-slice contracts. Deferred work
+remains: query-derived `DependsOn` and broader query-language source forms;
+deny, inheritance, and effective authorization; Subsystem hierarchy, nested
+Subsystem discovery, and transitive membership; and reference-request migration
+for BSL calls, query sources, Writes targets, protected resources, Subsystem
+content, and extension targets. Serialization, CLI, runtime product work, and
+quality percentages also remain outside this completed Sprint 3 scope.
 
 ## Definition of done for Semantic Model 2.0 core
 

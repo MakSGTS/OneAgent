@@ -24,8 +24,8 @@ gantt
     EDT metadata object descriptors         :done, s2, after s1, 5d
     EDT module nodes                        :done, s3, after s2, 5d
     BSL declaration extraction              :done, s4, after s3, 5d
-    Local call extraction and resolution    :active, s5, after s4, 8d
-    Cross-module call resolution            :s6, after s5, 8d
+    Local call extraction and resolution    :done, s5, after s4, 8d
+    Cross-module call resolution            :done, s6, after s5, 8d
     Semantic index                          :s7, after s6, 12d
     Incremental indexing                    :s8, after s7, 12d
 
@@ -113,6 +113,7 @@ Stable APIs, plugin SDK, performance/security hardening, documentation and examp
 
 - [x] Add a deterministic Semantic Coverage Audit for graph-domain and EDT-specific capabilities.
 - [x] Complete Semantic Coverage; the audit does not mark completion itself.
+- [x] Complete Sprint 3 Semantic Coverage Integration Review with no blocking findings.
 
 Ordered follow-up work:
 
@@ -123,7 +124,7 @@ Ordered follow-up work:
 5. **High — completed:** classify fallback-only `metadata_entity.unknown` as not applicable to EDT without emitting synthetic entities.
 6. **High — completed:** map EDT accounting-register resources to stable, provenance-backed `Measure` nodes (`semantic_node.measure`).
 7. **High — completed:** classify fallback-only `semantic_node.metadata.unknown` as not applicable to EDT without emitting synthetic metadata nodes.
-8. **High — completed:** emit static BSL Query declarations as stable, provenance-backed `NodeKind::Query` nodes; query-language parsing and data-access edges remain separate.
+8. **High — completed:** emit static BSL Query declarations as stable, provenance-backed `NodeKind::Query` nodes; the accepted first query-language parsing and `Reads` slice is completed separately in item 20, while query-derived `DependsOn` and broader query-language support remain deferred.
 9. **High — completed:** emit flat EDT role semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Role)` object nodes.
 10. **High — completed:** derive EDT document `StandardAttribute` nodes with stable identity, ownership, and provenance.
 11. **High — completed:** emit flat EDT `Subsystem` semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Subsystem)` object nodes.
@@ -169,9 +170,15 @@ Ordered follow-up work:
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
 0 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
-contains 0 Critical gaps, 0 High gaps, and 0 Medium gaps. Sprint 3 Integration
-Review is no longer blocked by High gaps; this status does not mean that the
-review itself has been performed.
+contains 0 Critical gaps, 0 High gaps, and 0 Medium gaps. Sprint 3 Semantic
+Coverage Integration Review is complete with no blocking findings.
+
+Completion does not broaden the accepted first-slice contracts. Deferred work
+remains: query-derived `DependsOn` and broader query-language source forms;
+deny, inheritance, and effective authorization; Subsystem hierarchy, nested
+Subsystem discovery, and transitive membership; and reference-request migration
+for BSL calls, query sources, Writes targets, protected resources, Subsystem
+content, and extension targets.
 
 The first production slice for `semantic_edge.depends_on` is implemented and
 the capability is supported. The first production slice for

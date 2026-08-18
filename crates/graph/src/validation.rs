@@ -466,9 +466,9 @@ pub struct SemanticGraphSchema;
 impl SemanticGraphSchema {
     /// Returns whether an edge kind is allowed between two node kinds.
     ///
-    /// The first schema version validates currently constrained relations and
-    /// intentionally leaves broad dependency-like relations unrestricted until
-    /// the semantic model defines stronger constraints.
+    /// Every edge kind delegates to its explicit accepted endpoint policy.
+    /// Unsupported, unknown, and future endpoint families are rejected until
+    /// their contracts are added deliberately.
     #[must_use]
     pub const fn allows(
         self,
@@ -1154,9 +1154,33 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
 }
 
 const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
-    matches!(source, NodeKind::Unknown)
-        || matches!(target, NodeKind::Unknown | NodeKind::Metadata(_))
-        || (is_reference_participant(source) && is_reference_participant(target))
+    (matches!(
+        source,
+        NodeKind::Attribute | NodeKind::Dimension | NodeKind::Resource
+    ) && matches!(
+        target,
+        NodeKind::Metadata(
+            MetadataKind::Catalog
+                | MetadataKind::Document
+                | MetadataKind::Enumeration
+                | MetadataKind::InformationRegister
+                | MetadataKind::AccumulationRegister
+                | MetadataKind::AccountingRegister
+                | MetadataKind::CalculationRegister
+                | MetadataKind::BusinessProcess
+                | MetadataKind::Task
+        )
+    )) || (matches!(source, NodeKind::AccessRight)
+        && matches!(
+            target,
+            NodeKind::Metadata(
+                MetadataKind::Configuration
+                    | MetadataKind::Catalog
+                    | MetadataKind::Document
+                    | MetadataKind::InformationRegister
+                    | MetadataKind::AccumulationRegister
+            )
+        ))
 }
 
 const fn allows_depends_on(source: NodeKind, target: NodeKind) -> bool {
@@ -1180,25 +1204,6 @@ const fn allows_writes(source: NodeKind, target: NodeKind) -> bool {
             target,
             NodeKind::Metadata(MetadataKind::AccumulationRegister)
         )
-}
-
-const fn is_reference_participant(kind: NodeKind) -> bool {
-    matches!(
-        kind,
-        NodeKind::Metadata(_)
-            | NodeKind::Module
-            | NodeKind::Procedure
-            | NodeKind::Function
-            | NodeKind::Query
-            | NodeKind::Form
-            | NodeKind::Command
-            | NodeKind::Attribute
-            | NodeKind::StandardAttribute
-            | NodeKind::TabularSection
-            | NodeKind::Dimension
-            | NodeKind::Resource
-            | NodeKind::Measure
-    )
 }
 
 const fn allows_owner(owner: NodeKind, child: NodeKind) -> bool {

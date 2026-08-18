@@ -77,6 +77,36 @@ fn node_kinds() -> Vec<NodeKind> {
     kinds
 }
 
+fn accepted_reference_pairs() -> Vec<(NodeKind, NodeKind)> {
+    let mut pairs = Vec::new();
+    let member_targets = [
+        MetadataKind::Catalog,
+        MetadataKind::Document,
+        MetadataKind::Enumeration,
+        MetadataKind::InformationRegister,
+        MetadataKind::AccumulationRegister,
+        MetadataKind::AccountingRegister,
+        MetadataKind::CalculationRegister,
+        MetadataKind::BusinessProcess,
+        MetadataKind::Task,
+    ];
+    for source in [NodeKind::Attribute, NodeKind::Dimension, NodeKind::Resource] {
+        for target in member_targets {
+            pairs.push((source, NodeKind::Metadata(target)));
+        }
+    }
+    for target in [
+        MetadataKind::Configuration,
+        MetadataKind::Catalog,
+        MetadataKind::Document,
+        MetadataKind::InformationRegister,
+        MetadataKind::AccumulationRegister,
+    ] {
+        pairs.push((NodeKind::AccessRight, NodeKind::Metadata(target)));
+    }
+    pairs
+}
+
 struct FixtureIds {
     configuration: EntityId,
     document: EntityId,
@@ -107,6 +137,109 @@ fn valid_graph(reverse_order: bool) -> SemanticGraph {
     insert_valid_edges(&mut graph, ids, reverse_order);
 
     graph
+}
+
+fn graph_with_invalid_reference_edges(
+    reverse_order: bool,
+) -> (SemanticGraph, Vec<(EntityId, EntityId, NodeKind, NodeKind)>) {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+    let access_right_id = id("access_right.invalid");
+    let enumeration_id = id("metadata.enumeration.status");
+    let unknown_id = id("unknown.reference.target");
+    let metadata_unknown_id = id("metadata.unknown.reference.target");
+
+    for (node_id, node_name, node_kind) in [
+        (
+            access_right_id.clone(),
+            "InvalidAccessRight",
+            NodeKind::AccessRight,
+        ),
+        (
+            enumeration_id.clone(),
+            "Status",
+            NodeKind::Metadata(MetadataKind::Enumeration),
+        ),
+        (unknown_id.clone(), "Unknown", NodeKind::Unknown),
+        (
+            metadata_unknown_id.clone(),
+            "UnknownMetadata",
+            NodeKind::Metadata(MetadataKind::Unknown),
+        ),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("references.invalid")],
+        ));
+    }
+
+    let invalid_pairs = vec![
+        (
+            ids.procedure.clone(),
+            ids.document.clone(),
+            NodeKind::Procedure,
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (
+            ids.document.clone(),
+            ids.procedure,
+            NodeKind::Metadata(MetadataKind::Document),
+            NodeKind::Procedure,
+        ),
+        (
+            unknown_id.clone(),
+            ids.document.clone(),
+            NodeKind::Unknown,
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (
+            ids.attribute.clone(),
+            ids.configuration,
+            NodeKind::Attribute,
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ),
+        (
+            access_right_id,
+            enumeration_id,
+            NodeKind::AccessRight,
+            NodeKind::Metadata(MetadataKind::Enumeration),
+        ),
+        (
+            ids.attribute.clone(),
+            unknown_id,
+            NodeKind::Attribute,
+            NodeKind::Unknown,
+        ),
+        (
+            ids.attribute,
+            metadata_unknown_id,
+            NodeKind::Attribute,
+            NodeKind::Metadata(MetadataKind::Unknown),
+        ),
+    ];
+    let mut edges = invalid_pairs
+        .iter()
+        .map(|(source, target, _, _)| {
+            GraphEdge::new_with_provenance(
+                source.clone(),
+                target.clone(),
+                EdgeKind::References,
+                vec![provenance("references.invalid")],
+            )
+        })
+        .collect::<Vec<_>>();
+    if reverse_order {
+        edges.reverse();
+    }
+    for edge in edges {
+        graph
+            .insert_edge(edge)
+            .expect("storage only validates endpoint existence");
+    }
+
+    (graph, invalid_pairs)
 }
 
 fn insert_accumulation_register(graph: &mut SemanticGraph) -> EntityId {
@@ -488,6 +621,172 @@ fn depends_on_rejects_unrelated_endpoint_pairs() {
             .count(),
         2
     );
+}
+
+#[test]
+fn references_schema_accepts_exact_current_production_matrix() {
+    let schema = SemanticGraphSchema;
+    let accepted = accepted_reference_pairs();
+
+    assert_eq!(accepted.len(), 32);
+    for (source_kind, target_kind) in accepted {
+        assert!(
+            schema.allows(source_kind, EdgeKind::References, target_kind),
+            "References unexpectedly rejects {source_kind:?} -> {target_kind:?}",
+        );
+    }
+}
+
+#[test]
+fn references_schema_rejects_every_pair_outside_current_production_matrix() {
+    let schema = SemanticGraphSchema;
+    let kinds = node_kinds();
+    let accepted = accepted_reference_pairs();
+    let mut accepted_count = 0;
+    let mut rejected_count = 0;
+
+    assert_eq!(metadata_kinds().len(), 23);
+    assert_eq!(kinds.len(), 39);
+    for source_kind in &kinds {
+        for target_kind in &kinds {
+            let expected = accepted.contains(&(*source_kind, *target_kind));
+            let actual = schema.allows(*source_kind, EdgeKind::References, *target_kind);
+            assert_eq!(
+                actual, expected,
+                "References endpoint decision differs for {source_kind:?} -> {target_kind:?}",
+            );
+            if actual {
+                accepted_count += 1;
+            } else {
+                rejected_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(accepted_count, 32);
+    assert_eq!(rejected_count, kinds.len() * kinds.len() - 32);
+    for unknown_kind in [NodeKind::Unknown, NodeKind::Metadata(MetadataKind::Unknown)] {
+        assert!(!schema.allows(unknown_kind, EdgeKind::References, NodeKind::Attribute));
+        assert!(!schema.allows(NodeKind::Attribute, EdgeKind::References, unknown_kind));
+    }
+}
+
+#[test]
+fn references_graph_accepts_provenance_backed_production_pairs() {
+    let ids = FixtureIds::new();
+    let access_right_id = id("access_right:metadata.document.sales:right.read");
+    let mut graph = valid_graph(false);
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        access_right_id.clone(),
+        name("Read Sales"),
+        NodeKind::AccessRight,
+        vec![provenance("metadata.role.sales_manager#rights")],
+    ));
+    for (source, target, context) in [
+        (
+            ids.attribute,
+            ids.document.clone(),
+            "metadata.document.sales#attribute=Company;edge=references",
+        ),
+        (
+            access_right_id,
+            ids.document,
+            "metadata.role.sales_manager#right=Read;edge=references",
+        ),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source,
+                target,
+                EdgeKind::References,
+                vec![provenance(context)],
+            ))
+            .expect("accepted References edge must be stored");
+    }
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn references_missing_provenance_remains_a_provenance_warning() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+
+    graph
+        .insert_edge(GraphEdge::new(
+            ids.attribute,
+            ids.document,
+            EdgeKind::References,
+        ))
+        .expect("accepted References edge must be stored");
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert_eq!(result.error_count(), 0);
+    assert_eq!(result.warning_count(), 1);
+    assert_eq!(
+        result.issues()[0].code(),
+        SemanticGraphValidationCode::MissingEdgeProvenance
+    );
+    assert_eq!(
+        result.issues()[0].kind(),
+        SemanticGraphValidationIssueKind::Provenance
+    );
+    assert_eq!(result.issues()[0].edge_kind(), Some(EdgeKind::References));
+}
+
+#[test]
+fn references_graph_rejects_invalid_endpoints_with_exact_deterministic_context() {
+    let (graph, invalid_pairs) = graph_with_invalid_reference_edges(false);
+    let (reversed, _) = graph_with_invalid_reference_edges(true);
+    let result = graph.validate();
+    let repeated = graph.validate();
+    let reversed_result = reversed.validate();
+    let invalid_endpoint_issues = result
+        .issues()
+        .iter()
+        .filter(|issue| issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints)
+        .collect::<Vec<_>>();
+
+    assert_eq!(result, repeated);
+    assert_eq!(result, reversed_result);
+    assert!(!result.is_valid());
+    assert_eq!(result.error_count(), invalid_pairs.len());
+    assert_eq!(result.warning_count(), 0);
+    assert_eq!(invalid_endpoint_issues.len(), invalid_pairs.len());
+    assert!(
+        invalid_endpoint_issues
+            .windows(2)
+            .all(|pair| pair[0] < pair[1])
+    );
+
+    for (source_id, target_id, source_kind, target_kind) in invalid_pairs {
+        let edge_id = SemanticGraphQuery::edge_id(
+            &NodeId::new(source_id.as_str()),
+            &NodeId::new(target_id.as_str()),
+            EdgeKind::References,
+        );
+        let issue = invalid_endpoint_issues
+            .iter()
+            .find(|issue| issue.edge_id() == Some(&edge_id))
+            .expect("invalid References edge must retain its exact identity");
+        let mut expected_nodes = vec![source_id, target_id];
+        expected_nodes.sort();
+
+        assert_eq!(issue.severity(), SemanticGraphValidationSeverity::Error);
+        assert_eq!(issue.kind(), SemanticGraphValidationIssueKind::Semantic);
+        assert_eq!(issue.nodes(), expected_nodes);
+        assert_eq!(issue.source_kind(), Some(source_kind));
+        assert_eq!(issue.target_kind(), Some(target_kind));
+        assert_eq!(issue.edge_kind(), Some(EdgeKind::References));
+        assert_eq!(issue.invariant(), "edge endpoint schema");
+        assert_eq!(issue.provenance(), [provenance("references.invalid")]);
+    }
 }
 
 #[test]

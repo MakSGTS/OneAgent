@@ -1808,17 +1808,20 @@ as typed outcomes and emit no placeholder edges.
 ADR-0025 audits every endpoint rule. `Contains` uses the accepted ownership
 matrix; `Calls` uses callable endpoints; `Reads`, `Writes`, `Grants`,
 `Includes`, `Extends`, and `DependsOn` match their accepted first-slice ADRs.
-Those eight rules are precise rather than permissive fallbacks. The only
-remaining broad rule is `References`: current code still accepts Unknown,
-arbitrary Metadata targets, and many cross-participant pairs.
+`References` now also uses its accepted first-slice matrices. All nine rules
+are precise rather than permissive fallbacks; Unknown and unsupported future
+endpoint families are rejected.
 
-The accepted References replacement preserves both current production slices:
+The References policy preserves both current production slices:
 Attribute, Dimension, or Resource to one of the nine mapped metadata-reference
 target kinds; and AccessRight to one of the five protected-resource metadata
-kinds implemented by the Grants pipeline. Every other pair, including Unknown
-and placeholder endpoints, is deferred. Implementation, exhaustive positive
-and negative graph-domain validation tests, production regressions, and the
-stale schema Rustdoc update remain pending, so Roadmap item 25 is not complete.
+kinds implemented by the Grants pipeline. Its exact 32 accepted pairs and all
+1,489 other pairs over the current 39-kind node inventory have deterministic
+graph-domain schema evidence. Typed graph-validation tests retain endpoint
+kinds, node and edge identities, provenance context, and issue ordering;
+metadata-reference and Grants production regressions remain valid. Every other
+pair, including Unknown and placeholder endpoints, is deferred. Roadmap item 25
+is complete without a Coverage transition or count change.
 Validation also checks missing endpoints, ownership, forbidden self-loops,
 ownership cycles, node and edge provenance, and build/report counter
 consistency.
@@ -2112,19 +2115,16 @@ The remaining thematic Semantic Coverage Completion backlog is:
 2. **Medium — metadata reference fixtures — completed.** Successful
    production-builder evidence now covers all nine mapped target kinds, and the
    seven formerly partial capabilities have complete deterministic evidence.
-3. **Medium — reference-request provenance — architecture accepted.** Implement
-   `docs/adr/0024-reference-request-provenance.md`: add the public graph-domain
-   request ledger and deterministic lifecycle, then migrate the EDT metadata
-   reference slice to collection-time provenance without changing resolution,
-   edge, diagnostic, or statistics semantics. Transition graph-domain and EDT
-   Coverage independently only after their respective production evidence is
-   complete.
-4. **Medium — endpoint validation — architecture accepted.** Implement
-   `docs/adr/0025-references-endpoint-validation.md`: replace the sole remaining
-   permissive `References` branch with the two accepted production matrices,
-   add exhaustive deterministic positive and negative validator evidence, and
-   update the stale schema comment. All other current EdgeKind endpoint rules
-   already match accepted first-slice contracts.
+3. **Medium — reference-request provenance — completed.** The public
+   graph-domain request ledger, deterministic lifecycle, EDT metadata-reference
+   migration, collection-time provenance, production evidence, and independent
+   graph-domain and EDT Coverage transitions are complete for the accepted
+   first slice.
+4. **Medium — endpoint validation — completed.** The `References` rule accepts
+   exactly the two ADR-0025 production matrices, exhaustive deterministic
+   positive and negative validator evidence is present, production regressions
+   pass, and the schema comment describes explicit per-edge policies. Coverage
+   status and counts are unchanged.
 
 The former `semantic_node.measure` High gap is closed. A representative EDT
 Accounting Register fixture now proves production parsing, semantic kind

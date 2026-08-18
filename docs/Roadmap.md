@@ -159,13 +159,13 @@ Ordered follow-up work:
     migration, collection-time provenance, projection consistency, production
     evidence, and independent graph-domain and EDT Coverage transitions are
     complete for the accepted metadata-reference first slice.
-25. **Medium — architecture accepted:** implement
-    `docs/adr/0025-references-endpoint-validation.md`; `References` is the only
-    remaining permissive endpoint rule, and it must be narrowed to the current
-    metadata-member and AccessRight production matrices with exhaustive
-    deterministic positive and negative validator tests. The other eight
-    EdgeKind rules already match their accepted ownership or first-slice
-    contracts. No Coverage transition or count change is expected.
+25. **Medium — completed:** implement
+    `docs/adr/0025-references-endpoint-validation.md`; `References` now accepts
+    exactly the 27 metadata-member pairs and five AccessRight resource pairs
+    emitted by current production, with exhaustive deterministic positive and
+    negative validator evidence. All nine EdgeKind rules now match their
+    accepted ownership or first-slice contracts. Coverage status and counts are
+    unchanged.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
 14 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage

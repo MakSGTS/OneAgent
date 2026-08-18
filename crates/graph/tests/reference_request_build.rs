@@ -258,16 +258,37 @@ fn duplicate_request_provenance_is_merged_without_double_counting() {
 
 fn projection_graph(ledger: &SemanticReferenceRequestLedger) -> SemanticGraph {
     let mut graph = SemanticGraph::new();
+    let owner_id = id("metadata.document.request-owner");
+    graph.insert_node(GraphNode::new_with_provenance(
+        owner_id.clone(),
+        name("RequestOwner"),
+        NodeKind::Metadata(MetadataKind::Document),
+        vec![provenance(
+            "metadata.document.request-owner.node",
+            ResolutionState::NotApplicable,
+        )],
+    ));
     for request in ledger.requests() {
         graph.insert_node(GraphNode::new_with_provenance(
             request.source_node().clone(),
             name(request.source_node().as_str()),
-            NodeKind::Unknown,
+            NodeKind::Attribute,
             vec![provenance(
                 &format!("{}.node", request.source_node().as_str()),
                 ResolutionState::NotApplicable,
             )],
         ));
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                owner_id.clone(),
+                request.source_node().clone(),
+                EdgeKind::Contains,
+                vec![provenance(
+                    &format!("{}.owner", request.source_node().as_str()),
+                    ResolutionState::NotApplicable,
+                )],
+            ))
+            .expect("request source ownership must be valid");
     }
     for (candidate, kind) in [
         ("target.resolved", NodeKind::Metadata(MetadataKind::Catalog)),

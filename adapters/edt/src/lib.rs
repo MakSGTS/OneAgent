@@ -567,9 +567,10 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
-        bsl_graph::add_configuration_module_symbols_with_diagnostics(
+        bsl_graph::add_configuration_module_symbols_with_diagnostics_in_scope(
             &mut graph,
             &configuration_modules,
+            query_source_resolution::WorkspaceResolutionScope::Complete,
             &mut diagnostics,
             &mut reference_statistics,
         )
@@ -2009,10 +2010,10 @@ impl From<EdtLoadError> for EdtGraphError {
 mod graph_tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
-        EdgeKind, FactOrigin, GraphEdge, NodeId, NodeKind, ResolutionError, ResolutionState,
-        SemanticCoverageCapabilityId, SemanticCoverageStatus, SemanticDiagnosticCode,
-        SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
-        SemanticReferenceCapability, SemanticReferenceStatistics,
+        EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, ResolutionError,
+        ResolutionState, SemanticCoverageCapabilityId, SemanticCoverageStatus,
+        SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph,
+        SemanticReference, SemanticReferenceCapability, SemanticReferenceStatistics,
     };
     use oneagent_metadata::MetadataKind;
     use std::collections::BTreeSet;
@@ -3461,6 +3462,20 @@ mod graph_tests {
         assert_eq!(calls[0].target(), check_access.id());
     }
 
+    fn assert_before_write_query_provenance(query: &GraphNode) {
+        assert_eq!(query.provenance().len(), 1);
+        assert_eq!(query.provenance()[0].origin(), FactOrigin::Declared);
+        assert!(
+            query.provenance()[0]
+                .source()
+                .expect("query provenance source must exist")
+                .as_str()
+                .contains(
+                    "/src/Documents/Sales/ObjectModule.bsl#bsl_query=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite:query:Query;owner=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite;binding=Query"
+                )
+        );
+    }
+
     #[test]
     fn emits_static_bsl_query_nodes_through_production_graph_builder() {
         let root = create_edt_project();
@@ -3530,21 +3545,20 @@ mod graph_tests {
         assert_ne!(before_write_query.id(), get_query.id());
         assert_eq!(query_api.owner_edges(&before_write_query_id).len(), 1);
         assert_eq!(query_api.owner_edges(&get_query_id).len(), 1);
-        assert_eq!(before_write_query.provenance().len(), 1);
+        assert_before_write_query_provenance(before_write_query);
+        let reads = query_api.edges_by_kind(EdgeKind::Reads);
+        assert_eq!(reads.len(), 2);
+        assert!(reads.iter().all(|edge| {
+            edge.target().as_str() == "11111111-aaaa-bbbb-cccc-222222222222"
+                && !edge.provenance().is_empty()
+        }));
         assert_eq!(
-            before_write_query.provenance()[0].origin(),
-            FactOrigin::Declared
+            reads
+                .iter()
+                .map(|edge| edge.source().as_str())
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([before_write_query_id.as_str(), get_query_id.as_str()])
         );
-        assert!(
-            before_write_query.provenance()[0]
-                .source()
-                .expect("query provenance source must exist")
-                .as_str()
-                .contains(
-                    "/src/Documents/Sales/ObjectModule.bsl#bsl_query=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite:query:Query;owner=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite;binding=Query"
-                )
-        );
-        assert!(query_api.edges_by_kind(EdgeKind::Reads).is_empty());
         assert!(query_api.edges_by_kind(EdgeKind::Writes).is_empty());
         assert!(
             query_api

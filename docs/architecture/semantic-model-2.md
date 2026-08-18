@@ -1328,7 +1328,10 @@ required stages or representative checks are absent. `Unsupported` means that a
 known relevant capability has no pipeline implementation. `NotApplicable` is
 used only when a stage is intentionally outside the semantic meaning of a
 capability. `DeclaredOnly` means that a graph enum variant exists but the EDT
-pipeline does not emit it.
+Coverage Registry has not yet been transitioned to production support. It
+ordinarily indicates that the EDT pipeline does not emit the capability; the
+task-separated Reads sequence temporarily has completed production evidence
+while its registry-only transition remains pending.
 
 Capabilities use typed identities based on `MetadataKind`, `NodeKind`,
 `EdgeKind`, validation codes, query capabilities, provenance paths, and typed
@@ -1598,11 +1601,11 @@ like any other node kind unless a concrete API gap is found later.
 
 Query node support is independent from `Reads`, `Writes`, and `DependsOn`.
 Current extraction creates the `NodeKind::Query` node and its ownership edge for
-the supported BSL slice. Future query-language analysis may then produce
-references and data-access facts. `Reads` and `Writes` describe data access
-derived from a Query or BSL symbol. `DependsOn` describes semantic dependency.
-None of these edges is a prerequisite for creating the Query node, and they
-remain separate coverage gaps.
+the supported BSL slice. Production query-language analysis now emits Reads for
+the parser's completely accepted fixture-backed forms and uniquely resolved
+Catalog or Information Register targets. `Writes` and query-derived `DependsOn`
+remain separate capabilities. None of these edges is a prerequisite for creating
+the Query node, and Query identity and ownership do not depend on query text.
 
 #### Determinism, errors, and first slice
 
@@ -1617,17 +1620,18 @@ Empty query text, malformed query language, unsupported source format,
 dynamically constructed text, partial snippets, ambiguous reassignment, missing
 owner identity, and missing provenance do not produce a supported Query node in
 the implemented first slice. Malformed query language may still produce a Query
-node when extraction has a complete static source declaration; syntax
-diagnostics belong to future query-language analysis. Parser failures in
-extraction itself SHOULD produce typed diagnostics only after a diagnostics
-contract is added.
+node when extraction has a complete static source declaration; the Reads
+producer now reports the current parser's typed syntax diagnostic and emits no
+Reads edge. Parser failures in BSL Query extraction remain distinct from
+query-language diagnostics.
 
-The first implementation slice targets static BSL query declarations inside a
-known procedure or function. This source has a real EDT input family, stable
+The first Query-node implementation slice targets static BSL query declarations
+inside a known procedure or function. This source has a real EDT input family, stable
 module ownership, existing BSL module discovery, an existing symbol owner model,
 and provenance source identifiers. The slice is restricted to declarations with
-a stable local binding and complete statically available text, and it does not
-emit `Reads`, `Writes`, or `DependsOn`.
+a stable local binding and complete statically available text. The later Reads
+producer consumes this Query entity without changing its identity or ownership;
+Writes and query-derived DependsOn remain unimplemented.
 
 The ordered follow-up tasks are:
 
@@ -1640,8 +1644,8 @@ The ordered follow-up tasks are:
    normalized local names without placeholder targets;
 4. Completed: add precise Reads validation for the accepted endpoint matrix
    without graph emission or a Coverage transition;
-5. emit EDT Reads edges with deterministic provenance, focused and production
-   integration tests, and Coverage evidence in separate implementation tasks;
+5. Completed: emit EDT Reads edges with deterministic provenance and focused,
+   production, Query, Impact, negative, and repeated-build integration evidence;
 6. define and implement Writes through a separate architecture and capability
    sequence;
 7. derive query `DependsOn` only after data-access production evidence and the
@@ -1697,14 +1701,16 @@ edge.
 
 ### Edge, validation, query, and impact inventory
 
-The EDT pipeline emits `Contains`, `References`, `Calls`, the first
+The EDT pipeline emits `Contains`, `References`, `Calls`, `Reads`, the first
 `DependsOn`, `Extends`, `Grants`, and `Includes` slices, each with provenance.
-`Reads` and `Writes` are declared but not emitted by EDT.
+Reads production is limited to the current fixture-backed parser forms and the
+Catalog and Information Register allowlist. `Writes` is declared but not emitted
+by EDT.
 
 Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
-the first `DependsOn`, `Extends`, `Grants`, and `Includes` slices. The remaining
-edge kinds are currently accepted by broad schema rules and are therefore
-structurally visible but not semantically constrained. Validation also checks
+`Reads`, the first `DependsOn`, `Extends`, `Grants`, and `Includes` slices. The
+remaining edge kinds are currently accepted by broad schema rules and are
+therefore structurally visible but not semantically constrained. Validation also checks
 missing endpoints, ownership, forbidden self-loops, ownership cycles, node and
 edge provenance, and build/report counter consistency.
 
@@ -1756,12 +1762,12 @@ transitive closure, dedicated query method, References edge, query-derived
 DependsOn edge, or ownership projection is added by the first slice.
 
 `semantic_edge.reads` remains `DeclaredOnly`. Parser investigation, typed
-parsing and diagnostics, exact metadata resolution, and precise validation are
-complete prerequisites, but production EDT emission, provenance aggregation,
-production negative and positive tests, Query and Impact evidence, full-builder
-integration, repeated-build determinism, and a registry-only status transition
-remain incomplete. Validator completion does not change the Coverage Registry
-status or aggregate counts.
+parsing and diagnostics, exact metadata resolution, precise validation,
+production EDT emission, provenance aggregation, positive and negative tests,
+Query and Impact evidence, full-builder integration, and repeated-build
+determinism are complete for the current fixture-backed forms. Only the separate
+registry transition remains. Production completion does not itself change the
+Coverage Registry status or aggregate counts.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
@@ -1929,9 +1935,10 @@ The remaining thematic Semantic Coverage Completion backlog is:
 1. **High — declared semantic edges.** Add producer-specific tasks for Reads and
    Writes rather than a generic edge task. The first Reads contract is accepted
    in `docs/adr/0021-reads-semantics.md`: focused query-language investigation,
-   typed parsing and diagnostics, metadata source resolution, and precise
-   validation are complete. EDT emission and production tests remain required
-   before the `semantic_edge.reads` Coverage transition. Writes remains a
+   typed parsing and diagnostics, metadata source resolution, precise
+   validation, EDT emission, deterministic provenance, and production tests are
+   complete for the current fixture-backed forms. The registry-only
+   `semantic_edge.reads` Coverage transition remains. Writes remains a
    separate architecture and implementation capability. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and

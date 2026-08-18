@@ -449,11 +449,16 @@ The committed prerequisite parser establishes complete-source proof, raw
 spelling, typed source categories, and deterministic raw-query byte locations
 for its minimum fixture-backed forms. The committed private EDT resolver applies
 the accepted normalization, collision, failure-precedence, workspace-scope, and
-exact-kind rules without emitting an edge. Precise graph validation now accepts
-only `Query --Reads--> Metadata(Catalog | InformationRegister)` and leaves
-`Writes` broadly accepted. The next ordered task is EDT Reads emission with
-deterministic provenance and production tests; parser, resolver, public graph
-API, and Coverage status remain unchanged by the validation prerequisite.
+exact-kind rules. Precise graph validation accepts only
+`Query --Reads--> Metadata(Catalog | InformationRegister)` and leaves `Writes`
+broadly accepted. The EDT production builder now invokes parsing and resolution
+after top-level metadata collection, emits canonical Reads edges only for unique
+compatible targets, aggregates deterministic exact resolved provenance, and
+reports typed parser and resolver failures without placeholders. Production
+emission remains limited to the parser's current fixture-backed accepted forms.
+The next ordered task is the registry-only `semantic_edge.reads` Coverage
+transition; parser, resolver, public Query API, and Writes behavior remain
+unchanged by emission.
 
 ## Rejected alternatives
 
@@ -495,7 +500,8 @@ form, general expression grammar, multiline BSL decoding and mapping, comments,
 strings, batches, joins, unions, nesting, temporary tables, virtual tables, and
 malformed-input recovery retain their existing evidence status. They do not
 block the resolver because it runs only for the parser's completely accepted
-source set. ADR-0021 remains authoritative for graph semantics; no architecture
-decision here changes `Reads`, `Writes`, `References`, or `DependsOn` behavior,
-Coverage status, or production output. Both `semantic_edge.reads` and
-`semantic_edge.writes` remain `DeclaredOnly`.
+source set. ADR-0021 remains authoritative for graph semantics. Production now
+emits Reads only for that accepted set; `Writes`, `References`, and query-derived
+`DependsOn` behavior is unchanged. Both `semantic_edge.reads` and
+`semantic_edge.writes` remain `DeclaredOnly`, and aggregate Coverage counts are
+unchanged pending the separate Reads registry transition.

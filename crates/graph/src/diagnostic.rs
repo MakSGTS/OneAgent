@@ -11,6 +11,12 @@ use crate::{
 /// Stable machine-readable semantic diagnostic code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SemanticDiagnosticCode {
+    /// A static query contains malformed query-language syntax.
+    QueryLanguageMalformedSyntax,
+    /// A query source uses a persistent namespace outside the supported allowlist.
+    QueryLanguageUnsupportedPersistentNamespace,
+    /// A query source is supplied by a parameter or another external source.
+    QueryLanguageExternalOrParameterDataSource,
     /// A raw semantic reference does not have the required source format.
     ReferenceMalformedFormat,
     /// A raw semantic reference uses a source prefix unsupported by the producer.
@@ -32,6 +38,13 @@ impl SemanticDiagnosticCode {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::QueryLanguageMalformedSyntax => "query_language.malformed_syntax",
+            Self::QueryLanguageUnsupportedPersistentNamespace => {
+                "query_language.unsupported_persistent_namespace"
+            }
+            Self::QueryLanguageExternalOrParameterDataSource => {
+                "query_language.external_or_parameter_data_source"
+            }
             Self::ReferenceMalformedFormat => "semantic.reference.malformed_format",
             Self::ReferenceUnsupportedPrefix => "semantic.reference.unsupported_prefix",
             Self::ReferenceUnresolved => "semantic.reference.unresolved",
@@ -59,6 +72,12 @@ pub enum SemanticDiagnosticSeverity {
 /// Typed semantic diagnostic category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SemanticDiagnosticKind {
+    /// The complete static query text is malformed or not fully consumed.
+    QueryLanguageMalformedSyntax,
+    /// A persistent query namespace is outside the supported allowlist.
+    QueryLanguageUnsupportedPersistentNamespace,
+    /// A query data source is supplied externally or through a parameter.
+    QueryLanguageExternalOrParameterDataSource,
     /// A raw semantic reference does not have the required source format.
     MalformedReferenceFormat,
     /// A raw semantic reference uses a source prefix unsupported by the producer.
@@ -354,6 +373,18 @@ mod tests {
 
     #[test]
     fn diagnostic_code_is_stable() {
+        assert_eq!(
+            SemanticDiagnosticCode::QueryLanguageMalformedSyntax.as_str(),
+            "query_language.malformed_syntax"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::QueryLanguageUnsupportedPersistentNamespace.as_str(),
+            "query_language.unsupported_persistent_namespace"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::QueryLanguageExternalOrParameterDataSource.as_str(),
+            "query_language.external_or_parameter_data_source"
+        );
         assert_eq!(
             SemanticDiagnosticCode::ReferenceMalformedFormat.as_str(),
             "semantic.reference.malformed_format"

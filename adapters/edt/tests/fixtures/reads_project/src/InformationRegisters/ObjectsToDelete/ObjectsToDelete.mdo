@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:InformationRegister xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="30000000-0000-0000-0000-000000000000">
+  <name>ObjectsToDelete</name>
+</mdclass:InformationRegister>

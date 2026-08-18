@@ -13,6 +13,9 @@ mod subsystem_content;
 // The parser is a production prerequisite for the later Writes resolution task.
 #[allow(dead_code)]
 mod writes;
+// The resolver is a production prerequisite for the later Writes emission task.
+#[allow(dead_code)]
+mod writes_resolution;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,

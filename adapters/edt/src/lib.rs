@@ -69,8 +69,10 @@ pub trait EdtConfigurationLoader {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FileSystemEdtConfigurationLoader;
 
-impl EdtConfigurationLoader for FileSystemEdtConfigurationLoader {
-    fn load(&self, project_root: &Path) -> Result<Configuration, EdtLoadError> {
+impl FileSystemEdtConfigurationLoader {
+    fn load_with_payload(
+        project_root: &Path,
+    ) -> Result<(Configuration, MetadataPayload), EdtLoadError> {
         let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
 
         if !configuration_path.is_file() {
@@ -93,13 +95,18 @@ impl EdtConfigurationLoader for FileSystemEdtConfigurationLoader {
         .map_err(|_| EdtLoadError::InvalidIdentifier)?;
 
         let name = EntityName::new(descriptor.name).map_err(|_| EdtLoadError::MissingName)?;
+        let payload = MetadataPayload::new(CommonMetadataPayload::new(descriptor.synonym), None);
 
-        Ok(Configuration::new(
-            id,
-            name,
-            project_root,
-            WorkspaceFormat::Edt,
+        Ok((
+            Configuration::new(id, name, project_root, WorkspaceFormat::Edt),
+            payload,
         ))
+    }
+}
+
+impl EdtConfigurationLoader for FileSystemEdtConfigurationLoader {
+    fn load(&self, project_root: &Path) -> Result<Configuration, EdtLoadError> {
+        Self::load_with_payload(project_root).map(|(configuration, _)| configuration)
     }
 }
 
@@ -246,9 +253,7 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
-    use super::{
-        EdtConfigurationLoader, FileSystemEdtConfigurationLoader, parse_configuration_descriptor,
-    };
+    use super::{FileSystemEdtConfigurationLoader, parse_configuration_descriptor};
 
     const CONFIGURATION_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mdclass:Configuration
@@ -291,15 +296,48 @@ mod tests {
         )
         .expect("configuration file must be created");
 
-        let configuration = FileSystemEdtConfigurationLoader
-            .load(root.path())
-            .expect("configuration must load");
+        let compatibility_configuration =
+            <FileSystemEdtConfigurationLoader as super::EdtConfigurationLoader>::load(
+                &FileSystemEdtConfigurationLoader,
+                root.path(),
+            )
+            .expect("compatibility configuration loader must succeed");
+        let (configuration, payload) =
+            FileSystemEdtConfigurationLoader::load_with_payload(root.path())
+                .expect("configuration must load");
 
+        assert_eq!(compatibility_configuration.id(), configuration.id());
+        assert_eq!(compatibility_configuration.name(), configuration.name());
         assert_eq!(configuration.name().as_str(), "DemoConfiguration");
         assert_eq!(
             configuration.id().as_str(),
             "40d7b43a-b34f-4e6f-a756-6d7f0dc850f0"
         );
+        assert_eq!(
+            payload.common().synonym(),
+            Some("Демонстрационная конфигурация")
+        );
+        assert_eq!(payload.specific(), None);
+    }
+
+    #[test]
+    fn configuration_payload_distinguishes_absent_synonym() {
+        let descriptor = parse_configuration_descriptor(
+            r#"<mdclass:Configuration uuid="id"><name>Main</name></mdclass:Configuration>"#,
+        )
+        .expect("configuration without synonym must be valid");
+
+        assert_eq!(descriptor.synonym, None);
+    }
+
+    #[test]
+    fn rejects_malformed_configuration_synonym_xml() {
+        let error = parse_configuration_descriptor(
+            r#"<mdclass:Configuration uuid="id"><name>Main</name><synonym><content>Broken</synonym></mdclass:Configuration>"#,
+        )
+        .expect_err("malformed synonym XML must be rejected");
+
+        assert!(matches!(error, super::EdtLoadError::MalformedXml(_)));
     }
 
     #[test]
@@ -311,14 +349,14 @@ mod tests {
 }
 
 use oneagent_graph::{
-    AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, NodeKind, ProducerId, Provenance,
-    ResolutionError, ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode,
-    SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphBuildDiff,
-    SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
-    SemanticReferenceOutcome, SemanticReferenceStatistics, StandardAttribute,
-    StandardAttributeKind,
+    AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload,
+    GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionError, ResolutionState,
+    SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
+    SemanticGraph, SemanticGraphBuildDiff, SemanticGraphReport, SemanticGraphValidationResult,
+    SemanticGraphValidator, SemanticReference, SemanticReferenceOutcome,
+    SemanticReferenceStatistics, StandardAttribute, StandardAttributeKind,
 };
-use oneagent_metadata::MetadataKind;
+use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
 use std::collections::{BTreeMap, BTreeSet};
 
 const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
@@ -473,7 +511,8 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         &self,
         project_root: &Path,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
-        let configuration = FileSystemEdtConfigurationLoader.load(project_root)?;
+        let (configuration, configuration_payload) =
+            FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
         let mut graph = SemanticGraph::new();
         let mut configuration_modules = Vec::new();
         let mut configuration_writes_sources = Vec::new();
@@ -485,22 +524,12 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let mut reference_statistics = SemanticReferenceStatistics::new();
 
         let configuration_id = configuration.id().clone();
-        let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
-        let configuration_source = source_id_from_path_fragment(
-            &configuration_path,
-            format!(
-                "metadata_object={};fact=configuration",
-                configuration_id.as_str()
-            ),
-            EdtGraphError::InvalidIdentifier,
-        )?;
-        insert_node(
+        insert_configuration_node(
             &mut graph,
-            configuration_id.clone(),
-            configuration.name().clone(),
-            NodeKind::Metadata(MetadataKind::Configuration),
-            parsed_provenance(configuration_source),
-        );
+            project_root,
+            &configuration,
+            configuration_payload,
+        )?;
 
         let source_root = project_root.join("src");
         if !source_root.is_dir() {
@@ -588,6 +617,31 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             reference_statistics,
         )
     }
+}
+
+fn insert_configuration_node(
+    graph: &mut SemanticGraph,
+    project_root: &Path,
+    configuration: &Configuration,
+    payload: MetadataPayload,
+) -> Result<(), EdtGraphError> {
+    let configuration_path = project_root.join(CONFIGURATION_RELATIVE_PATH);
+    let configuration_source = source_id_from_path_fragment(
+        &configuration_path,
+        format!(
+            "metadata_object={};fact=configuration",
+            configuration.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )?;
+    insert_metadata_node(
+        graph,
+        configuration.id().clone(),
+        configuration.name().clone(),
+        MetadataKind::Configuration,
+        payload,
+        parsed_provenance(configuration_source),
+    )
 }
 
 fn finish_configuration_graph_build(
@@ -751,13 +805,18 @@ fn collect_metadata_object(
         .map_err(EdtGraphError::MetadataObject)?;
     let descriptor_source = metadata_object_source_id(&descriptor)?;
 
-    insert_node(
+    let payload = MetadataPayload::new(
+        CommonMetadataPayload::new(descriptor.synonym().map(str::to_owned)),
+        None,
+    );
+    insert_metadata_node(
         graph,
         descriptor.id().clone(),
         descriptor.name().clone(),
-        NodeKind::Metadata(descriptor.kind()),
+        descriptor.kind(),
+        payload,
         declared_provenance(descriptor_source),
-    );
+    )?;
 
     if descriptor.kind() == MetadataKind::Role {
         insert_role_node(graph, &descriptor)?;
@@ -1569,6 +1628,26 @@ fn insert_node(
     graph.insert_node_with_provenance(id, name, kind, provenance);
 }
 
+fn insert_metadata_node(
+    graph: &mut SemanticGraph,
+    id: EntityId,
+    name: EntityName,
+    kind: MetadataKind,
+    payload: MetadataPayload,
+    provenance: Provenance,
+) -> Result<(), EdtGraphError> {
+    let node = GraphNode::new_with_payload_and_provenance(
+        id,
+        name,
+        NodeKind::Metadata(kind),
+        GraphNodePayload::Metadata(payload),
+        vec![provenance],
+    )
+    .map_err(EdtGraphError::NodePayload)?;
+    graph.insert_node(node);
+    Ok(())
+}
+
 fn insert_edge(
     graph: &mut SemanticGraph,
     source: EntityId,
@@ -1941,6 +2020,9 @@ pub enum EdtGraphError {
     /// Semantic graph validation failed.
     Graph(oneagent_graph::GraphError),
 
+    /// Typed metadata payload conflicts with its graph node kind.
+    NodePayload(GraphNodePayloadError),
+
     /// BSL symbols could not be added to the graph.
     Bsl(EdtBslGraphError),
 }
@@ -2005,6 +2087,7 @@ impl Display for EdtGraphError {
             Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
             Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
             Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
+            Self::NodePayload(error) => write!(formatter, "semantic graph node error: {error}"),
             Self::Bsl(error) => {
                 write!(formatter, "failed to add BSL symbols to graph: {error}")
             }
@@ -2025,6 +2108,7 @@ impl std::error::Error for EdtGraphError {
             Self::SubsystemContent(error) => Some(error),
             Self::RoleRights(error) => Some(error),
             Self::Graph(error) => Some(error),
+            Self::NodePayload(error) => Some(error),
             Self::InvalidIdentifier
             | Self::InvalidName
             | Self::SubsystemDescriptorOutsideProject { .. }
@@ -2067,6 +2151,10 @@ mod graph_tests {
     xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
     uuid="11111111-2222-3333-4444-555555555555">
     <name>DemoConfiguration</name>
+    <synonym>
+        <key>ru</key>
+        <content>Демонстрационная конфигурация</content>
+    </synonym>
 </mdclass:Configuration>
 "#;
     const DOCUMENT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -3087,6 +3175,66 @@ mod graph_tests {
                 .len(),
             4
         );
+    }
+
+    #[test]
+    fn preserves_common_metadata_payload_without_changing_query_identity() {
+        let root = create_edt_project();
+        add_common_command_descriptor(&root);
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with common payload must build");
+        let second = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+        let query = first.graph().query();
+        let configuration = query
+            .node(&NodeId::new("11111111-2222-3333-4444-555555555555"))
+            .expect("configuration node must exist");
+        let catalog = query
+            .node(&NodeId::new("11111111-aaaa-bbbb-cccc-222222222222"))
+            .expect("catalog node must exist");
+        let command = query
+            .node(&NodeId::new("cccccccc-1111-2222-3333-444444444444"))
+            .expect("command node must exist");
+
+        assert_eq!(
+            configuration
+                .metadata_payload()
+                .expect("configuration payload must exist")
+                .common()
+                .synonym(),
+            Some("Демонстрационная конфигурация")
+        );
+        assert_eq!(
+            catalog
+                .metadata_payload()
+                .expect("catalog payload must exist")
+                .common()
+                .synonym(),
+            None
+        );
+        assert_eq!(
+            command
+                .metadata_payload()
+                .expect("command payload must exist")
+                .common()
+                .synonym(),
+            Some("Refresh data")
+        );
+        assert_eq!(
+            query.nodes_by_name(&EntityName::new("RefreshData").expect("name must be valid")),
+            vec![command]
+        );
+        assert!(
+            query
+                .nodes_by_name(&EntityName::new("Refresh data").expect("name must be valid"))
+                .is_empty()
+        );
+        assert!(first.validate().is_valid());
+        assert!(first.graph().diff(second.graph()).is_empty());
+        assert!(first.diff(&second).is_empty());
     }
 
     #[test]

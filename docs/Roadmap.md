@@ -136,7 +136,7 @@ Ordered follow-up work:
 18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
 19. **High — completed:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the production builder now normalizes the explicit allowlist, resolves exact metadata targets, emits deterministic provenance-backed Includes edges, reports typed negative outcomes, enforces the precise validator matrix, and verifies generic queries and Impact exclusion.
 20. **High — completed:** implement and transition the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md`; parsing, multiline BSL decoding and private source mapping, typed positive and negative classification, exact resolution, validation, emission, provenance, raw fixtures, deterministic parser/full-builder tests, and `semantic_edge.reads` Coverage evidence are complete.
-21. **High — pending:** define and implement `Writes` as the next independent capability; do not infer writes or query-derived `DependsOn` from Reads architecture alone.
+21. **High — architecture accepted, implementation pending:** implement the first `Writes` slice defined by `docs/adr/0022-writes-semantics.md`: a complete zero-argument `RegisterRecords.<Name>.Write()` statement in a Document Object Module Procedure must be confirmed by the owning Document's matching `AccumulationRegister` record declaration and exact metadata resolution. Preserve typed declarations, extract complete candidates, resolve targets, narrow validation, emit deterministic provenance, add integration evidence, and transition Coverage as separate ordered tasks; do not infer Writes or query-derived `DependsOn` from Reads, Calls, Grants, or the bare method name.
 22. **Medium:** define and preserve complete typed metadata payloads.
 23. **Medium:** add successful fixtures for every mapped metadata reference target kind.
 24. **Medium:** decide and implement reference-request provenance ownership.
@@ -168,8 +168,17 @@ accepted forms. The confirmed multiline BSL decoder and private source map,
 explicit unsupported-structure, virtual-table, and temporary-table diagnostics,
 raw fixtures, deterministic parser/full-builder negative evidence, and the
 registry-only Coverage transition are complete. The capability is `Supported`.
-`semantic_edge.writes` remains a separate `DeclaredOnly` capability, and its
-broad endpoint acceptance is unchanged.
+The first `semantic_edge.writes` architecture contract is accepted in
+`docs/adr/0022-writes-semantics.md`. Its canonical direction is
+`Procedure --Writes--> Metadata(AccumulationRegister)` for the exact
+Document-register source contract; file, binary, text, archive, UI, external,
+dynamic, local-object, argument-bearing, and otherwise unresolved writes remain
+outside the first slice. Typed Document register declarations, complete
+candidate extraction, resolution, precise validation, production emission,
+integration evidence, and the registry transition remain ordered pending work.
+The capability remains `DeclaredOnly`, its broad endpoint acceptance is
+unchanged, the single High gap remains open, and Sprint 3 Integration Review
+remains blocked.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

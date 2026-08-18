@@ -1603,9 +1603,12 @@ Query node support is independent from `Reads`, `Writes`, and `DependsOn`.
 Current extraction creates the `NodeKind::Query` node and its ownership edge for
 the supported BSL slice. Production query-language analysis now emits Reads for
 the parser's completely accepted fixture-backed forms and uniquely resolved
-Catalog or Information Register targets. `Writes` and query-derived `DependsOn`
-remain separate capabilities. None of these edges is a prerequisite for creating
-the Query node, and Query identity and ownership do not depend on query text.
+Catalog or Information Register targets. `Writes` has a separate accepted
+architecture contract in `docs/adr/0022-writes-semantics.md`; its first slice is
+a BSL Procedure mutation fact rather than a Query fact, and implementation
+remains pending. Query-derived `DependsOn` also remains separate. None of these
+edges is a prerequisite for creating the Query node, and Query identity and
+ownership do not depend on query text.
 
 #### Determinism, errors, and first slice
 
@@ -1631,7 +1634,8 @@ module ownership, existing BSL module discovery, an existing symbol owner model,
 and provenance source identifiers. The slice is restricted to declarations with
 a stable local binding and complete statically available text. The later Reads
 producer consumes this Query entity without changing its identity or ownership;
-Writes and query-derived DependsOn remain unimplemented.
+the accepted first Writes slice uses existing Procedure nodes independently,
+and query-derived DependsOn remains unimplemented.
 
 The ordered follow-up tasks are:
 
@@ -1646,11 +1650,18 @@ The ordered follow-up tasks are:
    without graph emission or a Coverage transition;
 5. Completed: emit EDT Reads edges with deterministic provenance and focused,
    production, Query, Impact, negative, and repeated-build integration evidence;
-6. define and implement Writes through a separate architecture and capability
-   sequence;
-7. derive query `DependsOn` only after data-access production evidence and the
+6. Accepted architecture: follow `docs/adr/0022-writes-semantics.md` for the
+   narrow `Procedure --Writes--> Metadata(AccumulationRegister)` contract based
+   on a complete `RegisterRecords.<Name>.Write()` statement and the owning
+   Document's matching `<registerRecords>` declaration;
+7. preserve typed Document register-record declarations, implement complete
+   Writes candidate extraction, exact resolution, precise validation,
+   production emission, integration evidence, and the final registry transition
+   as ordered independent tasks; keep `semantic_edge.writes` `DeclaredOnly`
+   until all evidence exists;
+8. derive query `DependsOn` only after data-access production evidence and the
    dependency source contract exist;
-8. add metadata-owned Query sources such as data-composition datasets or
+9. add metadata-owned Query sources such as data-composition datasets or
    dynamic-list query settings after their EDT parser contracts are defined.
 
 ### Ownership inventory
@@ -1772,6 +1783,60 @@ fixtures and parser/full-builder tests cover unsupported structure, virtual
 tables, and temporary tables without partial source programs or Reads edges.
 The registry records the complete required evidence and the representative
 production integration test.
+
+`EdgeKind::Writes` is governed by
+`docs/adr/0022-writes-semantics.md`. It represents a direct resolved persistent
+mutation fact stored as `writer --Writes--> persistent mutation target`. The
+accepted smallest production slice is:
+
+```text
+NodeKind::Procedure
+    --Writes-->
+NodeKind::Metadata(MetadataKind::AccumulationRegister)
+```
+
+The source must be an existing Procedure in the Object Module of an EDT
+Document. A Writes-specific extractor must prove one complete standalone,
+zero-argument `RegisterRecords.<Name>.Write()` statement. The owning Document
+descriptor must independently declare exactly
+`AccumulationRegister.<Name>` in `<registerRecords>`, and resolution must find
+exactly one compatible existing top-level metadata node. The syntax, owner
+declaration, and resolved target are jointly required; no one source of evidence
+is sufficient by itself.
+
+This contract distinguishes platform Document register-record persistence from
+file, binary, text, archive, UI, external, dynamic, and local object writes that
+share the `.Write(...)` spelling. The current `BslCall` model can locate a
+qualified candidate and its containing symbol, but it does not preserve
+arguments, receiver type, or general local value flow. The first slice therefore
+does not accept `ProductSale.Write(...)`, arbitrary object variables, chained or
+aliased receivers, argument-bearing calls, other register families, localized
+spellings, or Query mutations. Unsupported, missing, ambiguous, incompatible,
+and dynamic candidates produce typed diagnostics and no placeholder, Unknown,
+external, or lower-confidence graph target.
+
+Writes uses standard `(source, target, EdgeKind::Writes)` identity and exact
+resolved provenance covering the Procedure, Object Module, owning Document,
+source occurrence, matching descriptor declaration, and resolved target.
+Repeated occurrences for one Procedure-target pair support one edge; distinct
+provenance is sorted and deduplicated before insertion. The later validator task
+must replace the broad Writes branch with only the accepted
+Procedure-to-Accumulation-Register matrix.
+
+Existing Query and Impact behavior is unchanged: Writes remains an outgoing
+dependency, incoming mutation usage, and reverse Impact traversal edge. The
+first producer will emit no companion Calls, References, Reads, Grants,
+DependsOn, or Contains fact. Role rights, Reads, generic Calls, and metadata
+declarations do not imply Writes.
+
+Implementation remains ordered and incomplete: preserve typed Document
+register-record declarations; implement complete Writes candidate extraction;
+resolve the owning declaration and exact target; narrow validation; emit and
+aggregate provenance; add production, negative, Query, Impact, duplicate, and
+repeated-build evidence; then transition only `semantic_edge.writes` in a final
+registry-only task. Architecture acceptance alone does not change production or
+Coverage. `semantic_edge.writes` remains `DeclaredOnly`, the broad validator
+branch remains in place, and Sprint 3 Integration Review remains blocked.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
@@ -1936,17 +2001,25 @@ validator tests cover the canonical ownership invariant.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — declared semantic edge.** Define and implement Writes as the next
-   independent capability rather than treating data-access edges as a generic
-   task. The first Reads contract is accepted
+1. **High — accepted architecture, implementation pending.** Implement Writes
+   as the next independent capability according to
+   `docs/adr/0022-writes-semantics.md`. The accepted first slice is a complete
+   `RegisterRecords.<Name>.Write()` statement in a Document Object Module
+   Procedure, independently confirmed by the owning Document's matching
+   `<registerRecords>AccumulationRegister.<Name></registerRecords>` declaration
+   and exact metadata resolution. Ordered prerequisites are typed declaration
+   preservation, complete candidate extraction, resolution, precise validation,
+   production emission and provenance aggregation, integration evidence, and a
+   final registry-only transition. The capability remains `DeclaredOnly` and
+   its validator branch remains broad until those tasks are complete. The first
+   Reads contract is accepted
    in `docs/adr/0021-reads-semantics.md`: focused query-language investigation,
    typed parsing and diagnostics, metadata source resolution, precise
    validation, EDT emission, deterministic provenance, and production tests are
    complete, including the confirmed multiline BSL decoder, private source map,
    unsupported-structure/virtual-table/temporary-table diagnostics, raw
    fixtures, parser/full-builder all-or-nothing evidence, and the
-   `semantic_edge.reads` Coverage transition. Writes remains a separate
-   architecture and implementation capability. The
+   `semantic_edge.reads` Coverage transition. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
    query-derived dependency origins remain separate tasks. The first `Extends`

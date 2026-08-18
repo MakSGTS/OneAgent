@@ -1267,7 +1267,13 @@ SM-9 MCP and IDE integration
     incremental refresh
 ```
 
-## Immediate implementation boundary
+## Historical initial implementation boundary
+
+> Historical note: this section records the initial Knowledge Graph proposal.
+> It is not the current implementation plan. The repository has since added
+> BSL and query parsing, graph query, validation, diff, impact, coverage, and
+> resolution facilities. Current execution scope is governed by accepted ADRs
+> and `docs/Roadmap.md`; Sprint 4 is bounded by ADR-0026.
 
 The first implementation stage covers only the Knowledge Graph core.
 
@@ -1296,6 +1302,9 @@ crates/graph/src/
 ```
 
 Existing graph modules remain available until migration is complete.
+
+The proposed file tree above is retained as historical design evidence and must
+not be used to infer that those exact files exist in the current repository.
 
 ## Semantic Coverage Audit
 

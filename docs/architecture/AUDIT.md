@@ -1,230 +1,96 @@
 # OneAgent Architecture Audit
 
-Generated automatically by `oneagent-audit.sh`.
+Point-in-time audit performed manually on 2026-08-18. The repository does not
+currently contain an `oneagent-audit.sh` generator; this document must not be
+treated as continuously generated state.
 
-## Environment
+## Baseline
 
-- Project: `/Users/maxim_tomshin/Development/oneagent`
+- Project: `oneagent`
 - Git branch: `main`
-- Git commit: `a9f70a4`
+- Source baseline before documentation reconciliation: `63d8c4f930b8`
 - Rust host: `aarch64-apple-darwin`
 - Rust version: `rustc 1.97.1 (8bab26f4f 2026-07-14)`
 - Cargo version: `cargo 1.97.1 (c980f4866 2026-06-30)`
+- Audit date: 2026-08-18
+
+The audit includes the documentation reconciliation in the working tree. The
+untracked `docs/codex/prompts/` directory predates and is outside this audit
+change.
 
 ## Summary
 
 | Check | Result |
 |---|---:|
-| Cargo manifests found | 11 |
-| Workspace packages | 9 |
-| Untracked Git entries | 25 |
-| Backup files | 6 |
-| Duplicate or obsolete paths | 1 |
-| TODO/FIXME/HACK markers | 0 |
+| Cargo manifests, including workspace root | 12 |
+| Workspace packages | 11 |
+| Workspace tests listed | 448 |
+| Untracked Git entries outside this change | 1 directory |
+| Ignored backup artifacts | 4 |
+| Duplicate root `runtime/` path | absent |
+| TODO/FIXME/HACK markers in Rust source | 0 |
+| `cargo fmt --all -- --check` | PASS |
 | `cargo check --workspace` | PASS |
 | `cargo test --workspace` | PASS |
-| `cargo clippy ... -D warnings` | PASS |
-| `cargo doc --workspace --no-deps` | PASS |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | PASS |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | PASS |
 
-## Workspace Packages
+## Workspace packages
 
-| Path | Package |
-|---|---|
-| `adapters/edt` | `oneagent-edt` |
-| `adapters/filesystem` | `oneagent-workspace-fs` |
-| `apps/cli` | `cli` |
-| `apps/runtime` | `oneagent-runtime` |
-| `crates/common` | `oneagent-common` |
-| `crates/graph` | `oneagent-graph` |
-| `crates/metadata` | `oneagent-metadata` |
-| `crates/protocol` | `oneagent-protocol` |
-| `crates/workspace` | `oneagent-workspace` |
+| Path | Package | Current responsibility |
+|---|---|---|
+| `adapters/edt` | `oneagent-edt` | EDT artifact ingestion and semantic graph contribution |
+| `adapters/filesystem` | `oneagent-workspace-fs` | Filesystem workspace discovery |
+| `apps/cli` | `oneagent-cli` | Package placeholder; supported CLI is planned for Sprint 21 |
+| `apps/runtime` | `oneagent-runtime` | Runtime composition, configuration, state, and lifecycle foundation |
+| `crates/analysis` | `oneagent-analysis` | Source-independent declaration and call analysis |
+| `crates/bsl` | `oneagent-bsl` | BSL and supported query-language parsing |
+| `crates/common` | `oneagent-common` | Shared typed primitives |
+| `crates/graph` | `oneagent-graph` | Canonical semantic graph and derived analysis APIs |
+| `crates/metadata` | `oneagent-metadata` | Typed 1C metadata model |
+| `crates/protocol` | `oneagent-protocol` | Protocol package foundation; transport contracts are not implemented |
+| `crates/workspace` | `oneagent-workspace` | Workspace and project abstractions |
 
-## All Cargo Manifests
+## Project-goal alignment
 
-```text
-./adapters/edt/Cargo.toml
-./adapters/filesystem/Cargo.toml
-./apps/cli/Cargo.toml
-./apps/runtime/Cargo.toml
-./Cargo.toml
-./crates/common/Cargo.toml
-./crates/graph/Cargo.toml
-./crates/metadata/Cargo.toml
-./crates/protocol/Cargo.toml
-./crates/workspace/Cargo.toml
-./runtime/Cargo.toml
-```
+| Project goal | Evidence | Assessment |
+|---|---|---|
+| Modular cross-platform Rust foundation | Cargo workspace, macOS and Windows CI, all quality gates passing | aligned |
+| Source-independent semantic model | Typed graph, provenance, validation, query, diff, impact, coverage, and resolution APIs | aligned |
+| 1C source ingestion | Implemented EDT and filesystem adapters | aligned for current scope; Designer XML is assigned to Sprint 14 |
+| Semantic indexing | Existing resolution index and scan-based Query API | incomplete by design; Sprint 4 boundary is accepted in ADR-0026 |
+| Incremental workspace updates | Graph/build diff facilities exist | incomplete by design; incremental index lifecycle belongs to Sprint 5 |
+| Long-running product Runtime and APIs | Runtime lifecycle foundation exists; CLI and protocol packages are placeholders | planned in Sprints 15–21 |
+| AI, MCP, and IDE integration | Vision and product boundaries are documented | planned in Sprints 22–35; no current implementation claim |
+| Git-aware intelligence | No Git adapter exists | explicitly assigned to Sprint 38 |
 
-## Git Status
+The implementation is consistent with the early semantic-core phase of the
+project vision. The main discrepancies were documentation drift: a duplicated
+date-based task sequence, planned integrations described as current, a stale
+historical implementation boundary, and this obsolete audit snapshot. Those
+items are corrected by the 2026-08-18 roadmap reconciliation.
 
-```text
-?? .github/
-?? .gitignore
-?? Cargo.lock
-?? Cargo.toml
-?? Cargo.toml.backup-20260718-142100
-?? LICENSE
-?? README.md
-?? adapters/edt/Cargo.toml
-?? adapters/edt/src/lib.rs.backup-20260718-180510
-?? adapters/filesystem/
-?? apps/
-?? crates/
-?? docs/Architecture.md
-?? docs/Development.md
-?? docs/Roadmap.md
-?? docs/Vision.md
-?? docs/adr/0001-project-vision.md
-?? docs/adr/0002-runtime-composition-root.md
-?? docs/adr/0003-semantic-domain-model.md
-?? docs/adr/0004-filesystem-workspace-discovery.md
-?? docs/adr/0005-edt-configuration-loading.md
-?? docs/adr/0006-semantic-graph.md
-?? docs/adr/0007-edt-to-semantic-graph.md
-?? runtime/
-?? rustfmt.toml
-```
+## Repository hygiene observations
 
-## Duplicate or Obsolete Paths
+The obsolete root `runtime/` directory and the tracked backup files reported by
+the previous audit are gone. Four ignored local `.bak` files remain under
+`adapters/edt/src/`:
 
 ```text
-runtime/ exists alongside apps/runtime/
+adapters/edt/src/lib.rs.bak
+adapters/edt/src/lib.rs.before-common-module-name.bak
+adapters/edt/src/lib.rs.before-production-call-test.bak
+adapters/edt/src/module_reader.rs.before-common-module-name.bak
 ```
 
-## Backup Files
+They are not tracked and do not affect builds. They should be removed only by
+their owner after confirming they are no longer needed.
 
-```text
-./adapters/edt/src/lib.rs.backup-20260718-180510
-./Cargo.toml.backup-20260718-142100
-./crates/common/src/lib.rs.backup-20260718-151921
-./crates/metadata/src/lib.rs.backup-20260718-151921
-./crates/workspace/src/lib.rs.backup-20260718-151921
-./crates/workspace/src/lib.rs.backup-20260718-172841
-```
+## Current next actions
 
-## TODO Markers
-
-```text
-none
-```
-
-## Check Logs
-
-### cargo check — PASS
-
-```text
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
-```
-
-### cargo test — PASS
-
-```text
-test tests::tree_returns_children_by_parent ... ok
-test tests::tree_filters_objects_by_kind ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-     Running unittests src/lib.rs (target/debug/deps/oneagent_protocol-e1f86fb6e64ba6d2)
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-     Running unittests src/main.rs (target/debug/deps/oneagent_runtime-2855a55740cacb9f)
-
-running 5 tests
-test app::builder::tests::builder_creates_application ... ok
-test app::builder::tests::builder_requires_configuration ... ok
-test app::lifecycle::tests::invalid_transition_returns_error ... ok
-test app::lifecycle::tests::valid_lifecycle_sequence_succeeds ... ok
-test config::tests::default_configuration_is_valid ... ok
-
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-     Running unittests src/lib.rs (target/debug/deps/oneagent_workspace-3858d760a60b507a)
-
-running 1 test
-test tests::workspace_finds_configuration_by_identifier ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-     Running unittests src/lib.rs (target/debug/deps/oneagent_workspace_fs-4e11b5b674fe130e)
-
-running 3 tests
-test tests::ignores_incomplete_edt_project ... ok
-test tests::detects_edt_project ... ok
-test tests::respects_depth_limit ... ok
-
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_common
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_edt
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_graph
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_metadata
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_protocol
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_workspace
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-   Doc-tests oneagent_workspace_fs
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-```
-
-### cargo clippy — PASS
-
-```text
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
-```
-
-### cargo doc — PASS
-
-```text
- Documenting oneagent-workspace-fs v0.1.0 (/Users/maxim_tomshin/Development/oneagent/adapters/filesystem)
- Documenting oneagent-workspace v0.1.0 (/Users/maxim_tomshin/Development/oneagent/crates/workspace)
- Documenting oneagent-graph v0.1.0 (/Users/maxim_tomshin/Development/oneagent/crates/graph)
- Documenting oneagent-metadata v0.1.0 (/Users/maxim_tomshin/Development/oneagent/crates/metadata)
- Documenting oneagent-edt v0.1.0 (/Users/maxim_tomshin/Development/oneagent/adapters/edt)
- Documenting oneagent-protocol v0.1.0 (/Users/maxim_tomshin/Development/oneagent/crates/protocol)
- Documenting oneagent-common v0.1.0 (/Users/maxim_tomshin/Development/oneagent/crates/common)
- Documenting cli v0.1.0 (/Users/maxim_tomshin/Development/oneagent/apps/cli)
- Documenting oneagent-runtime v0.1.0 (/Users/maxim_tomshin/Development/oneagent/apps/runtime)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.51s
-   Generated /Users/maxim_tomshin/Development/oneagent/target/doc/cli/index.html and 8 other files
-```
-
-## Recommended Actions
-
-- Remove or migrate obsolete duplicate paths before adding new crates.
-- Delete backup files or move them outside the repository.
-- Review and explicitly add or ignore all untracked files.
+1. Execute Sprint 4 against ADR-0026 and record its integration review.
+2. Keep release forecasts separate from the dependency-ordered sprint roadmap.
+3. Replace CLI, protocol, Runtime, and extension placeholders only in their
+   assigned sprints.
+4. Re-run this manual snapshot when repository structure or release status
+   changes, or add a reviewed audit tool before claiming automatic generation.

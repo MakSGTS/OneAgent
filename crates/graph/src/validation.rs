@@ -437,7 +437,7 @@ impl SemanticGraphSchema {
             EdgeKind::Grants => allows_grants(source_kind, target_kind),
             EdgeKind::Includes => allows_includes(source_kind, target_kind),
             EdgeKind::Reads => allows_reads(source_kind, target_kind),
-            EdgeKind::Writes => true,
+            EdgeKind::Writes => allows_writes(source_kind, target_kind),
         }
     }
 }
@@ -874,6 +874,14 @@ const fn allows_reads(source: NodeKind, target: NodeKind) -> bool {
         && matches!(
             target,
             NodeKind::Metadata(MetadataKind::Catalog | MetadataKind::InformationRegister)
+        )
+}
+
+const fn allows_writes(source: NodeKind, target: NodeKind) -> bool {
+    matches!(source, NodeKind::Procedure)
+        && matches!(
+            target,
+            NodeKind::Metadata(MetadataKind::AccumulationRegister)
         )
 }
 

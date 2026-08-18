@@ -1,9 +1,10 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
-    ResolutionState, SemanticGraph, SemanticGraphReport, SemanticGraphSchema,
-    SemanticGraphValidationCode, SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity,
-    SemanticGraphValidator, SemanticReferenceOutcome, SemanticReferenceStatistics,
+    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, ProducerId,
+    Provenance, ResolutionState, SemanticGraph, SemanticGraphQuery, SemanticGraphReport,
+    SemanticGraphSchema, SemanticGraphValidationCode, SemanticGraphValidationIssueKind,
+    SemanticGraphValidationSeverity, SemanticGraphValidator, SemanticReferenceOutcome,
+    SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 
@@ -106,6 +107,29 @@ fn valid_graph(reverse_order: bool) -> SemanticGraph {
     insert_valid_edges(&mut graph, ids, reverse_order);
 
     graph
+}
+
+fn insert_accumulation_register(graph: &mut SemanticGraph) -> EntityId {
+    let register_id = id("metadata.accumulation_register.cash_account_balance");
+
+    graph.insert_node(GraphNode::new_with_provenance(
+        register_id.clone(),
+        name("CashAccountBalance"),
+        NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        vec![provenance(
+            "metadata.accumulation_register.cash_account_balance",
+        )],
+    ));
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            id("configuration.main"),
+            register_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("configuration.main")],
+        ))
+        .expect("accumulation register ownership edge must be stored");
+
+    register_id
 }
 
 fn insert_valid_nodes(graph: &mut SemanticGraph, ids: &FixtureIds, reverse_order: bool) {
@@ -679,17 +703,142 @@ fn reads_graph_validation_reports_invalid_endpoint_contract() {
 }
 
 #[test]
-fn writes_schema_retains_broad_acceptance() {
+fn writes_schema_accepts_procedure_to_accumulation_register() {
+    let schema = SemanticGraphSchema;
+
+    assert!(schema.allows(
+        NodeKind::Procedure,
+        EdgeKind::Writes,
+        NodeKind::Metadata(MetadataKind::AccumulationRegister),
+    ));
+}
+
+#[test]
+fn writes_schema_rejects_every_non_procedure_source_kind() {
     let schema = SemanticGraphSchema;
     let kinds = node_kinds();
 
-    for source_kind in &kinds {
+    for source_kind in kinds
+        .iter()
+        .copied()
+        .filter(|kind| *kind != NodeKind::Procedure)
+    {
         for target_kind in &kinds {
             assert!(
-                schema.allows(*source_kind, EdgeKind::Writes, *target_kind),
-                "Writes unexpectedly rejects {source_kind:?} -> {target_kind:?}",
+                !schema.allows(source_kind, EdgeKind::Writes, *target_kind),
+                "Writes unexpectedly accepts {source_kind:?} -> {target_kind:?}",
             );
         }
+    }
+}
+
+#[test]
+fn writes_schema_rejects_every_non_accumulation_register_target_kind() {
+    let schema = SemanticGraphSchema;
+
+    for target_kind in node_kinds()
+        .into_iter()
+        .filter(|kind| *kind != NodeKind::Metadata(MetadataKind::AccumulationRegister))
+    {
+        assert!(
+            !schema.allows(NodeKind::Procedure, EdgeKind::Writes, target_kind),
+            "Writes unexpectedly accepts Procedure -> {target_kind:?}",
+        );
+    }
+}
+
+#[test]
+fn writes_graph_accepts_provenance_backed_procedure_to_accumulation_register_edge() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+    let register_id = insert_accumulation_register(&mut graph);
+
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.procedure,
+            register_id,
+            EdgeKind::Writes,
+            vec![provenance("metadata.document.sales:object_module#writes")],
+        ))
+        .expect("Writes edge must be stored");
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn writes_graph_rejects_invalid_endpoints_with_exact_deterministic_context() {
+    let ids = FixtureIds::new();
+    let mut graph = valid_graph(false);
+    let register_id = insert_accumulation_register(&mut graph);
+    let invalid_edges = [
+        (
+            ids.function,
+            register_id,
+            NodeKind::Function,
+            NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        ),
+        (
+            ids.procedure,
+            ids.document,
+            NodeKind::Procedure,
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+    ];
+
+    for (source_id, target_id, _, _) in &invalid_edges {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source_id.clone(),
+                target_id.clone(),
+                EdgeKind::Writes,
+                vec![provenance("metadata.document.sales:object_module#writes")],
+            ))
+            .expect("storage only validates endpoint existence");
+    }
+
+    let result = graph.validate();
+    let repeated = graph.validate();
+    let invalid_endpoint_issues = result
+        .issues()
+        .iter()
+        .filter(|issue| {
+            issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+                && issue.edge_kind() == Some(EdgeKind::Writes)
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(result, repeated);
+    assert!(!result.is_valid());
+    assert_eq!(result.error_count(), 2);
+    assert_eq!(result.warning_count(), 0);
+    assert_eq!(invalid_endpoint_issues.len(), 2);
+
+    for (source_id, target_id, source_kind, target_kind) in invalid_edges {
+        let edge_id = SemanticGraphQuery::edge_id(
+            &NodeId::new(source_id.as_str()),
+            &NodeId::new(target_id.as_str()),
+            EdgeKind::Writes,
+        );
+        let issue = invalid_endpoint_issues
+            .iter()
+            .find(|issue| issue.edge_id() == Some(&edge_id))
+            .expect("invalid Writes edge must retain its exact identity");
+        let mut expected_nodes = vec![source_id, target_id];
+        expected_nodes.sort();
+
+        assert_eq!(issue.severity(), SemanticGraphValidationSeverity::Error);
+        assert_eq!(issue.kind(), SemanticGraphValidationIssueKind::Semantic);
+        assert_eq!(issue.nodes(), expected_nodes);
+        assert_eq!(issue.source_kind(), Some(source_kind));
+        assert_eq!(issue.target_kind(), Some(target_kind));
+        assert_eq!(issue.invariant(), "edge endpoint schema");
+        assert_eq!(
+            issue.provenance(),
+            [provenance("metadata.document.sales:object_module#writes")]
+        );
     }
 }
 

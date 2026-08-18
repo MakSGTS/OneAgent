@@ -1732,8 +1732,13 @@ preserve source object, source member, role, expected target kind, target name,
 and descriptor path. Resolution emits `References` edges or typed missing,
 ambiguous, and incompatible-kind diagnostics; both outcomes update reference
 statistics and receive provenance. Catalog and Document targets have successful
-representative integration fixtures; the other mapped targets lack successful
-fixtures.
+representative integration fixtures. Enumeration, Information Register,
+Accumulation Register, Accounting Register, Calculation Register, Business
+Process, and Task now share the same production-builder representative test.
+For every mapped target kind it proves exact source and target identity,
+`References`, companion first-slice `DependsOn`, deterministic provenance,
+Query navigation, graph validation, resolution statistics, and repeated-build
+stability. All nine metadata-reference capabilities are `Supported`.
 
 BSL calls are extracted and local or qualified calls can resolve to `Calls`
 edges. Every extracted call now contributes exactly one final reference outcome:
@@ -2050,9 +2055,9 @@ The remaining thematic Semantic Coverage Completion backlog is:
    payload for each supported top-level metadata kind, add per-kind production
    evidence, and transition Coverage only after the ADR's completion criteria
    pass.
-2. **Medium — metadata reference fixtures.** Add successful fixtures for
-   Enumeration, Information Register, Accumulation Register, Accounting
-   Register, Calculation Register, Business Process, and Task targets.
+2. **Medium — metadata reference fixtures — completed.** Successful
+   production-builder evidence now covers all nine mapped target kinds, and the
+   seven formerly partial capabilities have complete deterministic evidence.
 3. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
@@ -2105,10 +2110,11 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 0 Critical gaps, 0 High gaps, and 43 Medium gaps.
+The EDT registry now reports 0 Critical gaps, 0 High gaps, and 36 Medium gaps.
 Combined with the graph-domain registry, the current Semantic Coverage audit
-reports 0 Critical gaps, 0 High gaps, and 44 Medium gaps. Other capability
-classifications are not changed by the focused Writes registry transition.
+reports 0 Critical gaps, 0 High gaps, and 37 Medium gaps. Exactly seven
+metadata-reference capabilities changed from `PartiallySupported` to
+`Supported`; other capability classifications are unchanged.
 Sprint 3 Integration Review is no longer blocked by High gaps; this statement
 does not record that the review itself has been performed.
 

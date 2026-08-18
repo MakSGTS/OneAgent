@@ -2051,6 +2051,7 @@ mod graph_tests {
     };
     use oneagent_metadata::MetadataKind;
     use std::collections::BTreeSet;
+    use std::fmt::Write as _;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::tempdir;
@@ -2206,6 +2207,111 @@ mod graph_tests {
     </resources>
 </mdclass:AccountingRegister>
 "#;
+
+    #[derive(Debug, Clone, Copy)]
+    struct MetadataReferenceCase {
+        directory: &'static str,
+        element: &'static str,
+        target_name: &'static str,
+        reference_type: &'static str,
+        member_name: &'static str,
+        member_id: &'static str,
+        target_id: &'static str,
+        target_kind: MetadataKind,
+    }
+
+    const METADATA_REFERENCE_CASES: [MetadataReferenceCase; 9] = [
+        MetadataReferenceCase {
+            directory: "Catalogs",
+            element: "Catalog",
+            target_name: "Products",
+            reference_type: "CatalogRef.Products",
+            member_name: "CatalogTarget",
+            member_id: "30000000-0000-0000-0000-000000000001",
+            target_id: "20000000-0000-0000-0000-000000000001",
+            target_kind: MetadataKind::Catalog,
+        },
+        MetadataReferenceCase {
+            directory: "Documents",
+            element: "Document",
+            target_name: "ReferenceOwner",
+            reference_type: "DocumentRef.ReferenceOwner",
+            member_name: "DocumentTarget",
+            member_id: "30000000-0000-0000-0000-000000000002",
+            target_id: "20000000-0000-0000-0000-000000000002",
+            target_kind: MetadataKind::Document,
+        },
+        MetadataReferenceCase {
+            directory: "Enums",
+            element: "Enum",
+            target_name: "Priority",
+            reference_type: "EnumRef.Priority",
+            member_name: "EnumerationTarget",
+            member_id: "30000000-0000-0000-0000-000000000003",
+            target_id: "20000000-0000-0000-0000-000000000003",
+            target_kind: MetadataKind::Enumeration,
+        },
+        MetadataReferenceCase {
+            directory: "InformationRegisters",
+            element: "InformationRegister",
+            target_name: "Prices",
+            reference_type: "InformationRegisterRecordSet.Prices",
+            member_name: "InformationRegisterTarget",
+            member_id: "30000000-0000-0000-0000-000000000004",
+            target_id: "20000000-0000-0000-0000-000000000004",
+            target_kind: MetadataKind::InformationRegister,
+        },
+        MetadataReferenceCase {
+            directory: "AccumulationRegisters",
+            element: "AccumulationRegister",
+            target_name: "Stock",
+            reference_type: "AccumulationRegisterRecordKey.Stock",
+            member_name: "AccumulationRegisterTarget",
+            member_id: "30000000-0000-0000-0000-000000000005",
+            target_id: "20000000-0000-0000-0000-000000000005",
+            target_kind: MetadataKind::AccumulationRegister,
+        },
+        MetadataReferenceCase {
+            directory: "AccountingRegisters",
+            element: "AccountingRegister",
+            target_name: "Ledger",
+            reference_type: "AccountingRegisterRecordSet.Ledger",
+            member_name: "AccountingRegisterTarget",
+            member_id: "30000000-0000-0000-0000-000000000006",
+            target_id: "20000000-0000-0000-0000-000000000006",
+            target_kind: MetadataKind::AccountingRegister,
+        },
+        MetadataReferenceCase {
+            directory: "CalculationRegisters",
+            element: "CalculationRegister",
+            target_name: "Payroll",
+            reference_type: "CalculationRegisterRecordKey.Payroll",
+            member_name: "CalculationRegisterTarget",
+            member_id: "30000000-0000-0000-0000-000000000007",
+            target_id: "20000000-0000-0000-0000-000000000007",
+            target_kind: MetadataKind::CalculationRegister,
+        },
+        MetadataReferenceCase {
+            directory: "BusinessProcesses",
+            element: "BusinessProcess",
+            target_name: "Approval",
+            reference_type: "BusinessProcessRef.Approval",
+            member_name: "BusinessProcessTarget",
+            member_id: "30000000-0000-0000-0000-000000000008",
+            target_id: "20000000-0000-0000-0000-000000000008",
+            target_kind: MetadataKind::BusinessProcess,
+        },
+        MetadataReferenceCase {
+            directory: "Tasks",
+            element: "Task",
+            target_name: "WorkItem",
+            reference_type: "TaskRef.WorkItem",
+            member_name: "TaskTarget",
+            member_id: "30000000-0000-0000-0000-000000000009",
+            target_id: "20000000-0000-0000-0000-000000000009",
+            target_kind: MetadataKind::Task,
+        },
+    ];
 
     #[test]
     fn subsystem_content_normalization_uses_the_explicit_first_slice_allowlist() {
@@ -2374,6 +2480,94 @@ mod graph_tests {
             ACCUMULATION_REGISTER_XML,
         )
         .expect("accumulation register descriptor must be created");
+
+        root
+    }
+
+    fn create_all_metadata_reference_targets_project() -> tempfile::TempDir {
+        let root = tempdir().expect("temporary directory must be created");
+        let configuration_directory = root.path().join("src/Configuration");
+        fs::create_dir_all(&configuration_directory)
+            .expect("configuration directory must be created");
+        fs::write(
+            configuration_directory.join("Configuration.mdo"),
+            CONFIGURATION_XML,
+        )
+        .expect("configuration descriptor must be created");
+
+        for case in METADATA_REFERENCE_CASES
+            .iter()
+            .filter(|case| case.target_kind != MetadataKind::Document)
+        {
+            let directory = root
+                .path()
+                .join("src")
+                .join(case.directory)
+                .join(case.target_name);
+            fs::create_dir_all(&directory).expect("target directory must be created");
+            fs::write(
+                directory.join(format!("{}.mdo", case.target_name)),
+                format!(
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:{element}
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="{target_id}">
+    <name>{target_name}</name>
+</mdclass:{element}>
+"#,
+                    element = case.element,
+                    target_id = case.target_id,
+                    target_name = case.target_name,
+                ),
+            )
+            .expect("target descriptor must be created");
+        }
+
+        let attributes =
+            METADATA_REFERENCE_CASES
+                .iter()
+                .fold(String::new(), |mut attributes, case| {
+                    write!(
+                        attributes,
+                        r#"
+    <attributes uuid="{member_id}">
+        <name>{member_name}</name>
+        <type>
+            <types>{reference_type}</types>
+        </type>
+    </attributes>
+"#,
+                        member_id = case.member_id,
+                        member_name = case.member_name,
+                        reference_type = case.reference_type,
+                    )
+                    .expect("metadata reference attribute must be rendered");
+                    attributes
+                });
+        let document_case = METADATA_REFERENCE_CASES
+            .iter()
+            .find(|case| case.target_kind == MetadataKind::Document)
+            .expect("document case must exist");
+        let document_directory = root
+            .path()
+            .join("src/Documents")
+            .join(document_case.target_name);
+        fs::create_dir_all(&document_directory).expect("document directory must be created");
+        fs::write(
+            document_directory.join(format!("{}.mdo", document_case.target_name)),
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document
+    xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="{target_id}">
+    <name>{target_name}</name>
+{attributes}</mdclass:Document>
+"#,
+                target_id = document_case.target_id,
+                target_name = document_case.target_name,
+            ),
+        )
+        .expect("document descriptor must be created");
 
         root
     }
@@ -3908,6 +4102,123 @@ mod graph_tests {
         assert!(graph.diff(repeated.graph()).is_empty());
         assert!(result.diff(&repeated).is_empty());
         assert!(result.diagnostics().is_empty());
+    }
+
+    fn assert_mapped_metadata_reference_case(
+        result: &EdtSemanticGraphBuildResult,
+        repeated: &EdtSemanticGraphBuildResult,
+        case: MetadataReferenceCase,
+    ) {
+        let query = result.graph().query();
+        let repeated_query = repeated.graph().query();
+        let member_id = EntityId::new(case.member_id).expect("member id must be valid");
+        let target_id = EntityId::new(case.target_id).expect("target id must be valid");
+        let member = result
+            .graph()
+            .node(&member_id)
+            .expect("source metadata member must exist");
+        let target = result
+            .graph()
+            .node(&target_id)
+            .expect("target metadata object must exist");
+        assert_eq!(member.kind(), NodeKind::Attribute);
+        assert_eq!(member.name().as_str(), case.member_name);
+        assert_eq!(target.kind(), NodeKind::Metadata(case.target_kind));
+        assert_eq!(target.name().as_str(), case.target_name);
+
+        let member_node_id = NodeId::new(case.member_id);
+        assert_eq!(
+            query
+                .node(&member_node_id)
+                .expect("Query must expose source member")
+                .id(),
+            &member_id
+        );
+        let references = query.outgoing_edges_by_kind(&member_node_id, EdgeKind::References);
+        let dependencies = query.outgoing_edges_by_kind(&member_node_id, EdgeKind::DependsOn);
+        let repeated_references =
+            repeated_query.outgoing_edges_by_kind(&member_node_id, EdgeKind::References);
+        let repeated_dependencies =
+            repeated_query.outgoing_edges_by_kind(&member_node_id, EdgeKind::DependsOn);
+        assert_eq!(references.len(), 1);
+        assert_eq!(dependencies.len(), 1);
+        assert_eq!(references[0].target(), &target_id);
+        assert_eq!(dependencies[0].target(), &target_id);
+        assert_eq!(references, repeated_references);
+        assert_eq!(dependencies, repeated_dependencies);
+        assert_eq!(references[0].provenance().len(), 1);
+        assert_eq!(dependencies[0].provenance().len(), 1);
+        assert_eq!(references[0].provenance()[0].origin(), FactOrigin::Resolved);
+        assert_eq!(
+            references[0].provenance()[0].resolution(),
+            ResolutionState::Resolved
+        );
+        assert_eq!(
+            dependencies[0].provenance()[0].origin(),
+            FactOrigin::Derived
+        );
+        assert_eq!(
+            dependencies[0].provenance()[0].resolution(),
+            ResolutionState::Resolved
+        );
+        let expected_target_context = format!(
+            "target_kind={};target_name={}",
+            case.target_kind.as_str(),
+            case.target_name
+        );
+        for edge in [references[0], dependencies[0]] {
+            assert!(
+                edge.provenance()[0]
+                    .source()
+                    .expect("reference provenance source must exist")
+                    .as_str()
+                    .contains(&expected_target_context)
+            );
+        }
+    }
+
+    #[test]
+    fn resolves_all_mapped_metadata_reference_target_kinds_through_production_builder() {
+        let root = create_all_metadata_reference_targets_project();
+        let result = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph must build");
+        let repeated = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph must build");
+
+        assert!(result.diagnostics().is_empty());
+        assert!(result.validate().is_valid());
+        for actual in [
+            result.reference_statistics().total(),
+            result.reference_statistics().resolved(),
+            result.reference_statistics().outcome_total(),
+            result.reference_statistics().with_provenance(),
+            result.report().resolution().resolved(),
+        ] {
+            assert_eq!(actual, METADATA_REFERENCE_CASES.len());
+        }
+        assert!(
+            result
+                .graph()
+                .nodes_by_kind(NodeKind::Metadata(MetadataKind::Unknown))
+                .is_empty()
+        );
+        assert!(result.graph().nodes_by_kind(NodeKind::Unknown).is_empty());
+        for case in METADATA_REFERENCE_CASES {
+            assert_mapped_metadata_reference_case(&result, &repeated, case);
+        }
+
+        assert_eq!(
+            result.graph().nodes().collect::<Vec<_>>(),
+            repeated.graph().nodes().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            result.graph().edges().collect::<Vec<_>>(),
+            repeated.graph().edges().collect::<Vec<_>>()
+        );
+        assert!(result.graph().diff(repeated.graph()).is_empty());
+        assert!(result.diff(&repeated).is_empty());
     }
 
     #[test]

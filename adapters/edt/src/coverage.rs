@@ -451,7 +451,6 @@ fn ownership_capability(child: NodeKind) -> SemanticCoverageCapability {
 fn metadata_reference_capability(kind: MetadataKind) -> SemanticCoverageCapability {
     use SemanticCoverageEvidence as Evidence;
 
-    let representative = matches!(kind, MetadataKind::Catalog | MetadataKind::Document);
     let required = [
         Evidence::Parsed,
         Evidence::ReferenceExtracted,
@@ -464,49 +463,22 @@ fn metadata_reference_capability(kind: MetadataKind) -> SemanticCoverageCapabili
         Evidence::NegativeTestExists,
         Evidence::IntegrationTestExists,
     ];
-    let mut evidence = vec![
-        Evidence::Parsed,
-        Evidence::ReferenceExtracted,
-        Evidence::ReferenceResolved,
-        Evidence::DiagnosticEmitted,
-        Evidence::SemanticEdgeEmitted,
-        Evidence::ProvenanceAttached,
-        Evidence::ResolutionStatisticsRecorded,
-        Evidence::NegativeTestExists,
-    ];
-    if representative {
-        evidence.extend([
-            Evidence::PositiveTestExists,
-            Evidence::IntegrationTestExists,
-        ]);
-    }
 
-    let capability = SemanticCoverageCapability::new(
+    SemanticCoverageCapability::new(
         SemanticCoverageCapabilityId::MetadataReference(SemanticReferenceCapability::MetadataType(
             kind,
         )),
         format!("{} metadata type reference", kind.as_str()),
-        if representative {
-            SemanticCoverageStatus::Supported
-        } else {
-            SemanticCoverageStatus::PartiallySupported
-        },
-        evidence,
+        SemanticCoverageStatus::Supported,
+        required,
         required,
     )
     .with_metadata_kind(kind)
     .with_node_kind(NodeKind::Metadata(kind))
-    .with_edge_kind(EdgeKind::References);
-
-    if representative {
-        capability.with_representative_test(
-            "oneagent_edt::graph_tests::resolves_metadata_reference_and_depends_on_edges",
-        )
-    } else {
-        capability.with_limitation(
-            "Reference prefix mapping is implemented, but this target kind lacks a representative successful integration fixture",
-        )
-    }
+    .with_edge_kind(EdgeKind::References)
+    .with_representative_test(
+        "oneagent_edt::graph_tests::resolves_all_mapped_metadata_reference_target_kinds_through_production_builder",
+    )
 }
 
 fn bsl_call_reference_capability() -> SemanticCoverageCapability {
@@ -748,7 +720,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::fs;
 
-    use super::EdtSemanticCoverageRegistry;
+    use super::{EdtSemanticCoverageRegistry, metadata_reference_target_kinds};
     use crate::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 
     #[test]
@@ -761,6 +733,85 @@ mod tests {
         assert!(first.duplicate_ids().is_empty());
         assert!(!first.capabilities().is_empty());
         assert_eq!(first.summary().total(), first.capabilities().len());
+    }
+
+    #[test]
+    fn all_mapped_metadata_reference_capabilities_are_complete_and_deterministic() {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let expected_kinds = metadata_reference_target_kinds();
+        let mut expected_registry_order = expected_kinds.to_vec();
+        expected_registry_order.sort_by_key(|kind| kind.as_str());
+        let actual_kinds = first
+            .capabilities()
+            .iter()
+            .filter_map(|capability| match capability.id() {
+                SemanticCoverageCapabilityId::MetadataReference(
+                    SemanticReferenceCapability::MetadataType(kind),
+                ) => Some(kind),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(first, second);
+        assert_eq!(first.capabilities(), second.capabilities());
+        assert_eq!(first.gaps(), second.gaps());
+        assert_eq!(actual_kinds, expected_registry_order);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+
+        for kind in expected_kinds {
+            let capability = first
+                .capability(SemanticCoverageCapabilityId::MetadataReference(
+                    SemanticReferenceCapability::MetadataType(kind),
+                ))
+                .expect("mapped metadata reference capability must exist");
+
+            assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+            assert_eq!(capability.evidence(), capability.required_evidence());
+            assert!(capability.missing_evidence().is_empty());
+            assert!(capability.limitations().is_empty());
+            assert_eq!(
+                capability.representative_tests(),
+                [
+                    "oneagent_edt::graph_tests::resolves_all_mapped_metadata_reference_target_kinds_through_production_builder"
+                ]
+            );
+            assert!(
+                first
+                    .gaps()
+                    .iter()
+                    .all(|gap| gap.capability_id() != capability.id())
+            );
+        }
+
+        assert!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::Critical)
+                .is_empty()
+        );
+        assert!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::High)
+                .is_empty()
+        );
+        assert_eq!(
+            first
+                .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                .len(),
+            36
+        );
+
+        let graph_domain = SemanticCoverageRegistry::audit();
+        assert_eq!(
+            graph_domain
+                .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                .len()
+                + first
+                    .gaps_by_priority(SemanticCoverageGapPriority::Medium)
+                    .len(),
+            37
+        );
     }
 
     #[test]
@@ -806,7 +857,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -835,7 +886,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            44
+            37
         );
     }
 
@@ -1129,7 +1180,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1204,7 +1255,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1273,7 +1324,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&43)
+            Some(&36)
         );
         assert!(
             first
@@ -1332,7 +1383,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&43)
+            Some(&36)
         );
         assert!(
             first
@@ -1377,7 +1428,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1475,7 +1526,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1525,7 +1576,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1573,7 +1624,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1646,7 +1697,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 
@@ -1729,7 +1780,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            43
+            36
         );
     }
 }

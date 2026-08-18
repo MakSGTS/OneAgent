@@ -143,13 +143,19 @@ Ordered follow-up work:
     targets, graph equality/diff/Query integration, per-kind production
     evidence, determinism, and the registry-only Coverage transition remain
     pending.
-23. **Medium:** add successful fixtures for every mapped metadata reference target kind.
+23. **Medium — completed:** add successful production-builder evidence for all
+    nine mapped metadata reference target kinds; Catalog, Document,
+    Enumeration, Information Register, Accumulation Register, Accounting
+    Register, Calculation Register, Business Process, and Task references now
+    share one deterministic representative integration test covering exact
+    targets, `References`, companion `DependsOn`, provenance, Query, validation,
+    resolution statistics, and repeated builds.
 24. **Medium:** decide and implement reference-request provenance ownership.
 25. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
-43 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
-contains 0 Critical gaps, 0 High gaps, and 44 Medium gaps. Sprint 3 Integration
+36 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
+contains 0 Critical gaps, 0 High gaps, and 37 Medium gaps. Sprint 3 Integration
 Review is no longer blocked by High gaps; this status does not mean that the
 review itself has been performed.
 

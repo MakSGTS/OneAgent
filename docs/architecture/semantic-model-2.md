@@ -1774,19 +1774,31 @@ edge.
 
 ### Edge, validation, query, and impact inventory
 
-The EDT pipeline emits `Contains`, `References`, `Calls`, `Reads`, the first
-`DependsOn`, `Extends`, `Grants`, and `Includes` slices, each with provenance.
-Reads production is limited to the parser's accepted forms and the Catalog and
-Information Register allowlist. Unsupported structures and source categories
-are recognized only to reject the complete Query deterministically. `Writes` is
-declared but not emitted by EDT.
+The EDT pipeline emits all nine current edge kinds with provenance: `Contains`,
+`Calls`, `References`, `Reads`, `Writes`, `Grants`, `Includes`, `Extends`, and
+the first `DependsOn` slice. Reads production is limited to the parser's
+accepted forms and the Catalog and Information Register allowlist. Writes
+production is limited to accepted Document Object Module Procedures and
+resolved Accumulation Register targets. Unsupported source forms are retained
+as typed outcomes and emit no placeholder edges.
 
-Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
-`Reads`, the first `DependsOn`, `Extends`, `Grants`, and `Includes` slices. The
-remaining edge kinds are currently accepted by broad schema rules and are
-therefore structurally visible but not semantically constrained. Validation also checks
-missing endpoints, ownership, forbidden self-loops, ownership cycles, node and
-edge provenance, and build/report counter consistency.
+ADR-0025 audits every endpoint rule. `Contains` uses the accepted ownership
+matrix; `Calls` uses callable endpoints; `Reads`, `Writes`, `Grants`,
+`Includes`, `Extends`, and `DependsOn` match their accepted first-slice ADRs.
+Those eight rules are precise rather than permissive fallbacks. The only
+remaining broad rule is `References`: current code still accepts Unknown,
+arbitrary Metadata targets, and many cross-participant pairs.
+
+The accepted References replacement preserves both current production slices:
+Attribute, Dimension, or Resource to one of the nine mapped metadata-reference
+target kinds; and AccessRight to one of the five protected-resource metadata
+kinds implemented by the Grants pipeline. Every other pair, including Unknown
+and placeholder endpoints, is deferred. Implementation, exhaustive positive
+and negative graph-domain validation tests, production regressions, and the
+stale schema Rustdoc update remain pending, so Roadmap item 25 is not complete.
+Validation also checks missing endpoints, ownership, forbidden self-loops,
+ownership cycles, node and edge provenance, and build/report counter
+consistency.
 
 The Query API exposes all stored edge kinds. Dependency and usage classification
 includes `Calls`, `References`, `Reads`, `Writes`, and `DependsOn`; `Contains` is
@@ -2086,9 +2098,12 @@ The remaining thematic Semantic Coverage Completion backlog is:
    edge, diagnostic, or statistics semantics. Transition graph-domain and EDT
    Coverage independently only after their respective production evidence is
    complete.
-4. **Medium — broad endpoint validation.** Replace permissive rules for future
-    emitted dependency, access, composition, and extension edges with typed
-    endpoint policies and negative tests.
+4. **Medium — endpoint validation — architecture accepted.** Implement
+   `docs/adr/0025-references-endpoint-validation.md`: replace the sole remaining
+   permissive `References` branch with the two accepted production matrices,
+   add exhaustive deterministic positive and negative validator evidence, and
+   update the stale schema comment. All other current EdgeKind endpoint rules
+   already match accepted first-slice contracts.
 
 The former `semantic_node.measure` High gap is closed. A representative EDT
 Accounting Register fixture now proves production parsing, semantic kind

@@ -157,7 +157,13 @@ Ordered follow-up work:
     migration, collection-time provenance, projection consistency, production
     evidence, and separate graph-domain and EDT Coverage transitions remain
     pending.
-25. **Medium:** replace permissive endpoint validation as new edge producers are added.
+25. **Medium — architecture accepted:** implement
+    `docs/adr/0025-references-endpoint-validation.md`; `References` is the only
+    remaining permissive endpoint rule, and it must be narrowed to the current
+    metadata-member and AccessRight production matrices with exhaustive
+    deterministic positive and negative validator tests. The other eight
+    EdgeKind rules already match their accepted ownership or first-slice
+    contracts. No Coverage transition or count change is expected.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
 36 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage

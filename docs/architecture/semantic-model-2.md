@@ -1778,10 +1778,11 @@ Current ADR-0024 evidence is mapped as follows:
 
 BSL calls, query sources, Writes targets, protected resources, Subsystem content,
 and extension targets remain private until each family defines source identity,
-category, completeness, projection, duplicate, and statistics contracts. This
-evidence task does not change either ReferenceRequest Coverage entry, aggregate
-Coverage counts, or Roadmap completion state; those transitions are owned by
-separate tasks.
+category, completeness, projection, duplicate, and statistics contracts. The
+graph-domain and EDT ReferenceRequest Coverage entries transitioned
+independently after their respective audits passed. Both entries are now
+`Supported`, and Roadmap item 24 is complete for the accepted metadata-reference
+first slice.
 
 BSL calls are extracted and local or qualified calls can resolve to `Calls`
 edges. Every extracted call now contributes exactly one final reference outcome:
@@ -2170,10 +2171,10 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 0 Critical gaps, 0 High gaps, and 15 Medium gaps.
+The EDT registry now reports 0 Critical gaps, 0 High gaps, and 14 Medium gaps.
 Combined with the graph-domain registry, the current Semantic Coverage audit
-reports 0 Critical gaps, 0 High gaps, and 15 Medium gaps. All 21 applicable
-metadata-entity capabilities and the seven completed metadata-reference
+reports 0 Critical gaps, 0 High gaps, and 14 Medium gaps. All 21 applicable
+metadata-entity capabilities and the nine completed metadata-reference
 capabilities are `Supported`; Form and Unknown metadata entities remain
 `NotApplicable`.
 Sprint 3 Integration Review is no longer blocked by High gaps; this statement

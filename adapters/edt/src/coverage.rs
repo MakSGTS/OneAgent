@@ -501,24 +501,15 @@ fn bsl_call_reference_capability() -> SemanticCoverageCapability {
 fn edt_provenance_capability(kind: SemanticProvenanceCapability) -> SemanticCoverageCapability {
     use SemanticCoverageEvidence as Evidence;
 
-    let partial = kind == SemanticProvenanceCapability::ReferenceRequest;
     let capability = SemanticCoverageCapability::new(
         SemanticCoverageCapabilityId::ProvenanceSource(kind),
         format!("EDT {} provenance", provenance_title(kind)),
-        if partial {
-            SemanticCoverageStatus::PartiallySupported
-        } else {
-            SemanticCoverageStatus::Supported
-        },
-        if partial {
-            vec![Evidence::Modeled]
-        } else {
-            vec![
-                Evidence::Modeled,
-                Evidence::ProvenanceAttached,
-                Evidence::PositiveTestExists,
-            ]
-        },
+        SemanticCoverageStatus::Supported,
+        [
+            Evidence::Modeled,
+            Evidence::ProvenanceAttached,
+            Evidence::PositiveTestExists,
+        ],
         [
             Evidence::Modeled,
             Evidence::ProvenanceAttached,
@@ -526,10 +517,35 @@ fn edt_provenance_capability(kind: SemanticProvenanceCapability) -> SemanticCove
         ],
     );
 
-    if partial {
-        capability.with_limitation(
-            "Pending metadata references preserve source context, but do not carry a public Provenance value until edge or diagnostic creation",
-        )
+    if kind == SemanticProvenanceCapability::ReferenceRequest {
+        capability
+            .with_representative_test(
+                "oneagent_edt::graph_tests::resolves_metadata_reference_and_depends_on_edges",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::resolves_all_mapped_metadata_reference_target_kinds_through_production_builder",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::missing_metadata_reference_target_is_reported",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::ambiguous_metadata_reference_target_is_reported",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::incompatible_metadata_reference_target_kind_is_reported",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::production_builder_preserves_explicit_partial_workspace_request",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::duplicate_metadata_type_reference_creates_one_depends_on_edge",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::duplicate_identical_reference_diagnostic_is_deduplicated",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::request_identity_survives_missing_to_resolved_production_diff",
+            )
     } else {
         capability.with_representative_test(
             "oneagent_edt::graph_tests::attaches_provenance_to_edt_graph_facts",
@@ -690,7 +706,7 @@ mod tests {
     use oneagent_graph::{
         EdgeKind, NodeKind, SemanticCoverageCapabilityId, SemanticCoverageEvidence,
         SemanticCoverageGapPriority, SemanticCoverageRegistry, SemanticCoverageStatus,
-        SemanticReferenceCapability,
+        SemanticProvenanceCapability, SemanticReferenceCapability,
     };
     use oneagent_metadata::MetadataKind;
     use std::collections::BTreeSet;
@@ -709,6 +725,41 @@ mod tests {
         assert!(first.duplicate_ids().is_empty());
         assert!(!first.capabilities().is_empty());
         assert_eq!(first.summary().total(), first.capabilities().len());
+    }
+
+    #[test]
+    fn reference_request_provenance_has_complete_edt_production_evidence() {
+        let report = EdtSemanticCoverageRegistry::audit();
+        let capability = report
+            .capability(SemanticCoverageCapabilityId::ProvenanceSource(
+                SemanticProvenanceCapability::ReferenceRequest,
+            ))
+            .expect("EDT reference request provenance coverage must exist");
+
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
+        assert_eq!(
+            capability.representative_tests(),
+            [
+                "oneagent_edt::graph_tests::ambiguous_metadata_reference_target_is_reported",
+                "oneagent_edt::graph_tests::duplicate_identical_reference_diagnostic_is_deduplicated",
+                "oneagent_edt::graph_tests::duplicate_metadata_type_reference_creates_one_depends_on_edge",
+                "oneagent_edt::graph_tests::incompatible_metadata_reference_target_kind_is_reported",
+                "oneagent_edt::graph_tests::missing_metadata_reference_target_is_reported",
+                "oneagent_edt::graph_tests::production_builder_preserves_explicit_partial_workspace_request",
+                "oneagent_edt::graph_tests::request_identity_survives_missing_to_resolved_production_diff",
+                "oneagent_edt::graph_tests::resolves_all_mapped_metadata_reference_target_kinds_through_production_builder",
+                "oneagent_edt::graph_tests::resolves_metadata_reference_and_depends_on_edges",
+            ]
+        );
+        assert!(
+            report
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
     }
 
     #[test]
@@ -775,7 +826,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -786,7 +837,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            15
+            14
         );
     }
 
@@ -833,7 +884,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -862,7 +913,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            15
+            14
         );
     }
 
@@ -1095,7 +1146,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1170,7 +1221,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1239,7 +1290,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&15)
+            Some(&14)
         );
         assert!(
             first
@@ -1298,7 +1349,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&15)
+            Some(&14)
         );
         assert!(
             first
@@ -1343,7 +1394,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1441,7 +1492,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1491,7 +1542,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1539,7 +1590,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1612,7 +1663,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 
@@ -1695,7 +1746,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            15
+            14
         );
     }
 }

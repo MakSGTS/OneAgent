@@ -152,13 +152,13 @@ Ordered follow-up work:
     share one deterministic representative integration test covering exact
     targets, `References`, companion `DependsOn`, provenance, Query, validation,
     resolution statistics, and repeated builds.
-24. **Medium — architecture accepted:** implement the public source-independent
+24. **Medium — completed:** implement the public source-independent
     reference-request ledger defined by
     `docs/adr/0024-reference-request-provenance.md`; graph-domain identity,
     lifecycle, Query/report/diff/validation integration, EDT metadata-reference
     migration, collection-time provenance, projection consistency, production
-    evidence, and separate graph-domain and EDT Coverage transitions remain
-    pending.
+    evidence, and independent graph-domain and EDT Coverage transitions are
+    complete for the accepted metadata-reference first slice.
 25. **Medium — architecture accepted:** implement
     `docs/adr/0025-references-endpoint-validation.md`; `References` is the only
     remaining permissive endpoint rule, and it must be narrowed to the current
@@ -168,8 +168,8 @@ Ordered follow-up work:
     contracts. No Coverage transition or count change is expected.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
-15 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
-contains 0 Critical gaps, 0 High gaps, and 15 Medium gaps. Sprint 3 Integration
+14 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
+contains 0 Critical gaps, 0 High gaps, and 14 Medium gaps. Sprint 3 Integration
 Review is no longer blocked by High gaps; this status does not mean that the
 review itself has been performed.
 

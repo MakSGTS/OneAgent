@@ -1368,6 +1368,43 @@ representative fixtures currently exist for Configuration, Catalog, Document,
 Common Module, Accumulation Register, Common Command, and Common Template; the
 other generic directory mappings lack dedicated integration fixtures.
 
+### Typed top-level metadata payload contract
+
+ADR-0023 accepts the source-independent payload contract, but its production
+implementation and Coverage transition remain pending. `oneagent-metadata` owns
+`MetadataPayload`; metadata GraphNode values store the same typed domain value
+rather than an EDT structure or an untyped graph property map. Payload is
+semantic content and does not participate in metadata or node identity.
+
+The accepted common payload contains only optional synonym. Configuration and
+every supported generic top-level metadata kind use this contract. An absent
+synonym remains absent and is not replaced with canonical name. The only
+accepted kind-specific payload is the Document's deterministic, deduplicated
+set of typed register-record targets. Repository code does not currently parse
+another justified source-independent top-level payload field.
+
+Identity, canonical name, kind, ownership, provenance, and source path remain
+separate from payload. Metadata members, extension, role rights, Subsystem
+content, references, and other relations continue to use their existing typed
+nodes, edges, diagnostics, and provenance. They are not copied into payload.
+Document register-record target components are intrinsic Document content, but
+their resolution state, occurrence evidence, diagnostics, and Writes edges
+remain separate.
+
+Payload participates in `MetadataObject` and GraphNode equality and in graph
+diff semantic content, while stable IDs remain unchanged. The existing Query API
+exposes payload through returned GraphNode values without changing exact
+canonical-name lookup. Future serialization must use a versioned tagged typed
+structure with deterministic collection ordering.
+
+Compatibility constructors may continue to create empty payload while existing
+non-metadata producers and tests migrate. Such defaults are not EDT Coverage
+evidence. `SemanticPayloadPreserved` may be added independently for a metadata
+kind only after production conversion, present/absent and malformed evidence,
+payload-kind validation, Query and payload-only diff evidence, representative
+full-builder coverage, and repeated-build determinism all pass. Architecture
+documentation alone changes neither capability status nor aggregate counts.
+
 `MetadataKind::Form` and `NodeKind::Metadata(MetadataKind::Form)` are not
 applicable to the EDT adapter: common forms are top-level
 `MetadataKind::CommonForm` entities, while forms owned by documents, catalogs,
@@ -2008,10 +2045,11 @@ capability is `Supported` with complete evidence.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **Medium — metadata payload completion.** Define and preserve the typed
-   payload expected for each supported top-level metadata kind. Acceptance:
-   fields parsed by EDT are either represented, explicitly excluded by contract,
-   or recorded as a known limitation.
+1. **Medium — metadata payload completion.** Architecture is accepted in
+   `docs/adr/0023-typed-metadata-payload.md`; implement and preserve the typed
+   payload for each supported top-level metadata kind, add per-kind production
+   evidence, and transition Coverage only after the ADR's completion criteria
+   pass.
 2. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.

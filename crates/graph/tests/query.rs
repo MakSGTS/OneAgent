@@ -1,9 +1,10 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph, SemanticGraphEdgeFilter,
-    SemanticGraphQuery, SemanticGraphTraversalDirection, SemanticGraphTraversalOptions,
+    EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind, SemanticGraph,
+    SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphTraversalDirection,
+    SemanticGraphTraversalOptions,
 };
-use oneagent_metadata::MetadataKind;
+use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
 
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
@@ -434,4 +435,37 @@ fn upstream_traversal_and_self_loop_are_deterministic() {
             .all(|node| node.node_id().as_str() != post_id.as_str())
     );
     assert_eq!(upstream[0].depth(), 1);
+}
+
+#[test]
+fn node_lookup_exposes_payload_without_changing_exact_name_behavior() {
+    let metadata_id = id("metadata.catalog.products");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(
+        GraphNode::new_with_payload(
+            metadata_id.clone(),
+            name("Products"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+            GraphNodePayload::Metadata(MetadataPayload::new(
+                CommonMetadataPayload::new(Some("Goods".to_owned())),
+                None,
+            )),
+        )
+        .expect("Catalog common payload must be valid"),
+    );
+
+    let query = graph.query();
+    let node = query
+        .node(&node_id(metadata_id.as_str()))
+        .expect("metadata node must exist");
+
+    assert_eq!(
+        node.metadata_payload()
+            .expect("metadata payload must exist")
+            .common()
+            .synonym(),
+        Some("Goods")
+    );
+    assert_eq!(query.nodes_by_name(&name("Products")), vec![node]);
+    assert!(query.nodes_by_name(&name("Goods")).is_empty());
 }

@@ -53,7 +53,7 @@ pub use impact::{
 };
 pub use kind::{EdgeKind, NodeKind};
 pub use measure::{Measure, MeasureError};
-pub use node::GraphNode;
+pub use node::{GraphNode, GraphNodePayload, GraphNodePayloadError};
 pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
 pub use query::{
     SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphRelation,

@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use oneagent_common::EntityName;
 
 use crate::{
-    Confidence, EdgeId, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, ProducerId,
-    Provenance, ResolutionState, SemanticGraph,
+    Confidence, EdgeId, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload, NodeId,
+    NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph,
 };
 
 /// Deterministic diff between two semantic graph snapshots.
@@ -210,7 +210,7 @@ pub enum GraphChangeKind {
 pub enum NodeModifiedAspect {
     /// Node semantic content changed.
     ///
-    /// Current semantic node content is canonical name and [`NodeKind`].
+    /// Current semantic node content is canonical name, [`NodeKind`] and typed payload.
     SemanticContent,
     /// Node provenance changed after order-insensitive normalization.
     Provenance,
@@ -226,12 +226,13 @@ pub enum EdgeModifiedAspect {
 /// Owned snapshot of graph node state used by diff records.
 ///
 /// The snapshot identity is [`NodeId`]. Mutable content currently consists of
-/// canonical name, [`NodeKind`] and normalized provenance.
+/// canonical name, [`NodeKind`], typed payload and normalized provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeSnapshot {
     id: NodeId,
     name: EntityName,
     kind: NodeKind,
+    payload: GraphNodePayload,
     provenance: Vec<Provenance>,
 }
 
@@ -241,6 +242,7 @@ impl NodeSnapshot {
             id: node_id(node.id().as_str()),
             name: node.name().clone(),
             kind: node.kind(),
+            payload: node.payload().clone(),
             provenance: normalized_provenance(node.provenance()),
         }
     }
@@ -263,6 +265,12 @@ impl NodeSnapshot {
         self.kind
     }
 
+    /// Returns typed semantic content stored by the node.
+    #[must_use]
+    pub const fn payload(&self) -> &GraphNodePayload {
+        &self.payload
+    }
+
     /// Returns normalized provenance records.
     #[must_use]
     pub fn provenance(&self) -> &[Provenance] {
@@ -270,7 +278,7 @@ impl NodeSnapshot {
     }
 
     fn has_same_semantic_content(&self, other: &Self) -> bool {
-        self.name == other.name && self.kind == other.kind
+        self.name == other.name && self.kind == other.kind && self.payload == other.payload
     }
 }
 

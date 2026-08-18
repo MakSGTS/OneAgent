@@ -1,12 +1,12 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, ProducerId,
-    Provenance, ResolutionState, SemanticGraph, SemanticGraphQuery, SemanticGraphReport,
-    SemanticGraphSchema, SemanticGraphValidationCode, SemanticGraphValidationIssueKind,
-    SemanticGraphValidationSeverity, SemanticGraphValidator, SemanticReferenceOutcome,
-    SemanticReferenceStatistics,
+    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind,
+    ProducerId, Provenance, ResolutionState, SemanticGraph, SemanticGraphQuery,
+    SemanticGraphReport, SemanticGraphSchema, SemanticGraphValidationCode,
+    SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity, SemanticGraphValidator,
+    SemanticReferenceOutcome, SemanticReferenceStatistics,
 };
-use oneagent_metadata::MetadataKind;
+use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
 
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
@@ -1349,4 +1349,27 @@ fn build_level_validation_detects_report_mismatch() {
             .iter()
             .any(|issue| issue.code() == SemanticGraphValidationCode::InconsistentReport)
     );
+}
+
+#[test]
+fn canonical_metadata_payload_shape_is_valid() {
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(
+        GraphNode::new_with_payload_and_provenance(
+            id("metadata.catalog.products"),
+            name("Products"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+            GraphNodePayload::Metadata(MetadataPayload::new(
+                CommonMetadataPayload::new(Some("Goods".to_owned())),
+                None,
+            )),
+            vec![provenance("metadata.catalog.products")],
+        )
+        .expect("Catalog common payload must be valid"),
+    );
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
 }

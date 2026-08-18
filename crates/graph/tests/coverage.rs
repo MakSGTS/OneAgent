@@ -6,7 +6,8 @@ use oneagent_graph::{
     ResolutionState, SemanticCoverageCapability, SemanticCoverageCapabilityId,
     SemanticCoverageCategory, SemanticCoverageEvidence, SemanticCoverageGapPriority,
     SemanticCoverageRegistry, SemanticCoverageReport, SemanticCoverageStatus, SemanticGraph,
-    SemanticObservedCoverage, semantic_coverage_edge_kinds, semantic_coverage_node_kinds,
+    SemanticObservedCoverage, SemanticProvenanceCapability, semantic_coverage_edge_kinds,
+    semantic_coverage_node_kinds,
 };
 use oneagent_metadata::MetadataKind;
 
@@ -124,6 +125,31 @@ fn access_right_node_has_graph_domain_coverage_entry() {
         SemanticCoverageCategory::SemanticNode
     );
     assert_eq!(capability.related_node_kind(), Some(NodeKind::AccessRight));
+}
+
+#[test]
+fn reference_request_provenance_has_complete_graph_domain_evidence() {
+    let report = SemanticCoverageRegistry::audit();
+    let capability = report
+        .capability(SemanticCoverageCapabilityId::ProvenanceSource(
+            SemanticProvenanceCapability::ReferenceRequest,
+        ))
+        .expect("reference request provenance coverage must exist");
+
+    assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+    assert!(capability.missing_evidence().is_empty());
+    assert!(capability.limitations().is_empty());
+    assert_eq!(
+        capability.representative_tests(),
+        &["oneagent_graph::reference_request_build"]
+    );
+    for evidence in [
+        SemanticCoverageEvidence::Modeled,
+        SemanticCoverageEvidence::ProvenanceAttached,
+        SemanticCoverageEvidence::PositiveTestExists,
+    ] {
+        assert!(capability.evidence().contains(&evidence));
+    }
 }
 
 #[test]

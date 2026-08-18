@@ -1046,37 +1046,27 @@ fn impact_capability(kind: EdgeKind) -> SemanticCoverageCapability {
 
 fn provenance_capability(kind: SemanticProvenanceCapability) -> SemanticCoverageCapability {
     use SemanticCoverageEvidence as Evidence;
-    let unsupported = kind == SemanticProvenanceCapability::ReferenceRequest;
-    let capability = SemanticCoverageCapability::new(
+    let representative_test = if kind == SemanticProvenanceCapability::ReferenceRequest {
+        "oneagent_graph::reference_request_build"
+    } else {
+        "oneagent_graph::provenance"
+    };
+    SemanticCoverageCapability::new(
         SemanticCoverageCapabilityId::ProvenanceSource(kind),
         format!("{} provenance", provenance_kind_code(kind)),
-        if unsupported {
-            SemanticCoverageStatus::PartiallySupported
-        } else {
-            SemanticCoverageStatus::Supported
-        },
-        if unsupported {
-            vec![Evidence::Modeled]
-        } else {
-            vec![
-                Evidence::Modeled,
-                Evidence::ProvenanceAttached,
-                Evidence::PositiveTestExists,
-            ]
-        },
+        SemanticCoverageStatus::Supported,
         [
             Evidence::Modeled,
             Evidence::ProvenanceAttached,
             Evidence::PositiveTestExists,
         ],
-    );
-    if unsupported {
-        capability.with_limitation(
-            "Pending reference provenance is encoded by the EDT adapter but is not a public graph-domain request field",
-        )
-    } else {
-        capability.with_representative_test("oneagent_graph::provenance")
-    }
+        [
+            Evidence::Modeled,
+            Evidence::ProvenanceAttached,
+            Evidence::PositiveTestExists,
+        ],
+    )
+    .with_representative_test(representative_test)
 }
 
 fn capability_is_consistent(capability: &SemanticCoverageCapability) -> bool {

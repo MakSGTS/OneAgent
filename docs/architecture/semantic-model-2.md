@@ -2172,7 +2172,7 @@ discovery, and transitive membership remain separate future capabilities.
 
 The EDT registry now reports 0 Critical gaps, 0 High gaps, and 15 Medium gaps.
 Combined with the graph-domain registry, the current Semantic Coverage audit
-reports 0 Critical gaps, 0 High gaps, and 16 Medium gaps. All 21 applicable
+reports 0 Critical gaps, 0 High gaps, and 15 Medium gaps. All 21 applicable
 metadata-entity capabilities and the seven completed metadata-reference
 capabilities are `Supported`; Form and Unknown metadata entities remain
 `NotApplicable`.

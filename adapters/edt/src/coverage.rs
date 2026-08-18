@@ -786,7 +786,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            16
+            15
         );
     }
 
@@ -862,7 +862,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            16
+            15
         );
     }
 

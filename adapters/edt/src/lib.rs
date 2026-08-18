@@ -10,6 +10,9 @@ mod module_reader;
 mod query_source_resolution;
 mod role_rights;
 mod subsystem_content;
+// The parser is a production prerequisite for the later Writes resolution task.
+#[allow(dead_code)]
+mod writes;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,

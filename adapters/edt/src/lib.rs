@@ -356,7 +356,10 @@ use oneagent_graph::{
     SemanticGraphValidator, SemanticReference, SemanticReferenceOutcome,
     SemanticReferenceStatistics, StandardAttribute, StandardAttributeKind,
 };
-use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
+use oneagent_metadata::{
+    CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataPayload,
+    MetadataRegisterRecord, MetadataSpecificPayload,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
@@ -805,10 +808,7 @@ fn collect_metadata_object(
         .map_err(EdtGraphError::MetadataObject)?;
     let descriptor_source = metadata_object_source_id(&descriptor)?;
 
-    let payload = MetadataPayload::new(
-        CommonMetadataPayload::new(descriptor.synonym().map(str::to_owned)),
-        None,
-    );
+    let payload = metadata_payload(&descriptor);
     insert_metadata_node(
         graph,
         descriptor.id().clone(),
@@ -906,6 +906,40 @@ fn collect_metadata_object(
     collected.modules.extend(modules);
 
     Ok(collected)
+}
+
+fn metadata_payload(descriptor: &EdtMetadataObjectDescriptor) -> MetadataPayload {
+    let common = CommonMetadataPayload::new(descriptor.synonym().map(str::to_owned));
+    let specific = (descriptor.kind() == MetadataKind::Document).then(|| {
+        let register_records = descriptor
+            .document_register_declarations()
+            .iter()
+            .filter_map(|outcome| {
+                let declaration = match outcome {
+                    metadata_object::EdtDocumentRegisterDeclarationOutcome::Supported(
+                        declaration,
+                    )
+                    | metadata_object::EdtDocumentRegisterDeclarationOutcome::UnsupportedKind(
+                        declaration,
+                    ) => declaration,
+                    metadata_object::EdtDocumentRegisterDeclarationOutcome::UnsupportedNamespace(
+                        _,
+                    )
+                    | metadata_object::EdtDocumentRegisterDeclarationOutcome::Malformed(_)
+                    | metadata_object::EdtDocumentRegisterDeclarationOutcome::Ambiguous(_) => {
+                        return None;
+                    }
+                };
+                let target_kind = declaration.kind?;
+                let target_name = EntityName::new(declaration.local_name.clone()).ok()?;
+
+                Some(MetadataRegisterRecord::new(target_kind, target_name))
+            });
+
+        MetadataSpecificPayload::Document(DocumentMetadataPayload::new(register_records))
+    });
+
+    MetadataPayload::new(common, specific)
 }
 
 fn collect_subsystem_content(
@@ -2128,12 +2162,12 @@ impl From<EdtLoadError> for EdtGraphError {
 mod graph_tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
-        EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, ResolutionError,
-        ResolutionState, SemanticCoverageCapabilityId, SemanticCoverageStatus,
+        EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind, NodeModifiedAspect,
+        ResolutionError, ResolutionState, SemanticCoverageCapabilityId, SemanticCoverageStatus,
         SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph,
         SemanticReference, SemanticReferenceCapability, SemanticReferenceStatistics,
     };
-    use oneagent_metadata::MetadataKind;
+    use oneagent_metadata::{MetadataKind, MetadataSpecificPayload};
     use std::collections::BTreeSet;
     use std::fmt::Write as _;
     use std::fs;
@@ -2663,6 +2697,24 @@ mod graph_tests {
     fn replace_document_descriptor(root: &tempfile::TempDir, xml: &str) {
         fs::write(root.path().join("src/Documents/Sales/Sales.mdo"), xml)
             .expect("document descriptor must be replaced");
+    }
+
+    fn document_with_register_records(declarations: &[&str]) -> String {
+        let mut content =
+            String::from("    <synonym><key>en</key><content>Sales document</content></synonym>\n");
+        for declaration in declarations {
+            writeln!(
+                content,
+                "    <registerRecords>{declaration}</registerRecords>"
+            )
+            .expect("Document register record must be rendered");
+        }
+
+        DOCUMENT_XML.replacen(
+            "</mdclass:Document>",
+            &format!("{content}</mdclass:Document>"),
+            1,
+        )
     }
 
     fn replace_object_module(root: &tempfile::TempDir, source: &str) {
@@ -3235,6 +3287,144 @@ mod graph_tests {
         assert!(first.validate().is_valid());
         assert!(first.graph().diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());
+    }
+
+    fn assert_document_payload(
+        result: &EdtSemanticGraphBuildResult,
+        expected_records: &[(MetadataKind, &str)],
+    ) {
+        let query = result.graph().query();
+        let document = query
+            .node(&NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
+            .expect("Document must be queryable by stable UUID");
+        let payload = document
+            .metadata_payload()
+            .expect("Document metadata payload must exist");
+        let MetadataSpecificPayload::Document(document_payload) = payload
+            .specific()
+            .expect("Document-specific payload must exist");
+        let records = document_payload
+            .register_records()
+            .iter()
+            .map(|record| (record.target_kind(), record.target_name().as_str()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(document.kind(), NodeKind::Metadata(MetadataKind::Document));
+        assert_eq!(payload.common().synonym(), Some("Sales document"));
+        assert_eq!(records, expected_records);
+        assert_eq!(
+            query.nodes_by_name(&EntityName::new("Sales").expect("name must be valid")),
+            vec![document]
+        );
+        assert!(
+            query
+                .nodes_by_name(
+                    &EntityName::new("Sales document").expect("synonym must be a valid name")
+                )
+                .is_empty()
+        );
+        assert!(query.edges_by_kind(EdgeKind::Writes).is_empty());
+        assert!(result.validate().is_valid());
+    }
+
+    fn assert_payload_only_document_change(
+        previous: &EdtSemanticGraphBuildResult,
+        current: &EdtSemanticGraphBuildResult,
+    ) {
+        let document_id = NodeId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        let graph_diff = previous.graph().diff(current.graph());
+        let build_diff = previous.diff(current);
+
+        assert!(graph_diff.added_nodes().is_empty());
+        assert!(graph_diff.removed_nodes().is_empty());
+        assert_eq!(graph_diff.modified_nodes().len(), 1);
+        assert_eq!(graph_diff.modified_nodes()[0].id(), &document_id);
+        assert_eq!(
+            graph_diff.modified_nodes()[0].modified_aspects(),
+            &[NodeModifiedAspect::SemanticContent]
+        );
+        assert!(graph_diff.added_edges().is_empty());
+        assert!(graph_diff.removed_edges().is_empty());
+        assert!(graph_diff.modified_edges().is_empty());
+        assert_eq!(build_diff.summary().node_changes(), 1);
+        assert_eq!(build_diff.summary().edge_changes(), 0);
+        assert_eq!(build_diff.summary().diagnostic_changes(), 0);
+        assert_eq!(build_diff.summary().resolution_metric_changes(), 0);
+        assert!(
+            current
+                .graph()
+                .query()
+                .edges_by_kind(EdgeKind::Writes)
+                .is_empty()
+        );
+        assert!(current.validate().is_valid());
+    }
+
+    #[test]
+    fn preserves_canonical_document_register_record_payload() {
+        let root = create_edt_project();
+        let first_order = [
+            "CalculationRegister.Payroll",
+            "AccumulationRegister.StockBalance",
+            "InformationRegister.Prices",
+            "AccountingRegister.GeneralLedger",
+            "InformationRegister.Prices",
+            "LocalizedRegister.Hidden",
+            "NameOnly",
+            "AccumulationRegister.CaseTarget",
+            "AccumulationRegister.CASETARGET",
+        ];
+        replace_document_descriptor(&root, &document_with_register_records(&first_order));
+
+        let first = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("graph with Document payload must build");
+        let repeated = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated graph build must succeed");
+
+        assert_document_payload(
+            &first,
+            &[
+                (MetadataKind::InformationRegister, "Prices"),
+                (MetadataKind::AccumulationRegister, "StockBalance"),
+                (MetadataKind::AccountingRegister, "GeneralLedger"),
+                (MetadataKind::CalculationRegister, "Payroll"),
+            ],
+        );
+        assert!(first.graph().diff(repeated.graph()).is_empty());
+        assert!(first.diff(&repeated).is_empty());
+
+        let reordered = [
+            "NameOnly",
+            "InformationRegister.Prices",
+            "AccumulationRegister.CASETARGET",
+            "LocalizedRegister.Hidden",
+            "AccountingRegister.GeneralLedger",
+            "AccumulationRegister.StockBalance",
+            "InformationRegister.Prices",
+            "AccumulationRegister.CaseTarget",
+            "CalculationRegister.Payroll",
+        ];
+        replace_document_descriptor(&root, &document_with_register_records(&reordered));
+        let reordered = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("reordered Document payload must build");
+
+        assert!(first.graph().diff(reordered.graph()).is_empty());
+        assert!(first.diff(&reordered).is_empty());
+
+        let changed = [
+            "InformationRegister.Prices",
+            "AccumulationRegister.StockBalance",
+            "AccountingRegister.GeneralLedger",
+        ];
+        replace_document_descriptor(&root, &document_with_register_records(&changed));
+        let changed = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("changed Document payload must build");
+
+        assert_payload_only_document_change(&first, &changed);
     }
 
     #[test]

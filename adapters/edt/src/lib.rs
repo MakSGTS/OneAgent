@@ -10,11 +10,8 @@ mod module_reader;
 mod query_source_resolution;
 mod role_rights;
 mod subsystem_content;
-// The parser is a production prerequisite for the later Writes resolution task.
-#[allow(dead_code)]
 mod writes;
-// The resolver is a production prerequisite for the later Writes emission task.
-#[allow(dead_code)]
+mod writes_emission;
 mod writes_resolution;
 
 pub use metadata_object::{
@@ -479,6 +476,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         let configuration = FileSystemEdtConfigurationLoader.load(project_root)?;
         let mut graph = SemanticGraph::new();
         let mut configuration_modules = Vec::new();
+        let mut configuration_writes_sources = Vec::new();
         let mut metadata_references = BTreeSet::new();
         let mut metadata_extensions = BTreeSet::new();
         let mut subsystem_content = BTreeSet::new();
@@ -544,6 +542,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
                 &mut graph,
             )?;
             configuration_modules.extend(collected.modules);
+            configuration_writes_sources.extend(collected.writes_sources);
             metadata_references.extend(collected.references);
             metadata_extensions.extend(collected.extensions);
             subsystem_content.extend(collected.subsystem_content);
@@ -582,12 +581,26 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         )
         .map_err(EdtGraphError::Bsl)?;
 
+        emit_configuration_writes(&mut graph, &configuration_writes_sources)?;
+
         Ok(EdtSemanticGraphBuildResult::new_with_reference_statistics(
             graph,
             diagnostics.into_iter().collect(),
             reference_statistics,
         ))
     }
+}
+
+fn emit_configuration_writes(
+    graph: &mut SemanticGraph,
+    sources: &[writes_emission::EdtWritesSource],
+) -> Result<(), EdtGraphError> {
+    writes_emission::emit_resolved_writes(
+        graph,
+        sources,
+        query_source_resolution::WorkspaceResolutionScope::Complete,
+    )?;
+    Ok(())
 }
 
 fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
@@ -618,6 +631,7 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
 #[derive(Debug, Default)]
 struct CollectedTopLevelMetadata {
     modules: Vec<EdtModuleDescriptor>,
+    writes_sources: Vec<writes_emission::EdtWritesSource>,
     references: BTreeSet<PendingMetadataReference>,
     extensions: BTreeSet<PendingMetadataExtension>,
     subsystem_content: BTreeSet<PendingSubsystemContentObservation>,
@@ -703,6 +717,7 @@ fn collect_top_level_metadata(
         )?;
 
         collected.modules.extend(object.modules);
+        collected.writes_sources.extend(object.writes_sources);
         collected.references.extend(object.references);
         collected.extensions.extend(object.extensions);
         collected.subsystem_content.extend(object.subsystem_content);
@@ -816,6 +831,12 @@ fn collect_metadata_object(
         )?;
     }
 
+    collected
+        .writes_sources
+        .push(writes_emission::EdtWritesSource::new(
+            descriptor,
+            modules.clone(),
+        ));
     collected.modules.extend(modules);
 
     Ok(collected)

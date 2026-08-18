@@ -456,7 +456,13 @@ mod tests {
 
         assert_eq!(graph.node_count(), node_count);
         assert_eq!(graph.edge_count(), edge_count);
-        assert!(graph.edges().all(|edge| edge.kind() != EdgeKind::Writes));
+        assert_eq!(
+            graph
+                .edges()
+                .filter(|edge| edge.kind() == EdgeKind::Writes)
+                .count(),
+            2
+        );
     }
 
     #[test]

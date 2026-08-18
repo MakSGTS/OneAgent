@@ -1,0 +1,15 @@
+SELECT
+	QuantitativeAccountingBalance.Subdivision AS SubdivisionBalance,
+	QuantitativeAccountingBalance.QuantityBalance AS QuantityBalance
+INTO SubdivisionBalances
+FROM
+	AccumulationRegister.QuantitativeAccounting.Balance(
+			&StartDate,
+			Account IN (&Account)
+				AND Product IN
+					(SELECT
+						Products.Ref
+					FROM
+						Products AS Products)
+				AND Location = Subdivision) AS QuantitativeAccountingBalance
+;

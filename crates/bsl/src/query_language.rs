@@ -124,8 +124,14 @@ impl ParsedQueryProgram {
 pub enum QueryLanguageDiagnosticKind {
     /// The raw query text is empty, incomplete, invalid, or not fully consumed.
     MalformedSyntax,
+    /// The program contains a source-producing structure outside the minimum slice.
+    UnsupportedStructure,
     /// A qualified persistent namespace is outside the first-slice allowlist.
     UnsupportedPersistentNamespace,
+    /// A register source invokes a virtual table.
+    VirtualTableSource,
+    /// The program declares or reads a temporary table.
+    TemporaryTableSource,
     /// A parameter occupies a data-source position.
     ExternalOrParameterDataSource,
 }
@@ -136,9 +142,12 @@ impl QueryLanguageDiagnosticKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::MalformedSyntax => "query_language.malformed_syntax",
+            Self::UnsupportedStructure => "query_language.unsupported_structure",
             Self::UnsupportedPersistentNamespace => {
                 "query_language.unsupported_persistent_namespace"
             }
+            Self::VirtualTableSource => "query_language.virtual_table_source",
+            Self::TemporaryTableSource => "query_language.temporary_table_source",
             Self::ExternalOrParameterDataSource => {
                 "query_language.external_or_parameter_data_source"
             }
@@ -248,6 +257,9 @@ impl QueryLanguageParser {
     #[must_use]
     pub fn parse(&self, source: &str) -> QueryLanguageParseResult {
         let mut parser = Parser::new(source);
+        if let Some(diagnostic) = parser.detect_unsupported_program() {
+            return QueryLanguageParseResult::rejected(diagnostic);
+        }
         match parser.parse_program() {
             Ok(program) => QueryLanguageParseResult::accepted(program),
             Err(diagnostic) => QueryLanguageParseResult::rejected(diagnostic),
@@ -267,6 +279,8 @@ enum TokenKind<'a> {
     Number,
     Dot,
     Ampersand,
+    LeftParenthesis,
+    Semicolon,
     Invalid,
     EndOfInput,
 }
@@ -290,6 +304,115 @@ impl<'a> Parser<'a> {
             tokens: tokenize(source),
             cursor: 0,
         }
+    }
+
+    fn detect_unsupported_program(&self) -> Option<QueryLanguageDiagnostic> {
+        for tokens in self.tokens.windows(6) {
+            if matches!(
+                tokens[0].kind,
+                TokenKind::Word("AccumulationRegister" | "InformationRegister")
+            ) && tokens[1].kind == TokenKind::Dot
+                && matches!(tokens[2].kind, TokenKind::Word(_))
+                && tokens[3].kind == TokenKind::Dot
+                && matches!(tokens[4].kind, TokenKind::Word(_))
+                && tokens[5].kind == TokenKind::LeftParenthesis
+            {
+                return Some(QueryLanguageDiagnostic::new(
+                    QueryLanguageDiagnosticKind::VirtualTableSource,
+                    "register virtual-table sources are unsupported in the minimum query-language slice",
+                    QueryTextRange::new(
+                        tokens[0].location.start_byte(),
+                        tokens[4].location.end_byte(),
+                    ),
+                ));
+            }
+        }
+
+        for (index, token) in self.tokens.iter().enumerate() {
+            if token.kind == TokenKind::Semicolon
+                && self.tokens[index + 1..]
+                    .iter()
+                    .any(|next| next.kind != TokenKind::EndOfInput)
+            {
+                return Some(QueryLanguageDiagnostic::new(
+                    QueryLanguageDiagnosticKind::UnsupportedStructure,
+                    "multiple query statements are unsupported in the minimum query-language slice",
+                    token.location,
+                ));
+            }
+        }
+
+        if let Some(token) = self
+            .tokens
+            .iter()
+            .find(|token| matches!(token.kind, TokenKind::Word("JOIN")))
+        {
+            return Some(QueryLanguageDiagnostic::new(
+                QueryLanguageDiagnosticKind::UnsupportedStructure,
+                "query JOIN structures are unsupported in the minimum query-language slice",
+                token.location,
+            ));
+        }
+
+        for (index, token) in self.tokens.iter().enumerate() {
+            if matches!(token.kind, TokenKind::Word("UNION")) {
+                let end = self
+                    .tokens
+                    .get(index + 1)
+                    .filter(|next| matches!(next.kind, TokenKind::Word("ALL")))
+                    .map_or(token.location.end_byte(), |next| next.location.end_byte());
+                return Some(QueryLanguageDiagnostic::new(
+                    QueryLanguageDiagnosticKind::UnsupportedStructure,
+                    "query UNION structures are unsupported in the minimum query-language slice",
+                    QueryTextRange::new(token.location.start_byte(), end),
+                ));
+            }
+        }
+
+        for tokens in self.tokens.windows(2) {
+            if tokens[0].kind == TokenKind::LeftParenthesis
+                && matches!(tokens[1].kind, TokenKind::Word("SELECT" | "ВЫБРАТЬ"))
+            {
+                return Some(QueryLanguageDiagnostic::new(
+                    QueryLanguageDiagnosticKind::UnsupportedStructure,
+                    "nested queries are unsupported in the minimum query-language slice",
+                    QueryTextRange::new(
+                        tokens[0].location.start_byte(),
+                        tokens[1].location.end_byte(),
+                    ),
+                ));
+            }
+        }
+
+        for tokens in self.tokens.windows(2) {
+            if matches!(tokens[0].kind, TokenKind::Word("INTO"))
+                && matches!(tokens[1].kind, TokenKind::Word(_))
+            {
+                return Some(QueryLanguageDiagnostic::new(
+                    QueryLanguageDiagnosticKind::TemporaryTableSource,
+                    "temporary-table declarations and sources are unsupported in the minimum query-language slice",
+                    QueryTextRange::new(
+                        tokens[0].location.start_byte(),
+                        tokens[1].location.end_byte(),
+                    ),
+                ));
+            }
+        }
+
+        for tokens in self.tokens.windows(3) {
+            if matches!(tokens[0].kind, TokenKind::Word("FROM" | "ИЗ"))
+                && matches!(tokens[1].kind, TokenKind::Word(_))
+                && tokens[2].kind != TokenKind::Dot
+            {
+                return Some(QueryLanguageDiagnostic::new(
+                    QueryLanguageDiagnosticKind::TemporaryTableSource,
+                    "temporary-table declarations and sources are unsupported in the minimum query-language slice",
+                    tokens[1].location,
+                ));
+            }
+        }
+
+        None
     }
 
     fn parse_program(&mut self) -> Result<ParsedQueryProgram, QueryLanguageDiagnostic> {
@@ -516,6 +639,8 @@ fn tokenize(source: &str) -> Vec<Token<'_>> {
             match character {
                 '.' => TokenKind::Dot,
                 '&' => TokenKind::Ampersand,
+                '(' => TokenKind::LeftParenthesis,
+                ';' => TokenKind::Semicolon,
                 _ => TokenKind::Invalid,
             }
         };
@@ -555,6 +680,18 @@ mod tests {
         include_str!("../tests/fixtures/query_language/accepted_information_register_en.query");
     const UNSUPPORTED_PARAMETER_SOURCE_EN: &str =
         include_str!("../tests/fixtures/query_language/unsupported_parameter_source_en.query");
+    const UNSUPPORTED_JOIN_EN: &str =
+        include_str!("../tests/fixtures/query_language/unsupported_join_en.query");
+    const UNSUPPORTED_UNION_ALL_EN: &str =
+        include_str!("../tests/fixtures/query_language/unsupported_union_all_en.query");
+    const UNSUPPORTED_NESTED_QUERY_EN: &str =
+        include_str!("../tests/fixtures/query_language/unsupported_nested_query_en.query");
+    const UNSUPPORTED_BATCH_EN: &str =
+        include_str!("../tests/fixtures/query_language/unsupported_batch_en.query");
+    const UNSUPPORTED_TEMPORARY_TABLE_EN: &str =
+        include_str!("../tests/fixtures/query_language/unsupported_temporary_table_en.query");
+    const UNSUPPORTED_VIRTUAL_TABLE_EN: &str =
+        include_str!("../tests/fixtures/query_language/unsupported_virtual_table_en.query");
 
     #[test]
     fn query_language_parses_english_catalog_fixture() {
@@ -707,6 +844,108 @@ mod tests {
             .sources()[0];
         assert_eq!(source.location().start_byte(), 19);
         assert_eq!(source.location().end_byte(), 35);
+    }
+
+    #[test]
+    fn query_language_rejects_repository_structures_with_exact_typed_ranges() {
+        for (fixture, kind, start, end, spelling) in [
+            (
+                UNSUPPORTED_JOIN_EN,
+                QueryLanguageDiagnosticKind::UnsupportedStructure,
+                90,
+                94,
+                "JOIN",
+            ),
+            (
+                UNSUPPORTED_UNION_ALL_EN,
+                QueryLanguageDiagnosticKind::UnsupportedStructure,
+                109,
+                118,
+                "UNION ALL",
+            ),
+            (
+                UNSUPPORTED_NESTED_QUERY_EN,
+                QueryLanguageDiagnosticKind::UnsupportedStructure,
+                311,
+                318,
+                "(SELECT",
+            ),
+            (
+                UNSUPPORTED_BATCH_EN,
+                QueryLanguageDiagnosticKind::UnsupportedStructure,
+                144,
+                145,
+                ";",
+            ),
+            (
+                UNSUPPORTED_TEMPORARY_TABLE_EN,
+                QueryLanguageDiagnosticKind::TemporaryTableSource,
+                32,
+                47,
+                "INTO ttProducts",
+            ),
+            (
+                UNSUPPORTED_VIRTUAL_TABLE_EN,
+                QueryLanguageDiagnosticKind::VirtualTableSource,
+                170,
+                221,
+                "AccumulationRegister.QuantitativeAccounting.Balance",
+            ),
+        ] {
+            let first = QueryLanguageParser.parse(fixture);
+            let repeated = QueryLanguageParser.parse(fixture);
+
+            assert!(!first.is_source_set_complete());
+            assert!(first.program().is_none());
+            assert_eq!(first.diagnostics().len(), 1);
+            let diagnostic = first.diagnostics()[0];
+            assert_eq!(diagnostic.kind(), kind);
+            assert_eq!(diagnostic.location().start_byte(), start);
+            assert_eq!(diagnostic.location().end_byte(), end);
+            assert_eq!(&fixture[start..end], spelling);
+            assert_eq!(first, repeated);
+        }
+    }
+
+    #[test]
+    fn query_language_recognizes_join_union_and_temporary_use_variants() {
+        for source in [
+            "SELECT Ref FROM Catalog.Products LEFT JOIN Catalog.Services",
+            "SELECT Ref FROM Catalog.Products UNION SELECT Ref FROM Catalog.Services",
+        ] {
+            let result = QueryLanguageParser.parse(source);
+            assert_eq!(
+                result.diagnostics()[0].kind(),
+                QueryLanguageDiagnosticKind::UnsupportedStructure
+            );
+            assert!(result.program().is_none());
+            assert!(!result.is_source_set_complete());
+        }
+
+        let temporary_use = QueryLanguageParser.parse("SELECT Ref FROM ttProducts");
+        assert_eq!(
+            temporary_use.diagnostics()[0].kind(),
+            QueryLanguageDiagnosticKind::TemporaryTableSource
+        );
+        assert_eq!(temporary_use.diagnostics()[0].location().start_byte(), 16);
+        assert_eq!(temporary_use.diagnostics()[0].location().end_byte(), 26);
+        assert!(temporary_use.program().is_none());
+    }
+
+    #[test]
+    fn query_language_new_diagnostic_codes_are_stable() {
+        assert_eq!(
+            QueryLanguageDiagnosticKind::UnsupportedStructure.as_str(),
+            "query_language.unsupported_structure"
+        );
+        assert_eq!(
+            QueryLanguageDiagnosticKind::VirtualTableSource.as_str(),
+            "query_language.virtual_table_source"
+        );
+        assert_eq!(
+            QueryLanguageDiagnosticKind::TemporaryTableSource.as_str(),
+            "query_language.temporary_table_source"
+        );
     }
 
     #[test]

@@ -13,8 +13,14 @@ use crate::{
 pub enum SemanticDiagnosticCode {
     /// A static query contains malformed query-language syntax.
     QueryLanguageMalformedSyntax,
+    /// A static query contains a source-producing structure outside the supported slice.
+    QueryLanguageUnsupportedStructure,
     /// A query source uses a persistent namespace outside the supported allowlist.
     QueryLanguageUnsupportedPersistentNamespace,
+    /// A query source invokes a register virtual table.
+    QueryLanguageVirtualTableSource,
+    /// A query declares or reads a temporary table.
+    QueryLanguageTemporaryTableSource,
     /// A query source is supplied by a parameter or another external source.
     QueryLanguageExternalOrParameterDataSource,
     /// A raw semantic reference does not have the required source format.
@@ -39,9 +45,12 @@ impl SemanticDiagnosticCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::QueryLanguageMalformedSyntax => "query_language.malformed_syntax",
+            Self::QueryLanguageUnsupportedStructure => "query_language.unsupported_structure",
             Self::QueryLanguageUnsupportedPersistentNamespace => {
                 "query_language.unsupported_persistent_namespace"
             }
+            Self::QueryLanguageVirtualTableSource => "query_language.virtual_table_source",
+            Self::QueryLanguageTemporaryTableSource => "query_language.temporary_table_source",
             Self::QueryLanguageExternalOrParameterDataSource => {
                 "query_language.external_or_parameter_data_source"
             }
@@ -74,8 +83,14 @@ pub enum SemanticDiagnosticSeverity {
 pub enum SemanticDiagnosticKind {
     /// The complete static query text is malformed or not fully consumed.
     QueryLanguageMalformedSyntax,
+    /// A query contains a source-producing structure outside the supported slice.
+    QueryLanguageUnsupportedStructure,
     /// A persistent query namespace is outside the supported allowlist.
     QueryLanguageUnsupportedPersistentNamespace,
+    /// A query invokes a register virtual table source.
+    QueryLanguageVirtualTableSource,
+    /// A query declares or reads a temporary table source.
+    QueryLanguageTemporaryTableSource,
     /// A query data source is supplied externally or through a parameter.
     QueryLanguageExternalOrParameterDataSource,
     /// A raw semantic reference does not have the required source format.
@@ -378,8 +393,20 @@ mod tests {
             "query_language.malformed_syntax"
         );
         assert_eq!(
+            SemanticDiagnosticCode::QueryLanguageUnsupportedStructure.as_str(),
+            "query_language.unsupported_structure"
+        );
+        assert_eq!(
             SemanticDiagnosticCode::QueryLanguageUnsupportedPersistentNamespace.as_str(),
             "query_language.unsupported_persistent_namespace"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::QueryLanguageVirtualTableSource.as_str(),
+            "query_language.virtual_table_source"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::QueryLanguageTemporaryTableSource.as_str(),
+            "query_language.temporary_table_source"
         );
         assert_eq!(
             SemanticDiagnosticCode::QueryLanguageExternalOrParameterDataSource.as_str(),

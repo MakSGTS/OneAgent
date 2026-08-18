@@ -1,0 +1,14 @@
+SELECT
+	ProductsInTheSegments.Product AS Product,
+	ProductsInTheSegments.LevelOneSegment AS LevelOneSegment,
+	ProductsInTheSegments.LevelTwoSegment AS LevelTwoSegment
+INTO ttProductsInTheSegments
+FROM
+	InformationRegister.ProductsInTheSegments AS ProductsInTheSegments
+WHERE
+	ProductsInTheSegments.Product IN
+		(SELECT
+			ttProducts.Ref
+		FROM
+			ttProducts)
+;

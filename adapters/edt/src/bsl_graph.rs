@@ -505,9 +505,24 @@ fn record_query_language_diagnostic(
             SemanticDiagnosticKind::QueryLanguageMalformedSyntax,
             SemanticReferenceOutcome::MalformedFormat,
         ),
+        QueryLanguageDiagnosticKind::UnsupportedStructure => (
+            SemanticDiagnosticCode::QueryLanguageUnsupportedStructure,
+            SemanticDiagnosticKind::QueryLanguageUnsupportedStructure,
+            SemanticReferenceOutcome::UnsupportedPrefix,
+        ),
         QueryLanguageDiagnosticKind::UnsupportedPersistentNamespace => (
             SemanticDiagnosticCode::QueryLanguageUnsupportedPersistentNamespace,
             SemanticDiagnosticKind::QueryLanguageUnsupportedPersistentNamespace,
+            SemanticReferenceOutcome::UnsupportedPrefix,
+        ),
+        QueryLanguageDiagnosticKind::VirtualTableSource => (
+            SemanticDiagnosticCode::QueryLanguageVirtualTableSource,
+            SemanticDiagnosticKind::QueryLanguageVirtualTableSource,
+            SemanticReferenceOutcome::UnsupportedPrefix,
+        ),
+        QueryLanguageDiagnosticKind::TemporaryTableSource => (
+            SemanticDiagnosticCode::QueryLanguageTemporaryTableSource,
+            SemanticDiagnosticKind::QueryLanguageTemporaryTableSource,
             SemanticReferenceOutcome::UnsupportedPrefix,
         ),
         QueryLanguageDiagnosticKind::ExternalOrParameterDataSource => (

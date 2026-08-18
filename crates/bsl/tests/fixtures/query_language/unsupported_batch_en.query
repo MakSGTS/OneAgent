@@ -1,0 +1,17 @@
+SELECT
+	Products.Ref AS Product
+INTO ttProducts
+FROM
+	Catalog.Products AS Products
+WHERE
+	Products.Ref IN (&ProductList)
+	AND &AdditionalFilter
+;
+
+////////////////////////////////////////////////////////////////////////////////
+SELECT
+	NamedProducts.Ref AS Product
+FROM
+	Catalog.NamedProducts AS NamedProducts
+		INNER JOIN ttProducts AS Products
+		ON NamedProducts.Owner = Products.Product

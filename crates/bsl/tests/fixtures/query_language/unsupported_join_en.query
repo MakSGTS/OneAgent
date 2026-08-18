@@ -1,0 +1,6 @@
+SELECT
+	NamedProducts.Ref AS Product
+FROM
+	Catalog.NamedProducts AS NamedProducts
+		INNER JOIN ttProducts AS Products
+		ON NamedProducts.Owner = Products.Product

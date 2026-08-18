@@ -32,10 +32,10 @@ Evidence labels used below are:
 `crates/bsl/src/queries.rs:7-16` defines `BslQuery` as an existing Query identity,
 owner, local binding, static text, and one-based BSL declaration line.
 `BslQuery::text()` returns the stored text (`crates/bsl/src/queries.rs:63-67`).
-The current line-oriented extractor accepts a static string in a supported
-constructor or `.Text` assignment (`crates/bsl/src/queries.rs:317-360`) and its
-literal decoder only handles a quoted value available on one BSL source line
-(`crates/bsl/src/queries.rs:375-397`).
+The extractor accepts a complete static string in a supported constructor or
+`.Text` assignment. Its decoder handles the existing one-line form and the
+confirmed pipe-style multiline form without changing the public `BslQuery`
+constructor or identity.
 
 This is BSL Query extraction, not 1C query-language parsing. The extractor does
 not tokenize `SELECT`, classify statements, discover sources, build an AST, or
@@ -54,12 +54,12 @@ the existing Query identity; it does not replace or split the Query node.
 ### Multiline BSL string implementation boundary
 
 Real query programs commonly use multiline BSL strings whose source lines begin
-with `|`. The current extractor still has no reusable multiline decoder,
-multiline tests, or decoded-query-to-BSL location model. The byte-affecting
-runtime rules are now established by the official syntax sources below plus a
-controlled execution on 1C:Enterprise 8.3.27.2214. Implementation remains
-pending, but it no longer depends on unavailable decoding evidence. No raw
-fixture was added by this evidence-only task.
+with `|`. `LineBslQueryExtractor` now implements the byte-affecting rules
+established by the official syntax sources below plus controlled execution on
+1C:Enterprise 8.3.27.2214. Focused tests cover constructor and `.Text` forms,
+LF/CRLF equivalence, empty continuations, doubled quotes, terminators,
+conservative rejection, deterministic identity, and the private decoded-to-BSL
+location model.
 
 ### Official multiline-string evidence
 
@@ -567,7 +567,7 @@ normalize input, so original whitespace and CRLF bytes contribute to offsets and
 token boundaries remain UTF-8 boundaries. The extractor owns projection back to
 BSL through the private segment map defined above. The existing one-based
 `BslQuery::line()` continues to identify the wrapper declaration; no public
-location API is added by the next slice.
+location API was added.
 
 ## Diagnostic taxonomy
 
@@ -606,11 +606,17 @@ The repository-owned raw corpus lives under
 | `accepted_catalog_ru.query` | Copied from an existing repository test | `crates/bsl/src/queries.rs:477-496` | One statement; one direct persistent Catalog source, raw name `Справочник.Номенклатура` | None |
 | `accepted_information_register_en.query` | Verbatim decoded query text from a real one-line BSL string | `OneAgent_EDTproject/src/CommonModules/MarkedObjectsDeletionInternal/Module.bsl:764-771` | One statement; one direct persistent Information Register source, alias `Tab` | None |
 | `unsupported_parameter_source_en.query` | Verbatim decoded query text from a real one-line BSL string | `OneAgent_EDTproject/src/DataProcessors/ExportImportEnterpriseData/ObjectModule.bsl:871-877` | One statement; parameter-supplied source, alias `MDTableAlias`; source set unsupported | External or parameter data source |
+| `unsupported_join_en.query` | Decoded contiguous statement excerpt | `OneAgent_EDTproject/src/Reports/SalesAnalytics/ObjectModule.bsl:145-150` | Multiple top-level sources through `INNER JOIN` | Unsupported query structure |
+| `unsupported_union_all_en.query` | Decoded complete statement | `OneAgent_EDTproject/src/Reports/TransferOfProduct/Forms/ReportForm/Module.bsl:173-189` | Multiple branches through `UNION ALL` | Unsupported query structure |
+| `unsupported_nested_query_en.query` | Decoded complete statement | `OneAgent_EDTproject/src/Reports/AnalyticalReportByCategories/ObjectModule.bsl:145-158` | Parenthesized nested `SELECT` | Unsupported query structure |
+| `unsupported_batch_en.query` | Decoded complete two-statement literal | `OneAgent_EDTproject/src/Reports/SalesAnalytics/ObjectModule.bsl:134-150` | Statement delimiter followed by another `SELECT` | Unsupported query structure |
+| `unsupported_temporary_table_en.query` | Decoded first-statement excerpt | `OneAgent_EDTproject/src/Reports/SalesAnalytics/ObjectModule.bsl:156-163` | `INTO ttProducts` declaration | Temporary table source |
+| `unsupported_virtual_table_en.query` | Decoded complete statement | `OneAgent_EDTproject/src/Reports/TransferOfProduct/Forms/ReportForm/Module.bsl:259-273` | Register virtual-table invocation | Virtual table source |
 
-No fixture is described as a minimized or verbatim decoding of multiline BSL
-text. Missing raw fixtures for scalar parameters, comments, keyword-like string
-literals, delimiters/batches, joins, unions, nested queries, temporary tables,
-virtual tables, and malformed syntax are explicit evidence gaps.
+Missing raw fixtures for scalar parameters, comments, keyword-like string
+literals, and malformed syntax remain explicit evidence gaps. The negative
+multiline derivatives use only confirmed decoding rules and retain exact source
+provenance in this manifest and the fixture README.
 
 ## Implementation-readiness matrix
 
@@ -625,14 +631,14 @@ virtual tables, and malformed syntax are explicit evidence gaps.
 | Optional alias | Confirmed by source | `accepted_information_register_en.query` | Alias attached to one source occurrence | None | Russian alias spelling is not evidenced |
 | Comment shielding | Comment-shaped text confirmed only in multiline BSL source; keyword-token payload Unknown | None | Comments contribute no source tokens | Malformed syntax only if comment lexing itself fails | Raw decoding, keyword-like fixture, and exact termination rules |
 | String-literal shielding | Metadata-like literal content confirmed only in multiline BSL source; keyword-token payload Unknown | None | Literal content contributes no source tokens | Malformed syntax for unterminated literal | Raw quoting/escape contract and keyword-like fixture |
-| Statement delimiter and batch detection | Structure and multiline decoding Confirmed | None | Multiple statements | Unsupported query structure | Raw fixture and single trailing-delimiter policy |
-| `JOIN` detection | Structure and multiline decoding Confirmed | None | Multiple top-level sources | Unsupported query structure | Raw fixture and join grammar boundary |
-| `UNION` detection | Structure and multiline decoding Confirmed | None | Multiple branches | Unsupported query structure | Raw fixture |
-| Nested-query detection | Structure and multiline decoding Confirmed | None | Nested source scope | Unsupported query structure | Raw fixture and balanced-delimiter grammar |
-| Temporary-table detection | Structure and multiline decoding Confirmed | None | Temporary declaration/source | Temporary table | Raw fixture |
-| Virtual-table detection | Structure and multiline decoding Confirmed | None | Virtual table source | Virtual table source | Raw fixture and invocation grammar |
+| Statement delimiter and batch detection | Structure and multiline decoding Confirmed | `unsupported_batch_en.query` | Multiple statements | Unsupported query structure | None for the evidenced delimiter-followed-by-statement shape |
+| `JOIN` detection | Structure and multiline decoding Confirmed | `unsupported_join_en.query` | Multiple top-level sources | Unsupported query structure | None for evidenced join keywords; broader join grammar remains deferred |
+| `UNION` detection | Structure and multiline decoding Confirmed | `unsupported_union_all_en.query` | Multiple branches | Unsupported query structure | None for `UNION` and `UNION ALL` detection |
+| Nested-query detection | Structure and multiline decoding Confirmed | `unsupported_nested_query_en.query` | Nested source scope | Unsupported query structure | None for the evidenced parenthesized `SELECT` shape |
+| Temporary-table detection | Structure and multiline decoding Confirmed | `unsupported_temporary_table_en.query` | Temporary declaration/source | Temporary table source | None for evidenced `INTO` declaration and unqualified source use |
+| Virtual-table detection | Structure and multiline decoding Confirmed | `unsupported_virtual_table_en.query` | Virtual table source | Virtual table source | None for evidenced register third-component invocation |
 | Malformed static input | Accepted by ADR-0021, not source-evidenced | None | No complete parsed program | Malformed query syntax | Evidence-backed malformed corpus and recovery policy |
-| Deterministic query-text location | Parser-local range is committed; private multiline source map is Accepted | Existing English and Russian fixtures plus inline parser tests | Zero-based half-open UTF-8 byte range in decoded query text, projected through typed private segments | Applicable typed diagnostic | Implementation and tests only |
+| Deterministic query-text location | Parser-local range and private multiline source map are implemented | Existing fixtures plus inline parser/extractor tests | Zero-based half-open UTF-8 byte range in decoded query text, projected through typed private segments | Applicable typed diagnostic | None for the accepted private model |
 | Case normalization | Accepted architecture decision | Existing accepted English and Russian queries can be paired with case-variant graph names in resolver tests | Preserved raw spelling plus locale-independent Rust Unicode lowercase key; no NFC/NFKC | Typed resolver outcome only after complete parsing | Resolver tests must cover English, Russian, expansion, no-normalization, and collisions |
 | Exact-kind resolution | Implemented by the committed private EDT resolver | Committed private resolver tests | Catalog or Information Register exact-kind candidate partition | Missing, ambiguous, incompatible, or partial-workspace | None for the accepted resolver slice |
 
@@ -648,37 +654,18 @@ broadly accepted. The EDT production builder now invokes parsing and resolution
 after top-level metadata collection, emits canonical Reads edges only for unique
 compatible targets, aggregates deterministic exact resolved provenance, and
 reports typed parser and resolver failures without placeholders. Production
-emission remains limited to the parser's current fixture-backed accepted forms.
-ADR-0021's negative-evidence prerequisites are not complete, but their
-multiline decoding prerequisite is complete. Unsupported-structure,
-virtual-table, and temporary-table fixtures, diagnostics, and full-builder
-negative tests still precede the registry-only `semantic_edge.reads` Coverage
-transition.
+emission remains limited to the parser's accepted forms. The confirmed multiline
+decoder, private `Copied`/`CollapsedQuote`/`InsertedLf` mapping, raw negative
+fixtures, typed unsupported-structure/virtual-table/temporary-table diagnostics,
+semantic propagation, and full-builder all-or-nothing evidence are implemented.
+Query identity, ownership, public API, accepted one-line behavior, resolver,
+Writes, References, query-derived DependsOn, and Impact policy remain unchanged.
 
-The narrowest next task is now an implementation task:
+The separate registry-only `semantic_edge.reads` Coverage transition required
+by ADR-0021 is complete. The next independent High task is Writes; this
+investigation does not define or implement its semantics.
 
-1. extend `LineBslQueryExtractor` in `crates/bsl/src/queries.rs` to consume one
-   complete evidenced multiline literal in a direct constructor or `.Text`
-   assignment, decode it with the Confirmed LF/marker/indentation/quote rules,
-   and retain the Accepted private `Copied`, `CollapsedQuote`, and
-   `InsertedLf` segment map;
-2. add extractor tests for opening payload, indentation, marker handling,
-   doubled quotes, empty lines, LF/CRLF inputs, terminators, dynamic text,
-   replacement, reassignment, returned text, and direct `.Text` text;
-3. add typed query-language categories for unsupported structure, virtual-table
-   source, and temporary-table source in `crates/bsl/src/query_language.rs`;
-4. add complete repository-owned raw fixtures and parser tests for `JOIN`,
-   `UNION`, nested query, batch, temporary-table, and virtual-table cases;
-5. add `FileSystemEdtSemanticGraphBuilder` negative tests in
-   `adapters/edt/tests/reads.rs` proving no partial Reads edges and deterministic
-   typed diagnostics for every ADR-0021 category.
-
-That implementation is authorized. It must preserve Query identity and ownership, accepted
-one-line extraction, parser-local UTF-8 ranges, resolver behavior, public Query
-API, Writes behavior, and Coverage status. The Coverage transition remains a
-later task after all required negative evidence passes.
-
-Readiness outcome: **Ready for multiline BSL extractor implementation**.
+Readiness outcome: **Reads implementation and Coverage transition complete**.
 
 ## Rejected alternatives
 
@@ -721,16 +708,14 @@ produce a missing or collision outcome.
 
 Case-insensitive namespace variants, the Russian Information Register query
 form, general expression grammar, multiline forms other than the tested pipe
-style, comments, strings, batches, joins, unions, nesting, temporary tables,
-virtual tables, and malformed-input recovery retain their existing evidence
-status. The private decoded-to-BSL mapping is Accepted rather than a claimed
-platform rule. These items do not block the resolver because it runs only for
-the parser's completely accepted source set. The confirmed multiline contract
-authorizes extractor implementation but does not itself complete the negative
-evidence required before a Reads Coverage transition. ADR-0021 remains
-authoritative for graph semantics. Production now
+style, comments, strings, and malformed-input recovery retain their existing
+evidence status. JOIN, UNION, nesting, batches, temporary tables, and virtual
+tables are recognized only for deterministic rejection; they are not accepted
+grammar. The private decoded-to-BSL mapping remains an Accepted OneAgent model
+rather than a claimed platform rule. ADR-0021 remains authoritative for graph
+semantics. Production now
 emits Reads only for the accepted fixture-backed set; `Writes`, `References`,
-and query-derived `DependsOn` behavior is unchanged. Both
-`semantic_edge.reads` and `semantic_edge.writes` remain `DeclaredOnly`, and EDT
-Coverage remains 2 High and 43 Medium gaps while combined Coverage remains
-0 Critical, 2 High, and 44 Medium gaps.
+and query-derived `DependsOn` behavior is unchanged. `semantic_edge.reads` is
+`Supported`; `semantic_edge.writes` remains `DeclaredOnly` as the only High EDT
+gap. EDT Coverage is 1 High and 43 Medium gaps, while combined Coverage is
+0 Critical, 1 High, and 44 Medium gaps.

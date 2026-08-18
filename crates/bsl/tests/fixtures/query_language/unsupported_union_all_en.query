@@ -1,0 +1,17 @@
+SELECT
+	Products.Ref AS Ref
+INTO Products
+FROM
+	Catalog.Products AS Products
+WHERE
+	Products.Ref = &Product
+
+UNION ALL
+
+SELECT
+	NamedProducts.Ref
+FROM
+	Catalog.NamedProducts AS NamedProducts
+WHERE
+	NamedProducts.Owner = &Product
+;

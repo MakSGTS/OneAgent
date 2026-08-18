@@ -1,0 +1,8 @@
+SELECT
+	Products.Ref AS Product
+INTO ttProducts
+FROM
+	Catalog.Products AS Products
+WHERE
+	Products.Ref IN (&ProductList)
+	AND &AdditionalFilter

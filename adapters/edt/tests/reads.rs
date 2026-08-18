@@ -13,6 +13,8 @@ const CONFIGURATION_ID: &str = "10000000-0000-0000-0000-000000000000";
 const CATALOG_ID: &str = "20000000-0000-0000-0000-000000000000";
 const INFORMATION_REGISTER_ID: &str = "30000000-0000-0000-0000-000000000000";
 const QUERY_HOST_ID: &str = "40000000-0000-0000-0000-000000000000";
+const UNSUPPORTED_JOIN_EN: &str =
+    include_str!("../../../crates/bsl/tests/fixtures/query_language/unsupported_join_en.query");
 
 fn reads_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reads_project")
@@ -94,6 +96,84 @@ fn create_query_project(query_text: &str) -> tempfile::TempDir {
     write_configuration(root.path());
     write_query_host(root.path(), query_text);
     root
+}
+
+fn multiline_bsl_literal(value: &str) -> String {
+    let mut lines = value.split('\n');
+    let mut literal = format!(
+        "\"{}",
+        lines.next().unwrap_or_default().replace('"', "\"\"")
+    );
+    for line in lines {
+        literal.push('\n');
+        literal.push_str("    |");
+        literal.push_str(&line.replace('"', "\"\""));
+    }
+    literal.push('"');
+    literal
+}
+
+fn write_multiline_query_host(root: &Path, query_text: &str, constructor: bool) {
+    write_metadata(
+        root,
+        "Documents",
+        "Document",
+        "QueryHost",
+        QUERY_HOST_ID,
+        "QueryHost",
+    );
+    let literal = multiline_bsl_literal(query_text);
+    let declaration = if constructor {
+        format!("    Query = New Query({literal});\n")
+    } else {
+        format!("    Query = New Query;\n    Query.Text = {literal};\n")
+    };
+    fs::write(
+        root.join("src/Documents/QueryHost/ObjectModule.bsl"),
+        format!("Procedure ReadData()\n{declaration}EndProcedure\n"),
+    )
+    .expect("multiline query module must be written");
+}
+
+fn create_multiline_query_project(query_text: &str, constructor: bool) -> tempfile::TempDir {
+    let root = tempfile::tempdir().expect("temporary EDT project must be created");
+    write_configuration(root.path());
+    write_multiline_query_host(root.path(), query_text, constructor);
+    write_supported_negative_targets(root.path());
+    root
+}
+
+fn create_negative_query_project(query_text: &str) -> tempfile::TempDir {
+    let root = create_query_project(query_text);
+    write_supported_negative_targets(root.path());
+    root
+}
+
+fn write_supported_negative_targets(root: &Path) {
+    write_metadata(
+        root,
+        "Catalogs",
+        "Catalog",
+        "Products",
+        "70000000-0000-0000-0000-000000000001",
+        "Products",
+    );
+    write_metadata(
+        root,
+        "Catalogs",
+        "Catalog",
+        "NamedProducts",
+        "70000000-0000-0000-0000-000000000002",
+        "NamedProducts",
+    );
+    write_metadata(
+        root,
+        "InformationRegisters",
+        "InformationRegister",
+        "ProductsInTheSegments",
+        "70000000-0000-0000-0000-000000000003",
+        "ProductsInTheSegments",
+    );
 }
 
 fn assert_no_query_companion_edges(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
@@ -325,6 +405,67 @@ fn assert_rejected_query_case(
         first.reference_statistics(),
         repeated.reference_statistics()
     );
+    assert!(first.graph().diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+    assert!(first.validate().is_valid());
+}
+
+fn assert_rejected_builder_query_case(
+    query_text: &str,
+    multiline: bool,
+    constructor: bool,
+    code: SemanticDiagnosticCode,
+    kind: SemanticDiagnosticKind,
+) {
+    let root = if multiline {
+        create_multiline_query_project(query_text, constructor)
+    } else {
+        create_negative_query_project(query_text)
+    };
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(root.path())
+        .expect("rejected query source must remain recoverable");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(root.path())
+        .expect("repeated rejected query build must succeed");
+    let expected_query_id = id(&format!(
+        "{QUERY_HOST_ID}:object_module:procedure:ReadData:query:Query"
+    ));
+    let query_diagnostics = first
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.source_node() == Some(&expected_query_id))
+        .collect::<Vec<_>>();
+
+    assert_eq!(query_diagnostics.len(), 1);
+    let diagnostic = query_diagnostics[0];
+    assert_eq!(diagnostic.code(), code);
+    assert_eq!(diagnostic.kind(), kind);
+    assert_eq!(diagnostic.source_node(), Some(&expected_query_id));
+    assert!(first.reference_statistics().total() >= 1);
+    assert_eq!(
+        first.reference_statistics().outcome_total(),
+        first.reference_statistics().total()
+    );
+    assert_eq!(
+        first.reference_statistics().with_provenance(),
+        first.reference_statistics().total()
+    );
+    assert_eq!(first.reference_statistics().unsupported_prefix(), 1);
+    assert!(
+        first
+            .graph()
+            .query()
+            .edges_by_kind(EdgeKind::Reads)
+            .is_empty()
+    );
+    assert_no_query_companion_edges(&first);
+    assert_eq!(first.diagnostics(), repeated.diagnostics());
+    assert_eq!(
+        first.reference_statistics(),
+        repeated.reference_statistics()
+    );
+    assert!(first.graph().diff(repeated.graph()).is_empty());
     assert!(first.diff(&repeated).is_empty());
     assert!(first.validate().is_valid());
 }
@@ -355,6 +496,55 @@ fn reads_parser_and_missing_failures_are_typed_counted_and_deterministic() {
     ] {
         assert_rejected_query_case(query_text, code, kind);
     }
+}
+
+#[test]
+fn reads_unsupported_categories_are_typed_all_or_nothing_and_deterministic() {
+    for (query_text, code, kind) in [
+        (
+            "SELECT Ref FROM Catalog.Products LEFT JOIN Catalog.NamedProducts",
+            SemanticDiagnosticCode::QueryLanguageUnsupportedStructure,
+            SemanticDiagnosticKind::QueryLanguageUnsupportedStructure,
+        ),
+        (
+            "SELECT Ref FROM Catalog.Products UNION ALL SELECT Ref FROM Catalog.NamedProducts",
+            SemanticDiagnosticCode::QueryLanguageUnsupportedStructure,
+            SemanticDiagnosticKind::QueryLanguageUnsupportedStructure,
+        ),
+        (
+            "SELECT Ref FROM Catalog.Products WHERE Ref IN (SELECT Ref FROM Catalog.NamedProducts)",
+            SemanticDiagnosticCode::QueryLanguageUnsupportedStructure,
+            SemanticDiagnosticKind::QueryLanguageUnsupportedStructure,
+        ),
+        (
+            "SELECT Ref FROM Catalog.Products; SELECT Ref FROM Catalog.NamedProducts",
+            SemanticDiagnosticCode::QueryLanguageUnsupportedStructure,
+            SemanticDiagnosticKind::QueryLanguageUnsupportedStructure,
+        ),
+        (
+            "SELECT Ref INTO TempProducts FROM Catalog.Products",
+            SemanticDiagnosticCode::QueryLanguageTemporaryTableSource,
+            SemanticDiagnosticKind::QueryLanguageTemporaryTableSource,
+        ),
+        (
+            "SELECT Ref FROM AccumulationRegister.Products.Balance()",
+            SemanticDiagnosticCode::QueryLanguageVirtualTableSource,
+            SemanticDiagnosticKind::QueryLanguageVirtualTableSource,
+        ),
+    ] {
+        assert_rejected_builder_query_case(query_text, false, false, code, kind);
+    }
+}
+
+#[test]
+fn reads_multiline_constructor_rejects_join_without_partial_reads() {
+    assert_rejected_builder_query_case(
+        UNSUPPORTED_JOIN_EN,
+        true,
+        true,
+        SemanticDiagnosticCode::QueryLanguageUnsupportedStructure,
+        SemanticDiagnosticKind::QueryLanguageUnsupportedStructure,
+    );
 }
 
 #[test]

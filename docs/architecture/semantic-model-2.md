@@ -1329,11 +1329,9 @@ known relevant capability has no pipeline implementation. `NotApplicable` is
 used only when a stage is intentionally outside the semantic meaning of a
 capability. `DeclaredOnly` means that a graph enum variant exists but the EDT
 Coverage Registry has not yet been transitioned to production support. It
-ordinarily indicates that the EDT pipeline does not emit the capability; the
-task-separated Reads sequence temporarily has production emission for the
-current fixture-backed forms while the now-authorized multiline extractor,
-unsupported-category negative evidence, and the later registry transition
-remain pending.
+ordinarily indicates that the EDT pipeline does not emit the capability. Reads
+no longer uses this transitional classification: its production evidence and
+registry transition are complete.
 
 Capabilities use typed identities based on `MetadataKind`, `NodeKind`,
 `EdgeKind`, validation codes, query capabilities, provenance paths, and typed
@@ -1705,9 +1703,10 @@ edge.
 
 The EDT pipeline emits `Contains`, `References`, `Calls`, `Reads`, the first
 `DependsOn`, `Extends`, `Grants`, and `Includes` slices, each with provenance.
-Reads production is limited to the current fixture-backed parser forms and the
-Catalog and Information Register allowlist. `Writes` is declared but not emitted
-by EDT.
+Reads production is limited to the parser's accepted forms and the Catalog and
+Information Register allowlist. Unsupported structures and source categories
+are recognized only to reject the complete Query deterministically. `Writes` is
+declared but not emitted by EDT.
 
 Validation has explicit endpoint rules for `Contains`, `Calls`, `References`,
 `Reads`, the first `DependsOn`, `Extends`, `Grants`, and `Includes` slices. The
@@ -1763,20 +1762,16 @@ reverse dependency-to-usage Impact traversal. No reverse impact edge,
 transitive closure, dedicated query method, References edge, query-derived
 DependsOn edge, or ownership projection is added by the first slice.
 
-`semantic_edge.reads` remains `DeclaredOnly`. Parser investigation, typed
+`semantic_edge.reads` is `Supported`. Parser investigation, typed
 parsing and diagnostics, exact metadata resolution, precise validation,
-production EDT emission, provenance aggregation, positive tests, the existing
-fixture-backed negative cases, Query and Impact evidence, full-builder
-integration, and repeated-build determinism are complete for the current
-fixture-backed forms. ADR-0021 still requires explicit unsupported-structure,
-virtual-table, and temporary-table negative evidence. Repository examples for
-those categories are multiline BSL literals. Controlled execution on official
-1C:Enterprise `8.3.27.2214` has confirmed their pipe-style byte-decoding rules,
-and the private source-map model is accepted. Multiline extraction and mapping,
-typed category diagnostics, raw fixtures, and full-builder negative tests must
-precede the separate registry transition.
-Production completion for the current forms does not itself change the Coverage
-Registry status or aggregate counts.
+production EDT emission, provenance aggregation, positive and negative tests,
+Query and Impact evidence, full-builder integration, and repeated-build
+determinism are complete. The confirmed pipe-style multiline decoder retains
+the private copied/collapsed-quote/inserted-LF source map. Repository-owned raw
+fixtures and parser/full-builder tests cover unsupported structure, virtual
+tables, and temporary tables without partial source programs or Reads edges.
+The registry records the complete required evidence and the representative
+production integration test.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
@@ -1941,17 +1936,17 @@ validator tests cover the canonical ownership invariant.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — declared semantic edges.** Add producer-specific tasks for Reads and
-   Writes rather than a generic edge task. The first Reads contract is accepted
+1. **High — declared semantic edge.** Define and implement Writes as the next
+   independent capability rather than treating data-access edges as a generic
+   task. The first Reads contract is accepted
    in `docs/adr/0021-reads-semantics.md`: focused query-language investigation,
    typed parsing and diagnostics, metadata source resolution, precise
    validation, EDT emission, deterministic provenance, and production tests are
-   complete for the current fixture-backed forms. Before the
-   `semantic_edge.reads` Coverage transition, the confirmed multiline BSL
-   decoding contract must be implemented together with its private source map;
-   unsupported-structure, virtual-table, and temporary-table typed diagnostics
-   and corresponding parser/full-builder negative tests also remain.
-   Writes remains a separate architecture and implementation capability. The
+   complete, including the confirmed multiline BSL decoder, private source map,
+   unsupported-structure/virtual-table/temporary-table diagnostics, raw
+   fixtures, parser/full-builder all-or-nothing evidence, and the
+   `semantic_edge.reads` Coverage transition. Writes remains a separate
+   architecture and implementation capability. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and
    query-derived dependency origins remain separate tasks. The first `Extends`
@@ -2026,12 +2021,12 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 2 High gaps and retains 43 Medium gaps. Combined
+The EDT registry now reports 1 High gap and retains 43 Medium gaps. Combined
 with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 2 High gaps, and 44 Medium gaps. Other ownership and
+0 Critical gaps, 1 High gap, and 44 Medium gaps. Other ownership and
 declared-edge capabilities remain independent typed gaps and are not reclassified
 by these focused coverage changes. Sprint 3 Integration Review remains blocked
-while High gaps remain.
+while the Writes High gap remains.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable

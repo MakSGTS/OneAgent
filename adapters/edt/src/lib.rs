@@ -569,6 +569,18 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         &self,
         project_root: &Path,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
+        Self::build_graph_with_metadata_reference_scope(
+            project_root,
+            query_source_resolution::WorkspaceResolutionScope::Complete,
+        )
+    }
+}
+
+impl FileSystemEdtSemanticGraphBuilder {
+    fn build_graph_with_metadata_reference_scope(
+        project_root: &Path,
+        metadata_reference_scope: query_source_resolution::WorkspaceResolutionScope,
+    ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
         let (configuration, configuration_payload) =
             FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
         let mut graph = SemanticGraph::new();
@@ -649,7 +661,7 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
             &mut graph,
             &metadata_references,
             &mut diagnostics,
-            query_source_resolution::WorkspaceResolutionScope::Complete,
+            metadata_reference_scope,
         )?;
 
         emit_role_grants(
@@ -4784,6 +4796,36 @@ mod graph_tests {
         assert_eq!(dependencies[0].target(), &target_id);
         assert_eq!(references, repeated_references);
         assert_eq!(dependencies, repeated_dependencies);
+        let request = result
+            .reference_request_query()
+            .by_source(&member_id)
+            .into_iter()
+            .next()
+            .expect("mapped request must be observable");
+        let repeated_request = repeated
+            .reference_request_query()
+            .request(request.id())
+            .expect("repeated request identity must be stable");
+        assert_eq!(request, repeated_request);
+        assert_eq!(request.outcome(), SemanticReferenceRequestOutcome::Resolved);
+        assert_eq!(request.state(), ResolutionState::Resolved);
+        assert_eq!(
+            request.expected_kinds(),
+            &[NodeKind::Metadata(case.target_kind)]
+        );
+        assert_eq!(request.candidates(), std::slice::from_ref(&target_id));
+        assert!(matches!(
+            request.reference(),
+            SemanticReference::Name(name) if name.as_str() == case.target_name
+        ));
+        assert!(request.provenance().iter().any(|provenance| {
+            provenance.origin() == FactOrigin::Declared
+                && provenance.resolution() == ResolutionState::Unresolved
+        }));
+        assert!(request.provenance().iter().any(|provenance| {
+            provenance.origin() == FactOrigin::Resolved
+                && provenance.resolution() == ResolutionState::Resolved
+        }));
         assert_eq!(references[0].provenance().len(), 1);
         assert_eq!(dependencies[0].provenance().len(), 1);
         assert_eq!(references[0].provenance()[0].origin(), FactOrigin::Resolved);
@@ -5119,6 +5161,9 @@ mod graph_tests {
         let result = FileSystemEdtSemanticGraphBuilder
             .build_graph_with_diagnostics(root.path())
             .expect("duplicate resolved reference must not fail graph build");
+        let repeated = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("repeated duplicate build must succeed");
         let company_id = company_attribute_id();
 
         assert_eq!(
@@ -5135,6 +5180,17 @@ mod graph_tests {
                 .len(),
             1
         );
+        let requests = result.reference_request_query().by_source(&company_id);
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].outcome(),
+            SemanticReferenceRequestOutcome::Resolved
+        );
+        assert_eq!(requests[0].provenance().len(), 2);
+        assert_eq!(result.reference_statistics().total(), 4);
+        assert_eq!(result.reference_statistics().resolved(), 4);
+        assert_eq!(result.reference_requests(), repeated.reference_requests());
+        assert!(result.diff(&repeated).is_empty());
         assert!(result.diagnostics().is_empty());
     }
 
@@ -5229,6 +5285,80 @@ mod graph_tests {
                 == [oneagent_graph::ReferenceRequestModifiedAspect::Provenance]
         }));
         assert_eq!(diff.summary().reference_request_changes(), 5);
+    }
+
+    #[test]
+    fn request_identity_survives_missing_to_resolved_production_diff() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_reference("CatalogRef.MissingProducts"),
+        );
+        let previous = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("missing-target snapshot must build");
+        add_catalog_descriptor(
+            &root,
+            "MissingProducts",
+            "33333333-aaaa-bbbb-cccc-444444444444",
+            "MissingProducts",
+        );
+        let current = FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_diagnostics(root.path())
+            .expect("resolved snapshot must build");
+        let company_id = company_attribute_id();
+        let previous_request = previous
+            .reference_request_query()
+            .by_source(&company_id)
+            .into_iter()
+            .next()
+            .expect("previous request must exist");
+        let current_request = current
+            .reference_request_query()
+            .by_source(&company_id)
+            .into_iter()
+            .next()
+            .expect("current request must exist");
+        let diff = previous.diff(&current);
+
+        assert_eq!(previous_request.id(), current_request.id());
+        assert_eq!(
+            previous_request.outcome(),
+            SemanticReferenceRequestOutcome::MissingTarget
+        );
+        assert_eq!(
+            current_request.outcome(),
+            SemanticReferenceRequestOutcome::Resolved
+        );
+        assert!(diff.reference_requests().added().is_empty());
+        assert!(diff.reference_requests().removed().is_empty());
+        assert_eq!(diff.reference_requests().modified().len(), 1);
+        assert_eq!(
+            diff.reference_requests().modified()[0].modified_aspects(),
+            &[
+                oneagent_graph::ReferenceRequestModifiedAspect::Candidates,
+                oneagent_graph::ReferenceRequestModifiedAspect::State,
+                oneagent_graph::ReferenceRequestModifiedAspect::Outcome,
+                oneagent_graph::ReferenceRequestModifiedAspect::Provenance,
+            ]
+        );
+        assert_eq!(diff.diagnostics().removed().len(), 1);
+        assert_eq!(
+            current
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .len(),
+            1
+        );
+        assert_eq!(
+            current
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+                .len(),
+            1
+        );
+        assert!(previous.validate().is_valid());
+        assert!(current.validate().is_valid());
     }
 
     #[test]
@@ -5381,6 +5511,52 @@ mod graph_tests {
         let statistics = SemanticReferenceStatistics::from_reference_requests(&terminal);
         assert_eq!(statistics.total(), 1);
         assert_eq!(statistics.unresolved(), 1);
+    }
+
+    #[test]
+    fn production_builder_preserves_explicit_partial_workspace_request() {
+        let root = create_edt_project();
+        replace_document_descriptor(
+            &root,
+            &document_with_reference("CatalogRef.MissingProducts"),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder::build_graph_with_metadata_reference_scope(
+            root.path(),
+            super::query_source_resolution::WorkspaceResolutionScope::Partial,
+        )
+        .expect("partial production build must succeed");
+        let company_id = company_attribute_id();
+        let request = result
+            .reference_request_query()
+            .by_source(&company_id)
+            .into_iter()
+            .next()
+            .expect("partial request must be observable");
+
+        assert_eq!(
+            request.outcome(),
+            SemanticReferenceRequestOutcome::PartialWorkspace
+        );
+        assert_eq!(request.state(), ResolutionState::Partial);
+        assert!(request.candidates().is_empty());
+        assert!(result.diagnostics().is_empty());
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::References)
+                .is_empty()
+        );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(&company_id, EdgeKind::DependsOn)
+                .is_empty()
+        );
+        assert_eq!(result.reference_statistics().total(), 4);
+        assert_eq!(result.reference_statistics().resolved(), 3);
+        assert_eq!(result.reference_statistics().unresolved(), 1);
+        assert!(result.validate().is_valid());
     }
 
     #[test]

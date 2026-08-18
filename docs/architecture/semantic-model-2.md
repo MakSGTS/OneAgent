@@ -1741,26 +1741,47 @@ For every mapped target kind it proves exact source and target identity,
 Query navigation, graph validation, resolution statistics, and repeated-build
 stability. All nine metadata-reference capabilities are `Supported`.
 
-ADR-0024 accepts a future public, source-independent
-`SemanticReferenceRequest` build-observation type in `oneagent-graph`. Its
-stable identity is derived from source node, semantic category, typed target
-reference, and the sorted expected-kind set; candidates, current resolution
-state, and provenance are mutable content of that identity. The request owns
-provenance from collection time and later receives resolver evidence. A
-deterministic build-result ledger is canonical for processed references, while
-resolved edges, diagnostics, and statistics are projections that must not count
-the same request independently. Requests are not graph nodes or edges, and
-`SemanticGraphQuery` remains graph-only; build results expose the ledger and a
-separate immutable request view may filter it.
+ADR-0024 is implemented by the public, source-independent
+`SemanticReferenceRequest` build-observation type in `oneagent-graph`. Stable
+identity is derived from source node, semantic category, typed target reference,
+and the sorted expected-kind set; candidates, current resolution state, typed
+outcome, and provenance are mutable content of that identity. Checked lifecycle
+transitions preserve collection provenance and append resolver evidence. The
+deterministically ordered ledger supplies immutable filters, request-aware
+reports, added/removed/modified build diffs, and typed build validation.
+Requests remain build observations rather than graph nodes or edges, so graph
+equality and `SemanticGraphQuery` remain graph-only.
 
-The first implementation slice is limited to metadata member type references.
-The adapter must translate `PendingMetadataReference` into the public value
-without moving descriptor paths or EDT roles into `oneagent-graph`. BSL calls,
-query sources, Writes targets, protected resources, Subsystem content, and
-extension targets remain private until each family defines source identity,
-category, completeness, projection, duplicate, and statistics contracts.
-Architecture acceptance does not change either ReferenceRequest Coverage entry
-or the current aggregate counts.
+The EDT first slice converts accepted Attribute, Dimension, and Resource type
+observations to `SemanticReferenceCategory::MetadataType` at collection time.
+Descriptor paths and EDT roles remain private projection evidence. Terminal
+requests canonically drive `References`, ADR-0017 `DependsOn`, failed
+diagnostics, and accepted-request statistics once; non-migrated request families
+remain in explicitly named legacy statistics during migration. Complete and
+explicitly partial workspace scopes preserve missing versus partial outcomes
+without placeholder nodes. `EdtSemanticGraphBuildResult` exposes ordered
+requests and their immutable query, and its report, diff, and validation paths
+use the ledger.
+
+Current ADR-0024 evidence is mapped as follows:
+
+| Criterion | Evidence |
+|---|---|
+| Checked identity, lifecycle, ordering, aggregation, and query filters | `oneagent_graph::reference_request` unit tests |
+| Report derivation, partial compatibility mapping, request diff, and validation | `crates/graph/tests/reference_request_build.rs` |
+| All nine mapped metadata target kinds and repeated-build stability | `oneagent_edt::graph_tests::resolves_all_mapped_metadata_reference_target_kinds_through_production_builder` |
+| Collection and resolver provenance with exact resolved projections | `oneagent_edt::graph_tests::resolves_metadata_reference_and_depends_on_edges` |
+| Missing, ambiguous, and incompatible terminal projections | focused `oneagent_edt::graph_tests::*_metadata_reference_*` tests |
+| Explicit partial production orchestration with no placeholder or failure projection | `oneagent_edt::graph_tests::production_builder_preserves_explicit_partial_workspace_request` |
+| Duplicate aggregation without ledger, edge, diagnostic, or statistics duplication | `oneagent_edt::graph_tests::duplicate_metadata_type_reference_creates_one_depends_on_edge` and `duplicate_identical_reference_diagnostic_is_deduplicated` |
+| Stable identity and modified-not-remove/add lifecycle diff | `oneagent_edt::graph_tests::request_identity_survives_missing_to_resolved_production_diff` |
+
+BSL calls, query sources, Writes targets, protected resources, Subsystem content,
+and extension targets remain private until each family defines source identity,
+category, completeness, projection, duplicate, and statistics contracts. This
+evidence task does not change either ReferenceRequest Coverage entry, aggregate
+Coverage counts, or Roadmap completion state; those transitions are owned by
+separate tasks.
 
 BSL calls are extracted and local or qualified calls can resolve to `Calls`
 edges. Every extracted call now contributes exactly one final reference outcome:

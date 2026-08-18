@@ -299,14 +299,33 @@ fn assert_writes_coverage(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
         .expect("Writes coverage capability must remain registered");
     assert_eq!(
         writes_capability.status(),
-        SemanticCoverageStatus::DeclaredOnly
+        SemanticCoverageStatus::Supported
+    );
+    assert_eq!(
+        writes_capability.evidence(),
+        writes_capability.required_evidence()
+    );
+    assert!(writes_capability.missing_evidence().is_empty());
+    assert!(writes_capability.limitations().is_empty());
+    assert_eq!(
+        writes_capability.representative_tests(),
+        [
+            "oneagent_edt::writes::writes_full_builder_emits_canonical_edges_with_query_coverage_and_repeated_build_evidence"
+        ]
+    );
+    assert_eq!(
+        coverage
+            .edt_pipeline()
+            .gaps_by_priority(SemanticCoverageGapPriority::Critical)
+            .len(),
+        0
     );
     assert_eq!(
         coverage
             .edt_pipeline()
             .gaps_by_priority(SemanticCoverageGapPriority::High)
             .len(),
-        1
+        0
     );
     assert_eq!(
         coverage
@@ -317,7 +336,7 @@ fn assert_writes_coverage(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
     );
     for (priority, expected) in [
         (SemanticCoverageGapPriority::Critical, 0),
-        (SemanticCoverageGapPriority::High, 1),
+        (SemanticCoverageGapPriority::High, 0),
         (SemanticCoverageGapPriority::Medium, 44),
     ] {
         let combined = coverage.graph_domain().gaps_by_priority(priority).len()

@@ -1605,10 +1605,10 @@ the supported BSL slice. Production query-language analysis now emits Reads for
 the parser's completely accepted fixture-backed forms and uniquely resolved
 Catalog or Information Register targets. `Writes` has a separate accepted
 architecture contract in `docs/adr/0022-writes-semantics.md`; its first slice is
-a BSL Procedure mutation fact rather than a Query fact, and implementation
-remains pending. Query-derived `DependsOn` also remains separate. None of these
-edges is a prerequisite for creating the Query node, and Query identity and
-ownership do not depend on query text.
+a BSL Procedure mutation fact rather than a Query fact, and its implementation
+and registry transition are complete. Query-derived `DependsOn` remains
+separate. None of these edges is a prerequisite for creating the Query node,
+and Query identity and ownership do not depend on query text.
 
 #### Determinism, errors, and first slice
 
@@ -1650,15 +1650,14 @@ The ordered follow-up tasks are:
    without graph emission or a Coverage transition;
 5. Completed: emit EDT Reads edges with deterministic provenance and focused,
    production, Query, Impact, negative, and repeated-build integration evidence;
-6. Accepted architecture: follow `docs/adr/0022-writes-semantics.md` for the
+6. Completed: follow `docs/adr/0022-writes-semantics.md` for the
    narrow `Procedure --Writes--> Metadata(AccumulationRegister)` contract based
    on a complete `RegisterRecords.<Name>.Write()` statement and the owning
    Document's matching `<registerRecords>` declaration;
-7. preserve typed Document register-record declarations, implement complete
-   Writes candidate extraction, exact resolution, precise validation,
-   production emission, integration evidence, and the final registry transition
-   as ordered independent tasks; keep `semantic_edge.writes` `DeclaredOnly`
-   until all evidence exists;
+7. Completed: preserve typed Document register-record declarations, implement
+   complete Writes candidate extraction, exact resolution, precise validation,
+   production emission, integration evidence, and the final registry-only
+   transition to `Supported` as ordered independent tasks;
 8. derive query `DependsOn` only after data-access production evidence and the
    dependency source contract exist;
 9. add metadata-owned Query sources such as data-composition datasets or
@@ -1764,8 +1763,9 @@ does not invent placeholder, Unknown, or external nodes.
 Reads uses standard `(source, target, EdgeKind::Reads)` identity and resolved,
 exact provenance. Multiple source occurrences for one Query-target pair support
 one edge; distinct evidence is sorted and deduplicated before insertion. The
-validator now accepts only Query-to-allowlisted-Metadata endpoints and leaves
-the broad Writes branch unchanged until its separate contract exists.
+Reads validator accepts only Query-to-allowlisted-Metadata endpoints. The Writes
+validator independently enforces the accepted
+Procedure-to-Accumulation-Register matrix.
 
 The existing Query API and Impact Analysis classification remain unchanged.
 Reads continues to participate in outgoing dependency, incoming usage, and
@@ -1819,24 +1819,24 @@ Writes uses standard `(source, target, EdgeKind::Writes)` identity and exact
 resolved provenance covering the Procedure, Object Module, owning Document,
 source occurrence, matching descriptor declaration, and resolved target.
 Repeated occurrences for one Procedure-target pair support one edge; distinct
-provenance is sorted and deduplicated before insertion. The later validator task
-must replace the broad Writes branch with only the accepted
-Procedure-to-Accumulation-Register matrix.
+provenance is sorted and deduplicated before insertion. The validator enforces
+only the accepted Procedure-to-Accumulation-Register matrix.
 
 Existing Query and Impact behavior is unchanged: Writes remains an outgoing
 dependency, incoming mutation usage, and reverse Impact traversal edge. The
-first producer will emit no companion Calls, References, Reads, Grants,
+first producer emits no companion Calls, References, Reads, Grants,
 DependsOn, or Contains fact. Role rights, Reads, generic Calls, and metadata
 declarations do not imply Writes.
 
-Implementation remains ordered and incomplete: preserve typed Document
-register-record declarations; implement complete Writes candidate extraction;
-resolve the owning declaration and exact target; narrow validation; emit and
-aggregate provenance; add production, negative, Query, Impact, duplicate, and
-repeated-build evidence; then transition only `semantic_edge.writes` in a final
-registry-only task. Architecture acceptance alone does not change production or
-Coverage. `semantic_edge.writes` remains `DeclaredOnly`, the broad validator
-branch remains in place, and Sprint 3 Integration Review remains blocked.
+The accepted first slice is implemented end to end: typed Document
+register-record declarations, complete candidate extraction, exact owning
+declaration and target resolution, precise validation, canonical production
+emission, deterministic provenance aggregation, typed diagnostics, and
+production, negative, Query, Impact, duplicate, and repeated-build evidence are
+present. The final registry-only transition records the complete required
+evidence and classifies `semantic_edge.writes` as `Supported`. Deferred register
+families, object persistence, value/type flow, query mutation, localized
+spellings, and write-derived `DependsOn` remain outside this slice.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
@@ -1999,53 +1999,26 @@ reference resolution, deterministic node and edge provenance, graph validation,
 and repeated-build stability. Positive, incompatible-owner, and multiple-owner
 validator tests cover the canonical ownership invariant.
 
+The former `semantic_edge.writes` High gap is closed. The accepted first slice
+emits exact provenance-backed edges from Document Object Module Procedures to
+declared and resolved Accumulation Registers, enforces the precise endpoint
+matrix, preserves typed failure outcomes, and has deterministic production,
+Query, Impact, negative, duplicate, and repeated-build evidence. Its registry
+capability is `Supported` with complete evidence.
+
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **High — accepted architecture, implementation pending.** Implement Writes
-   as the next independent capability according to
-   `docs/adr/0022-writes-semantics.md`. The accepted first slice is a complete
-   `RegisterRecords.<Name>.Write()` statement in a Document Object Module
-   Procedure, independently confirmed by the owning Document's matching
-   `<registerRecords>AccumulationRegister.<Name></registerRecords>` declaration
-   and exact metadata resolution. Ordered prerequisites are typed declaration
-   preservation, complete candidate extraction, resolution, precise validation,
-   production emission and provenance aggregation, integration evidence, and a
-   final registry-only transition. The capability remains `DeclaredOnly` and
-   its validator branch remains broad until those tasks are complete. The first
-   Reads contract is accepted
-   in `docs/adr/0021-reads-semantics.md`: focused query-language investigation,
-   typed parsing and diagnostics, metadata source resolution, precise
-   validation, EDT emission, deterministic provenance, and production tests are
-   complete, including the confirmed multiline BSL decoder, private source map,
-   unsupported-structure/virtual-table/temporary-table diagnostics, raw
-   fixtures, parser/full-builder all-or-nothing evidence, and the
-   `semantic_edge.reads` Coverage transition. The
-   first `DependsOn` slice is implemented according to
-   `docs/adr/0017-depends-on-semantics.md`; later call-derived and
-   query-derived dependency origins remain separate tasks. The first `Extends`
-   slice is implemented according to `docs/adr/0018-extends-semantics.md`.
-   The first `Grants` slice is implemented according to
-   `docs/adr/0019-grants-semantics.md`: real EDT role-right sources produce
-   scoped `AccessRight` nodes, precise canonical edges, resolved provenance,
-   deterministic duplicate aggregation, and Coverage evidence. The first
-   Includes slice is implemented according to
-   `docs/adr/0020-includes-semantics.md`: direct top-level Subsystem `<content>`
-   declarations produce exact, provenance-backed membership edges with typed
-   negative outcomes and precise endpoint validation. Acceptance for each
-   remaining edge:
-   extraction source, endpoint rule, provenance, Query semantics, Impact policy
-   decision, and tests.
-2. **Medium — metadata payload completion.** Define and preserve the typed
+1. **Medium — metadata payload completion.** Define and preserve the typed
    payload expected for each supported top-level metadata kind. Acceptance:
    fields parsed by EDT are either represented, explicitly excluded by contract,
    or recorded as a known limitation.
-3. **Medium — metadata reference fixtures.** Add successful fixtures for
+2. **Medium — metadata reference fixtures.** Add successful fixtures for
    Enumeration, Information Register, Accumulation Register, Accounting
    Register, Calculation Register, Business Process, and Task targets.
-4. **Medium — reference-request provenance.** Decide whether pending reference
+3. **Medium — reference-request provenance.** Decide whether pending reference
    requests become a public graph-domain type; if accepted, attach provenance at
    extraction time without changing resolution semantics.
-5. **Medium — broad endpoint validation.** Replace permissive rules for future
+4. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.
 
@@ -2094,12 +2067,12 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 1 High gap and retains 43 Medium gaps. Combined
-with the graph-domain registry, the current Semantic Coverage audit reports
-0 Critical gaps, 1 High gap, and 44 Medium gaps. Other ownership and
-declared-edge capabilities remain independent typed gaps and are not reclassified
-by these focused coverage changes. Sprint 3 Integration Review remains blocked
-while the Writes High gap remains.
+The EDT registry now reports 0 Critical gaps, 0 High gaps, and 43 Medium gaps.
+Combined with the graph-domain registry, the current Semantic Coverage audit
+reports 0 Critical gaps, 0 High gaps, and 44 Medium gaps. Other capability
+classifications are not changed by the focused Writes registry transition.
+Sprint 3 Integration Review is no longer blocked by High gaps; this statement
+does not record that the review itself has been performed.
 
 The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable

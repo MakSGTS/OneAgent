@@ -25,6 +25,57 @@ fn provenance(source: &str) -> Provenance {
     )
 }
 
+fn metadata_kinds() -> [MetadataKind; 23] {
+    [
+        MetadataKind::Configuration,
+        MetadataKind::Subsystem,
+        MetadataKind::Catalog,
+        MetadataKind::Document,
+        MetadataKind::Enumeration,
+        MetadataKind::CommonModule,
+        MetadataKind::Report,
+        MetadataKind::DataProcessor,
+        MetadataKind::InformationRegister,
+        MetadataKind::AccumulationRegister,
+        MetadataKind::AccountingRegister,
+        MetadataKind::CalculationRegister,
+        MetadataKind::BusinessProcess,
+        MetadataKind::Task,
+        MetadataKind::Role,
+        MetadataKind::CommonForm,
+        MetadataKind::Form,
+        MetadataKind::Command,
+        MetadataKind::Template,
+        MetadataKind::HttpService,
+        MetadataKind::WebService,
+        MetadataKind::XdtoPackage,
+        MetadataKind::Unknown,
+    ]
+}
+
+fn node_kinds() -> Vec<NodeKind> {
+    let mut kinds = metadata_kinds().map(NodeKind::Metadata).to_vec();
+    kinds.extend([
+        NodeKind::Module,
+        NodeKind::Procedure,
+        NodeKind::Function,
+        NodeKind::Query,
+        NodeKind::Form,
+        NodeKind::Command,
+        NodeKind::Attribute,
+        NodeKind::StandardAttribute,
+        NodeKind::TabularSection,
+        NodeKind::Dimension,
+        NodeKind::Resource,
+        NodeKind::Measure,
+        NodeKind::Role,
+        NodeKind::AccessRight,
+        NodeKind::Subsystem,
+        NodeKind::Unknown,
+    ]);
+    kinds
+}
+
 struct FixtureIds {
     configuration: EntityId,
     document: EntityId,
@@ -413,6 +464,233 @@ fn depends_on_rejects_unrelated_endpoint_pairs() {
             .count(),
         2
     );
+}
+
+#[test]
+fn reads_schema_accepts_first_slice_metadata_targets() {
+    let schema = SemanticGraphSchema;
+
+    for metadata_kind in [MetadataKind::Catalog, MetadataKind::InformationRegister] {
+        assert!(schema.allows(
+            NodeKind::Query,
+            EdgeKind::Reads,
+            NodeKind::Metadata(metadata_kind),
+        ));
+    }
+}
+
+#[test]
+fn reads_schema_rejects_every_non_query_source_kind() {
+    let schema = SemanticGraphSchema;
+
+    for source_kind in node_kinds()
+        .into_iter()
+        .filter(|kind| *kind != NodeKind::Query)
+    {
+        assert!(
+            !schema.allows(
+                source_kind,
+                EdgeKind::Reads,
+                NodeKind::Metadata(MetadataKind::Catalog),
+            ),
+            "Reads unexpectedly accepts source kind {source_kind:?}",
+        );
+    }
+}
+
+#[test]
+fn reads_schema_rejects_metadata_targets_outside_allowlist() {
+    let schema = SemanticGraphSchema;
+
+    for metadata_kind in metadata_kinds().into_iter().filter(|kind| {
+        !matches!(
+            kind,
+            MetadataKind::Catalog | MetadataKind::InformationRegister
+        )
+    }) {
+        assert!(
+            !schema.allows(
+                NodeKind::Query,
+                EdgeKind::Reads,
+                NodeKind::Metadata(metadata_kind),
+            ),
+            "Reads unexpectedly accepts metadata target kind {metadata_kind:?}",
+        );
+    }
+}
+
+#[test]
+fn reads_schema_rejects_metadata_member_targets() {
+    let schema = SemanticGraphSchema;
+
+    for target_kind in [
+        NodeKind::Attribute,
+        NodeKind::StandardAttribute,
+        NodeKind::TabularSection,
+        NodeKind::Dimension,
+        NodeKind::Resource,
+        NodeKind::Measure,
+    ] {
+        assert!(!schema.allows(NodeKind::Query, EdgeKind::Reads, target_kind));
+    }
+}
+
+#[test]
+fn reads_schema_rejects_flat_semantic_targets() {
+    let schema = SemanticGraphSchema;
+
+    for target_kind in [
+        NodeKind::Module,
+        NodeKind::Procedure,
+        NodeKind::Function,
+        NodeKind::Query,
+        NodeKind::Form,
+        NodeKind::Command,
+        NodeKind::Role,
+        NodeKind::AccessRight,
+        NodeKind::Subsystem,
+    ] {
+        assert!(!schema.allows(NodeKind::Query, EdgeKind::Reads, target_kind));
+    }
+}
+
+#[test]
+fn reads_schema_rejects_unknown_targets() {
+    let schema = SemanticGraphSchema;
+
+    for target_kind in [NodeKind::Unknown, NodeKind::Metadata(MetadataKind::Unknown)] {
+        assert!(!schema.allows(NodeKind::Query, EdgeKind::Reads, target_kind));
+    }
+}
+
+#[test]
+fn reads_graph_validation_accepts_both_first_slice_target_kinds() {
+    let query_id = id("query.reads");
+    let catalog_id = id("metadata.catalog.products");
+    let information_register_id = id("metadata.information_register.objects");
+    let mut graph = SemanticGraph::new();
+
+    for (node_id, node_name, node_kind) in [
+        (query_id.clone(), "ReadsQuery", NodeKind::Query),
+        (
+            catalog_id.clone(),
+            "Products",
+            NodeKind::Metadata(MetadataKind::Catalog),
+        ),
+        (
+            information_register_id.clone(),
+            "Objects",
+            NodeKind::Metadata(MetadataKind::InformationRegister),
+        ),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("query.reads")],
+        ));
+    }
+    for target_id in [catalog_id, information_register_id] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                query_id.clone(),
+                target_id,
+                EdgeKind::Reads,
+                vec![provenance("query.reads")],
+            ))
+            .expect("Reads edge must be stored");
+    }
+
+    let result = graph.validate();
+
+    assert!(result.is_valid());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn reads_graph_validation_reports_invalid_endpoint_contract() {
+    let query_id = id("query.invalid_reads");
+    let source_document_id = id("metadata.document.source");
+    let target_document_id = id("metadata.document.target");
+    let catalog_id = id("metadata.catalog.products");
+    let mut graph = SemanticGraph::new();
+
+    for (node_id, node_name, node_kind) in [
+        (query_id.clone(), "InvalidReadsQuery", NodeKind::Query),
+        (
+            source_document_id.clone(),
+            "SourceDocument",
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (
+            target_document_id.clone(),
+            "TargetDocument",
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (
+            catalog_id.clone(),
+            "Products",
+            NodeKind::Metadata(MetadataKind::Catalog),
+        ),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("query.invalid_reads")],
+        ));
+    }
+    for (source_id, target_id) in [
+        (query_id, target_document_id),
+        (source_document_id, catalog_id),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source_id,
+                target_id,
+                EdgeKind::Reads,
+                vec![provenance("query.invalid_reads")],
+            ))
+            .expect("storage only validates endpoint existence");
+    }
+
+    let result = graph.validate();
+    let invalid_endpoints = result
+        .issues()
+        .iter()
+        .filter(|issue| {
+            issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+                && issue.severity() == SemanticGraphValidationSeverity::Error
+                && issue.edge_kind() == Some(EdgeKind::Reads)
+        })
+        .collect::<Vec<_>>();
+
+    assert!(!result.is_valid());
+    assert_eq!(result.error_count(), 2);
+    assert_eq!(invalid_endpoints.len(), 2);
+    assert!(invalid_endpoints.iter().any(|issue| {
+        issue.source_kind() == Some(NodeKind::Query)
+            && issue.target_kind() == Some(NodeKind::Metadata(MetadataKind::Document))
+    }));
+    assert!(invalid_endpoints.iter().any(|issue| {
+        issue.source_kind() == Some(NodeKind::Metadata(MetadataKind::Document))
+            && issue.target_kind() == Some(NodeKind::Metadata(MetadataKind::Catalog))
+    }));
+}
+
+#[test]
+fn writes_schema_retains_broad_acceptance() {
+    let schema = SemanticGraphSchema;
+    let kinds = node_kinds();
+
+    for source_kind in &kinds {
+        for target_kind in &kinds {
+            assert!(
+                schema.allows(*source_kind, EdgeKind::Writes, *target_kind),
+                "Writes unexpectedly rejects {source_kind:?} -> {target_kind:?}",
+            );
+        }
+    }
 }
 
 #[test]

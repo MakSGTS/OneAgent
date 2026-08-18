@@ -14,9 +14,9 @@ Evidence labels used below are:
   `OneAgent_EDTproject/src`;
 - **Confirmed by an existing repository test**: asserted by committed Rust test
   code;
-- **Confirmed by the current prerequisite implementation**: represented by the
-  user-owned query-language parser changes in the working tree, without claiming
-  that those changes are committed;
+- **Confirmed by the committed prerequisite implementation**: represented by
+  committed query-language parser or private EDT query-source resolver code and
+  tests;
 - **Accepted architecture decision**: deterministic OneAgent behavior selected
   where repository or platform evidence does not define an implementable rule;
 - **Accepted by ADR-0021 but not yet represented by source evidence**: required
@@ -439,33 +439,21 @@ virtual tables, and malformed syntax are explicit evidence gaps.
 | Temporary-table detection | Confirmed only in multiline BSL source | None | Temporary declaration/source | Temporary table | Raw fixture |
 | Virtual-table detection | Confirmed only in multiline BSL source | None | Virtual table source | Virtual table source | Raw fixture and invocation grammar |
 | Malformed static input | Accepted by ADR-0021, not source-evidenced | None | No complete parsed program | Malformed query syntax | Evidence-backed malformed corpus and recovery policy |
-| Deterministic query-text location | Accepted by current prerequisite parser | Existing English and Russian fixtures plus inline parser tests | Zero-based half-open UTF-8 byte range in unchanged raw query text | Applicable typed diagnostic | BSL multiline source mapping remains deferred |
+| Deterministic query-text location | Accepted by committed prerequisite parser | Existing English and Russian fixtures plus inline parser tests | Zero-based half-open UTF-8 byte range in unchanged raw query text | Applicable typed diagnostic | BSL multiline source mapping remains deferred |
 | Case normalization | Accepted architecture decision | Existing accepted English and Russian queries can be paired with case-variant graph names in resolver tests | Preserved raw spelling plus locale-independent Rust Unicode lowercase key; no NFC/NFKC | Typed resolver outcome only after complete parsing | Resolver tests must cover English, Russian, expansion, no-normalization, and collisions |
-| Exact-kind resolution | Accepted by ADR-0021 and existing graph precedent | Future private resolver tests | Catalog or Information Register exact-kind candidate partition | Missing, ambiguous, incompatible, or partial-workspace | Resolver-only implementation |
+| Exact-kind resolution | Implemented by the committed private EDT resolver | Committed private resolver tests | Catalog or Information Register exact-kind candidate partition | Missing, ambiguous, incompatible, or partial-workspace | None for the accepted resolver slice |
 
 ## Readiness conclusion and next task boundary
 
-The current prerequisite parser establishes complete-source proof, raw spelling,
-typed source categories, and deterministic raw-query byte locations for its
-minimum fixture-backed forms. This investigation now supplies the previously
-missing local-name normalization, collision, failure-precedence, workspace-scope,
-and layer-placement decisions. The next ordered task may implement the private
-resolver in `oneagent-edt` without changing the parser, graph resolution API,
-validator, graph emission, or Coverage status.
-
-That resolver-only task must:
-
-- accept only a completely parsed source set and resolve only after all top-level
-  metadata nodes exist;
-- derive keys with exact `str::to_lowercase()` behavior and retain raw spelling;
-- test English and Russian case differences, multi-scalar expansion, absence of
-  NFC/NFKC normalization, compatible collisions, cross-kind partitioning, and
-  deterministic candidate order;
-- implement typed missing, ambiguous, incompatible, and explicitly signaled
-  partial-workspace outcomes with the precedence defined above;
-- resolve only exact Catalog and Information Register metadata kinds;
-- produce no placeholder, `Unknown`, external, or lower-confidence target;
-- emit no `Reads`, `Writes`, `References`, or query-derived `DependsOn` edge.
+The committed prerequisite parser establishes complete-source proof, raw
+spelling, typed source categories, and deterministic raw-query byte locations
+for its minimum fixture-backed forms. The committed private EDT resolver applies
+the accepted normalization, collision, failure-precedence, workspace-scope, and
+exact-kind rules without emitting an edge. Precise graph validation now accepts
+only `Query --Reads--> Metadata(Catalog | InformationRegister)` and leaves
+`Writes` broadly accepted. The next ordered task is EDT Reads emission with
+deterministic provenance and production tests; parser, resolver, public graph
+API, and Coverage status remain unchanged by the validation prerequisite.
 
 ## Rejected alternatives
 

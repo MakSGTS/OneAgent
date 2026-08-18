@@ -135,7 +135,7 @@ Ordered follow-up work:
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
 18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
 19. **High — completed:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the production builder now normalizes the explicit allowlist, resolves exact metadata targets, emits deterministic provenance-backed Includes edges, reports typed negative outcomes, enforces the precise validator matrix, and verifies generic queries and Impact exclusion.
-20. **High — architecture accepted, implementation pending:** implement the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md` in this order: focused query-language investigation; typed parser, source model, and diagnostics; exact Catalog and Information Register source resolution; precise Reads validation; EDT emission with deterministic provenance and production tests; and only then the `semantic_edge.reads` Coverage transition.
+20. **High — prerequisite implementation in progress:** implement the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md`; focused query-language investigation, the typed parser and source model, exact Catalog and Information Register source resolution, and precise Reads validation are completed, while EDT emission with deterministic provenance and production tests must precede the `semantic_edge.reads` Coverage transition.
 21. **High — pending:** define and implement `Writes` as a separate capability after the Reads source contract is proven; do not infer writes or query-derived `DependsOn` from Reads architecture alone.
 22. **Medium:** define and preserve complete typed metadata payloads.
 23. **Medium:** add successful fixtures for every mapped metadata reference target kind.
@@ -158,14 +158,15 @@ resolved by exact metadata kind and name, emitted as canonical Includes edges,
 and covered by precise validation, typed failures, deterministic provenance,
 generic query, and Impact-exclusion evidence.
 
-The first `semantic_edge.reads` architecture contract is accepted, but no
-production evidence changes in this documentation task. The capability remains
-`DeclaredOnly`. Its first slice is `Query --Reads--> Metadata(...)` for one
-completely parsed top-level `SELECT` with one direct Catalog or Information
-Register source. Parser investigation, typed diagnostics, exact resolution,
-precise validation, EDT emission, deterministic provenance, production tests,
-and the Coverage transition remain ordered implementation prerequisites.
-`semantic_edge.writes` remains a separate `DeclaredOnly` capability.
+The first `semantic_edge.reads` architecture contract is accepted, but the EDT
+pipeline still emits no Reads edge and the capability remains `DeclaredOnly`.
+Its first slice is `Query --Reads--> Metadata(...)` for one completely parsed
+top-level `SELECT` with one direct Catalog or Information Register source.
+Parser investigation, typed diagnostics, exact resolution, and precise endpoint
+validation are complete. EDT emission, deterministic provenance, production
+tests, and the Coverage transition remain ordered prerequisites.
+`semantic_edge.writes` remains a separate `DeclaredOnly` capability, and its
+broad endpoint acceptance is unchanged.
 
 The detailed capability inventory, missing evidence, acceptance criteria, and
 out-of-scope boundaries are recorded in `docs/architecture/semantic-model-2.md`.

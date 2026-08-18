@@ -1631,21 +1631,22 @@ emit `Reads`, `Writes`, or `DependsOn`.
 
 The ordered follow-up tasks are:
 
-1. follow `docs/adr/0021-reads-semantics.md` and investigate the minimum
+1. Completed: follow `docs/adr/0021-reads-semantics.md` and investigate the minimum
    query-language grammar, bilingual lexical behavior, source locations, and
    typed diagnostics using repository-owned real-source evidence;
-2. implement query-language parsing, a typed source model, diagnostics, and
+2. Completed: implement query-language parsing, a typed source model, diagnostics, and
    all-or-nothing first-slice completeness without graph emission;
-3. resolve accepted persistent query sources to exact metadata kinds and
+3. Completed: resolve accepted persistent query sources to exact metadata kinds and
    normalized local names without placeholder targets;
-4. add precise Reads validation, EDT emission, deterministic provenance,
-   focused and production integration tests, and Coverage evidence in separate
-   implementation tasks;
-5. define and implement Writes through a separate architecture and capability
+4. Completed: add precise Reads validation for the accepted endpoint matrix
+   without graph emission or a Coverage transition;
+5. emit EDT Reads edges with deterministic provenance, focused and production
+   integration tests, and Coverage evidence in separate implementation tasks;
+6. define and implement Writes through a separate architecture and capability
    sequence;
-6. derive query `DependsOn` only after data-access production evidence and the
+7. derive query `DependsOn` only after data-access production evidence and the
    dependency source contract exist;
-7. add metadata-owned Query sources such as data-composition datasets or
+8. add metadata-owned Query sources such as data-composition datasets or
    dynamic-list query settings after their EDT parser contracts are defined.
 
 ### Ownership inventory
@@ -1735,18 +1736,17 @@ explicit allowlist produce typed diagnostics and no Reads edge for the Query.
 The producer must not emit a supported fragment from an otherwise unsupported
 query because that would expose an incomplete read set as complete evidence.
 
-Repository evidence does not define a complete 1C query-language grammar.
-Therefore a focused parser investigation is the first mandatory follow-up. A
-later typed parser must prove complete first-slice source classification and
-preserve deterministic source locations before metadata resolution or graph
-emission. Resolution uses the parsed metadata kind and normalized local name,
-requires exactly one compatible in-graph target, and does not invent
-placeholder, Unknown, or external nodes.
+Repository evidence does not define a complete 1C query-language grammar. The
+committed parser therefore proves complete first-slice source classification
+only for its accepted fixture-backed forms and preserves deterministic source
+locations. The committed private EDT resolver uses the parsed metadata kind and
+normalized local name, requires exactly one compatible in-graph target, and
+does not invent placeholder, Unknown, or external nodes.
 
 Reads uses standard `(source, target, EdgeKind::Reads)` identity and resolved,
 exact provenance. Multiple source occurrences for one Query-target pair support
 one edge; distinct evidence is sorted and deduplicated before insertion. The
-later validator accepts only Query-to-allowlisted-Metadata endpoints and leaves
+validator now accepts only Query-to-allowlisted-Metadata endpoints and leaves
 the broad Writes branch unchanged until its separate contract exists.
 
 The existing Query API and Impact Analysis classification remain unchanged.
@@ -1755,12 +1755,13 @@ reverse dependency-to-usage Impact traversal. No reverse impact edge,
 transitive closure, dedicated query method, References edge, query-derived
 DependsOn edge, or ownership projection is added by the first slice.
 
-`semantic_edge.reads` remains `DeclaredOnly` until parser investigation, typed
-parsing and diagnostics, exact metadata resolution, precise validation,
-production EDT emission, provenance aggregation, focused negative and positive
-tests, Query and Impact evidence, full-builder integration, repeated-build
-determinism, and a registry-only status transition are complete. Architecture
-acceptance does not change the Coverage Registry status or aggregate counts.
+`semantic_edge.reads` remains `DeclaredOnly`. Parser investigation, typed
+parsing and diagnostics, exact metadata resolution, and precise validation are
+complete prerequisites, but production EDT emission, provenance aggregation,
+production negative and positive tests, Query and Impact evidence, full-builder
+integration, repeated-build determinism, and a registry-only status transition
+remain incomplete. Validator completion does not change the Coverage Registry
+status or aggregate counts.
 
 `EdgeKind::DependsOn` is governed by
 `docs/adr/0017-depends-on-semantics.md`. It is a materialized normalized direct
@@ -1927,10 +1928,10 @@ The remaining thematic Semantic Coverage Completion backlog is:
 
 1. **High — declared semantic edges.** Add producer-specific tasks for Reads and
    Writes rather than a generic edge task. The first Reads contract is accepted
-   in `docs/adr/0021-reads-semantics.md`: its ordered prerequisites are focused
-   query-language investigation, typed parsing and diagnostics, metadata source
-   resolution, precise validation, EDT emission and production tests, and only
-   then the `semantic_edge.reads` Coverage transition. Writes remains a
+   in `docs/adr/0021-reads-semantics.md`: focused query-language investigation,
+   typed parsing and diagnostics, metadata source resolution, and precise
+   validation are complete. EDT emission and production tests remain required
+   before the `semantic_edge.reads` Coverage transition. Writes remains a
    separate architecture and implementation capability. The
    first `DependsOn` slice is implemented according to
    `docs/adr/0017-depends-on-semantics.md`; later call-derived and

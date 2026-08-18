@@ -138,7 +138,6 @@ fn metadata_capability(kind: MetadataKind) -> SemanticCoverageCapability {
         || supported_metadata_directories()
             .values()
             .any(|candidate| *candidate == kind);
-    let representative = representative_metadata_kinds().contains(&kind);
     let required = [
         Evidence::Discovered,
         Evidence::Parsed,
@@ -161,20 +160,16 @@ fn metadata_capability(kind: MetadataKind) -> SemanticCoverageCapability {
             Evidence::NodeKindDeclared,
             Evidence::NodeEmitted,
             Evidence::StableIdentityAssigned,
+            Evidence::SemanticPayloadPreserved,
             Evidence::ProvenanceAttached,
+            Evidence::PositiveTestExists,
+            Evidence::IntegrationTestExists,
         ]);
     } else if kind != MetadataKind::Unknown {
         evidence.extend([Evidence::Modeled, Evidence::NodeKindDeclared]);
     }
-    if representative {
-        evidence.extend([
-            Evidence::PositiveTestExists,
-            Evidence::IntegrationTestExists,
-        ]);
-    }
-
     let status = if supported {
-        SemanticCoverageStatus::PartiallySupported
+        SemanticCoverageStatus::Supported
     } else {
         SemanticCoverageStatus::Unsupported
     };
@@ -190,28 +185,9 @@ fn metadata_capability(kind: MetadataKind) -> SemanticCoverageCapability {
     .with_node_kind(NodeKind::Metadata(kind));
 
     match status {
-        SemanticCoverageStatus::PartiallySupported => {
-            let capability = capability.with_limitation(if representative {
-                "The EDT pipeline emits this metadata kind, but descriptor fields beyond graph identity, name and kind are not preserved as typed semantic payload"
-            } else {
-                "The generic EDT path emits this metadata kind without a dedicated representative fixture, and descriptor payload is only partially preserved"
-            });
-            if representative {
-                capability.with_representative_test(match kind {
-                    MetadataKind::Command => {
-                        "oneagent_edt::graph_tests::discovers_top_level_common_command_as_metadata_entity"
-                    }
-                    MetadataKind::Template => {
-                        "oneagent_edt::graph_tests::discovers_top_level_common_template_as_metadata_entity"
-                    }
-                    _ => {
-                        "oneagent_edt::graph_tests::builds_graph_with_configuration_and_metadata_objects"
-                    }
-                })
-            } else {
-                capability
-            }
-        }
+        SemanticCoverageStatus::Supported => capability.with_representative_test(
+            "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind",
+        ),
         SemanticCoverageStatus::Unsupported => capability.with_limitation(
             "MetadataKind is declared but the EDT directory registry does not discover this entity",
         ),
@@ -720,7 +696,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::fs;
 
-    use super::{EdtSemanticCoverageRegistry, metadata_reference_target_kinds};
+    use super::{EdtSemanticCoverageRegistry, all_metadata_kinds, metadata_reference_target_kinds};
     use crate::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 
     #[test]
@@ -799,7 +775,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -810,7 +786,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            37
+            16
         );
     }
 
@@ -857,7 +833,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -886,41 +862,36 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            37
+            16
         );
     }
 
     #[test]
-    fn registry_distinguishes_supported_partial_and_unsupported_entities() {
+    fn metadata_payload_transition_completes_every_supported_entity() {
         let report = EdtSemanticCoverageRegistry::audit();
+        let representative =
+            "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind";
 
-        assert_eq!(
-            report
-                .capability(SemanticCoverageCapabilityId::MetadataEntity(
-                    MetadataKind::Document,
-                ))
-                .expect("document coverage must exist")
-                .status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
-        assert_eq!(
-            report
-                .capability(SemanticCoverageCapabilityId::MetadataEntity(
-                    MetadataKind::InformationRegister,
-                ))
-                .expect("register coverage must exist")
-                .status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
-        assert_eq!(
-            report
-                .capability(SemanticCoverageCapabilityId::MetadataEntity(
-                    MetadataKind::Template,
-                ))
-                .expect("template coverage must exist")
-                .status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
+        for kind in all_metadata_kinds()
+            .into_iter()
+            .filter(|kind| !matches!(kind, MetadataKind::Form | MetadataKind::Unknown))
+        {
+            let capability = report
+                .capability(SemanticCoverageCapabilityId::MetadataEntity(kind))
+                .expect("supported metadata coverage must exist");
+
+            assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+            assert_eq!(capability.evidence(), capability.required_evidence());
+            assert!(capability.missing_evidence().is_empty());
+            assert!(capability.limitations().is_empty());
+            assert_eq!(capability.representative_tests(), [representative]);
+            assert!(
+                report
+                    .gaps()
+                    .iter()
+                    .all(|gap| gap.capability_id() != capability.id())
+            );
+        }
     }
 
     #[test]
@@ -966,56 +937,20 @@ mod tests {
             ))
             .expect("command coverage must exist");
 
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
         assert_eq!(
-            capability.status(),
-            SemanticCoverageStatus::PartiallySupported
+            capability.representative_tests(),
+            ["oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind"]
         );
         assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::Discovered)
+            report
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
         );
-        assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::Parsed)
-        );
-        assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::NodeEmitted)
-        );
-        assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::StableIdentityAssigned)
-        );
-        assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::ProvenanceAttached)
-        );
-        assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::PositiveTestExists)
-        );
-        assert!(
-            capability
-                .evidence()
-                .contains(&SemanticCoverageEvidence::IntegrationTestExists)
-        );
-        assert_eq!(
-            capability.missing_evidence(),
-            BTreeSet::from([SemanticCoverageEvidence::SemanticPayloadPreserved])
-        );
-
-        let command_gap = report
-            .gaps()
-            .iter()
-            .find(|gap| gap.capability_id() == capability.id())
-            .expect("payload completion must remain visible");
-        assert_eq!(command_gap.priority(), SemanticCoverageGapPriority::Medium);
 
         assert!(
             report
@@ -1057,11 +992,9 @@ mod tests {
                 MetadataKind::Command,
             ))
             .expect("command coverage must exist");
-        assert_eq!(command.status(), SemanticCoverageStatus::PartiallySupported);
-        assert_eq!(
-            command.missing_evidence(),
-            BTreeSet::from([SemanticCoverageEvidence::SemanticPayloadPreserved])
-        );
+        assert_eq!(command.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(command.evidence(), command.required_evidence());
+        assert!(command.missing_evidence().is_empty());
 
         assert!(
             report
@@ -1084,34 +1017,22 @@ mod tests {
             ))
             .expect("template node coverage must exist");
 
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
         assert_eq!(
-            capability.status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
-        for evidence in [
-            SemanticCoverageEvidence::Discovered,
-            SemanticCoverageEvidence::Parsed,
-            SemanticCoverageEvidence::NodeEmitted,
-            SemanticCoverageEvidence::StableIdentityAssigned,
-            SemanticCoverageEvidence::ProvenanceAttached,
-            SemanticCoverageEvidence::PositiveTestExists,
-            SemanticCoverageEvidence::IntegrationTestExists,
-        ] {
-            assert!(capability.evidence().contains(&evidence));
-        }
-        assert_eq!(
-            capability.missing_evidence(),
-            BTreeSet::from([SemanticCoverageEvidence::SemanticPayloadPreserved])
+            capability.representative_tests(),
+            ["oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind"]
         );
         assert_eq!(node.status(), SemanticCoverageStatus::Supported);
         assert!(node.missing_evidence().is_empty());
-
-        let template_gap = report
-            .gaps()
-            .iter()
-            .find(|gap| gap.capability_id() == capability.id())
-            .expect("payload completion must remain visible");
-        assert_eq!(template_gap.priority(), SemanticCoverageGapPriority::Medium);
+        assert!(
+            report
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
 
         let form = report
             .capability(SemanticCoverageCapabilityId::MetadataEntity(
@@ -1157,15 +1078,9 @@ mod tests {
                 MetadataKind::Document,
             ))
             .expect("ordinary metadata capability must remain registered");
-        assert_eq!(
-            document.status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
-        assert!(
-            document
-                .required_evidence()
-                .contains(&SemanticCoverageEvidence::Discovered)
-        );
+        assert_eq!(document.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(document.evidence(), document.required_evidence());
+        assert!(document.missing_evidence().is_empty());
 
         let high_gaps = first.gaps_by_priority(SemanticCoverageGapPriority::High);
         let actual_high_ids = high_gaps
@@ -1180,7 +1095,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1255,7 +1170,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1324,7 +1239,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&36)
+            Some(&15)
         );
         assert!(
             first
@@ -1383,7 +1298,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&36)
+            Some(&15)
         );
         assert!(
             first
@@ -1428,7 +1343,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1526,7 +1441,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1576,7 +1491,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1624,7 +1539,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1697,7 +1612,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 
@@ -1780,7 +1695,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            36
+            15
         );
     }
 }

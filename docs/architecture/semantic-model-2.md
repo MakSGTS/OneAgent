@@ -1366,12 +1366,12 @@ Configuration and every generic directory mapping, both present and absent
 synonyms, Query visibility, validation, provenance, and repeated-build
 determinism. `MetadataKind::Form` and `MetadataKind::Unknown` remain explicit
 non-applicable fallbacks for this EDT path. The Coverage registry remains
-unchanged until its separate evidence transition.
+aligned with this evidence through its completed payload transition.
 
 ### Typed top-level metadata payload contract
 
 ADR-0023's source-independent payload contract is implemented in the metadata,
-graph, and EDT production layers; its Coverage transition remains separate.
+graph, and EDT production layers, and its Coverage transition is complete.
 `oneagent-metadata` owns `MetadataPayload`; metadata GraphNode values store the
 same typed domain value rather than an EDT structure or an untyped graph
 property map. Payload is semantic content and does not participate in metadata
@@ -2048,8 +2048,7 @@ The Critical BSL call observability gap remains closed. The High
 `metadata_entity.command` discovery and emission gap is also closed: EDT
 `CommonCommands` are parsed through the universal top-level descriptor path,
 emitted with stable UUID identity and provenance, and owned by the configuration.
-The capability remains `PartiallySupported` only because complete typed metadata
-payload preservation is a separate Medium gap. The former
+The capability is `Supported` with complete typed metadata payload evidence. The former
 `metadata_entity.form` and `semantic_node.metadata.form` High gaps were stale:
 the generic top-level Form concept is not applicable to EDT, whose actual common
 and subordinate form representations already use distinct semantic kinds.
@@ -2084,10 +2083,10 @@ capability is `Supported` with complete evidence.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **Medium — metadata payload Coverage transition.** The ADR-0023 domain,
+1. **Medium — metadata payload — completed.** The ADR-0023 domain,
    graph integration, EDT conversion, and complete per-kind production evidence
-   are implemented. The remaining step is the registry-only evidence and status
-   transition after the completed validation cycle.
+   are implemented. All applicable EDT metadata-entity capabilities have
+   complete registry evidence and `Supported` status.
 2. **Medium — metadata reference fixtures — completed.** Successful
    production-builder evidence now covers all nine mapped target kinds, and the
    seven formerly partial capabilities have complete deterministic evidence.
@@ -2150,11 +2149,12 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 0 Critical gaps, 0 High gaps, and 36 Medium gaps.
+The EDT registry now reports 0 Critical gaps, 0 High gaps, and 15 Medium gaps.
 Combined with the graph-domain registry, the current Semantic Coverage audit
-reports 0 Critical gaps, 0 High gaps, and 37 Medium gaps. Exactly seven
-metadata-reference capabilities changed from `PartiallySupported` to
-`Supported`; other capability classifications are unchanged.
+reports 0 Critical gaps, 0 High gaps, and 16 Medium gaps. All 21 applicable
+metadata-entity capabilities and the seven completed metadata-reference
+capabilities are `Supported`; Form and Unknown metadata entities remain
+`NotApplicable`.
 Sprint 3 Integration Review is no longer blocked by High gaps; this statement
 does not record that the review itself has been performed.
 
@@ -2162,8 +2162,7 @@ The former High `metadata_entity.template` gap is closed. EDT now discovers
 Common Template descriptors through the generic top-level path, emits stable
 `NodeKind::Metadata(MetadataKind::Template)` nodes and configuration ownership
 edges with provenance, and verifies deterministic Query API results. The
-capability remains `PartiallySupported` only because complete typed template
-payload preservation belongs to the shared Medium payload-completion item.
+capability is `Supported` with complete typed payload preservation evidence.
 
 The audit intentionally does not implement these backlog items, add serialization
 or a CLI, scan source code at runtime, introduce quality percentages, or change

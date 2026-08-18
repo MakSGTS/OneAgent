@@ -117,9 +117,9 @@ Stable APIs, plugin SDK, performance/security hardening, documentation and examp
 Ordered follow-up work:
 
 1. **Critical — completed:** retain unresolved BSL calls as typed diagnostics and resolution statistics.
-2. **High — completed:** discover and emit top-level Common Command metadata (`metadata_entity.command`); typed payload completion remains Medium.
+2. **High — completed:** discover and emit top-level Common Command metadata (`metadata_entity.command`); typed payload preservation is also complete.
 3. **High — completed:** classify generic top-level Form entity and node capabilities as not applicable to EDT; real common and subordinate forms use distinct semantic kinds.
-4. **High — completed:** discover and emit top-level Common Template metadata (`metadata_entity.template`); typed payload completion remains Medium.
+4. **High — completed:** discover and emit top-level Common Template metadata (`metadata_entity.template`); typed payload preservation is also complete.
 5. **High — completed:** classify fallback-only `metadata_entity.unknown` as not applicable to EDT without emitting synthetic entities.
 6. **High — completed:** map EDT accounting-register resources to stable, provenance-backed `Measure` nodes (`semantic_node.measure`).
 7. **High — completed:** classify fallback-only `semantic_node.metadata.unknown` as not applicable to EDT without emitting synthetic metadata nodes.
@@ -137,12 +137,14 @@ Ordered follow-up work:
 19. **High — completed:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the production builder now normalizes the explicit allowlist, resolves exact metadata targets, emits deterministic provenance-backed Includes edges, reports typed negative outcomes, enforces the precise validator matrix, and verifies generic queries and Impact exclusion.
 20. **High — completed:** implement and transition the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md`; parsing, multiline BSL decoding and private source mapping, typed positive and negative classification, exact resolution, validation, emission, provenance, raw fixtures, deterministic parser/full-builder tests, and `semantic_edge.reads` Coverage evidence are complete.
 21. **High — completed:** implement and transition the first `Writes` slice defined by `docs/adr/0022-writes-semantics.md`; typed Document register declarations, complete zero-argument `RegisterRecords.<Name>.Write()` candidate extraction in Document Object Module Procedures, exact declaration and metadata resolution, precise validation, deterministic provenance-backed production emission, typed diagnostics, Query and Impact behavior, negative, duplicate, and repeated-build evidence, and `semantic_edge.writes` Coverage evidence are complete. Writes and query-derived `DependsOn` are not inferred from Reads, Calls, Grants, declarations alone, or the bare method name.
-22. **Medium — implementation complete, Coverage transition pending:** the
+22. **Medium — completed:** the
     typed metadata payload contract from
     `docs/adr/0023-typed-metadata-payload.md` is implemented across the metadata
     domain, graph equality/diff/Query integration, common EDT synonym and typed
     Document register-record conversion, and complete deterministic per-kind
-    production evidence. Only the registry evidence/status transition remains.
+    production evidence. All 21 applicable EDT metadata-entity capabilities now
+    have complete evidence and `Supported` status; Form and Unknown remain
+    `NotApplicable`.
 23. **Medium — completed:** add successful production-builder evidence for all
     nine mapped metadata reference target kinds; Catalog, Document,
     Enumeration, Information Register, Accumulation Register, Accounting
@@ -166,8 +168,8 @@ Ordered follow-up work:
     contracts. No Coverage transition or count change is expected.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
-36 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
-contains 0 Critical gaps, 0 High gaps, and 37 Medium gaps. Sprint 3 Integration
+15 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage
+contains 0 Critical gaps, 0 High gaps, and 16 Medium gaps. Sprint 3 Integration
 Review is no longer blocked by High gaps; this status does not mean that the
 review itself has been performed.
 

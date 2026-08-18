@@ -3643,10 +3643,9 @@ mod graph_tests {
                 .without_provenance(),
             0
         );
-        assert_eq!(
-            capability.status(),
-            SemanticCoverageStatus::PartiallySupported
-        );
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
         assert!(first.validate().is_valid());
         assert!(graph.diff(second.graph()).is_empty());
         assert!(first.diff(&second).is_empty());

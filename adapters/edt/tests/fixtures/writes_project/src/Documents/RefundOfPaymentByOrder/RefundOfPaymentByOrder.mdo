@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Document xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:core="http://g5.1c.ru/v8/dt/mcore" xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="ed647f67-f8fe-476b-8823-8d52b365ab20">
+  <name>RefundOfPaymentByOrder</name>
+  <registerRecords>AccumulationRegister.CashAccountBalance</registerRecords>
+  <registerRecords>AccumulationRegister.RefundBankPayment</registerRecords>
+</mdclass:Document>

@@ -1360,21 +1360,22 @@ represented as `MetadataKind::Command` rather than the flat child
 capability.
 
 All discovered top-level descriptors emit `NodeKind::Metadata(kind)` with stable
-identity and provenance. Their status is `PartiallySupported`: the descriptor
-reader parses identity, name, synonym, kind, and path, while the graph node keeps
-only identity, name, kind, and provenance. Descriptor payload beyond the current
-graph contract is not represented as typed semantic payload. Dedicated
-representative fixtures currently exist for Configuration, Catalog, Document,
-Common Module, Accumulation Register, Common Command, and Common Template; the
-other generic directory mappings lack dedicated integration fixtures.
+identity, provenance, and the typed payload accepted by ADR-0023. The
+parameterized production fixture in `adapters/edt/tests/payload.rs` accounts for
+Configuration and every generic directory mapping, both present and absent
+synonyms, Query visibility, validation, provenance, and repeated-build
+determinism. `MetadataKind::Form` and `MetadataKind::Unknown` remain explicit
+non-applicable fallbacks for this EDT path. The Coverage registry remains
+unchanged until its separate evidence transition.
 
 ### Typed top-level metadata payload contract
 
-ADR-0023 accepts the source-independent payload contract, but its production
-implementation and Coverage transition remain pending. `oneagent-metadata` owns
-`MetadataPayload`; metadata GraphNode values store the same typed domain value
-rather than an EDT structure or an untyped graph property map. Payload is
-semantic content and does not participate in metadata or node identity.
+ADR-0023's source-independent payload contract is implemented in the metadata,
+graph, and EDT production layers; its Coverage transition remains separate.
+`oneagent-metadata` owns `MetadataPayload`; metadata GraphNode values store the
+same typed domain value rather than an EDT structure or an untyped graph
+property map. Payload is semantic content and does not participate in metadata
+or node identity.
 
 The accepted common payload contains only optional synonym. Configuration and
 every supported generic top-level metadata kind use this contract. An absent
@@ -2083,11 +2084,10 @@ capability is `Supported` with complete evidence.
 
 The remaining thematic Semantic Coverage Completion backlog is:
 
-1. **Medium — metadata payload completion.** Architecture is accepted in
-   `docs/adr/0023-typed-metadata-payload.md`; implement and preserve the typed
-   payload for each supported top-level metadata kind, add per-kind production
-   evidence, and transition Coverage only after the ADR's completion criteria
-   pass.
+1. **Medium — metadata payload Coverage transition.** The ADR-0023 domain,
+   graph integration, EDT conversion, and complete per-kind production evidence
+   are implemented. The remaining step is the registry-only evidence and status
+   transition after the completed validation cycle.
 2. **Medium — metadata reference fixtures — completed.** Successful
    production-builder evidence now covers all nine mapped target kinds, and the
    seven formerly partial capabilities have complete deterministic evidence.

@@ -93,6 +93,163 @@ impl Display for MetadataKind {
     }
 }
 
+/// Source-independent semantic content shared by all metadata kinds.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MetadataPayload {
+    common: CommonMetadataPayload,
+    specific: Option<MetadataSpecificPayload>,
+}
+
+impl MetadataPayload {
+    /// Creates metadata payload from common and optional kind-specific content.
+    #[must_use]
+    pub const fn new(
+        common: CommonMetadataPayload,
+        specific: Option<MetadataSpecificPayload>,
+    ) -> Self {
+        Self { common, specific }
+    }
+
+    /// Creates metadata payload with no accepted semantic content.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self::new(CommonMetadataPayload::empty(), None)
+    }
+
+    /// Returns content shared by all metadata kinds.
+    #[must_use]
+    pub const fn common(&self) -> &CommonMetadataPayload {
+        &self.common
+    }
+
+    /// Returns kind-specific metadata content when present.
+    #[must_use]
+    pub const fn specific(&self) -> Option<&MetadataSpecificPayload> {
+        self.specific.as_ref()
+    }
+
+    /// Returns whether this payload is compatible with a metadata kind.
+    #[must_use]
+    pub const fn is_compatible_with(&self, kind: MetadataKind) -> bool {
+        match self.specific {
+            None => true,
+            Some(MetadataSpecificPayload::Document(_)) => matches!(kind, MetadataKind::Document),
+        }
+    }
+}
+
+/// Semantic content shared by all metadata kinds.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct CommonMetadataPayload {
+    synonym: Option<String>,
+}
+
+impl CommonMetadataPayload {
+    /// Creates common metadata content with an optional localized synonym.
+    #[must_use]
+    pub const fn new(synonym: Option<String>) -> Self {
+        Self { synonym }
+    }
+
+    /// Creates common metadata content with no synonym.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self::new(None)
+    }
+
+    /// Returns the explicitly declared localized synonym when present.
+    #[must_use]
+    pub fn synonym(&self) -> Option<&str> {
+        self.synonym.as_deref()
+    }
+}
+
+/// Closed kind-specific metadata content supported by the domain model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetadataSpecificPayload {
+    /// Content intrinsic to a Document metadata object.
+    Document(DocumentMetadataPayload),
+}
+
+/// Source-independent Document content.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DocumentMetadataPayload {
+    register_records: Vec<MetadataRegisterRecord>,
+}
+
+impl DocumentMetadataPayload {
+    /// Creates canonical Document content from declared register-record targets.
+    #[must_use]
+    pub fn new(register_records: impl IntoIterator<Item = MetadataRegisterRecord>) -> Self {
+        let mut register_records = register_records.into_iter().collect::<Vec<_>>();
+        register_records.sort();
+        register_records.dedup();
+        Self { register_records }
+    }
+
+    /// Returns declared register-record targets in canonical order.
+    #[must_use]
+    pub fn register_records(&self) -> &[MetadataRegisterRecord] {
+        &self.register_records
+    }
+}
+
+/// Canonical target declared by a Document register-record entry.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MetadataRegisterRecord {
+    target_kind: MetadataKind,
+    target_name: EntityName,
+}
+
+impl MetadataRegisterRecord {
+    /// Creates a declared register-record target.
+    #[must_use]
+    pub const fn new(target_kind: MetadataKind, target_name: EntityName) -> Self {
+        Self {
+            target_kind,
+            target_name,
+        }
+    }
+
+    /// Returns the declared target metadata kind.
+    #[must_use]
+    pub const fn target_kind(&self) -> MetadataKind {
+        self.target_kind
+    }
+
+    /// Returns the declared canonical target name.
+    #[must_use]
+    pub const fn target_name(&self) -> &EntityName {
+        &self.target_name
+    }
+}
+
+/// Error returned when metadata object content conflicts with its kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MetadataObjectPayloadError {
+    kind: MetadataKind,
+}
+
+impl MetadataObjectPayloadError {
+    /// Returns the metadata kind rejected by payload validation.
+    #[must_use]
+    pub const fn kind(self) -> MetadataKind {
+        self.kind
+    }
+}
+
+impl Display for MetadataObjectPayloadError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "metadata payload is incompatible with {} metadata kind",
+            self.kind
+        )
+    }
+}
+
+impl std::error::Error for MetadataObjectPayloadError {}
+
 /// A semantic metadata object independent from its source file format.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataObject {
@@ -100,6 +257,7 @@ pub struct MetadataObject {
     name: EntityName,
     kind: MetadataKind,
     parent_id: Option<EntityId>,
+    payload: MetadataPayload,
 }
 
 impl MetadataObject {
@@ -116,7 +274,34 @@ impl MetadataObject {
             name,
             kind,
             parent_id,
+            payload: MetadataPayload::empty(),
         }
+    }
+
+    /// Creates a metadata object with explicit semantic payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MetadataObjectPayloadError`] when kind-specific content does
+    /// not match `kind`.
+    pub fn new_with_payload(
+        id: EntityId,
+        name: EntityName,
+        kind: MetadataKind,
+        parent_id: Option<EntityId>,
+        payload: MetadataPayload,
+    ) -> Result<Self, MetadataObjectPayloadError> {
+        if !payload.is_compatible_with(kind) {
+            return Err(MetadataObjectPayloadError { kind });
+        }
+
+        Ok(Self {
+            id,
+            name,
+            kind,
+            parent_id,
+            payload,
+        })
     }
 
     /// Returns the stable object identifier.
@@ -141,6 +326,12 @@ impl MetadataObject {
     #[must_use]
     pub const fn parent_id(&self) -> Option<&EntityId> {
         self.parent_id.as_ref()
+    }
+
+    /// Returns source-independent semantic metadata content.
+    #[must_use]
+    pub const fn payload(&self) -> &MetadataPayload {
+        &self.payload
     }
 }
 
@@ -207,7 +398,10 @@ impl MetadataTree {
 mod tests {
     use oneagent_common::{EntityId, EntityName};
 
-    use super::{MetadataKind, MetadataObject, MetadataTree};
+    use super::{
+        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataObject,
+        MetadataPayload, MetadataRegisterRecord, MetadataSpecificPayload, MetadataTree,
+    };
 
     fn id(value: &str) -> EntityId {
         EntityId::new(value).expect("identifier must be valid")
@@ -259,5 +453,101 @@ mod tests {
         ));
 
         assert_eq!(tree.objects_by_kind(MetadataKind::Document).len(), 1);
+    }
+
+    #[test]
+    fn compatibility_constructor_creates_empty_payload() {
+        let object = MetadataObject::new(
+            id("catalog.products"),
+            name("Products"),
+            MetadataKind::Catalog,
+            None,
+        );
+
+        assert_eq!(object.payload(), &MetadataPayload::empty());
+        assert_eq!(object.payload().common().synonym(), None);
+        assert_eq!(object.payload().specific(), None);
+    }
+
+    #[test]
+    fn common_payload_preserves_absent_and_explicit_synonym() {
+        let absent = CommonMetadataPayload::new(None);
+        let present = CommonMetadataPayload::new(Some("Продажи".to_owned()));
+
+        assert_eq!(absent.synonym(), None);
+        assert_eq!(present.synonym(), Some("Продажи"));
+    }
+
+    #[test]
+    fn document_payload_is_sorted_and_deduplicated() {
+        let accumulation =
+            MetadataRegisterRecord::new(MetadataKind::AccumulationRegister, name("Stock"));
+        let information =
+            MetadataRegisterRecord::new(MetadataKind::InformationRegister, name("Prices"));
+
+        let payload =
+            DocumentMetadataPayload::new([information.clone(), accumulation.clone(), information]);
+
+        assert_eq!(
+            payload.register_records(),
+            &[
+                MetadataRegisterRecord::new(MetadataKind::InformationRegister, name("Prices")),
+                accumulation,
+            ]
+        );
+    }
+
+    #[test]
+    fn document_payload_equality_is_independent_of_input_order() {
+        let accumulation =
+            MetadataRegisterRecord::new(MetadataKind::AccumulationRegister, name("Stock"));
+        let accounting =
+            MetadataRegisterRecord::new(MetadataKind::AccountingRegister, name("Ledger"));
+
+        assert_eq!(
+            DocumentMetadataPayload::new([accumulation.clone(), accounting.clone()]),
+            DocumentMetadataPayload::new([accounting, accumulation]),
+        );
+    }
+
+    #[test]
+    fn metadata_object_equality_includes_payload() {
+        let make_object = |synonym: &str| {
+            MetadataObject::new_with_payload(
+                id("catalog.products"),
+                name("Products"),
+                MetadataKind::Catalog,
+                None,
+                MetadataPayload::new(CommonMetadataPayload::new(Some(synonym.to_owned())), None),
+            )
+            .expect("Catalog common payload must be valid")
+        };
+
+        assert_ne!(make_object("Products"), make_object("Goods"));
+    }
+
+    #[test]
+    fn metadata_object_rejects_kind_specific_payload_mismatch() {
+        let payload = MetadataPayload::new(
+            CommonMetadataPayload::empty(),
+            Some(MetadataSpecificPayload::Document(
+                DocumentMetadataPayload::default(),
+            )),
+        );
+
+        let error = MetadataObject::new_with_payload(
+            id("catalog.products"),
+            name("Products"),
+            MetadataKind::Catalog,
+            None,
+            payload,
+        )
+        .expect_err("Document payload on Catalog must be rejected");
+
+        assert_eq!(error.kind(), MetadataKind::Catalog);
+        assert_eq!(
+            error.to_string(),
+            "metadata payload is incompatible with catalog metadata kind"
+        );
     }
 }

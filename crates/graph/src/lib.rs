@@ -15,6 +15,7 @@ pub mod measure;
 pub mod node;
 pub mod provenance;
 pub mod query;
+pub mod reference_request;
 pub mod report;
 pub mod resolution;
 pub mod standard_attribute;
@@ -58,6 +59,11 @@ pub use provenance::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionS
 pub use query::{
     SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphRelation,
     SemanticGraphTraversalDirection, SemanticGraphTraversalNode, SemanticGraphTraversalOptions,
+};
+pub use reference_request::{
+    SemanticReferenceCategory, SemanticReferenceRequest, SemanticReferenceRequestError,
+    SemanticReferenceRequestId, SemanticReferenceRequestLedger, SemanticReferenceRequestOutcome,
+    SemanticReferenceRequestQuery,
 };
 pub use report::{
     DiagnosticSummary, EdgeSummary, GraphSummary, NodeSummary, ProvenanceCoverageSummary,

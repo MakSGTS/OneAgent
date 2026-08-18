@@ -150,7 +150,13 @@ Ordered follow-up work:
     share one deterministic representative integration test covering exact
     targets, `References`, companion `DependsOn`, provenance, Query, validation,
     resolution statistics, and repeated builds.
-24. **Medium:** decide and implement reference-request provenance ownership.
+24. **Medium — architecture accepted:** implement the public source-independent
+    reference-request ledger defined by
+    `docs/adr/0024-reference-request-provenance.md`; graph-domain identity,
+    lifecycle, Query/report/diff/validation integration, EDT metadata-reference
+    migration, collection-time provenance, projection consistency, production
+    evidence, and separate graph-domain and EDT Coverage transitions remain
+    pending.
 25. **Medium:** replace permissive endpoint validation as new edge producers are added.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and

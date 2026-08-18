@@ -1740,6 +1740,27 @@ For every mapped target kind it proves exact source and target identity,
 Query navigation, graph validation, resolution statistics, and repeated-build
 stability. All nine metadata-reference capabilities are `Supported`.
 
+ADR-0024 accepts a future public, source-independent
+`SemanticReferenceRequest` build-observation type in `oneagent-graph`. Its
+stable identity is derived from source node, semantic category, typed target
+reference, and the sorted expected-kind set; candidates, current resolution
+state, and provenance are mutable content of that identity. The request owns
+provenance from collection time and later receives resolver evidence. A
+deterministic build-result ledger is canonical for processed references, while
+resolved edges, diagnostics, and statistics are projections that must not count
+the same request independently. Requests are not graph nodes or edges, and
+`SemanticGraphQuery` remains graph-only; build results expose the ledger and a
+separate immutable request view may filter it.
+
+The first implementation slice is limited to metadata member type references.
+The adapter must translate `PendingMetadataReference` into the public value
+without moving descriptor paths or EDT roles into `oneagent-graph`. BSL calls,
+query sources, Writes targets, protected resources, Subsystem content, and
+extension targets remain private until each family defines source identity,
+category, completeness, projection, duplicate, and statistics contracts.
+Architecture acceptance does not change either ReferenceRequest Coverage entry
+or the current aggregate counts.
+
 BSL calls are extracted and local or qualified calls can resolve to `Calls`
 edges. Every extracted call now contributes exactly one final reference outcome:
 an unqualified call is handled by local resolution and a qualified call by
@@ -2058,9 +2079,13 @@ The remaining thematic Semantic Coverage Completion backlog is:
 2. **Medium — metadata reference fixtures — completed.** Successful
    production-builder evidence now covers all nine mapped target kinds, and the
    seven formerly partial capabilities have complete deterministic evidence.
-3. **Medium — reference-request provenance.** Decide whether pending reference
-   requests become a public graph-domain type; if accepted, attach provenance at
-   extraction time without changing resolution semantics.
+3. **Medium — reference-request provenance — architecture accepted.** Implement
+   `docs/adr/0024-reference-request-provenance.md`: add the public graph-domain
+   request ledger and deterministic lifecycle, then migrate the EDT metadata
+   reference slice to collection-time provenance without changing resolution,
+   edge, diagnostic, or statistics semantics. Transition graph-domain and EDT
+   Coverage independently only after their respective production evidence is
+   complete.
 4. **Medium — broad endpoint validation.** Replace permissive rules for future
     emitted dependency, access, composition, and extension edges with typed
     endpoint policies and negative tests.

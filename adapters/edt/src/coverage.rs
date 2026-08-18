@@ -289,7 +289,7 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         SemanticCoverageStatus::PartiallySupported => capability.with_limitation(
             "The EDT pipeline emits this node kind, but no dedicated representative integration fixture verifies it",
         ),
-        _ => capability.with_representative_test("oneagent_edt::graph_tests"),
+        _ => capability.with_representative_test(representative_node_test(kind)),
     }
 }
 
@@ -572,6 +572,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
         MetadataKind::AccumulationRegister,
         MetadataKind::Command,
         MetadataKind::Template,
+        MetadataKind::Subsystem,
     ])
 }
 
@@ -687,6 +688,15 @@ fn representative_node_kind(kind: NodeKind) -> bool {
     }
 }
 
+const fn representative_node_test(kind: NodeKind) -> &'static str {
+    match kind {
+        NodeKind::Metadata(_) => {
+            "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind"
+        }
+        _ => "oneagent_edt::graph_tests",
+    }
+}
+
 const fn edge_title(kind: EdgeKind) -> &'static str {
     match kind {
         EdgeKind::Contains => "contains",
@@ -714,6 +724,43 @@ mod tests {
 
     use super::{EdtSemanticCoverageRegistry, all_metadata_kinds, metadata_reference_target_kinds};
     use crate::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
+
+    fn assert_metadata_node_has_complete_production_evidence(kind: MetadataKind) {
+        let first = EdtSemanticCoverageRegistry::audit();
+        let second = EdtSemanticCoverageRegistry::audit();
+        let capability = first
+            .capability(SemanticCoverageCapabilityId::SemanticNode(
+                NodeKind::Metadata(kind),
+            ))
+            .expect("metadata node coverage must exist");
+
+        assert_eq!(first, second);
+        assert!(first.is_consistent());
+        assert!(first.duplicate_ids().is_empty());
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
+        assert_eq!(
+            capability.related_node_kind(),
+            Some(NodeKind::Metadata(kind))
+        );
+        assert_eq!(
+            capability.representative_tests(),
+            ["oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind"]
+        );
+        assert!(
+            first
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+    }
+
+    #[test]
+    fn subsystem_metadata_node_has_complete_production_evidence() {
+        assert_metadata_node_has_complete_production_evidence(MetadataKind::Subsystem);
+    }
 
     #[test]
     fn registry_is_deterministic_unique_and_consistent() {
@@ -826,7 +873,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -837,7 +884,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            14
+            13
         );
     }
 
@@ -884,7 +931,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
 
         let graph_domain = SemanticCoverageRegistry::audit();
@@ -913,7 +960,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                     .len(),
-            14
+            13
         );
     }
 
@@ -1146,7 +1193,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1221,7 +1268,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1290,7 +1337,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&14)
+            Some(&13)
         );
         assert!(
             first
@@ -1349,7 +1396,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::Medium),
-            Some(&14)
+            Some(&13)
         );
         assert!(
             first
@@ -1394,7 +1441,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1492,7 +1539,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1542,7 +1589,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1590,7 +1637,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1663,7 +1710,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 
@@ -1746,7 +1793,7 @@ mod tests {
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
                 .len(),
-            14
+            13
         );
     }
 }

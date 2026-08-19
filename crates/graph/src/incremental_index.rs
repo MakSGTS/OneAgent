@@ -387,7 +387,10 @@ mod tests {
         Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
         ResolutionState, SemanticGraph, SemanticGraphDiff,
         node::GraphNodePayload,
-        semantic_index::{SemanticNodeIndexError, SemanticNodeIndexState},
+        semantic_index::{
+            SemanticIndexState, SemanticIndexStateError, SemanticNodeIndexError,
+            SemanticNodeIndexState,
+        },
     };
 
     fn id(value: &str) -> EntityId {
@@ -978,5 +981,247 @@ mod tests {
             ],
         );
         assert_eq!(second, SemanticNodeIndexState::from_graph(&reversed));
+    }
+
+    #[test]
+    fn mixed_edge_changes_update_every_dimension_and_match_clean_rebuild() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("source", "Source", NodeKind::Module),
+                node("old", "Old", NodeKind::Procedure),
+                node("new", "New", NodeKind::Function),
+                node("child", "Child", NodeKind::Attribute),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [
+                edge("source", "old", EdgeKind::Calls, FactOrigin::Resolved),
+                edge("source", "child", EdgeKind::Contains, FactOrigin::Declared),
+                edge("source", "new", EdgeKind::References, FactOrigin::Parsed),
+            ],
+        );
+
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("child", "Child", NodeKind::Attribute),
+                node("new", "New", NodeKind::Function),
+                node("old", "Old", NodeKind::Procedure),
+                node("source", "Source", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut current,
+            [
+                edge("source", "new", EdgeKind::Calls, FactOrigin::Resolved),
+                edge("source", "child", EdgeKind::Contains, FactOrigin::Derived),
+                edge("child", "source", EdgeKind::DependsOn, FactOrigin::Derived),
+                edge("source", "new", EdgeKind::References, FactOrigin::Resolved),
+            ],
+        );
+
+        let previous_state = SemanticIndexState::from_graph(&previous);
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("mixed edge transition must normalize");
+        let incremental = previous_state
+            .apply_changes(&changes)
+            .expect("mixed edge transition must apply atomically");
+        let rebuilt = SemanticIndexState::from_graph(&current);
+
+        assert_eq!(incremental, rebuilt);
+        assert_eq!(incremental.nodes(), rebuilt.nodes());
+        assert_eq!(incremental.edges().edge_ids().len(), 4);
+        assert_eq!(
+            incremental
+                .edges()
+                .edge_ids_by_kind(EdgeKind::Calls)
+                .expect("Calls bucket must exist")
+                .len(),
+            1
+        );
+        assert_eq!(
+            incremental
+                .edges()
+                .outgoing(&id("source"))
+                .expect("source adjacency must exist")
+                .len(),
+            3
+        );
+        assert_eq!(
+            incremental
+                .edges()
+                .incoming(&id("source"))
+                .expect("source incoming adjacency must exist")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn node_replacement_rekeys_retained_containment_without_losing_invalid_states() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("owner.a", "Owner A", NodeKind::Module),
+                node("owner.b", "Owner B", NodeKind::Module),
+                node("child", "Before", NodeKind::Attribute),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [
+                edge("owner.a", "child", EdgeKind::Contains, FactOrigin::Declared),
+                edge("owner.b", "child", EdgeKind::Contains, FactOrigin::Declared),
+                edge("child", "child", EdgeKind::Contains, FactOrigin::Derived),
+                edge("child", "owner.a", EdgeKind::Contains, FactOrigin::Derived),
+            ],
+        );
+
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("owner.b", "Owner B", NodeKind::Module),
+                node("child", "After", NodeKind::Query),
+                node("owner.a", "Owner A", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut current,
+            [
+                edge("child", "owner.a", EdgeKind::Contains, FactOrigin::Derived),
+                edge("child", "child", EdgeKind::Contains, FactOrigin::Derived),
+                edge("owner.b", "child", EdgeKind::Contains, FactOrigin::Declared),
+                edge("owner.a", "child", EdgeKind::Contains, FactOrigin::Declared),
+            ],
+        );
+
+        let previous_state = SemanticIndexState::from_graph(&previous);
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("containment rekey transition must normalize");
+        let incremental = previous_state
+            .apply_changes(&changes)
+            .expect("containment rekey must apply");
+
+        assert_eq!(incremental, SemanticIndexState::from_graph(&current));
+        assert!(
+            incremental
+                .edges()
+                .children_by_name(&id("owner.a"), &name("Before"))
+                .is_none()
+        );
+        assert!(
+            incremental
+                .edges()
+                .children_by_name(&id("owner.a"), &name("After"))
+                .expect("new child-name bucket must exist")
+                .contains(&id("child"))
+        );
+        assert!(
+            incremental
+                .edges()
+                .children_by_kind(&id("owner.b"), NodeKind::Query)
+                .expect("new child-kind bucket must exist")
+                .contains(&id("child"))
+        );
+        assert_eq!(
+            incremental
+                .edges()
+                .owners(&id("child"))
+                .expect("all invalid owner candidates must remain")
+                .iter()
+                .map(EntityId::as_str)
+                .collect::<Vec<_>>(),
+            ["child", "owner.a", "owner.b"]
+        );
+    }
+
+    #[test]
+    fn node_deletion_removes_all_incident_edge_membership() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("owner", "Owner", NodeKind::Module),
+                node("child", "Child", NodeKind::Procedure),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [
+                edge("owner", "child", EdgeKind::Contains, FactOrigin::Declared),
+                edge("child", "owner", EdgeKind::Calls, FactOrigin::Resolved),
+            ],
+        );
+        let mut current = SemanticGraph::new();
+        current.insert_node(node("owner", "Owner", NodeKind::Module));
+
+        let previous_state = SemanticIndexState::from_graph(&previous);
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("incident deletion must normalize");
+        let incremental = previous_state
+            .apply_changes(&changes)
+            .expect("incident deletion must apply");
+
+        assert_eq!(incremental, SemanticIndexState::from_graph(&current));
+        assert!(incremental.edges().edge_ids().is_empty());
+        assert!(incremental.edges().outgoing(&id("child")).is_none());
+        assert!(incremental.edges().incoming(&id("child")).is_none());
+        assert!(incremental.edges().owners(&id("child")).is_none());
+    }
+
+    #[test]
+    fn composite_state_retry_is_deterministic_and_stale_failure_is_atomic() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("a", "A", NodeKind::Module),
+                node("b", "B", NodeKind::Procedure),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [edge("a", "b", EdgeKind::Calls, FactOrigin::Resolved)],
+        );
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("b", "B", NodeKind::Procedure),
+                node("a", "A", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut current,
+            [
+                edge("b", "a", EdgeKind::Calls, FactOrigin::Resolved),
+                edge("a", "b", EdgeKind::DependsOn, FactOrigin::Derived),
+            ],
+        );
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("cycle replacement must normalize");
+        let previous_state = SemanticIndexState::from_graph(&previous);
+
+        let first = previous_state
+            .apply_changes(&changes)
+            .expect("first application must succeed");
+        let retry = previous_state
+            .apply_changes(&changes)
+            .expect("retry must succeed");
+        assert_eq!(first, retry);
+        assert_eq!(first, SemanticIndexState::from_graph(&current));
+
+        let unchanged = first.clone();
+        let error = first
+            .apply_changes(&changes)
+            .expect_err("already-current composite state must be stale");
+        assert_eq!(error, SemanticIndexStateError::StaleBaseState);
+        assert_eq!(first, unchanged);
     }
 }

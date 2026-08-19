@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use oneagent_common::{EntityId, EntityName};
 
 use crate::{
-    EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, NodeSnapshot, SemanticGraph,
+    EdgeId, EdgeKind, EdgeSnapshot, GraphEdge, GraphNode, NodeId, NodeKind, NodeSnapshot,
+    SemanticGraph,
     edge_identity::edge_id,
     incremental_index::{NormalizedSemanticIndexChanges, NormalizedSemanticIndexOperation},
 };
@@ -181,6 +182,466 @@ fn remove_bucket_member<Key: Ord>(
     Ok(())
 }
 
+/// Owned membership for every edge, adjacency, and containment dimension.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SemanticEdgeIndexState {
+    identities: BTreeSet<EdgeId>,
+    kinds: BTreeMap<EdgeKind, BTreeSet<EdgeId>>,
+    outgoing: BTreeMap<EntityId, BTreeSet<EdgeId>>,
+    outgoing_kinds: BTreeMap<(EntityId, EdgeKind), BTreeSet<EdgeId>>,
+    incoming: BTreeMap<EntityId, BTreeSet<EdgeId>>,
+    incoming_kinds: BTreeMap<(EntityId, EdgeKind), BTreeSet<EdgeId>>,
+    owner_edges: BTreeMap<EntityId, BTreeSet<EdgeId>>,
+    owners: BTreeMap<EntityId, BTreeSet<EntityId>>,
+    children: BTreeMap<EntityId, BTreeSet<EntityId>>,
+    child_kinds: BTreeMap<(EntityId, NodeKind), BTreeSet<EntityId>>,
+    child_names: BTreeMap<(EntityId, EntityName), BTreeSet<EntityId>>,
+}
+
+impl SemanticEdgeIndexState {
+    pub(crate) fn from_graph(graph: &SemanticGraph) -> Self {
+        let mut state = Self::empty();
+        for edge in graph.edges() {
+            state.insert_graph_edge(graph, edge);
+        }
+        state
+    }
+
+    const fn empty() -> Self {
+        Self {
+            identities: BTreeSet::new(),
+            kinds: BTreeMap::new(),
+            outgoing: BTreeMap::new(),
+            outgoing_kinds: BTreeMap::new(),
+            incoming: BTreeMap::new(),
+            incoming_kinds: BTreeMap::new(),
+            owner_edges: BTreeMap::new(),
+            owners: BTreeMap::new(),
+            children: BTreeMap::new(),
+            child_kinds: BTreeMap::new(),
+            child_names: BTreeMap::new(),
+        }
+    }
+
+    fn insert_graph_edge(&mut self, graph: &SemanticGraph, edge: &GraphEdge) {
+        let id = edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind());
+        let inserted = self.identities.insert(id.clone());
+        debug_assert!(inserted, "canonical graph edge identity must be unique");
+        insert_edge_membership(&mut self.kinds, edge.kind(), &id);
+        insert_edge_membership(&mut self.outgoing, edge.source().clone(), &id);
+        insert_edge_membership(
+            &mut self.outgoing_kinds,
+            (edge.source().clone(), edge.kind()),
+            &id,
+        );
+        insert_edge_membership(&mut self.incoming, edge.target().clone(), &id);
+        insert_edge_membership(
+            &mut self.incoming_kinds,
+            (edge.target().clone(), edge.kind()),
+            &id,
+        );
+        if edge.kind() == EdgeKind::Contains {
+            self.insert_containment(graph, edge.source(), edge.target(), &id);
+        }
+    }
+
+    fn insert_snapshot(
+        &mut self,
+        graph: &SemanticGraph,
+        edge: &EdgeSnapshot,
+    ) -> Result<(), SemanticEdgeIndexError> {
+        let source = snapshot_node_entity_id(edge.source())?;
+        let target = snapshot_node_entity_id(edge.target())?;
+        if !self.identities.insert(edge.id().clone()) {
+            return Err(SemanticEdgeIndexError::DuplicateEdge(edge.id().clone()));
+        }
+        insert_edge_membership(&mut self.kinds, edge.kind(), edge.id());
+        insert_edge_membership(&mut self.outgoing, source.clone(), edge.id());
+        insert_edge_membership(
+            &mut self.outgoing_kinds,
+            (source.clone(), edge.kind()),
+            edge.id(),
+        );
+        insert_edge_membership(&mut self.incoming, target.clone(), edge.id());
+        insert_edge_membership(
+            &mut self.incoming_kinds,
+            (target.clone(), edge.kind()),
+            edge.id(),
+        );
+        if edge.kind() == EdgeKind::Contains {
+            self.insert_containment(graph, &source, &target, edge.id());
+        }
+        Ok(())
+    }
+
+    fn remove_snapshot(
+        &mut self,
+        graph: &SemanticGraph,
+        edge: &EdgeSnapshot,
+    ) -> Result<(), SemanticEdgeIndexError> {
+        let source = snapshot_node_entity_id(edge.source())?;
+        let target = snapshot_node_entity_id(edge.target())?;
+        if !self.identities.remove(edge.id()) {
+            return Err(SemanticEdgeIndexError::MissingEdge(edge.id().clone()));
+        }
+        remove_edge_membership(&mut self.kinds, &edge.kind(), edge.id())?;
+        remove_edge_membership(&mut self.outgoing, &source, edge.id())?;
+        remove_edge_membership(
+            &mut self.outgoing_kinds,
+            &(source.clone(), edge.kind()),
+            edge.id(),
+        )?;
+        remove_edge_membership(&mut self.incoming, &target, edge.id())?;
+        remove_edge_membership(
+            &mut self.incoming_kinds,
+            &(target.clone(), edge.kind()),
+            edge.id(),
+        )?;
+        if edge.kind() == EdgeKind::Contains {
+            self.remove_containment(graph, &source, &target, edge.id())?;
+        }
+        Ok(())
+    }
+
+    fn insert_containment(
+        &mut self,
+        graph: &SemanticGraph,
+        owner: &EntityId,
+        child: &EntityId,
+        edge: &EdgeId,
+    ) {
+        insert_edge_membership(&mut self.owner_edges, child.clone(), edge);
+        let (Some(owner_node), Some(child_node)) = (graph.node(owner), graph.node(child)) else {
+            return;
+        };
+        insert_node_membership(&mut self.owners, child.clone(), owner_node.id());
+        insert_node_membership(&mut self.children, owner.clone(), child_node.id());
+        insert_node_membership(
+            &mut self.child_kinds,
+            (owner.clone(), child_node.kind()),
+            child_node.id(),
+        );
+        insert_node_membership(
+            &mut self.child_names,
+            (owner.clone(), child_node.name().clone()),
+            child_node.id(),
+        );
+    }
+
+    fn remove_containment(
+        &mut self,
+        graph: &SemanticGraph,
+        owner: &EntityId,
+        child: &EntityId,
+        edge: &EdgeId,
+    ) -> Result<(), SemanticEdgeIndexError> {
+        remove_edge_membership(&mut self.owner_edges, child, edge)?;
+        let (Some(owner_node), Some(child_node)) = (graph.node(owner), graph.node(child)) else {
+            return Ok(());
+        };
+        remove_node_membership(&mut self.owners, child, owner_node.id())?;
+        remove_node_membership(&mut self.children, owner, child_node.id())?;
+        remove_node_membership(
+            &mut self.child_kinds,
+            &(owner.clone(), child_node.kind()),
+            child_node.id(),
+        )?;
+        remove_node_membership(
+            &mut self.child_names,
+            &(owner.clone(), child_node.name().clone()),
+            child_node.id(),
+        )?;
+        Ok(())
+    }
+
+    fn rekey_containment_child(
+        &mut self,
+        current: &SemanticGraph,
+        old: &NodeSnapshot,
+        new: &NodeSnapshot,
+    ) -> Result<(), SemanticEdgeIndexError> {
+        if old.name() == new.name() && old.kind() == new.kind() {
+            return Ok(());
+        }
+        let child = snapshot_node_entity_id(old.id())?;
+        let retained = self
+            .incoming_kinds
+            .get(&(child.clone(), EdgeKind::Contains))
+            .cloned()
+            .unwrap_or_default();
+        for id in retained {
+            let edge = graph_edge_by_id(current, &id)
+                .ok_or_else(|| SemanticEdgeIndexError::MissingCurrentEdge(id.clone()))?;
+            let owner = edge.source().clone();
+            if old.kind() != new.kind() {
+                remove_node_membership(
+                    &mut self.child_kinds,
+                    &(owner.clone(), old.kind()),
+                    &child,
+                )?;
+                insert_node_membership(&mut self.child_kinds, (owner.clone(), new.kind()), &child);
+            }
+            if old.name() != new.name() {
+                remove_node_membership(
+                    &mut self.child_names,
+                    &(owner.clone(), old.name().clone()),
+                    &child,
+                )?;
+                insert_node_membership(&mut self.child_names, (owner, new.name().clone()), &child);
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_refresh(
+        &self,
+        old: &EdgeSnapshot,
+        new: &EdgeSnapshot,
+    ) -> Result<(), SemanticEdgeIndexError> {
+        if old.id() != new.id()
+            || old.source() != new.source()
+            || old.target() != new.target()
+            || old.kind() != new.kind()
+        {
+            return Err(SemanticEdgeIndexError::InvalidRefresh(old.id().clone()));
+        }
+        if !self.identities.contains(old.id()) {
+            return Err(SemanticEdgeIndexError::MissingEdge(old.id().clone()));
+        }
+        Ok(())
+    }
+
+    fn validate_removed_node(&self, node: &NodeSnapshot) -> Result<(), SemanticEdgeIndexError> {
+        let id = snapshot_node_entity_id(node.id())?;
+        if self.outgoing.contains_key(&id) || self.incoming.contains_key(&id) {
+            return Err(SemanticEdgeIndexError::RetainedIncidentEdge(id));
+        }
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn apply_changes(
+        &self,
+        changes: &NormalizedSemanticIndexChanges<'_, '_>,
+    ) -> Result<Self, SemanticEdgeIndexError> {
+        if self != &Self::from_graph(changes.previous()) {
+            return Err(SemanticEdgeIndexError::StaleBaseState);
+        }
+        let mut next = self.clone();
+        for operation in changes.operations() {
+            match operation {
+                NormalizedSemanticIndexOperation::RemoveEdge(edge) => {
+                    next.remove_snapshot(changes.previous(), edge)?;
+                }
+                NormalizedSemanticIndexOperation::RemoveNode(node) => {
+                    next.validate_removed_node(node)?;
+                }
+                NormalizedSemanticIndexOperation::ReplaceNode { old, new } => {
+                    next.rekey_containment_child(changes.current(), old, new)?;
+                }
+                NormalizedSemanticIndexOperation::AddEdge(edge) => {
+                    next.insert_snapshot(changes.current(), edge)?;
+                }
+                NormalizedSemanticIndexOperation::RefreshEdge { old, new } => {
+                    next.validate_refresh(old, new)?;
+                }
+                NormalizedSemanticIndexOperation::AddNode(_)
+                | NormalizedSemanticIndexOperation::RefreshNode { .. } => {}
+            }
+        }
+        if next != Self::from_graph(changes.current()) {
+            return Err(SemanticEdgeIndexError::CurrentStateMismatch);
+        }
+        Ok(next)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edge_ids(&self) -> &BTreeSet<EdgeId> {
+        &self.identities
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edge_ids_by_kind(&self, kind: EdgeKind) -> Option<&BTreeSet<EdgeId>> {
+        self.kinds.get(&kind)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn outgoing(&self, source: &EntityId) -> Option<&BTreeSet<EdgeId>> {
+        self.outgoing.get(source)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn incoming(&self, target: &EntityId) -> Option<&BTreeSet<EdgeId>> {
+        self.incoming.get(target)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn owners(&self, child: &EntityId) -> Option<&BTreeSet<EntityId>> {
+        self.owners.get(child)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn children_by_name(
+        &self,
+        owner: &EntityId,
+        name: &EntityName,
+    ) -> Option<&BTreeSet<EntityId>> {
+        self.child_names.get(&(owner.clone(), name.clone()))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn children_by_kind(
+        &self,
+        owner: &EntityId,
+        kind: NodeKind,
+    ) -> Option<&BTreeSet<EntityId>> {
+        self.child_kinds.get(&(owner.clone(), kind))
+    }
+}
+
+/// Typed atomic edge-state transition failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SemanticEdgeIndexError {
+    StaleBaseState,
+    InvalidNodeId(NodeId),
+    DuplicateEdge(EdgeId),
+    MissingEdge(EdgeId),
+    MissingCurrentEdge(EdgeId),
+    MissingBucketMember(EdgeId),
+    MissingNodeBucketMember(EntityId),
+    RetainedIncidentEdge(EntityId),
+    InvalidRefresh(EdgeId),
+    CurrentStateMismatch,
+}
+
+/// Owned semantic-index state prepared and published as one unit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SemanticIndexState {
+    nodes: SemanticNodeIndexState,
+    edges: SemanticEdgeIndexState,
+}
+
+impl SemanticIndexState {
+    pub(crate) fn from_graph(graph: &SemanticGraph) -> Self {
+        Self {
+            nodes: SemanticNodeIndexState::from_graph(graph),
+            edges: SemanticEdgeIndexState::from_graph(graph),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn apply_changes(
+        &self,
+        changes: &NormalizedSemanticIndexChanges<'_, '_>,
+    ) -> Result<Self, SemanticIndexStateError> {
+        if self != &Self::from_graph(changes.previous()) {
+            return Err(SemanticIndexStateError::StaleBaseState);
+        }
+        let next = Self {
+            nodes: self
+                .nodes
+                .apply_changes(changes)
+                .map_err(SemanticIndexStateError::Node)?,
+            edges: self
+                .edges
+                .apply_changes(changes)
+                .map_err(SemanticIndexStateError::Edge)?,
+        };
+        if next != Self::from_graph(changes.current()) {
+            return Err(SemanticIndexStateError::CurrentStateMismatch);
+        }
+        Ok(next)
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn nodes(&self) -> &SemanticNodeIndexState {
+        &self.nodes
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn edges(&self) -> &SemanticEdgeIndexState {
+        &self.edges
+    }
+}
+
+/// Typed composite-state transition failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SemanticIndexStateError {
+    StaleBaseState,
+    Node(SemanticNodeIndexError),
+    Edge(SemanticEdgeIndexError),
+    CurrentStateMismatch,
+}
+
+fn snapshot_node_entity_id(id: &NodeId) -> Result<EntityId, SemanticEdgeIndexError> {
+    EntityId::new(id.as_str()).map_err(|_| SemanticEdgeIndexError::InvalidNodeId(id.clone()))
+}
+
+fn graph_edge_by_id<'graph>(
+    graph: &'graph SemanticGraph,
+    expected: &EdgeId,
+) -> Option<&'graph GraphEdge> {
+    graph.edges().find(|edge| {
+        edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind()) == *expected
+    })
+}
+
+fn insert_edge_membership<Key: Ord + Clone>(
+    buckets: &mut BTreeMap<Key, BTreeSet<EdgeId>>,
+    key: Key,
+    id: &EdgeId,
+) {
+    buckets.entry(key).or_default().insert(id.clone());
+}
+
+fn insert_node_membership<Key: Ord + Clone>(
+    buckets: &mut BTreeMap<Key, BTreeSet<EntityId>>,
+    key: Key,
+    id: &EntityId,
+) {
+    buckets.entry(key).or_default().insert(id.clone());
+}
+
+fn remove_edge_membership<Key: Ord>(
+    buckets: &mut BTreeMap<Key, BTreeSet<EdgeId>>,
+    key: &Key,
+    id: &EdgeId,
+) -> Result<(), SemanticEdgeIndexError> {
+    let remove_bucket = {
+        let Some(ids) = buckets.get_mut(key) else {
+            return Err(SemanticEdgeIndexError::MissingBucketMember(id.clone()));
+        };
+        if !ids.remove(id) {
+            return Err(SemanticEdgeIndexError::MissingBucketMember(id.clone()));
+        }
+        ids.is_empty()
+    };
+    if remove_bucket {
+        buckets.remove(key);
+    }
+    Ok(())
+}
+
+fn remove_node_membership<Key: Ord>(
+    buckets: &mut BTreeMap<Key, BTreeSet<EntityId>>,
+    key: &Key,
+    id: &EntityId,
+) -> Result<(), SemanticEdgeIndexError> {
+    let remove_bucket = {
+        let Some(ids) = buckets.get_mut(key) else {
+            return Err(SemanticEdgeIndexError::MissingNodeBucketMember(id.clone()));
+        };
+        if !ids.remove(id) {
+            return Err(SemanticEdgeIndexError::MissingNodeBucketMember(id.clone()));
+        }
+        ids.is_empty()
+    };
+    if remove_bucket {
+        buckets.remove(key);
+    }
+    Ok(())
+}
+
 /// Crate-internal read-only lookup state derived from one borrowed graph snapshot.
 #[derive(Debug)]
 pub(crate) struct SemanticIndex<'graph> {
@@ -203,32 +664,25 @@ pub(crate) struct SemanticIndex<'graph> {
 impl<'graph> SemanticIndex<'graph> {
     /// Builds lookup state without changing or copying canonical graph facts.
     pub(crate) fn new(graph: &'graph SemanticGraph) -> Self {
-        let node_state = SemanticNodeIndexState::from_graph(graph);
+        let state = SemanticIndexState::from_graph(graph);
         let NodeViews {
             identities: nodes_by_id,
             names: nodes_by_name,
             kinds: nodes_by_kind,
-        } = build_node_views(graph, &node_state);
-
-        let mut ordered_edges = graph
-            .edges()
-            .map(|edge| {
-                (
-                    edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind()),
-                    edge,
-                )
-            })
-            .collect::<Vec<_>>();
-        ordered_edges.sort_by(|left, right| left.0.cmp(&right.0));
-
-        let mut edges_by_id = BTreeMap::new();
-        let mut edges_by_kind = BTreeMap::<EdgeKind, Vec<&GraphEdge>>::new();
-        for (id, edge) in ordered_edges {
-            edges_by_kind.entry(edge.kind()).or_default().push(edge);
-            edges_by_id.insert(id, edge);
-        }
-
-        let relations = build_relation_indexes(&nodes_by_id, &edges_by_id);
+        } = build_node_views(graph, &state.nodes);
+        let EdgeViews {
+            identities: edges_by_id,
+            kinds: edges_by_kind,
+            outgoing: outgoing_edges,
+            outgoing_kinds: outgoing_edges_by_kind,
+            incoming: incoming_edges,
+            incoming_kinds: incoming_edges_by_kind,
+            owner_edges: owner_edges_by_child,
+            owners: owners_by_child,
+            children: children_by_owner,
+            child_kinds: children_by_owner_kind,
+            child_names: children_by_owner_name,
+        } = build_edge_views(graph, &state.edges);
 
         Self {
             nodes_by_id,
@@ -236,15 +690,15 @@ impl<'graph> SemanticIndex<'graph> {
             nodes_by_kind,
             edges_by_id,
             edges_by_kind,
-            outgoing_edges: relations.outgoing_edges,
-            outgoing_edges_by_kind: relations.outgoing_edges_by_kind,
-            incoming_edges: relations.incoming_edges,
-            incoming_edges_by_kind: relations.incoming_edges_by_kind,
-            owner_edges_by_child: relations.owner_edges_by_child,
-            owners_by_child: relations.owners_by_child,
-            children_by_owner: relations.children_by_owner,
-            children_by_owner_kind: relations.children_by_owner_kind,
-            children_by_owner_name: relations.children_by_owner_name,
+            outgoing_edges,
+            outgoing_edges_by_kind,
+            incoming_edges,
+            incoming_edges_by_kind,
+            owner_edges_by_child,
+            owners_by_child,
+            children_by_owner,
+            children_by_owner_kind,
+            children_by_owner_name,
         }
     }
 
@@ -397,111 +851,86 @@ fn build_node_views<'graph>(
     }
 }
 
-struct RelationIndexes<'graph> {
-    outgoing_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
-    outgoing_edges_by_kind: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
-    incoming_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
-    incoming_edges_by_kind: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
-    owner_edges_by_child: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
-    owners_by_child: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
-    children_by_owner: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
-    children_by_owner_kind: BTreeMap<(EntityId, NodeKind), Vec<&'graph GraphNode>>,
-    children_by_owner_name: BTreeMap<(EntityId, EntityName), Vec<&'graph GraphNode>>,
+struct EdgeViews<'graph> {
+    identities: BTreeMap<EdgeId, &'graph GraphEdge>,
+    kinds: BTreeMap<EdgeKind, Vec<&'graph GraphEdge>>,
+    outgoing: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    outgoing_kinds: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
+    incoming: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    incoming_kinds: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
+    owner_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    owners: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
+    children: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
+    child_kinds: BTreeMap<(EntityId, NodeKind), Vec<&'graph GraphNode>>,
+    child_names: BTreeMap<(EntityId, EntityName), Vec<&'graph GraphNode>>,
 }
 
-fn build_relation_indexes<'graph>(
-    nodes_by_id: &BTreeMap<EntityId, &'graph GraphNode>,
-    edges_by_id: &BTreeMap<EdgeId, &'graph GraphEdge>,
-) -> RelationIndexes<'graph> {
-    let mut indexes = RelationIndexes {
-        outgoing_edges: BTreeMap::new(),
-        outgoing_edges_by_kind: BTreeMap::new(),
-        incoming_edges: BTreeMap::new(),
-        incoming_edges_by_kind: BTreeMap::new(),
-        owner_edges_by_child: BTreeMap::new(),
-        owners_by_child: BTreeMap::new(),
-        children_by_owner: BTreeMap::new(),
-        children_by_owner_kind: BTreeMap::new(),
-        children_by_owner_name: BTreeMap::new(),
-    };
+fn build_edge_views<'graph>(
+    graph: &'graph SemanticGraph,
+    state: &SemanticEdgeIndexState,
+) -> EdgeViews<'graph> {
+    let identities = state
+        .identities
+        .iter()
+        .map(|id| {
+            let edge = graph_edge_by_id(graph, id)
+                .expect("semantic edge index state must resolve in its canonical graph");
+            (id.clone(), edge)
+        })
+        .collect();
 
-    for edge in edges_by_id.values().copied() {
-        indexes
-            .outgoing_edges
-            .entry(edge.source().clone())
-            .or_default()
-            .push(edge);
-        indexes
-            .outgoing_edges_by_kind
-            .entry((edge.source().clone(), edge.kind()))
-            .or_default()
-            .push(edge);
-        indexes
-            .incoming_edges
-            .entry(edge.target().clone())
-            .or_default()
-            .push(edge);
-        indexes
-            .incoming_edges_by_kind
-            .entry((edge.target().clone(), edge.kind()))
-            .or_default()
-            .push(edge);
-
-        if edge.kind() != EdgeKind::Contains {
-            continue;
-        }
-
-        indexes
-            .owner_edges_by_child
-            .entry(edge.target().clone())
-            .or_default()
-            .push(edge);
-
-        let (Some(owner), Some(child)) = (
-            nodes_by_id.get(edge.source()).copied(),
-            nodes_by_id.get(edge.target()).copied(),
-        ) else {
-            continue;
-        };
-
-        indexes
-            .owners_by_child
-            .entry(edge.target().clone())
-            .or_default()
-            .push(owner);
-        indexes
-            .children_by_owner
-            .entry(edge.source().clone())
-            .or_default()
-            .push(child);
-        indexes
-            .children_by_owner_kind
-            .entry((edge.source().clone(), child.kind()))
-            .or_default()
-            .push(child);
-        indexes
-            .children_by_owner_name
-            .entry((edge.source().clone(), child.name().clone()))
-            .or_default()
-            .push(child);
+    EdgeViews {
+        identities,
+        kinds: build_edge_bucket_views(graph, &state.kinds),
+        outgoing: build_edge_bucket_views(graph, &state.outgoing),
+        outgoing_kinds: build_edge_bucket_views(graph, &state.outgoing_kinds),
+        incoming: build_edge_bucket_views(graph, &state.incoming),
+        incoming_kinds: build_edge_bucket_views(graph, &state.incoming_kinds),
+        owner_edges: build_edge_bucket_views(graph, &state.owner_edges),
+        owners: build_node_bucket_views(graph, &state.owners),
+        children: build_node_bucket_views(graph, &state.children),
+        child_kinds: build_node_bucket_views(graph, &state.child_kinds),
+        child_names: build_node_bucket_views(graph, &state.child_names),
     }
-
-    for nodes in indexes
-        .owners_by_child
-        .values_mut()
-        .chain(indexes.children_by_owner.values_mut())
-        .chain(indexes.children_by_owner_kind.values_mut())
-        .chain(indexes.children_by_owner_name.values_mut())
-    {
-        sort_and_deduplicate_nodes(nodes);
-    }
-
-    indexes
 }
 
-fn sort_and_deduplicate_nodes(nodes: &mut Vec<&GraphNode>) {
-    nodes.sort_by_key(|node| node.id());
-    nodes.dedup_by_key(|node| node.id());
+fn build_edge_bucket_views<'graph, Key: Ord + Clone>(
+    graph: &'graph SemanticGraph,
+    buckets: &BTreeMap<Key, BTreeSet<EdgeId>>,
+) -> BTreeMap<Key, Vec<&'graph GraphEdge>> {
+    buckets
+        .iter()
+        .map(|(key, ids)| {
+            let edges = ids
+                .iter()
+                .map(|id| {
+                    graph_edge_by_id(graph, id)
+                        .expect("semantic edge bucket must resolve in its canonical graph")
+                })
+                .collect();
+            (key.clone(), edges)
+        })
+        .collect()
+}
+
+fn build_node_bucket_views<'graph, Key: Ord + Clone>(
+    graph: &'graph SemanticGraph,
+    buckets: &BTreeMap<Key, BTreeSet<EntityId>>,
+) -> BTreeMap<Key, Vec<&'graph GraphNode>> {
+    buckets
+        .iter()
+        .map(|(key, ids)| {
+            let nodes = ids
+                .iter()
+                .map(|id| {
+                    graph
+                        .node(id)
+                        .expect("semantic node bucket must resolve in its canonical graph")
+                })
+                .collect();
+            (key.clone(), nodes)
+        })
+        .collect()
 }
 
 #[cfg(test)]

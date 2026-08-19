@@ -135,11 +135,10 @@ performs a focused readiness check at kickoff.
 
 | Sprint | Version | Goal | Status |
 |---|---|---|---|
-| Sprint 4 — Semantic Index | v0.2 | Build the derived semantic index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) over the completed graph and EDT semantic model. | next |
+| Sprint 4 — Semantic Index | v0.2 | Build the derived semantic index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) over the completed graph and EDT semantic model. | active |
 
-Sprint 4 is the next dependency-ordered target. It becomes `active` only after
-its architecture boundary, task decomposition, acceptance criteria, and
-validation plan are approved.
+Sprint 4 is the active dependency-ordered target. Its architecture boundary,
+task decomposition, acceptance criteria, and validation plan are approved.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -428,10 +427,9 @@ reviewed baseline, then run the common full implementation gate.
 
 ##### Sprint 4 state gates
 
-Sprint 4 remains `next` while this plan is prepared. Its architecture boundary
-and task-template readiness gate are complete. The remaining activation step is
-explicit approval of this execution plan after a live repository-state recheck;
-only that approval may change the status from `next` to `active`.
+Sprint 4 is `active`. Its architecture boundary, task-template readiness gate,
+execution plan, and live repository-state recheck are complete, and execution
+of the approved dependency-ordered tasks has started.
 
 Sprint 4 may later be marked `completed` only after Tasks 1 through 4 are
 complete, Task 5 issues `pass`, all focused and full validation commands have

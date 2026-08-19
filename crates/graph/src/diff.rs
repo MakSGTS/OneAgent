@@ -7,6 +7,7 @@ use oneagent_common::EntityName;
 use crate::{
     Confidence, EdgeId, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload, NodeId,
     NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph,
+    edge_identity::edge_id as stable_edge_id,
 };
 
 /// Deterministic diff between two semantic graph snapshots.
@@ -302,7 +303,7 @@ impl EdgeSnapshot {
         let source = node_id(edge.source().as_str());
         let target = node_id(edge.target().as_str());
         Self {
-            id: edge_id(&source, &target, edge.kind()),
+            id: stable_edge_id(source.as_str(), target.as_str(), edge.kind()),
             source,
             target,
             kind: edge.kind(),
@@ -620,17 +621,6 @@ fn node_id(value: &str) -> NodeId {
     NodeId::new(value.to_owned())
 }
 
-fn edge_id(source: &NodeId, target: &NodeId, kind: EdgeKind) -> EdgeId {
-    EdgeId::new(format!(
-        "edge:source#{}:{};target#{}:{};kind:{}",
-        source.as_str().len(),
-        source.as_str(),
-        target.as_str().len(),
-        target.as_str(),
-        edge_kind_code(kind)
-    ))
-}
-
 fn normalized_provenance(provenance: &[Provenance]) -> Vec<Provenance> {
     let mut provenance = provenance.to_vec();
     provenance.sort_by_key(provenance_key);
@@ -655,20 +645,6 @@ struct ProvenanceKey {
     origin: FactOrigin,
     confidence: Confidence,
     resolution: ResolutionState,
-}
-
-fn edge_kind_code(kind: EdgeKind) -> &'static str {
-    match kind {
-        EdgeKind::Contains => "contains",
-        EdgeKind::Calls => "calls",
-        EdgeKind::References => "references",
-        EdgeKind::Reads => "reads",
-        EdgeKind::Writes => "writes",
-        EdgeKind::Grants => "grants",
-        EdgeKind::Includes => "includes",
-        EdgeKind::Extends => "extends",
-        EdgeKind::DependsOn => "depends_on",
-    }
 }
 
 #[allow(clippy::too_many_lines)]

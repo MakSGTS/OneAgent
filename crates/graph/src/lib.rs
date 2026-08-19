@@ -8,6 +8,7 @@ pub mod coverage;
 pub mod diagnostic;
 pub mod diff;
 pub mod edge;
+mod edge_identity;
 pub mod identity;
 pub mod impact;
 pub mod kind;
@@ -18,6 +19,8 @@ pub mod query;
 pub mod reference_request;
 pub mod report;
 pub mod resolution;
+#[allow(dead_code)]
+mod semantic_index;
 pub mod standard_attribute;
 pub mod validation;
 

@@ -17,6 +17,7 @@ use crate::{
     SemanticDiagnostic, SemanticDiagnosticKind, SemanticGraph, SemanticGraphReport,
     SemanticReferenceCategory, SemanticReferenceRequest, SemanticReferenceRequestId,
     SemanticReferenceRequestLedger, SemanticReferenceRequestOutcome, SemanticReferenceStatistics,
+    edge_identity::edge_id as stable_edge_id,
 };
 
 /// Stable machine-readable validation issue code.
@@ -759,7 +760,8 @@ impl SemanticGraphValidator {
 
     fn validate_edges(graph: &SemanticGraph, issues: &mut Vec<SemanticGraphValidationIssue>) {
         for edge in graph.edges() {
-            let edge_id = edge_id(edge.source(), edge.target(), edge.kind());
+            let edge_id =
+                stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind());
             let source = graph.node(edge.source());
             let target = graph.node(edge.target());
 
@@ -974,7 +976,11 @@ impl SemanticGraphValidator {
                     "graph facts should retain provenance",
                 )
                 .with_nodes(vec![edge.source().clone(), edge.target().clone()])
-                .with_edge_id(edge_id(edge.source(), edge.target(), edge.kind()))
+                .with_edge_id(stable_edge_id(
+                    edge.source().as_str(),
+                    edge.target().as_str(),
+                    edge.kind(),
+                ))
                 .with_edge_kind(edge.kind());
 
                 if let Some(kind) = source_kind {
@@ -1280,31 +1286,6 @@ const fn forbids_self_loop(kind: EdgeKind) -> bool {
         kind,
         EdgeKind::Contains | EdgeKind::Calls | EdgeKind::Includes | EdgeKind::Extends
     )
-}
-
-fn edge_id(source: &EntityId, target: &EntityId, kind: EdgeKind) -> EdgeId {
-    EdgeId::new(format!(
-        "edge:source#{}:{};target#{}:{};kind:{}",
-        source.as_str().len(),
-        source.as_str(),
-        target.as_str().len(),
-        target.as_str(),
-        edge_kind_code(kind)
-    ))
-}
-
-const fn edge_kind_code(kind: EdgeKind) -> &'static str {
-    match kind {
-        EdgeKind::Contains => "contains",
-        EdgeKind::Calls => "calls",
-        EdgeKind::References => "references",
-        EdgeKind::Reads => "reads",
-        EdgeKind::Writes => "writes",
-        EdgeKind::Grants => "grants",
-        EdgeKind::Includes => "includes",
-        EdgeKind::Extends => "extends",
-        EdgeKind::DependsOn => "depends_on",
-    }
 }
 
 fn normalized_provenance(provenance: &[Provenance]) -> Vec<Provenance> {

@@ -9,7 +9,10 @@ use std::collections::{BTreeSet, VecDeque};
 
 use oneagent_common::{EntityId, EntityName};
 
-use crate::{EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph};
+use crate::{
+    EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph,
+    edge_identity::edge_id as stable_edge_id,
+};
 
 /// Direction used by neighbor, dependency and traversal queries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -202,7 +205,7 @@ impl<'graph> SemanticGraphRelation<'graph> {
         Self {
             node,
             edge,
-            edge_id: edge_id_for_entities(edge.source(), edge.target(), edge.kind()),
+            edge_id: stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind()),
             direction,
         }
     }
@@ -248,7 +251,7 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// Builds the stable edge identifier used by query, diff and validation APIs.
     #[must_use]
     pub fn edge_id(source: &NodeId, target: &NodeId, kind: EdgeKind) -> EdgeId {
-        edge_id_for_strings(source.as_str(), target.as_str(), kind)
+        stable_edge_id(source.as_str(), target.as_str(), kind)
     }
 
     /// Returns `true` when `kind` participates in dependency queries.
@@ -378,9 +381,9 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// lookup scans deterministic edge storage and compares stable identifiers.
     #[must_use]
     pub fn edge(&self, id: &EdgeId) -> Option<&'graph GraphEdge> {
-        self.graph
-            .edges()
-            .find(|edge| edge_id_for_entities(edge.source(), edge.target(), edge.kind()) == *id)
+        self.graph.edges().find(|edge| {
+            stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind()) == *id
+        })
     }
 
     /// Returns whether an edge exists.
@@ -684,7 +687,7 @@ impl<'graph> SemanticGraphQuery<'graph> {
 
                 Some((
                     neighbor.clone(),
-                    edge_id_for_entities(edge.source(), edge.target(), edge.kind()),
+                    stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind()),
                 ))
             })
             .collect::<Vec<_>>();
@@ -720,8 +723,12 @@ fn sorted_edges<'graph>(
     edges: impl IntoIterator<Item = &'graph GraphEdge>,
 ) -> Vec<&'graph GraphEdge> {
     let mut edges = edges.into_iter().collect::<Vec<_>>();
-    edges.sort_by_key(|edge| edge_id_for_entities(edge.source(), edge.target(), edge.kind()));
-    edges.dedup_by_key(|edge| edge_id_for_entities(edge.source(), edge.target(), edge.kind()));
+    edges.sort_by_key(|edge| {
+        stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind())
+    });
+    edges.dedup_by_key(|edge| {
+        stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind())
+    });
     edges
 }
 
@@ -731,33 +738,4 @@ fn entity_id_from_node_id(id: &NodeId) -> Option<EntityId> {
 
 fn node_id_from_entity(id: &EntityId) -> NodeId {
     NodeId::new(id.as_str().to_owned())
-}
-
-fn edge_id_for_entities(source: &EntityId, target: &EntityId, kind: EdgeKind) -> EdgeId {
-    edge_id_for_strings(source.as_str(), target.as_str(), kind)
-}
-
-fn edge_id_for_strings(source: &str, target: &str, kind: EdgeKind) -> EdgeId {
-    EdgeId::new(format!(
-        "edge:source#{}:{};target#{}:{};kind:{}",
-        source.len(),
-        source,
-        target.len(),
-        target,
-        edge_kind_code(kind)
-    ))
-}
-
-const fn edge_kind_code(kind: EdgeKind) -> &'static str {
-    match kind {
-        EdgeKind::Contains => "contains",
-        EdgeKind::Calls => "calls",
-        EdgeKind::References => "references",
-        EdgeKind::Reads => "reads",
-        EdgeKind::Writes => "writes",
-        EdgeKind::Grants => "grants",
-        EdgeKind::Includes => "includes",
-        EdgeKind::Extends => "extends",
-        EdgeKind::DependsOn => "depends_on",
-    }
 }

@@ -239,7 +239,8 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
 
     let emitted = edt_emits_node_kind(kind);
     let representative = representative_node_kind(kind);
-    let required = [
+    let member_payload = matches!(kind, NodeKind::Attribute | NodeKind::TabularSection);
+    let mut required = vec![
         Evidence::Parsed,
         Evidence::Modeled,
         Evidence::NodeKindDeclared,
@@ -249,6 +250,9 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         Evidence::PositiveTestExists,
         Evidence::IntegrationTestExists,
     ];
+    if member_payload {
+        required.push(Evidence::SemanticPayloadPreserved);
+    }
     let mut evidence = vec![Evidence::Modeled, Evidence::NodeKindDeclared];
     if emitted {
         evidence.extend([
@@ -257,6 +261,9 @@ fn edt_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
             Evidence::StableIdentityAssigned,
             Evidence::ProvenanceAttached,
         ]);
+        if member_payload {
+            evidence.push(Evidence::SemanticPayloadPreserved);
+        }
     }
     if representative {
         evidence.extend([
@@ -706,6 +713,9 @@ const fn representative_node_test(kind: NodeKind) -> &'static str {
         NodeKind::Metadata(_) => {
             "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind"
         }
+        NodeKind::Attribute | NodeKind::TabularSection => {
+            "oneagent_edt::grants::grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance"
+        }
         _ => "oneagent_edt::graph_tests",
     }
 }
@@ -838,6 +848,35 @@ mod tests {
     #[test]
     fn xdto_package_metadata_node_has_complete_production_evidence() {
         assert_metadata_node_has_complete_production_evidence(MetadataKind::XdtoPackage);
+    }
+
+    #[test]
+    fn member_nodes_have_complete_edt_payload_evidence() {
+        let report = EdtSemanticCoverageRegistry::audit();
+        let representative = "oneagent_edt::grants::grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance";
+
+        for kind in [NodeKind::Attribute, NodeKind::TabularSection] {
+            let capability = report
+                .capability(SemanticCoverageCapabilityId::SemanticNode(kind))
+                .expect("EDT member node coverage must exist");
+
+            assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+            assert_eq!(capability.evidence(), capability.required_evidence());
+            assert!(
+                capability
+                    .evidence()
+                    .contains(&SemanticCoverageEvidence::SemanticPayloadPreserved)
+            );
+            assert!(capability.missing_evidence().is_empty());
+            assert!(capability.limitations().is_empty());
+            assert_eq!(capability.representative_tests(), [representative]);
+            assert!(
+                report
+                    .gaps()
+                    .iter()
+                    .all(|gap| gap.capability_id() != capability.id())
+            );
+        }
     }
 
     #[test]

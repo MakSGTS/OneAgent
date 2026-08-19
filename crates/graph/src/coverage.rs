@@ -921,7 +921,7 @@ fn graph_capabilities() -> Vec<SemanticCoverageCapability> {
 
 fn graph_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
     use SemanticCoverageEvidence as Evidence;
-    let required = [
+    let mut required = vec![
         Evidence::Modeled,
         Evidence::NodeKindDeclared,
         Evidence::StableIdentityAssigned,
@@ -929,15 +929,27 @@ fn graph_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         Evidence::QuerySupportExists,
         Evidence::PositiveTestExists,
     ];
+    if matches!(kind, NodeKind::Attribute | NodeKind::TabularSection) {
+        required.push(Evidence::SemanticPayloadPreserved);
+    }
     SemanticCoverageCapability::new(
         SemanticCoverageCapabilityId::SemanticNode(kind),
         format!("{} semantic node", node_kind_code(kind)),
         SemanticCoverageStatus::Supported,
-        required,
+        required.clone(),
         required,
     )
     .with_node_kind(kind)
-    .with_representative_test("oneagent_graph::coverage")
+    .with_representative_test(graph_node_representative_test(kind))
+}
+
+const fn graph_node_representative_test(kind: NodeKind) -> &'static str {
+    match kind {
+        NodeKind::Attribute | NodeKind::TabularSection => {
+            "oneagent_graph::node::tests::accepts_member_payload_for_attribute_and_tabular_section"
+        }
+        _ => "oneagent_graph::coverage",
+    }
 }
 
 fn graph_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {

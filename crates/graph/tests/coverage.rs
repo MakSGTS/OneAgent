@@ -128,6 +128,39 @@ fn access_right_node_has_graph_domain_coverage_entry() {
 }
 
 #[test]
+fn member_nodes_have_complete_graph_payload_evidence() {
+    let report = SemanticCoverageRegistry::audit();
+
+    for kind in [NodeKind::Attribute, NodeKind::TabularSection] {
+        let capability = report
+            .capability(SemanticCoverageCapabilityId::SemanticNode(kind))
+            .expect("member node coverage must exist");
+
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::SemanticPayloadPreserved)
+        );
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
+        assert_eq!(
+            capability.representative_tests(),
+            [
+                "oneagent_graph::node::tests::accepts_member_payload_for_attribute_and_tabular_section"
+            ]
+        );
+        assert!(
+            report
+                .gaps()
+                .iter()
+                .all(|gap| gap.capability_id() != capability.id())
+        );
+    }
+}
+
+#[test]
 fn reference_request_provenance_has_complete_graph_domain_evidence() {
     let report = SemanticCoverageRegistry::audit();
     let capability = report

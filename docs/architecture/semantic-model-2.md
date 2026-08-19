@@ -1415,6 +1415,42 @@ payload-kind validation, Query and payload-only diff evidence, representative
 full-builder coverage, and repeated-build determinism all pass. Architecture
 documentation alone changes neither capability status nor aggregate counts.
 
+### Typed Attribute and TabularSection payload contract
+
+ADR-0028's first subordinate-member payload slice is implemented in the
+metadata, graph, and EDT production layers. `MetadataMemberPayload` contains
+only an optional synonym and is compatible only with `NodeKind::Attribute` and
+`NodeKind::TabularSection`. The payload is semantic display content: it does not
+participate in source UUID identity, owner-scoped UUID-less fallback identity,
+canonical name lookup, containment, reference-request identity, diagnostics,
+statistics, or provenance aggregation.
+
+The EDT metadata-structure reader accepts one direct non-empty
+`synonym/value` for a recognized Attribute or TabularSection. Absence remains
+an explicit empty member payload. Empty values, duplicate containers or values,
+and the unsupported `synonym/content` encoding are typed parser errors. A
+nested Attribute retains its own payload and immediate TabularSection owner;
+its synonym does not leak to the owner or create a second metadata-object
+containment edge.
+
+The production graph builder uses explicit member-payload construction for
+both present and absent values while preserving the existing two-phase child
+node and ownership-edge contribution order. Query observes payload through the
+canonical GraphNode. A synonym-only source change preserves node and edge
+identity, is reported as `SemanticContent` by Diff, and is a direct Impact seed
+without a new propagation rule. Semantic Index lookup dimensions remain
+unchanged.
+
+Graph-domain and EDT `SemanticNode(Attribute)` and
+`SemanticNode(TabularSection)` Coverage now require and provide
+`SemanticPayloadPreserved`. Their status and the aggregate gap counts remain
+unchanged because both capabilities were already `Supported`. Real grants and
+ownership fixtures plus generated malformed, UUID-less, equal-name,
+source-order, and repeated-build cases provide the accepted evidence boundary.
+Number qualifiers, history/search settings, produced types, line-number
+settings and standard attributes, multiple locale values, alternative synonym
+encodings, deeper nesting, and non-Document owner families remain deferred.
+
 `MetadataKind::Form` and `NodeKind::Metadata(MetadataKind::Form)` are not
 applicable to the EDT adapter: common forms are top-level
 `MetadataKind::CommonForm` entities, while forms owned by documents, catalogs,

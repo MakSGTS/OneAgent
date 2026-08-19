@@ -723,7 +723,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 6 — Attributes and Tabular Sections | Expand the knowledge model for attributes, tabular sections, ownership, identity, and references. | planned |
+| Sprint 6 — Attributes and Tabular Sections | Expand the knowledge model for attributes, tabular sections, ownership, identity, and references. | in progress — review pending |
 | Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | planned |
 | Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | planned |
 | Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
@@ -787,6 +787,27 @@ the completed reference-request slice remain unchanged. Other observed member
 fields and source variants remain deferred. Because the accepted slice adds no
 reference behavior, Task 6 is a regression gate and must be closed as
 `already_complete` without an empty commit when its evidence remains green.
+
+The Task 7 implementation and evidence baseline is complete. The
+source-independent model exposes optional member synonym through a payload
+compatible only with Attribute and TabularSection nodes. The EDT reader accepts
+the single direct `synonym/value` form, produces typed invalid and duplicate
+outcomes, preserves nearest-owner nesting, and the production builder emits an
+explicit member payload for both present and absent values. Query, Validation,
+Diff, Impact, repeated builds, source-order independence, UUID and owner-scoped
+UUID-less identity, equal names under different owners, and real grants and
+ownership fixtures are covered. Task 6 was closed as `already_complete` because
+synonym adds no reference observation or endpoint.
+
+Graph-domain and EDT Coverage for `SemanticNode(Attribute)` and
+`SemanticNode(TabularSection)` now require and provide
+`SemanticPayloadPreserved`; their `Supported` status and aggregate gap counts
+remain unchanged. Number qualifiers, history/search flags, produced types,
+line-number settings and standard attributes, multiple locale values,
+alternative synonym encodings, deeper nesting, non-Document owner families,
+and duplicate-identity policy remain deferred. Sprint 6 remains in progress
+until the independent Task 8 review records its findings and completion
+decision.
 
 | Order | Task | Owned outcome | Prerequisite | Suggested commit message |
 |---:|---|---|---|---|

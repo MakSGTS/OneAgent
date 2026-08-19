@@ -377,6 +377,7 @@ mod tests {
     use std::ptr;
 
     use oneagent_common::{EntityId, EntityName};
+    use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
 
     use super::{
         IncrementalIndexChangeError, NormalizedSemanticIndexChanges,
@@ -385,6 +386,8 @@ mod tests {
     use crate::{
         Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
         ResolutionState, SemanticGraph, SemanticGraphDiff,
+        node::GraphNodePayload,
+        semantic_index::{SemanticNodeIndexError, SemanticNodeIndexState},
     };
 
     fn id(value: &str) -> EntityId {
@@ -421,6 +424,25 @@ mod tests {
             kind,
             vec![provenance(id_value, origin)],
         )
+    }
+
+    fn metadata_node_with_payload(
+        id_value: &str,
+        name_value: &str,
+        synonym: &str,
+        origin: FactOrigin,
+    ) -> GraphNode {
+        GraphNode::new_with_payload_and_provenance(
+            id(id_value),
+            name(name_value),
+            NodeKind::Metadata(MetadataKind::Catalog),
+            GraphNodePayload::Metadata(MetadataPayload::new(
+                CommonMetadataPayload::new(Some(synonym.to_owned())),
+                None,
+            )),
+            vec![provenance(id_value, origin)],
+        )
+        .expect("metadata payload must match the node kind")
     }
 
     fn edge(source: &str, target: &str, kind: EdgeKind, origin: FactOrigin) -> GraphEdge {
@@ -756,5 +778,205 @@ mod tests {
 
         assert_eq!(first.operations(), retry.operations());
         assert_eq!(first.operations(), reversed.operations());
+    }
+
+    #[test]
+    fn incrementally_updates_all_node_dimensions_and_matches_a_clean_rebuild() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("stable", "Stable", NodeKind::Module),
+                node("shared.old", "Shared", NodeKind::Procedure),
+                node("removed", "Removed", NodeKind::Query),
+                node("replaced", "Before", NodeKind::Procedure),
+                node_with_provenance(
+                    "refreshed",
+                    "Refreshed",
+                    NodeKind::Attribute,
+                    FactOrigin::Parsed,
+                ),
+            ],
+        );
+
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("shared.new", "Shared", NodeKind::Procedure),
+                node("replaced", "After", NodeKind::Function),
+                node("shared.old", "Shared", NodeKind::Procedure),
+                node("stable", "Stable", NodeKind::Module),
+                node_with_provenance(
+                    "refreshed",
+                    "Refreshed",
+                    NodeKind::Attribute,
+                    FactOrigin::Derived,
+                ),
+            ],
+        );
+
+        let previous_state = SemanticNodeIndexState::from_graph(&previous);
+        let unaffected_before = previous_state
+            .ids_by_name(&name("Stable"))
+            .expect("stable bucket must exist")
+            .clone();
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("node transition must normalize");
+        let incremental = previous_state
+            .apply_changes(&changes)
+            .expect("node projections must apply atomically");
+        let rebuilt = SemanticNodeIndexState::from_graph(&current);
+
+        assert_eq!(incremental, rebuilt);
+        assert!(!incremental.ids().contains(&id("removed")));
+        assert!(incremental.ids().contains(&id("shared.new")));
+        assert!(incremental.ids_by_name(&name("Before")).is_none());
+        assert_eq!(
+            incremental
+                .ids_by_name(&name("Shared"))
+                .expect("duplicate-name bucket must exist")
+                .iter()
+                .map(EntityId::as_str)
+                .collect::<Vec<_>>(),
+            ["shared.new", "shared.old"]
+        );
+        assert_eq!(
+            incremental
+                .ids_by_kind(NodeKind::Function)
+                .expect("new kind bucket must exist")
+                .iter()
+                .map(EntityId::as_str)
+                .collect::<Vec<_>>(),
+            ["replaced"]
+        );
+        assert_eq!(
+            incremental
+                .ids_by_name(&name("Stable"))
+                .expect("stable bucket must remain"),
+            &unaffected_before
+        );
+    }
+
+    #[test]
+    fn payload_and_provenance_refreshes_leave_node_lookup_keys_unchanged() {
+        let mut previous = SemanticGraph::new();
+        previous.insert_node(metadata_node_with_payload(
+            "catalog.products",
+            "Products",
+            "Old synonym",
+            FactOrigin::Parsed,
+        ));
+        let mut current = SemanticGraph::new();
+        current.insert_node(metadata_node_with_payload(
+            "catalog.products",
+            "Products",
+            "New synonym",
+            FactOrigin::Derived,
+        ));
+
+        let previous_state = SemanticNodeIndexState::from_graph(&previous);
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("payload and provenance transition must normalize");
+
+        assert!(matches!(
+            changes.operations(),
+            [NormalizedSemanticIndexOperation::RefreshNode { .. }]
+        ));
+        let incremental = previous_state
+            .apply_changes(&changes)
+            .expect("lookup-neutral refresh must apply");
+
+        assert_eq!(incremental, previous_state);
+        assert_eq!(incremental, SemanticNodeIndexState::from_graph(&current));
+    }
+
+    #[test]
+    fn stale_node_state_fails_atomically_and_retry_is_deterministic() {
+        let mut previous = SemanticGraph::new();
+        previous.insert_node(node("node", "Before", NodeKind::Procedure));
+        let mut current = SemanticGraph::new();
+        current.insert_node(node("node", "After", NodeKind::Function));
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("replacement must normalize");
+
+        let previous_state = SemanticNodeIndexState::from_graph(&previous);
+        let first = previous_state
+            .apply_changes(&changes)
+            .expect("first application must succeed");
+        let retry = previous_state
+            .apply_changes(&changes)
+            .expect("retry from the accepted previous state must succeed");
+        assert_eq!(first, retry);
+
+        let stale_before = first.clone();
+        let error = first
+            .apply_changes(&changes)
+            .expect_err("already-current node state must be stale");
+        assert_eq!(error, SemanticNodeIndexError::StaleBaseState);
+        assert_eq!(first, stale_before);
+    }
+
+    #[test]
+    fn empty_reversed_and_multistep_node_transitions_match_clean_rebuilds() {
+        let empty = SemanticGraph::new();
+        let empty_state = SemanticNodeIndexState::from_graph(&empty);
+        let empty_changes = NormalizedSemanticIndexChanges::between(&empty, &empty)
+            .expect("empty transition must normalize");
+        assert_eq!(
+            empty_state
+                .apply_changes(&empty_changes)
+                .expect("empty state must apply"),
+            empty_state
+        );
+
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("z", "Z", NodeKind::Procedure),
+                node("a", "A", NodeKind::Module),
+            ],
+        );
+        let mut middle = SemanticGraph::new();
+        insert_nodes(
+            &mut middle,
+            [
+                node("a", "A", NodeKind::Module),
+                node("z", "Renamed", NodeKind::Function),
+            ],
+        );
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("b", "B", NodeKind::Query),
+                node("z", "Renamed", NodeKind::Function),
+            ],
+        );
+
+        let first_changes = NormalizedSemanticIndexChanges::between(&previous, &middle)
+            .expect("first step must normalize");
+        let first = SemanticNodeIndexState::from_graph(&previous)
+            .apply_changes(&first_changes)
+            .expect("first step must apply");
+        assert_eq!(first, SemanticNodeIndexState::from_graph(&middle));
+
+        let second_changes = NormalizedSemanticIndexChanges::between(&middle, &current)
+            .expect("second step must normalize");
+        let second = first
+            .apply_changes(&second_changes)
+            .expect("second step must apply");
+        assert_eq!(second, SemanticNodeIndexState::from_graph(&current));
+
+        let mut reversed = SemanticGraph::new();
+        insert_nodes(
+            &mut reversed,
+            [
+                node("z", "Renamed", NodeKind::Function),
+                node("b", "B", NodeKind::Query),
+            ],
+        );
+        assert_eq!(second, SemanticNodeIndexState::from_graph(&reversed));
     }
 }

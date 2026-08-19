@@ -1,12 +1,185 @@
 //! Deterministic derived indexes for one complete semantic graph snapshot.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use oneagent_common::{EntityId, EntityName};
 
 use crate::{
-    EdgeId, EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticGraph, edge_identity::edge_id,
+    EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, NodeSnapshot, SemanticGraph,
+    edge_identity::edge_id,
+    incremental_index::{NormalizedSemanticIndexChanges, NormalizedSemanticIndexOperation},
 };
+
+/// Owned membership for the node dimensions of the semantic index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SemanticNodeIndexState {
+    identities: BTreeSet<EntityId>,
+    by_name: BTreeMap<EntityName, BTreeSet<EntityId>>,
+    by_kind: BTreeMap<NodeKind, BTreeSet<EntityId>>,
+}
+
+impl SemanticNodeIndexState {
+    pub(crate) fn from_graph(graph: &SemanticGraph) -> Self {
+        let mut state = Self {
+            identities: BTreeSet::new(),
+            by_name: BTreeMap::new(),
+            by_kind: BTreeMap::new(),
+        };
+
+        for node in graph.nodes() {
+            let inserted = state.identities.insert(node.id().clone());
+            debug_assert!(inserted, "canonical graph node identity must be unique");
+            state
+                .by_name
+                .entry(node.name().clone())
+                .or_default()
+                .insert(node.id().clone());
+            state
+                .by_kind
+                .entry(node.kind())
+                .or_default()
+                .insert(node.id().clone());
+        }
+
+        state
+    }
+
+    /// Applies only node projections and returns a complete private candidate.
+    #[allow(dead_code)]
+    pub(crate) fn apply_changes(
+        &self,
+        changes: &NormalizedSemanticIndexChanges<'_, '_>,
+    ) -> Result<Self, SemanticNodeIndexError> {
+        if self != &Self::from_graph(changes.previous()) {
+            return Err(SemanticNodeIndexError::StaleBaseState);
+        }
+
+        let mut next = self.clone();
+        for operation in changes.operations() {
+            match operation {
+                NormalizedSemanticIndexOperation::RemoveNode(node) => next.remove(node)?,
+                NormalizedSemanticIndexOperation::ReplaceNode { old, new } => {
+                    next.remove(old)?;
+                    next.insert(new)?;
+                }
+                NormalizedSemanticIndexOperation::AddNode(node) => next.insert(node)?,
+                NormalizedSemanticIndexOperation::RefreshNode { old, new } => {
+                    next.validate_refresh(old, new)?;
+                }
+                NormalizedSemanticIndexOperation::RemoveEdge(_)
+                | NormalizedSemanticIndexOperation::AddEdge(_)
+                | NormalizedSemanticIndexOperation::RefreshEdge { .. } => {}
+            }
+        }
+
+        if next != Self::from_graph(changes.current()) {
+            return Err(SemanticNodeIndexError::CurrentStateMismatch);
+        }
+
+        Ok(next)
+    }
+
+    fn insert(&mut self, node: &NodeSnapshot) -> Result<(), SemanticNodeIndexError> {
+        let id = snapshot_entity_id(node)?;
+        if !self.identities.insert(id.clone()) {
+            return Err(SemanticNodeIndexError::DuplicateNode(id));
+        }
+        self.by_name
+            .entry(node.name().clone())
+            .or_default()
+            .insert(id.clone());
+        self.by_kind.entry(node.kind()).or_default().insert(id);
+        Ok(())
+    }
+
+    fn remove(&mut self, node: &NodeSnapshot) -> Result<(), SemanticNodeIndexError> {
+        let id = snapshot_entity_id(node)?;
+        if !self.identities.remove(&id) {
+            return Err(SemanticNodeIndexError::MissingNode(id));
+        }
+
+        remove_bucket_member(&mut self.by_name, node.name(), &id)?;
+        remove_bucket_member(&mut self.by_kind, &node.kind(), &id)?;
+        Ok(())
+    }
+
+    fn validate_refresh(
+        &self,
+        old: &NodeSnapshot,
+        new: &NodeSnapshot,
+    ) -> Result<(), SemanticNodeIndexError> {
+        let old_id = snapshot_entity_id(old)?;
+        let new_id = snapshot_entity_id(new)?;
+        if old_id != new_id || old.name() != new.name() || old.kind() != new.kind() {
+            return Err(SemanticNodeIndexError::InvalidRefresh(old_id));
+        }
+        if !self.identities.contains(&old_id)
+            || !self
+                .by_name
+                .get(old.name())
+                .is_some_and(|ids| ids.contains(&old_id))
+            || !self
+                .by_kind
+                .get(&old.kind())
+                .is_some_and(|ids| ids.contains(&old_id))
+        {
+            return Err(SemanticNodeIndexError::MissingNode(old_id));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ids(&self) -> &BTreeSet<EntityId> {
+        &self.identities
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ids_by_name(&self, name: &EntityName) -> Option<&BTreeSet<EntityId>> {
+        self.by_name.get(name)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ids_by_kind(&self, kind: NodeKind) -> Option<&BTreeSet<EntityId>> {
+        self.by_kind.get(&kind)
+    }
+}
+
+/// Typed atomic node-state transition failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SemanticNodeIndexError {
+    StaleBaseState,
+    InvalidNodeId(NodeId),
+    DuplicateNode(EntityId),
+    MissingNode(EntityId),
+    MissingBucketMember(EntityId),
+    InvalidRefresh(EntityId),
+    CurrentStateMismatch,
+}
+
+fn snapshot_entity_id(node: &NodeSnapshot) -> Result<EntityId, SemanticNodeIndexError> {
+    EntityId::new(node.id().as_str())
+        .map_err(|_| SemanticNodeIndexError::InvalidNodeId(node.id().clone()))
+}
+
+fn remove_bucket_member<Key: Ord>(
+    buckets: &mut BTreeMap<Key, BTreeSet<EntityId>>,
+    key: &Key,
+    id: &EntityId,
+) -> Result<(), SemanticNodeIndexError> {
+    let remove_bucket = {
+        let Some(ids) = buckets.get_mut(key) else {
+            return Err(SemanticNodeIndexError::MissingBucketMember(id.clone()));
+        };
+        if !ids.remove(id) {
+            return Err(SemanticNodeIndexError::MissingBucketMember(id.clone()));
+        }
+        ids.is_empty()
+    };
+    if remove_bucket {
+        buckets.remove(key);
+    }
+    Ok(())
+}
 
 /// Crate-internal read-only lookup state derived from one borrowed graph snapshot.
 #[derive(Debug)]
@@ -30,18 +203,12 @@ pub(crate) struct SemanticIndex<'graph> {
 impl<'graph> SemanticIndex<'graph> {
     /// Builds lookup state without changing or copying canonical graph facts.
     pub(crate) fn new(graph: &'graph SemanticGraph) -> Self {
-        let mut nodes_by_id = BTreeMap::new();
-        let mut nodes_by_name = BTreeMap::<EntityName, Vec<&GraphNode>>::new();
-        let mut nodes_by_kind = BTreeMap::<NodeKind, Vec<&GraphNode>>::new();
-
-        for node in graph.nodes() {
-            nodes_by_id.insert(node.id().clone(), node);
-            nodes_by_name
-                .entry(node.name().clone())
-                .or_default()
-                .push(node);
-            nodes_by_kind.entry(node.kind()).or_default().push(node);
-        }
+        let node_state = SemanticNodeIndexState::from_graph(graph);
+        let NodeViews {
+            identities: nodes_by_id,
+            names: nodes_by_name,
+            kinds: nodes_by_kind,
+        } = build_node_views(graph, &node_state);
 
         let mut ordered_edges = graph
             .edges()
@@ -169,6 +336,64 @@ impl<'graph> SemanticIndex<'graph> {
         self.children_by_owner_name
             .get(&(owner.clone(), name.clone()))
             .map_or(&[], Vec::as_slice)
+    }
+}
+
+struct NodeViews<'graph> {
+    identities: BTreeMap<EntityId, &'graph GraphNode>,
+    names: BTreeMap<EntityName, Vec<&'graph GraphNode>>,
+    kinds: BTreeMap<NodeKind, Vec<&'graph GraphNode>>,
+}
+
+fn build_node_views<'graph>(
+    graph: &'graph SemanticGraph,
+    state: &SemanticNodeIndexState,
+) -> NodeViews<'graph> {
+    let identities = state
+        .identities
+        .iter()
+        .map(|id| {
+            let node = graph
+                .node(id)
+                .expect("semantic node index state must resolve in its canonical graph");
+            (id.clone(), node)
+        })
+        .collect();
+    let names = state
+        .by_name
+        .iter()
+        .map(|(name, ids)| {
+            let nodes = ids
+                .iter()
+                .map(|id| {
+                    graph
+                        .node(id)
+                        .expect("semantic node name state must resolve in its canonical graph")
+                })
+                .collect();
+            (name.clone(), nodes)
+        })
+        .collect();
+    let kinds = state
+        .by_kind
+        .iter()
+        .map(|(kind, ids)| {
+            let nodes = ids
+                .iter()
+                .map(|id| {
+                    graph
+                        .node(id)
+                        .expect("semantic node kind state must resolve in its canonical graph")
+                })
+                .collect();
+            (*kind, nodes)
+        })
+        .collect();
+
+    NodeViews {
+        identities,
+        names,
+        kinds,
     }
 }
 

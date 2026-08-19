@@ -11,6 +11,8 @@ pub mod edge;
 mod edge_identity;
 pub mod identity;
 pub mod impact;
+#[allow(dead_code)]
+mod incremental_index;
 pub mod kind;
 pub mod measure;
 pub mod node;

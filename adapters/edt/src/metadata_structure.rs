@@ -2,9 +2,9 @@
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::NodeKind;
-use oneagent_metadata::MetadataKind;
+use oneagent_metadata::{MetadataKind, MetadataMemberPayload};
 use quick_xml::Reader;
-use quick_xml::events::{BytesStart, Event};
+use quick_xml::events::{BytesStart, BytesText, Event};
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -68,6 +68,7 @@ pub struct EdtMetadataChildDescriptor {
     name: EntityName,
     kind: EdtMetadataChildKind,
     parent_id: EntityId,
+    member_payload: MetadataMemberPayload,
     references: Vec<EdtMetadataReferenceDescriptor>,
 }
 
@@ -81,11 +82,32 @@ impl EdtMetadataChildDescriptor {
         parent_id: EntityId,
         references: Vec<EdtMetadataReferenceDescriptor>,
     ) -> Self {
+        Self::new_with_member_payload(
+            id,
+            name,
+            kind,
+            parent_id,
+            MetadataMemberPayload::empty(),
+            references,
+        )
+    }
+
+    /// Creates a child metadata descriptor with explicit member content.
+    #[must_use]
+    pub const fn new_with_member_payload(
+        id: EntityId,
+        name: EntityName,
+        kind: EdtMetadataChildKind,
+        parent_id: EntityId,
+        member_payload: MetadataMemberPayload,
+        references: Vec<EdtMetadataReferenceDescriptor>,
+    ) -> Self {
         Self {
             id,
             name,
             kind,
             parent_id,
+            member_payload,
             references,
         }
     }
@@ -112,6 +134,12 @@ impl EdtMetadataChildDescriptor {
     #[must_use]
     pub const fn parent_id(&self) -> &EntityId {
         &self.parent_id
+    }
+
+    /// Returns accepted source-independent member content.
+    #[must_use]
+    pub const fn member_payload(&self) -> &MetadataMemberPayload {
+        &self.member_payload
     }
 
     /// Returns explicit metadata references declared by this child element.
@@ -228,6 +256,10 @@ struct PendingChild {
     kind: EdtMetadataChildKind,
     uuid: Option<String>,
     name: Option<String>,
+    synonym_container_count: usize,
+    synonym_value_count: usize,
+    synonym: Option<String>,
+    unsupported_synonym_encoding: bool,
     references: Vec<EdtMetadataReferenceDescriptor>,
     nested_attributes: Vec<PendingChild>,
     depth: usize,
@@ -256,10 +288,18 @@ fn parse_children(
                         kind,
                         uuid: read_uuid(&reader, &event)?,
                         name: None,
+                        synonym_container_count: 0,
+                        synonym_value_count: 0,
+                        synonym: None,
+                        unsupported_synonym_encoding: false,
                         references: Vec::new(),
                         nested_attributes: Vec::new(),
                         depth: path.len(),
                     });
+                }
+
+                if let Some(child) = pending.last_mut() {
+                    observe_member_synonym_start(child, &path);
                 }
             }
 
@@ -280,44 +320,14 @@ fn parse_children(
                         },
                     });
                 }
+
+                if let Some(child) = pending.last_mut() {
+                    observe_member_synonym_empty(child, &path, &element_name);
+                }
             }
 
             Ok(Event::Text(event)) => {
-                if path.last().is_some_and(|element| element == "name")
-                    && let Some(child) = pending.last_mut()
-                    && child.name.is_none()
-                {
-                    child.name = Some(
-                        event
-                            .decode()
-                            .map_err(|source| {
-                                EdtMetadataStructureError::MalformedXml(source.to_string())
-                            })?
-                            .into_owned(),
-                    );
-                }
-
-                if path.last().is_some_and(|element| element == "types")
-                    && let Some(child) = pending.last_mut()
-                {
-                    let value = event
-                        .decode()
-                        .map_err(|source| {
-                            EdtMetadataStructureError::MalformedXml(source.to_string())
-                        })?
-                        .into_owned();
-
-                    if let Some(reference) =
-                        parse_metadata_reference_type(&value).map_err(|()| {
-                            EdtMetadataStructureError::InvalidReferenceName {
-                                path: descriptor_path.to_path_buf(),
-                                type_name: value,
-                            }
-                        })?
-                    {
-                        child.references.push(reference);
-                    }
-                }
+                observe_child_text(&event, &path, &mut pending, descriptor_path)?;
             }
 
             Ok(Event::End(_)) => {
@@ -355,6 +365,135 @@ fn parse_children(
     Ok(children)
 }
 
+fn observe_child_text(
+    event: &BytesText<'_>,
+    path: &[String],
+    pending: &mut [PendingChild],
+    descriptor_path: &Path,
+) -> Result<(), EdtMetadataStructureError> {
+    let Some(child) = pending.last_mut() else {
+        return Ok(());
+    };
+
+    if path.last().is_some_and(|element| element == "name") && child.name.is_none() {
+        child.name = Some(decode_text(event)?);
+    }
+
+    if path.last().is_some_and(|element| element == "types") {
+        let value = decode_text(event)?;
+        if let Some(reference) = parse_metadata_reference_type(&value).map_err(|()| {
+            EdtMetadataStructureError::InvalidReferenceName {
+                path: descriptor_path.to_path_buf(),
+                type_name: value,
+            }
+        })? {
+            child.references.push(reference);
+        }
+    }
+
+    if is_direct_member_synonym_value(path, child.depth) {
+        let value = decode_text(event)?;
+        if !value.is_empty() {
+            match &mut child.synonym {
+                Some(current) => current.push_str(&value),
+                None => child.synonym = Some(value),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn decode_text(event: &BytesText<'_>) -> Result<String, EdtMetadataStructureError> {
+    event
+        .decode()
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|source| EdtMetadataStructureError::MalformedXml(source.to_string()))
+}
+
+fn observe_member_synonym_start(child: &mut PendingChild, path: &[String]) {
+    if !is_member_kind(child.kind) {
+        return;
+    }
+
+    if path.len() == child.depth + 1 && path.last().is_some_and(|element| element == "synonym") {
+        child.synonym_container_count += 1;
+    } else if is_direct_member_synonym_element(path, child.depth, "value") {
+        child.synonym_value_count += 1;
+    } else if is_direct_member_synonym_element(path, child.depth, "content") {
+        child.unsupported_synonym_encoding = true;
+    }
+}
+
+fn observe_member_synonym_empty(child: &mut PendingChild, path: &[String], element_name: &str) {
+    if !is_member_kind(child.kind) {
+        return;
+    }
+
+    if path.len() == child.depth && element_name == "synonym" {
+        child.synonym_container_count += 1;
+    } else if path.len() == child.depth + 1
+        && path.last().is_some_and(|element| element == "synonym")
+    {
+        match element_name {
+            "value" => child.synonym_value_count += 1,
+            "content" => child.unsupported_synonym_encoding = true,
+            _ => {}
+        }
+    }
+}
+
+fn is_direct_member_synonym_value(path: &[String], child_depth: usize) -> bool {
+    is_direct_member_synonym_element(path, child_depth, "value")
+}
+
+fn is_direct_member_synonym_element(
+    path: &[String],
+    child_depth: usize,
+    element_name: &str,
+) -> bool {
+    path.len() == child_depth + 2
+        && path
+            .get(child_depth)
+            .is_some_and(|element| element == "synonym")
+        && path.last().is_some_and(|element| element == element_name)
+}
+
+const fn is_member_kind(kind: EdtMetadataChildKind) -> bool {
+    matches!(
+        kind,
+        EdtMetadataChildKind::Attribute | EdtMetadataChildKind::TabularSection
+    )
+}
+
+fn finish_member_payload(
+    child: &PendingChild,
+    descriptor_path: &Path,
+) -> Result<MetadataMemberPayload, EdtMetadataStructureError> {
+    if !is_member_kind(child.kind) || child.synonym_container_count == 0 {
+        return Ok(MetadataMemberPayload::empty());
+    }
+
+    if child.synonym_container_count > 1 || child.synonym_value_count > 1 {
+        return Err(EdtMetadataStructureError::DuplicateMemberSynonym {
+            path: descriptor_path.to_path_buf(),
+            kind: child.kind,
+        });
+    }
+
+    if child.unsupported_synonym_encoding
+        || child.synonym_value_count != 1
+        || child.synonym.as_deref().is_none_or(str::is_empty)
+    {
+        return Err(EdtMetadataStructureError::InvalidMemberSynonym {
+            path: descriptor_path.to_path_buf(),
+            kind: child.kind,
+        });
+    }
+
+    Ok(MetadataMemberPayload::new(child.synonym.clone()))
+}
+
 fn finish_child(
     mut child: PendingChild,
     parent_id: &EntityId,
@@ -363,22 +502,23 @@ fn finish_child(
     let nested_attributes = std::mem::take(&mut child.nested_attributes);
     let raw_name = child
         .name
+        .as_deref()
         .ok_or_else(|| EdtMetadataStructureError::MissingName {
             path: descriptor_path.to_path_buf(),
             kind: child.kind,
         })?;
 
-    let name = EntityName::new(&raw_name).map_err(|_| EdtMetadataStructureError::InvalidName {
+    let name = EntityName::new(raw_name).map_err(|_| EdtMetadataStructureError::InvalidName {
         path: descriptor_path.to_path_buf(),
-        name: raw_name.clone(),
+        name: raw_name.to_owned(),
     })?;
 
-    let raw_id = child.uuid.unwrap_or_else(|| {
+    let raw_id = child.uuid.take().unwrap_or_else(|| {
         format!(
             "{}:{}:{}",
             parent_id.as_str(),
             child.kind.as_str(),
-            raw_name
+            name.as_str()
         )
     });
 
@@ -386,9 +526,16 @@ fn finish_child(
         path: descriptor_path.to_path_buf(),
         identifier: raw_id,
     })?;
+    let member_payload = finish_member_payload(&child, descriptor_path)?;
 
-    let descriptor =
-        EdtMetadataChildDescriptor::new(id, name, child.kind, parent_id.clone(), child.references);
+    let descriptor = EdtMetadataChildDescriptor::new_with_member_payload(
+        id,
+        name,
+        child.kind,
+        parent_id.clone(),
+        member_payload,
+        child.references,
+    );
     let immediate_owner_id = descriptor.id().clone();
     let mut descriptors = vec![descriptor];
 
@@ -541,6 +688,24 @@ pub enum EdtMetadataStructureError {
         name: String,
     },
 
+    /// A member synonym container has no accepted direct non-empty value.
+    InvalidMemberSynonym {
+        /// Descriptor path.
+        path: PathBuf,
+
+        /// Child element kind.
+        kind: EdtMetadataChildKind,
+    },
+
+    /// A member declares more than one direct synonym container or value.
+    DuplicateMemberSynonym {
+        /// Descriptor path.
+        path: PathBuf,
+
+        /// Child element kind.
+        kind: EdtMetadataChildKind,
+    },
+
     /// A metadata reference target name is invalid.
     InvalidReferenceName {
         /// Descriptor path.
@@ -590,6 +755,20 @@ impl Display for EdtMetadataStructureError {
                 path.display()
             ),
 
+            Self::InvalidMemberSynonym { path, kind } => write!(
+                formatter,
+                "EDT {} in {} has no accepted direct member synonym value",
+                kind.as_str(),
+                path.display()
+            ),
+
+            Self::DuplicateMemberSynonym { path, kind } => write!(
+                formatter,
+                "EDT {} in {} declares duplicate direct member synonym content",
+                kind.as_str(),
+                path.display()
+            ),
+
             Self::InvalidReferenceName { path, type_name } => write!(
                 formatter,
                 "invalid EDT metadata reference type `{type_name}` in {}",
@@ -608,6 +787,8 @@ impl std::error::Error for EdtMetadataStructureError {
             | Self::MissingIdentifierAndName { .. }
             | Self::InvalidIdentifier { .. }
             | Self::InvalidName { .. }
+            | Self::InvalidMemberSynonym { .. }
+            | Self::DuplicateMemberSynonym { .. }
             | Self::InvalidReferenceName { .. } => None,
         }
     }
@@ -618,14 +799,37 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_metadata::MetadataKind;
     use std::fs;
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
     use crate::EdtMetadataObjectDescriptor;
 
     use super::{
-        EdtMetadataChildKind, EdtMetadataReferenceRole, EdtMetadataStructureReader,
-        FileSystemEdtMetadataStructureReader,
+        EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataReferenceRole,
+        EdtMetadataStructureError, EdtMetadataStructureReader,
+        FileSystemEdtMetadataStructureReader, parse_children,
     };
+
+    fn document_descriptor(path: PathBuf, id: &str, name: &str) -> EdtMetadataObjectDescriptor {
+        EdtMetadataObjectDescriptor::new(
+            EntityId::new(id).expect("identifier must be valid"),
+            EntityName::new(name).expect("name must be valid"),
+            None,
+            MetadataKind::Document,
+            None,
+            path,
+        )
+    }
+
+    fn generated_children(
+        xml: &str,
+    ) -> Result<Vec<EdtMetadataChildDescriptor>, EdtMetadataStructureError> {
+        parse_children(
+            xml,
+            &EntityId::new("document-generated").expect("identifier must be valid"),
+            Path::new("generated/Document.mdo"),
+        )
+    }
 
     #[test]
     fn reads_attributes_and_tabular_sections() {
@@ -1126,5 +1330,164 @@ mod tests {
                 .iter()
                 .any(|child| child.name().as_str() == "Print")
         );
+    }
+
+    #[test]
+    fn reads_real_present_member_synonyms_repeatedly() {
+        let descriptor_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/grants_project/src/Documents/Sale/Sale.mdo");
+        let descriptor = document_descriptor(
+            descriptor_path,
+            "d9ad89c3-91b4-4d3e-bbfb-1b6e930a38f8",
+            "Sale",
+        );
+
+        let first = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("real grants structure must be read");
+        let repeated = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("repeated grants structure read must succeed");
+
+        assert_eq!(first, repeated);
+        assert_eq!(first.len(), 5);
+        for (name, synonym) in [
+            ("Proucts", Some("Proucts")),
+            ("Реквизит1", None),
+            ("Price", Some("Price")),
+            ("Quantity", Some("Quantity")),
+            ("Ammount", Some("Ammount")),
+        ] {
+            let child = first
+                .iter()
+                .find(|child| child.name().as_str() == name)
+                .expect("real fixture child must exist");
+            assert_eq!(child.member_payload().synonym(), synonym);
+        }
+    }
+
+    #[test]
+    fn reads_real_absent_member_synonyms_without_synthesis() {
+        let descriptor_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/ownership_project/src/Documents/Sales/Sales.mdo");
+        let descriptor = document_descriptor(
+            descriptor_path,
+            "20000000-0000-0000-0000-000000000000",
+            "Sales",
+        );
+
+        let children = FileSystemEdtMetadataStructureReader
+            .read_children(&descriptor)
+            .expect("real ownership structure must be read");
+
+        assert_eq!(children.len(), 4);
+        assert!(
+            children
+                .iter()
+                .all(|child| child.member_payload().synonym().is_none())
+        );
+    }
+
+    #[test]
+    fn direct_member_synonym_is_non_ascii_order_independent_and_owner_scoped() {
+        let xml = |synonym_body: &str| {
+            format!(
+                r#"<mdclass:Document xmlns:mdclass="urn:test" uuid="document-generated">
+  <name>Generated</name>
+  <synonym><value>Document display</value></synonym>
+  <attributes uuid="top-attribute">
+    <name>TopAttribute</name>
+    <synonym>{synonym_body}</synonym>
+  </attributes>
+  <tabularSections uuid="section">
+    <name>Lines</name>
+    <attributes uuid="nested-attribute">
+      <name>NestedAttribute</name>
+      <synonym><key>ru</key><value>Вложенный реквизит</value></synonym>
+    </attributes>
+  </tabularSections>
+</mdclass:Document>"#
+            )
+        };
+
+        let key_first = generated_children(&xml("<key>ru</key><value>Верхний реквизит</value>"))
+            .expect("key-first synonym must be parsed");
+        let value_first = generated_children(&xml("<value>Верхний реквизит</value><key>ru</key>"))
+            .expect("value-first synonym must be parsed");
+
+        assert_eq!(key_first, value_first);
+        assert_eq!(key_first[0].id().as_str(), "top-attribute");
+        assert_eq!(
+            key_first[0].member_payload().synonym(),
+            Some("Верхний реквизит")
+        );
+        assert_eq!(key_first[1].id().as_str(), "section");
+        assert_eq!(key_first[1].member_payload().synonym(), None);
+        assert_eq!(key_first[2].parent_id(), key_first[1].id());
+        assert_eq!(
+            key_first[2].member_payload().synonym(),
+            Some("Вложенный реквизит")
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_and_duplicate_direct_member_synonyms_deterministically() {
+        let xml = |synonym: &str| {
+            format!(
+                r#"<mdclass:Document xmlns:mdclass="urn:test">
+  <name>Generated</name>
+  <attributes uuid="attribute">
+    <name>Attribute</name>
+    {synonym}
+  </attributes>
+</mdclass:Document>"#
+            )
+        };
+        let cases = [
+            ("<synonym><key>ru</key></synonym>", false),
+            ("<synonym><value/></synonym>", false),
+            ("<synonym><content>Display</content></synonym>", false),
+            (
+                "<synonym><value>One</value></synonym><synonym><value>Two</value></synonym>",
+                true,
+            ),
+            (
+                "<synonym><value>One</value><value>Two</value></synonym>",
+                true,
+            ),
+        ];
+
+        for (synonym, duplicate) in cases {
+            let source = xml(synonym);
+            let first = generated_children(&source).expect_err("member synonym must be rejected");
+            let repeated =
+                generated_children(&source).expect_err("repeated invalid read must fail");
+
+            assert_eq!(first.to_string(), repeated.to_string());
+            match first {
+                EdtMetadataStructureError::DuplicateMemberSynonym { path, kind } if duplicate => {
+                    assert_eq!(path, Path::new("generated/Document.mdo"));
+                    assert_eq!(kind, EdtMetadataChildKind::Attribute);
+                }
+                EdtMetadataStructureError::InvalidMemberSynonym { path, kind } if !duplicate => {
+                    assert_eq!(path, Path::new("generated/Document.mdo"));
+                    assert_eq!(kind, EdtMetadataChildKind::Attribute);
+                }
+                error => panic!("unexpected member synonym error: {error}"),
+            }
+        }
+    }
+
+    #[test]
+    fn malformed_member_synonym_remains_a_malformed_xml_error() {
+        let error = generated_children(
+            r#"<mdclass:Document xmlns:mdclass="urn:test">
+  <name>Generated</name>
+  <attributes><name>Attribute</name><synonym><value>Broken</synonym></attributes>
+</mdclass:Document>"#,
+        )
+        .expect_err("malformed member synonym XML must be rejected");
+
+        assert!(matches!(error, EdtMetadataStructureError::MalformedXml(_)));
     }
 }

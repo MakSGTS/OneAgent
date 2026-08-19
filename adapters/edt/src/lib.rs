@@ -3,9 +3,8 @@
 mod bsl_graph;
 mod command_parameter;
 mod coverage;
-// The parser is a production prerequisite for the later Opens emission task.
-#[allow(dead_code)]
 mod form_navigation;
+mod form_navigation_emission;
 mod metadata_object;
 mod metadata_structure;
 mod module_reader;
@@ -55,6 +54,7 @@ pub use bsl_graph::{
     analyze_module,
 };
 pub use coverage::{EdtSemanticCoverageRegistry, EdtSemanticCoverageReport};
+pub use form_navigation_emission::EdtFormNavigationEmissionError;
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
@@ -691,14 +691,13 @@ impl FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
-        bsl_graph::add_configuration_module_symbols_with_diagnostics_in_scope(
+        add_configuration_module_semantics(
             &mut graph,
             &configuration_modules,
-            query_source_resolution::WorkspaceResolutionScope::Complete,
+            metadata_reference_scope,
             &mut diagnostics,
             &mut reference_statistics,
-        )
-        .map_err(EdtGraphError::Bsl)?;
+        )?;
 
         finish_configuration_graph_build(
             graph,
@@ -708,6 +707,33 @@ impl FileSystemEdtSemanticGraphBuilder {
             reference_requests,
         )
     }
+}
+
+fn add_configuration_module_semantics(
+    graph: &mut SemanticGraph,
+    modules: &[EdtModuleDescriptor],
+    workspace_scope: query_source_resolution::WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<(), EdtGraphError> {
+    let form_navigation = form_navigation_emission::collect_form_navigation(modules)
+        .map_err(EdtGraphError::FormNavigation)?;
+    bsl_graph::add_configuration_module_symbols_with_diagnostics_in_scope(
+        graph,
+        modules,
+        query_source_resolution::WorkspaceResolutionScope::Complete,
+        diagnostics,
+        reference_statistics,
+    )
+    .map_err(EdtGraphError::Bsl)?;
+    form_navigation_emission::emit_form_navigation(
+        graph,
+        &form_navigation,
+        workspace_scope,
+        diagnostics,
+        reference_statistics,
+    )
+    .map_err(EdtGraphError::FormNavigation)
 }
 
 fn insert_configuration_node(
@@ -2752,6 +2778,9 @@ pub enum EdtGraphError {
 
     /// BSL symbols could not be added to the graph.
     Bsl(EdtBslGraphError),
+
+    /// Static Form navigation could not be collected or emitted.
+    FormNavigation(form_navigation_emission::EdtFormNavigationEmissionError),
 }
 
 impl Display for EdtGraphError {
@@ -2841,6 +2870,9 @@ impl Display for EdtGraphError {
             Self::Bsl(error) => {
                 write!(formatter, "failed to add BSL symbols to graph: {error}")
             }
+            Self::FormNavigation(error) => {
+                write!(formatter, "failed to emit EDT Form navigation: {error}")
+            }
         }
     }
 }
@@ -2868,6 +2900,7 @@ impl std::error::Error for EdtGraphError {
             | Self::InvalidFormCommandModuleOwner { .. }
             | Self::InvalidCommandParameterSource { .. } => None,
             Self::Bsl(error) => Some(error),
+            Self::FormNavigation(error) => Some(error),
         }
     }
 }

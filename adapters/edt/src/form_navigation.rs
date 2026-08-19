@@ -83,7 +83,7 @@ pub(crate) enum EdtFormNavigationRejectionReason {
 }
 
 impl EdtFormNavigationRejectionReason {
-    const fn outcome_kind(self) -> EdtFormNavigationOutcomeKind {
+    pub(crate) const fn outcome_kind(self) -> EdtFormNavigationOutcomeKind {
         match self {
             Self::MalformedStatement => EdtFormNavigationOutcomeKind::Malformed,
             Self::UnsupportedTarget(_) => EdtFormNavigationOutcomeKind::Unsupported,

@@ -3,6 +3,9 @@
 mod bsl_graph;
 mod command_parameter;
 mod coverage;
+// The parser is a production prerequisite for the later Opens emission task.
+#[allow(dead_code)]
+mod form_navigation;
 mod metadata_object;
 mod metadata_structure;
 mod module_reader;

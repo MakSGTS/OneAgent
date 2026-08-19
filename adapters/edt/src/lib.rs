@@ -3321,6 +3321,7 @@ mod graph_tests {
             EdgeKind::Includes => "includes",
             EdgeKind::Extends => "extends",
             EdgeKind::DependsOn => "depends_on",
+            EdgeKind::Opens => "opens",
         };
 
         format!(

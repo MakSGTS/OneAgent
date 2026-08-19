@@ -497,6 +497,61 @@ fn dependencies_and_usages_follow_dependency_edge_policy() {
 }
 
 #[test]
+fn opens_participates_in_generic_filters_dependencies_usages_and_traversal() {
+    let procedure = id("procedure.open");
+    let form = id("form.document");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(GraphNode::new(
+        procedure.clone(),
+        name("Open"),
+        NodeKind::Procedure,
+    ));
+    graph.insert_node(GraphNode::new(
+        form.clone(),
+        name("DocumentForm"),
+        NodeKind::Form,
+    ));
+    graph
+        .insert_edge(GraphEdge::new(
+            procedure.clone(),
+            form.clone(),
+            EdgeKind::Opens,
+        ))
+        .expect("Opens edge must be stored");
+
+    let query = graph.query();
+    let procedure_id = node_id(procedure.as_str());
+    let form_id = node_id(form.as_str());
+    let traversal = query.traverse(
+        &procedure_id,
+        &SemanticGraphTraversalOptions::new(SemanticGraphTraversalDirection::Downstream, 1)
+            .with_edge_filter(SemanticGraphEdgeFilter::only(EdgeKind::Opens)),
+    );
+
+    assert!(SemanticGraphQuery::is_dependency_edge_kind(EdgeKind::Opens));
+    assert_eq!(
+        query
+            .downstream_neighbors_by_kind(&procedure_id, EdgeKind::Opens)
+            .len(),
+        1
+    );
+    assert_eq!(query.direct_dependencies(&procedure_id).len(), 1);
+    assert_eq!(
+        query
+            .direct_dependencies_by_kind(&procedure_id, EdgeKind::Opens)
+            .len(),
+        1
+    );
+    assert_eq!(query.direct_usages(&form_id).len(), 1);
+    assert_eq!(
+        query.direct_usages(&form_id)[0].edge().kind(),
+        EdgeKind::Opens
+    );
+    assert_eq!(traversal.len(), 1);
+    assert_eq!(traversal[0].node_id(), &form_id);
+}
+
+#[test]
 fn bounded_breadth_first_traversal_handles_cycles_and_depth() {
     let normal = graph_fixture(false);
     let reversed = graph_fixture(true);

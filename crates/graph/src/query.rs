@@ -271,8 +271,8 @@ impl<'graph> SemanticGraphQuery<'graph> {
 
     /// Returns `true` when `kind` participates in dependency queries.
     ///
-    /// First-version dependency edges are `Calls`, `References`, `Reads`,
-    /// `Writes` and `DependsOn`. Ownership `Contains` edges are intentionally
+    /// Dependency edges are `Calls`, `References`, `Reads`, `Writes`,
+    /// `DependsOn` and `Opens`. Ownership `Contains` edges are intentionally
     /// excluded.
     #[must_use]
     pub const fn is_dependency_edge_kind(kind: EdgeKind) -> bool {
@@ -540,8 +540,8 @@ impl<'graph> SemanticGraphQuery<'graph> {
 
     /// Returns direct dependencies of `node`.
     ///
-    /// Dependencies follow outgoing `Calls`, `References`, `Reads`, `Writes`
-    /// and `DependsOn` edges. Ownership `Contains` edges are excluded.
+    /// Dependencies follow outgoing `Calls`, `References`, `Reads`, `Writes`,
+    /// `DependsOn` and `Opens` edges. Ownership `Contains` edges are excluded.
     #[must_use]
     pub fn direct_dependencies(&self, node: &NodeId) -> Vec<SemanticGraphRelation<'graph>> {
         self.direct_dependencies_with_filter(node, &SemanticGraphEdgeFilter::All)
@@ -723,12 +723,13 @@ impl<'graph> SemanticGraphQuery<'graph> {
     }
 }
 
-const DEPENDENCY_EDGE_KINDS: [EdgeKind; 5] = [
+const DEPENDENCY_EDGE_KINDS: [EdgeKind; 6] = [
     EdgeKind::Calls,
     EdgeKind::References,
     EdgeKind::Reads,
     EdgeKind::Writes,
     EdgeKind::DependsOn,
+    EdgeKind::Opens,
 ];
 
 const fn is_dependency_edge_kind(kind: EdgeKind) -> bool {
@@ -739,6 +740,7 @@ const fn is_dependency_edge_kind(kind: EdgeKind) -> bool {
             | EdgeKind::Reads
             | EdgeKind::Writes
             | EdgeKind::DependsOn
+            | EdgeKind::Opens
     )
 }
 

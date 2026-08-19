@@ -487,6 +487,7 @@ impl SemanticGraphSchema {
             EdgeKind::Includes => allows_includes(source_kind, target_kind),
             EdgeKind::Reads => allows_reads(source_kind, target_kind),
             EdgeKind::Writes => allows_writes(source_kind, target_kind),
+            EdgeKind::Opens => allows_opens(source_kind, target_kind),
         }
     }
 }
@@ -1144,7 +1145,6 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
     match target {
         NodeKind::Metadata(MetadataKind::Configuration) => false,
         NodeKind::Metadata(_)
-        | NodeKind::Module
         | NodeKind::StandardAttribute
         | NodeKind::TabularSection
         | NodeKind::Dimension
@@ -1152,6 +1152,10 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
         | NodeKind::Measure
         | NodeKind::Form
         | NodeKind::Command => matches!(source, NodeKind::Metadata(_)),
+        NodeKind::Module => matches!(
+            source,
+            NodeKind::Metadata(_) | NodeKind::Form | NodeKind::Command
+        ),
         NodeKind::Attribute => matches!(source, NodeKind::Metadata(_) | NodeKind::TabularSection),
         NodeKind::Procedure | NodeKind::Function => matches!(source, NodeKind::Module),
         NodeKind::Query => matches!(source, NodeKind::Procedure | NodeKind::Function),
@@ -1162,9 +1166,39 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
 const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
     (matches!(
         source,
+        NodeKind::Attribute
+            | NodeKind::Dimension
+            | NodeKind::Resource
+            | NodeKind::Command
+            | NodeKind::Metadata(MetadataKind::Command)
+    ) && is_metadata_type_target(target))
+        || (matches!(source, NodeKind::AccessRight)
+            && matches!(
+                target,
+                NodeKind::Metadata(
+                    MetadataKind::Configuration
+                        | MetadataKind::Catalog
+                        | MetadataKind::Document
+                        | MetadataKind::InformationRegister
+                        | MetadataKind::AccumulationRegister
+                )
+            ))
+}
+
+const fn allows_depends_on(source: NodeKind, target: NodeKind) -> bool {
+    (matches!(
+        source,
         NodeKind::Attribute | NodeKind::Dimension | NodeKind::Resource
-    ) && matches!(
-        target,
+    ) && matches!(target, NodeKind::Metadata(_)))
+        || (matches!(
+            source,
+            NodeKind::Command | NodeKind::Metadata(MetadataKind::Command)
+        ) && is_metadata_type_target(target))
+}
+
+const fn is_metadata_type_target(kind: NodeKind) -> bool {
+    matches!(
+        kind,
         NodeKind::Metadata(
             MetadataKind::Catalog
                 | MetadataKind::Document
@@ -1176,24 +1210,15 @@ const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
                 | MetadataKind::BusinessProcess
                 | MetadataKind::Task
         )
-    )) || (matches!(source, NodeKind::AccessRight)
-        && matches!(
-            target,
-            NodeKind::Metadata(
-                MetadataKind::Configuration
-                    | MetadataKind::Catalog
-                    | MetadataKind::Document
-                    | MetadataKind::InformationRegister
-                    | MetadataKind::AccumulationRegister
-            )
-        ))
+    )
 }
 
-const fn allows_depends_on(source: NodeKind, target: NodeKind) -> bool {
-    matches!(
-        source,
-        NodeKind::Attribute | NodeKind::Dimension | NodeKind::Resource
-    ) && matches!(target, NodeKind::Metadata(_))
+const fn allows_opens(source: NodeKind, target: NodeKind) -> bool {
+    matches!(source, NodeKind::Procedure)
+        && matches!(
+            target,
+            NodeKind::Form | NodeKind::Metadata(MetadataKind::CommonForm)
+        )
 }
 
 const fn allows_reads(source: NodeKind, target: NodeKind) -> bool {

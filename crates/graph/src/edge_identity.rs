@@ -25,6 +25,7 @@ const fn edge_kind_code(kind: EdgeKind) -> &'static str {
         EdgeKind::Includes => "includes",
         EdgeKind::Extends => "extends",
         EdgeKind::DependsOn => "depends_on",
+        EdgeKind::Opens => "opens",
     }
 }
 
@@ -41,6 +42,22 @@ mod tests {
             id.as_str(),
             "edge:source#6:source;target#6:target;kind:depends_on"
         );
+    }
+
+    #[test]
+    fn opens_has_a_stable_machine_identity_without_changing_existing_kinds() {
+        let opens = edge_id("source", "target", EdgeKind::Opens);
+        let depends_on = edge_id("source", "target", EdgeKind::DependsOn);
+
+        assert_eq!(
+            opens.as_str(),
+            "edge:source#6:source;target#6:target;kind:opens"
+        );
+        assert_eq!(
+            depends_on.as_str(),
+            "edge:source#6:source;target#6:target;kind:depends_on"
+        );
+        assert_ne!(opens, depends_on);
     }
 
     #[test]

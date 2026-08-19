@@ -170,6 +170,44 @@ fn modified_dependency_affects_direct_and_transitive_usages() {
 }
 
 #[test]
+fn modified_opened_form_propagates_impact_to_opening_procedure() {
+    let build = |form_name: &str| {
+        let mut graph = SemanticGraph::new();
+        add_node(&mut graph, "procedure.open", "Open", NodeKind::Procedure);
+        add_node(&mut graph, "form.document", form_name, NodeKind::Form);
+        add_edge(
+            &mut graph,
+            "procedure.open",
+            "form.document",
+            EdgeKind::Opens,
+        );
+        graph
+    };
+    let previous = build("DocumentForm");
+    let current = build("SalesDocumentForm");
+    let diff = previous.diff(&current);
+
+    let result =
+        SemanticImpactAnalyzer::analyze(&previous, &current, &diff, &SemanticImpactOptions::new(1))
+            .expect("Opens impact must succeed");
+    let opening_procedure = result
+        .affected_nodes()
+        .iter()
+        .find(|node| node.node_id().as_str() == "procedure.open")
+        .expect("opening procedure must be transitively affected");
+
+    assert_eq!(opening_procedure.depth(), 1);
+    assert_eq!(
+        opening_procedure.status(),
+        ImpactNodeStatus::TransitivelyAffected
+    );
+    assert!(opening_procedure.reasons().iter().any(|reason| {
+        reason.kind() == ImpactReasonKind::DependencyPropagation
+            && reason.edge_kind() == Some(EdgeKind::Opens)
+    }));
+}
+
+#[test]
 fn result_is_repeatable_and_independent_from_insertion_order() {
     let previous = dependency_graph("Callee", false);
     let current = dependency_graph("CalleeRenamed", false);

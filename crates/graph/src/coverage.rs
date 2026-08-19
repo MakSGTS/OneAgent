@@ -1026,6 +1026,7 @@ fn impact_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             | EdgeKind::Reads
             | EdgeKind::Writes
             | EdgeKind::DependsOn
+            | EdgeKind::Opens
     );
     if propagates {
         SemanticCoverageCapability::new(
@@ -1249,11 +1250,11 @@ pub fn semantic_coverage_node_kinds() -> Vec<NodeKind> {
 
 /// Returns every currently declared edge kind for registry consistency checks.
 #[must_use]
-pub const fn semantic_coverage_edge_kinds() -> [EdgeKind; 9] {
+pub const fn semantic_coverage_edge_kinds() -> [EdgeKind; 10] {
     all_edge_kinds()
 }
 
-const fn all_edge_kinds() -> [EdgeKind; 9] {
+const fn all_edge_kinds() -> [EdgeKind; 10] {
     [
         EdgeKind::Contains,
         EdgeKind::Calls,
@@ -1264,6 +1265,7 @@ const fn all_edge_kinds() -> [EdgeKind; 9] {
         EdgeKind::Includes,
         EdgeKind::Extends,
         EdgeKind::DependsOn,
+        EdgeKind::Opens,
     ]
 }
 
@@ -1369,6 +1371,7 @@ const fn edge_kind_code(kind: EdgeKind) -> &'static str {
         EdgeKind::Includes => "includes",
         EdgeKind::Extends => "extends",
         EdgeKind::DependsOn => "depends_on",
+        EdgeKind::Opens => "opens",
     }
 }
 

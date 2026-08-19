@@ -58,4 +58,6 @@ pub enum EdgeKind {
     Extends,
     /// Source depends on target.
     DependsOn,
+    /// Source opens target form.
+    Opens,
 }

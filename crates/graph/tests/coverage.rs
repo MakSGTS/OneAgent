@@ -111,6 +111,32 @@ fn every_node_and_edge_kind_has_a_registry_entry() {
 }
 
 #[test]
+fn opens_has_stable_supported_graph_and_impact_coverage() {
+    let report = SemanticCoverageRegistry::audit();
+    let edge = report
+        .capability(SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Opens))
+        .expect("Opens edge coverage must exist");
+    let impact = report
+        .capability(SemanticCoverageCapabilityId::ImpactPropagation(
+            EdgeKind::Opens,
+        ))
+        .expect("Opens impact coverage must exist");
+
+    assert_eq!(edge.stable_id(), "semantic_edge.opens");
+    assert_eq!(edge.status(), SemanticCoverageStatus::Supported);
+    assert_eq!(edge.related_edge_kind(), Some(EdgeKind::Opens));
+    assert_eq!(impact.stable_id(), "impact_propagation.opens");
+    assert_eq!(impact.status(), SemanticCoverageStatus::Supported);
+    assert!(
+        impact
+            .evidence()
+            .contains(&SemanticCoverageEvidence::ImpactPropagationExists)
+    );
+    assert!(edge.missing_evidence().is_empty());
+    assert!(impact.missing_evidence().is_empty());
+}
+
+#[test]
 fn access_right_node_has_graph_domain_coverage_entry() {
     let report = SemanticCoverageRegistry::audit();
     let capability = report

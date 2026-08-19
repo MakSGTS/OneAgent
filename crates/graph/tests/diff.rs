@@ -1,7 +1,7 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    GraphChangeKind, GraphNode, GraphNodePayload, NodeKind, NodeModifiedAspect, SemanticGraph,
-    SemanticGraphDiff,
+    EdgeKind, GraphChangeKind, GraphEdge, GraphNode, GraphNodePayload, NodeKind,
+    NodeModifiedAspect, SemanticGraph, SemanticGraphDiff,
 };
 use oneagent_metadata::{
     CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
@@ -42,6 +42,45 @@ fn public_diff_api_compares_graph_snapshots_directionally() {
     assert_eq!(diff.removed_nodes()[0].kind(), GraphChangeKind::Removed);
     assert_eq!(diff.removed_nodes()[0].id().as_str(), "node.old");
     assert_eq!(diff.summary().total_changes(), 2);
+}
+
+#[test]
+fn opens_edge_changes_keep_stable_typed_diff_identity() {
+    let procedure = id("procedure.open");
+    let form = id("form.document");
+    let mut old = SemanticGraph::new();
+    let mut new = SemanticGraph::new();
+
+    for graph in [&mut old, &mut new] {
+        graph.insert_node(GraphNode::new(
+            procedure.clone(),
+            name("Open"),
+            NodeKind::Procedure,
+        ));
+        graph.insert_node(GraphNode::new(
+            form.clone(),
+            name("DocumentForm"),
+            NodeKind::Form,
+        ));
+    }
+    new.insert_edge(GraphEdge::new(
+        procedure.clone(),
+        form.clone(),
+        EdgeKind::Opens,
+    ))
+    .expect("Opens edge must be stored");
+
+    let added = SemanticGraphDiff::between(&old, &new);
+    let removed = SemanticGraphDiff::between(&new, &old);
+
+    assert_eq!(added.added_edges().len(), 1);
+    assert_eq!(added.added_edges()[0].edge_kind(), EdgeKind::Opens);
+    assert_eq!(added.added_edges()[0].source().as_str(), procedure.as_str());
+    assert_eq!(added.added_edges()[0].target().as_str(), form.as_str());
+    assert!(added.added_edges()[0].id().as_str().ends_with("kind:opens"));
+    assert_eq!(added.summary().edges_added(), 1);
+    assert_eq!(removed.removed_edges().len(), 1);
+    assert_eq!(removed.removed_edges()[0].id(), added.added_edges()[0].id());
 }
 
 #[test]

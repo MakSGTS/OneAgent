@@ -90,7 +90,13 @@ fn accepted_reference_pairs() -> Vec<(NodeKind, NodeKind)> {
         MetadataKind::BusinessProcess,
         MetadataKind::Task,
     ];
-    for source in [NodeKind::Attribute, NodeKind::Dimension, NodeKind::Resource] {
+    for source in [
+        NodeKind::Attribute,
+        NodeKind::Dimension,
+        NodeKind::Resource,
+        NodeKind::Command,
+        NodeKind::Metadata(MetadataKind::Command),
+    ] {
         for target in member_targets {
             pairs.push((source, NodeKind::Metadata(target)));
         }
@@ -624,11 +630,191 @@ fn depends_on_rejects_unrelated_endpoint_pairs() {
 }
 
 #[test]
+fn command_depends_on_accepts_exact_metadata_target_matrix() {
+    let schema = SemanticGraphSchema;
+    let accepted_targets = [
+        MetadataKind::Catalog,
+        MetadataKind::Document,
+        MetadataKind::Enumeration,
+        MetadataKind::InformationRegister,
+        MetadataKind::AccumulationRegister,
+        MetadataKind::AccountingRegister,
+        MetadataKind::CalculationRegister,
+        MetadataKind::BusinessProcess,
+        MetadataKind::Task,
+    ];
+
+    for source_kind in [NodeKind::Command, NodeKind::Metadata(MetadataKind::Command)] {
+        for target_kind in node_kinds() {
+            let expected =
+                matches!(target_kind, NodeKind::Metadata(kind) if accepted_targets.contains(&kind));
+            assert_eq!(
+                schema.allows(source_kind, EdgeKind::DependsOn, target_kind),
+                expected,
+                "DependsOn endpoint decision differs for {source_kind:?} -> {target_kind:?}",
+            );
+        }
+    }
+}
+
+#[test]
+fn opens_schema_accepts_only_procedure_to_form_targets() {
+    let schema = SemanticGraphSchema;
+    let kinds = node_kinds();
+    let mut accepted_count = 0;
+
+    for source_kind in &kinds {
+        for target_kind in &kinds {
+            let expected = *source_kind == NodeKind::Procedure
+                && matches!(
+                    target_kind,
+                    NodeKind::Form | NodeKind::Metadata(MetadataKind::CommonForm)
+                );
+            let actual = schema.allows(*source_kind, EdgeKind::Opens, *target_kind);
+            assert_eq!(
+                actual, expected,
+                "Opens endpoint decision differs for {source_kind:?} -> {target_kind:?}",
+            );
+            accepted_count += usize::from(actual);
+        }
+    }
+
+    assert_eq!(accepted_count, 2);
+}
+
+#[test]
+fn opens_graph_accepts_form_and_common_form_targets() {
+    let ids = FixtureIds::new();
+    let form_id = id("metadata.document.sales:form:document_form");
+    let common_form_id = id("metadata.common_form.selection");
+    let mut graph = valid_graph(false);
+
+    for (node_id, node_name, node_kind) in [
+        (form_id.clone(), "DocumentForm", NodeKind::Form),
+        (
+            common_form_id.clone(),
+            "Selection",
+            NodeKind::Metadata(MetadataKind::CommonForm),
+        ),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("forms")],
+        ));
+    }
+    graph
+        .insert_edge(GraphEdge::new_with_provenance(
+            ids.document,
+            form_id.clone(),
+            EdgeKind::Contains,
+            vec![provenance("forms")],
+        ))
+        .expect("form ownership edge must be stored");
+    for target in [form_id, common_form_id] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                ids.procedure.clone(),
+                target,
+                EdgeKind::Opens,
+                vec![provenance("form.navigation")],
+            ))
+            .expect("Opens edge must be stored");
+    }
+
+    let result = graph.validate();
+
+    assert!(result.is_valid(), "{:#?}", result.issues());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn invalid_opens_endpoints_report_deterministically() {
+    let build = |reverse: bool| {
+        let ids = FixtureIds::new();
+        let form_id = id("metadata.document.sales:form:document_form");
+        let mut graph = valid_graph(false);
+        graph.insert_node(GraphNode::new_with_provenance(
+            form_id.clone(),
+            name("DocumentForm"),
+            NodeKind::Form,
+            vec![provenance("forms")],
+        ));
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                ids.document.clone(),
+                form_id.clone(),
+                EdgeKind::Contains,
+                vec![provenance("forms")],
+            ))
+            .expect("form ownership edge must be stored");
+        let mut edges = vec![
+            GraphEdge::new_with_provenance(
+                ids.function,
+                form_id,
+                EdgeKind::Opens,
+                vec![provenance("form.navigation.invalid")],
+            ),
+            GraphEdge::new_with_provenance(
+                ids.procedure,
+                ids.document,
+                EdgeKind::Opens,
+                vec![provenance("form.navigation.invalid")],
+            ),
+        ];
+        if reverse {
+            edges.reverse();
+        }
+        for edge in edges {
+            graph
+                .insert_edge(edge)
+                .expect("storage only validates endpoint existence");
+        }
+        graph
+    };
+
+    let normal = build(false).validate();
+    let reversed = build(true).validate();
+    let opens_issues = normal
+        .issues()
+        .iter()
+        .filter(|issue| issue.edge_kind() == Some(EdgeKind::Opens))
+        .collect::<Vec<_>>();
+
+    assert_eq!(normal, reversed);
+    assert_eq!(opens_issues.len(), 2);
+    assert!(opens_issues.iter().all(|issue| {
+        issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
+            && issue.invariant() == "edge endpoint schema"
+    }));
+    assert!(opens_issues.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[test]
+fn form_and_command_module_owners_preserve_metadata_module_ownership() {
+    let schema = SemanticGraphSchema;
+
+    for owner in [
+        NodeKind::Form,
+        NodeKind::Command,
+        NodeKind::Metadata(MetadataKind::Command),
+        NodeKind::Metadata(MetadataKind::CommonForm),
+        NodeKind::Metadata(MetadataKind::Document),
+    ] {
+        assert!(schema.allows(owner, EdgeKind::Contains, NodeKind::Module));
+    }
+    for invalid_owner in [NodeKind::Module, NodeKind::Procedure, NodeKind::Unknown] {
+        assert!(!schema.allows(invalid_owner, EdgeKind::Contains, NodeKind::Module,));
+    }
+}
+
+#[test]
 fn references_schema_accepts_exact_current_production_matrix() {
     let schema = SemanticGraphSchema;
     let accepted = accepted_reference_pairs();
 
-    assert_eq!(accepted.len(), 32);
+    assert_eq!(accepted.len(), 50);
     for (source_kind, target_kind) in accepted {
         assert!(
             schema.allows(source_kind, EdgeKind::References, target_kind),
@@ -663,8 +849,8 @@ fn references_schema_rejects_every_pair_outside_current_production_matrix() {
         }
     }
 
-    assert_eq!(accepted_count, 32);
-    assert_eq!(rejected_count, kinds.len() * kinds.len() - 32);
+    assert_eq!(accepted_count, 50);
+    assert_eq!(rejected_count, kinds.len() * kinds.len() - 50);
     for unknown_kind in [NodeKind::Unknown, NodeKind::Metadata(MetadataKind::Unknown)] {
         assert!(!schema.allows(unknown_kind, EdgeKind::References, NodeKind::Attribute));
         assert!(!schema.allows(NodeKind::Attribute, EdgeKind::References, unknown_kind));
@@ -1463,6 +1649,199 @@ fn child_without_owner_is_error() {
     assert!(result.issues().iter().any(|issue| {
         issue.code() == SemanticGraphValidationCode::InvalidOwner
             && issue.invariant() == "mandatory owner edge"
+    }));
+}
+
+#[test]
+fn form_and_command_owned_modules_validate_as_single_owner_paths() {
+    let document = id("metadata.document.sales");
+    let form = id("metadata.document.sales:form:document_form");
+    let command = id("metadata.document.sales:command:open");
+    let common_command = id("metadata.command.global_open");
+    let form_module = id("metadata.document.sales:form:document_form:module");
+    let command_module = id("metadata.document.sales:command:open:module");
+    let metadata_command_module = id("metadata.command.global_open:module");
+    let mut graph = SemanticGraph::new();
+
+    for (node_id, node_name, node_kind) in [
+        (
+            document.clone(),
+            "Sales",
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (form.clone(), "DocumentForm", NodeKind::Form),
+        (command.clone(), "Open", NodeKind::Command),
+        (
+            common_command.clone(),
+            "GlobalOpen",
+            NodeKind::Metadata(MetadataKind::Command),
+        ),
+        (form_module.clone(), "FormModule", NodeKind::Module),
+        (command_module.clone(), "CommandModule", NodeKind::Module),
+        (
+            metadata_command_module.clone(),
+            "MetadataCommandModule",
+            NodeKind::Module,
+        ),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("module.ownership")],
+        ));
+    }
+    for (owner, child) in [
+        (document.clone(), form.clone()),
+        (document, command.clone()),
+        (form, form_module),
+        (command, command_module),
+        (common_command, metadata_command_module),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                owner,
+                child,
+                EdgeKind::Contains,
+                vec![provenance("module.ownership")],
+            ))
+            .expect("ownership edge must be stored");
+    }
+
+    let result = graph.validate();
+
+    assert!(result.is_valid(), "{:#?}", result.issues());
+    assert!(result.issues().is_empty());
+}
+
+#[test]
+fn form_module_without_owner_is_error() {
+    let mut graph = SemanticGraph::new();
+    let module = id("metadata.document.sales:form:document_form:module");
+    graph.insert_node(GraphNode::new_with_provenance(
+        module.clone(),
+        name("FormModule"),
+        NodeKind::Module,
+        vec![provenance("module.ownership")],
+    ));
+
+    let result = graph.validate();
+
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::InvalidOwner
+            && issue.nodes() == [module.clone()]
+            && issue.invariant() == "mandatory owner edge"
+    }));
+}
+
+#[test]
+fn self_and_incompatible_module_ownership_remain_invalid() {
+    let module = id("form.module");
+    let incompatible_owner = id("unknown.owner");
+    let mut self_owned = SemanticGraph::new();
+    self_owned.insert_node(GraphNode::new_with_provenance(
+        module.clone(),
+        name("FormModule"),
+        NodeKind::Module,
+        vec![provenance("module.ownership")],
+    ));
+    self_owned
+        .insert_edge(GraphEdge::new_with_provenance(
+            module.clone(),
+            module,
+            EdgeKind::Contains,
+            vec![provenance("module.ownership")],
+        ))
+        .expect("storage allows defensive self-loop validation");
+
+    let self_result = self_owned.validate();
+
+    assert!(self_result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::ForbiddenSelfLoop
+            && issue.edge_kind() == Some(EdgeKind::Contains)
+    }));
+
+    let module = id("command.module");
+    let mut incompatible = SemanticGraph::new();
+    incompatible.insert_node(GraphNode::new_with_provenance(
+        incompatible_owner.clone(),
+        name("UnknownOwner"),
+        NodeKind::Unknown,
+        vec![provenance("module.ownership")],
+    ));
+    incompatible.insert_node(GraphNode::new_with_provenance(
+        module.clone(),
+        name("CommandModule"),
+        NodeKind::Module,
+        vec![provenance("module.ownership")],
+    ));
+    incompatible
+        .insert_edge(GraphEdge::new_with_provenance(
+            incompatible_owner,
+            module,
+            EdgeKind::Contains,
+            vec![provenance("module.ownership")],
+        ))
+        .expect("storage only validates endpoint existence");
+
+    let incompatible_result = incompatible.validate();
+
+    assert!(incompatible_result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::InvalidOwner
+            && issue.invariant() == "owner-child kind schema"
+    }));
+}
+
+#[test]
+fn module_with_form_and_metadata_command_owners_is_error() {
+    let document = id("metadata.document.sales");
+    let form = id("metadata.document.sales:form:document_form");
+    let common_command = id("metadata.command.global_open");
+    let module = id("shared.module");
+    let mut graph = SemanticGraph::new();
+
+    for (node_id, node_name, node_kind) in [
+        (
+            document.clone(),
+            "Sales",
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (form.clone(), "DocumentForm", NodeKind::Form),
+        (
+            common_command.clone(),
+            "GlobalOpen",
+            NodeKind::Metadata(MetadataKind::Command),
+        ),
+        (module.clone(), "SharedModule", NodeKind::Module),
+    ] {
+        graph.insert_node(GraphNode::new_with_provenance(
+            node_id,
+            name(node_name),
+            node_kind,
+            vec![provenance("module.ownership")],
+        ));
+    }
+    for (owner, child) in [
+        (document, form.clone()),
+        (form, module.clone()),
+        (common_command, module.clone()),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                owner,
+                child,
+                EdgeKind::Contains,
+                vec![provenance("module.ownership")],
+            ))
+            .expect("ownership edge must be stored");
+    }
+
+    let result = graph.validate();
+
+    assert!(result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::MultipleOwners
+            && issue.nodes().contains(&module)
+            && issue.edge_kind() == Some(EdgeKind::Contains)
     }));
 }
 

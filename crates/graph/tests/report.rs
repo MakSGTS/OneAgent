@@ -44,3 +44,28 @@ fn public_report_api_aggregates_graph_and_reference_statistics() {
     assert_eq!(report.resolution().total(), 1);
     assert_eq!(report.resolution().resolved(), 1);
 }
+
+#[test]
+fn report_counts_opens_edges_by_kind() {
+    let procedure = id("procedure.open");
+    let form = id("form.document");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(GraphNode::new(
+        procedure.clone(),
+        name("Open"),
+        NodeKind::Procedure,
+    ));
+    graph.insert_node(GraphNode::new(
+        form.clone(),
+        name("DocumentForm"),
+        NodeKind::Form,
+    ));
+    graph
+        .insert_edge(GraphEdge::new(procedure, form, EdgeKind::Opens))
+        .expect("Opens edge must be stored");
+
+    let report = SemanticGraphReport::from_graph(&graph);
+
+    assert_eq!(report.graph().total_edges(), 1);
+    assert_eq!(report.edges().by_kind()[&EdgeKind::Opens], 1);
+}

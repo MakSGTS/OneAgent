@@ -320,13 +320,11 @@ fn assert_writes_coverage(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
             .len(),
         0
     );
-    let high_gaps = coverage
-        .edt_pipeline()
-        .gaps_by_priority(SemanticCoverageGapPriority::High);
-    assert_eq!(high_gaps.len(), 1);
-    assert_eq!(
-        high_gaps[0].capability_id(),
-        SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Opens)
+    assert!(
+        coverage
+            .edt_pipeline()
+            .gaps_by_priority(SemanticCoverageGapPriority::High)
+            .is_empty()
     );
     assert_eq!(
         coverage
@@ -337,7 +335,7 @@ fn assert_writes_coverage(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
     );
     for (priority, expected) in [
         (SemanticCoverageGapPriority::Critical, 0),
-        (SemanticCoverageGapPriority::High, 1),
+        (SemanticCoverageGapPriority::High, 0),
         (SemanticCoverageGapPriority::Medium, 0),
     ] {
         let combined = coverage.graph_domain().gaps_by_priority(priority).len()

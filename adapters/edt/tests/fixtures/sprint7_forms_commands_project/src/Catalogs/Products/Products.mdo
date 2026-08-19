@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Catalog xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass"
+    uuid="72000000-0000-0000-0000-000000000000">
+    <name>Products</name>
+    <forms uuid="72100000-0000-0000-0000-000000000000"><name>PriceImport</name></forms>
+    <forms uuid="72200000-0000-0000-0000-000000000000"><name>Shared</name></forms>
+    <commands uuid="72300000-0000-0000-0000-000000000000">
+        <name>OpenPriceImport</name>
+        <commandParameterType><types>CatalogRef.Counterparties</types></commandParameterType>
+    </commands>
+</mdclass:Catalog>

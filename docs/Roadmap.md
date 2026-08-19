@@ -146,7 +146,8 @@ Sprint 6 is completed under
 [ADR-0028](adr/0028-attribute-tabular-section-semantics.md) with a `pass`
 decision in the
 [Sprint 6 integration review](reviews/sprint-6-attributes-tabular-sections.md).
-Sprint 7 is the next planning target; v0.3 remains planned through Sprint 14.
+Sprint 7 is active and remains pending its integration review; v0.3 remains
+planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -731,7 +732,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | next |
+| Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | active |
 | Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | planned |
 | Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
@@ -999,7 +1000,8 @@ Definition of Done passes.
 
 Forms, Commands, queries, roles, subsystems, event subscriptions, Designer XML,
 Runtime, persistence, AI, MCP, IDE, and all unproven EDT member forms remain
-deferred. Sprint 7 Forms and Commands is the next planning target.
+deferred. This completed baseline provided the hand-off into Sprint 7 Forms and
+Commands.
 
 #### Sprint 7 Forms and Commands execution plan
 
@@ -1010,7 +1012,7 @@ the existing flat graph with the complete conceptual UI taxonomy and does not
 infer semantics from directory names, command placement, or an `OpenForm`
 spelling alone.
 
-The live planning baseline at `eab870a` is:
+The immutable planning baseline at `eab870a` was:
 
 - Common Forms are top-level
   `NodeKind::Metadata(MetadataKind::CommonForm)` nodes;
@@ -1029,6 +1031,14 @@ The live planning baseline at `eab870a` is:
   navigation do not reach the current production graph;
 - the live `EdgeKind` enum does not contain `Opens`;
 - `Form.form` internals and Command Groups have no accepted production model.
+
+Tasks 1–7 now implement the accepted delta: `EdgeKind::Opens` and its graph
+consumers are live; canonical subordinate Form and Common/subordinate Command
+modules enter the existing BSL pipeline; mapped Command parameter types use the
+public reference-request lifecycle; and exact static navigation emits
+provenance-backed `Procedure --Opens--> Form` facts. The planning-baseline
+statements above remain historical gate evidence rather than current production
+limitations.
 
 Those implemented facts are `already_complete` planning prerequisites, not new
 Sprint 7 tasks. No empty commit may recreate or restate them. Their proving
@@ -1359,6 +1369,21 @@ cargo test -p oneagent-edt coverage
 
 Run the complete repository implementation gate after focused checks.
 
+Task 8 production evidence is now present in the repository-owned
+`adapters/edt/tests/fixtures/sprint7_forms_commands_project` layout and its
+full-builder integration test. The matrix covers subordinate Form,
+subordinate/Common Command, and existing Common Form modules; Procedure,
+Function, Query, ownership, Command reference/dependency projections, explicit
+Common and subordinate Form navigation, typed negative and partial outcomes,
+duplicate provenance, equal-name owner scoping, reports, statistics, Query,
+Diff, Impact, Validation, source-order independence, repeated builds, and the
+existing complete/incremental Semantic Index clean-rebuild oracle. EDT
+`semantic_edge.opens` is now `Supported` with complete evidence. Live registry
+tests verify 101 EDT capabilities (96 `Supported`, 5 `NotApplicable`) and 85
+graph-domain capabilities (82 `Supported`, 3 `NotApplicable`), with no
+Critical, High, or Medium gaps. Sprint 7 remains active until Task 9 records a
+non-blocking review decision.
+
 ##### Task 9 — Review the integrated Sprint 7 baseline
 
 Use the [review profile](codex/profiles/review.md) and
@@ -1383,11 +1408,11 @@ silently fix findings in the review change.
 
 ##### Planning validation and suggested commit
 
-This Sprint 7 kickoff is documentation-only. Validate Markdown consistency,
-relative links, manifest numbering, dependency order, accepted-versus-deferred
-scope, and the unchanged `next` status. Run `git diff --check` and inspect the
-complete task-owned documentation diff. Do not run the Rust workspace gate for
-the planning change because it modifies no production file.
+The Sprint 7 kickoff was documentation-only. Its validation covered Markdown
+consistency, relative links, manifest numbering, dependency order,
+accepted-versus-deferred scope, and the then-unchanged `next` status. The
+planning change required only `git diff --check` because it modified no
+production file.
 
 Suggested planning commit message, as a recommendation only:
 
@@ -1399,9 +1424,12 @@ The message does not authorize staging or committing.
 
 ##### Sprint 7 state gates and completion criteria
 
-Sprint 7 remains `next` during planning. It becomes active only when the
+Sprint 7 remained `next` during planning. It became active when the
 accepted planning baseline is committed and Task 1 begins under an explicit
 execution instruction.
+
+The current state is `active`: Tasks 1–8 are committed or are the current
+validated change, and Task 9 still owns the completion decision.
 
 A task is `already_complete` only when current committed evidence and successful
 required validation prove every acceptance criterion. Record the proving
@@ -1559,9 +1587,16 @@ Ordered follow-up work:
     `docs/adr/0025-references-endpoint-validation.md`; `References` now accepts
     exactly the 27 metadata-member pairs and five AccessRight resource pairs
     emitted by current production, with exhaustive deterministic positive and
-    negative validator evidence. All nine EdgeKind rules now match their
+    negative validator evidence. All ten EdgeKind rules now match their
     accepted ownership or first-slice contracts. Coverage status and counts are
     unchanged.
+26. **High — completed:** implement and transition the bounded Sprint 7
+    `Opens` slice defined by
+    `docs/adr/0029-form-command-navigation-semantics.md`; repository-owned EDT
+    evidence now proves exact Common and subordinate Form resolution,
+    provenance-backed production emission, typed negative and partial
+    outcomes, Query, Diff, Impact, Validation, reports, determinism, and
+    compatibility with complete and incremental Semantic Index consumers.
 
 The EDT Coverage Registry currently contains 0 Critical gaps, 0 High gaps, and
 0 Medium gaps. Combined with the Graph Domain registry, Semantic Coverage

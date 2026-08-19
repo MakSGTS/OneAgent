@@ -1461,15 +1461,16 @@ their current node kinds, UUID or owner-scoped fallback identity, immediate
 metadata ownership, provenance, Query behavior, validation, and Coverage.
 Those facts are compatibility constraints rather than new Sprint 7 outcomes.
 
-ADR-0029 accepts a bounded extension. Subordinate Form `Module.bsl` and
-Common/subordinate Command `CommandModule.bsl` artifacts may contribute
+ADR-0029 defines a bounded extension that the EDT adapter now implements.
+Subordinate Form `Module.bsl` and Common/subordinate Command
+`CommandModule.bsl` artifacts contribute
 ordinary `Module`, `Procedure`, `Function`, Query, Calls, and related existing
 BSL facts through the canonical graph pipeline. New subordinate module
 identities derive from the canonical Form or Command owner plus a stable module
 role. Form and Command nodes own those modules through `Contains`; no parallel
 UI-specific symbol graph is introduced.
 
-Mapped `commandParameterType` observations may use the public semantic
+Mapped `commandParameterType` observations use the public semantic
 reference-request lifecycle with a distinct Command parameter role. The source
 is the canonical Common or subordinate Command, and the target allowlist is
 exactly the nine metadata kinds already accepted for the completed metadata
@@ -1478,7 +1479,8 @@ fact and its justified normalized `DependsOn`; unsupported, missing,
 ambiguous, incompatible, malformed, and partial observations emit no edge and
 create no placeholder node.
 
-ADR-0029 also accepts one new direct navigation relation:
+ADR-0029 also defines one direct navigation relation now emitted by the
+production builder:
 
 ```text
 Procedure --Opens--> Form
@@ -1500,11 +1502,13 @@ payload, explicit command execution, and other conceptual UI edges remain
 deferred. The conceptual nested UI taxonomy remains a target vocabulary, not
 the live public Rust layout or a wildcard endpoint policy.
 
-Architecture acceptance does not change production behavior, capability
-status, or aggregate Coverage counts. Independent source-independent graph,
-EDT parser, production emission, Query, Diff, incremental-equivalence, Impact,
-diagnostic, report, determinism, and Coverage evidence must pass before the
-corresponding capabilities can transition.
+The repository-owned Sprint 7 EDT fixture and focused negative/partial tests
+now prove the independent source-independent graph, EDT parser, production
+emission, Query, Diff, complete/incremental index equivalence, Impact,
+diagnostic, report, determinism, and Coverage contracts. The EDT
+`semantic_edge.opens` capability is therefore `Supported`; this evidence does
+not promote the deferred UI taxonomy or mark Sprint 7 completed before its
+integration review.
 
 `MetadataKind::Form` and `NodeKind::Metadata(MetadataKind::Form)` are not
 applicable to the EDT adapter: common forms are top-level
@@ -2276,12 +2280,13 @@ object node. Repeated builds preserve subsystem node identity, provenance, and
 graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
 discovery, and transitive membership remain separate future capabilities.
 
-The EDT registry now reports 0 Critical gaps, 0 High gaps, and 0 Medium gaps.
-Combined with the graph-domain registry, the current Semantic Coverage audit
-reports 0 Critical gaps, 0 High gaps, and 0 Medium gaps. All 21 applicable
-metadata-entity capabilities and the nine completed metadata-reference
-capabilities are `Supported`; Form and Unknown metadata entities remain
-`NotApplicable`.
+The EDT registry now reports 101 capabilities: 96 `Supported` and 5
+`NotApplicable`, with 0 Critical gaps, 0 High gaps, and 0 Medium gaps. The
+graph-domain registry reports 85 capabilities: 82 `Supported` and 3
+`NotApplicable`, also with no Critical, High, or Medium gaps. All 21 applicable
+metadata-entity capabilities, the nine completed metadata-reference
+capabilities, and the bounded EDT `semantic_edge.opens` producer are
+`Supported`; Form and Unknown metadata entities remain `NotApplicable`.
 Sprint 3 Semantic Coverage Integration Review is complete with no blocking
 findings.
 

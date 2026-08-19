@@ -779,6 +779,15 @@ The existing [investigation profile](codex/profiles/investigation.md),
 templates, cover the ordered work below. The Sprint 6 readiness audit found no
 concrete reusable prompt-contract gap, so no Codex Framework change is planned.
 
+The evidence-backed implementation boundary is accepted in
+[ADR-0028](adr/0028-attribute-tabular-section-semantics.md): preserve the
+repository-proven optional direct synonym value as typed content of Attribute
+and TabularSection nodes. Identity, immediate ownership, canonical names, and
+the completed reference-request slice remain unchanged. Other observed member
+fields and source variants remain deferred. Because the accepted slice adds no
+reference behavior, Task 6 is a regression gate and must be closed as
+`already_complete` without an empty commit when its evidence remains green.
+
 | Order | Task | Owned outcome | Prerequisite | Suggested commit message |
 |---:|---|---|---|---|
 | 1 | Investigate the live Attribute and TabularSection source boundary. | Repository-owned artifact corpus, implemented-versus-missing matrix, consumer inventory, and candidate source contracts. | Sprint 5 and the v0.2 release review are completed. | `Investigate Sprint 6 member source contracts` |

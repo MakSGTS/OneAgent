@@ -1,9 +1,11 @@
+use oneagent_common::EntityName;
 use oneagent_edt::{
     EdtSemanticGraphBuildResult, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder,
 };
 use oneagent_graph::{
-    EdgeKind, FactOrigin, NodeId, NodeKind, ResolutionState, SemanticCoverageCapabilityId,
-    SemanticCoverageGapPriority, SemanticCoverageStatus,
+    EdgeKind, FactOrigin, ImpactNodeStatus, NodeId, NodeKind, NodeModifiedAspect, ResolutionState,
+    SemanticCoverageCapabilityId, SemanticCoverageGapPriority, SemanticCoverageStatus,
+    SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use oneagent_metadata::MetadataKind;
 use std::fs;
@@ -17,7 +19,7 @@ fn node_id(value: &str) -> NodeId {
     NodeId::new(value)
 }
 
-fn write_order_fixture(root: &Path, tabular_section_first: bool) {
+fn write_order_fixture(root: &Path, tabular_section_first: bool, company_synonym: &str) {
     let configuration_directory = root.join("src/Configuration");
     let document_directory = root.join("src/Documents/Sales");
     fs::create_dir_all(&configuration_directory).expect("configuration directory must be created");
@@ -30,18 +32,26 @@ fn write_order_fixture(root: &Path, tabular_section_first: bool) {
 
     let top_level_attribute = r#"  <attributes uuid="21000000-0000-0000-0000-000000000000">
     <name>Company</name>
-  </attributes>"#;
+    <synonym><key>en</key><value>COMPANY_SYNONYM</value></synonym>
+  </attributes>"#
+        .replace("COMPANY_SYNONYM", company_synonym);
     let tabular_section = r#"  <tabularSections uuid="22000000-0000-0000-0000-000000000000">
     <name>Products</name>
     <attributes uuid="23000000-0000-0000-0000-000000000000">
       <name>Product</name>
       <type><types>DocumentRef.Sales</types></type>
     </attributes>
+  </tabularSections>
+  <tabularSections>
+    <name>Services</name>
+    <attributes>
+      <name>Product</name>
+    </attributes>
   </tabularSections>"#;
     let (first, second) = if tabular_section_first {
-        (tabular_section, top_level_attribute)
+        (tabular_section, top_level_attribute.as_str())
     } else {
-        (top_level_attribute, tabular_section)
+        (top_level_attribute.as_str(), tabular_section)
     };
     fs::write(
         document_directory.join("Sales.mdo"),
@@ -75,6 +85,9 @@ fn assert_immediate_ownership(result: &EdtSemanticGraphBuildResult) {
     let nested_attribute = query
         .node(&nested_attribute_id)
         .expect("nested Attribute node must exist");
+    let top_level_attribute = query
+        .node(&top_level_attribute_id)
+        .expect("top-level Attribute node must exist");
     let nested_owners = query.owners(&nested_attribute_id);
     let tabular_children = query.children_by_kind(&tabular_section_id, NodeKind::Attribute);
     let nested_ownership_edge = query
@@ -89,6 +102,16 @@ fn assert_immediate_ownership(result: &EdtSemanticGraphBuildResult) {
     assert_eq!(document.kind(), NodeKind::Metadata(MetadataKind::Document));
     assert_eq!(tabular_section.kind(), NodeKind::TabularSection);
     assert_eq!(nested_attribute.kind(), NodeKind::Attribute);
+    for member in [top_level_attribute, tabular_section, nested_attribute] {
+        assert!(member.metadata_member_payload().is_some());
+        assert_eq!(
+            member
+                .metadata_member_payload()
+                .expect("member payload must exist")
+                .synonym(),
+            None
+        );
+    }
     assert_eq!(query.owner(&tabular_section_id), Some(document));
     assert_eq!(query.owner(&top_level_attribute_id), Some(document));
     assert_eq!(nested_owners, vec![tabular_section]);
@@ -231,16 +254,102 @@ fn tabular_section_ownership_fixture_builds_with_immediate_owners() {
 #[test]
 fn ownership_output_is_independent_from_source_observation_order() {
     let root = tempfile::tempdir().expect("temporary EDT project must be created");
-    write_order_fixture(root.path(), false);
+    write_order_fixture(root.path(), false, "Company display");
     let first = FileSystemEdtSemanticGraphBuilder
         .build_graph_with_diagnostics(root.path())
         .expect("first ownership observation order must build");
 
-    write_order_fixture(root.path(), true);
+    write_order_fixture(root.path(), true, "Company display");
     let reordered = FileSystemEdtSemanticGraphBuilder
         .build_graph_with_diagnostics(root.path())
         .expect("reordered ownership observations must build");
 
     assert!(first.graph().diff(reordered.graph()).is_empty());
     assert!(first.diff(&reordered).is_empty());
+
+    let query = first.graph().query();
+    let company = query
+        .node(&node_id("21000000-0000-0000-0000-000000000000"))
+        .expect("generated Company Attribute must exist");
+    assert_eq!(
+        company
+            .metadata_member_payload()
+            .expect("Company member payload must exist")
+            .synonym(),
+        Some("Company display")
+    );
+
+    let products = query
+        .nodes_by_name(&EntityName::new("Product").expect("duplicate member name must be valid"));
+    assert_eq!(products.len(), 2);
+    let owners = products
+        .iter()
+        .map(|product| {
+            query
+                .owner(&NodeId::new(product.id().as_str()))
+                .expect("duplicate-name member owner must exist")
+                .id()
+        })
+        .collect::<Vec<_>>();
+    assert_ne!(owners[0], owners[1]);
+    assert_ne!(products[0].id(), products[1].id());
+}
+
+#[test]
+fn synonym_only_source_change_preserves_identity_ownership_and_impact_scope() {
+    let root = tempfile::tempdir().expect("temporary EDT project must be created");
+    write_order_fixture(root.path(), false, "Company display");
+    let previous = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(root.path())
+        .expect("previous member payload graph must build");
+
+    write_order_fixture(root.path(), false, "Organization display");
+    let current = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(root.path())
+        .expect("current member payload graph must build");
+    let diff = previous.graph().diff(current.graph());
+
+    assert!(diff.added_nodes().is_empty());
+    assert!(diff.removed_nodes().is_empty());
+    assert!(diff.added_edges().is_empty());
+    assert!(diff.removed_edges().is_empty());
+    assert!(diff.modified_edges().is_empty());
+    assert_eq!(diff.modified_nodes().len(), 1);
+    assert_eq!(
+        diff.modified_nodes()[0].modified_aspects(),
+        &[NodeModifiedAspect::SemanticContent]
+    );
+    assert_eq!(
+        diff.modified_nodes()[0].id().as_str(),
+        "21000000-0000-0000-0000-000000000000"
+    );
+
+    let impact = SemanticImpactAnalyzer::analyze(
+        previous.graph(),
+        current.graph(),
+        &diff,
+        &SemanticImpactOptions::new(2),
+    )
+    .expect("production member payload impact must succeed");
+    assert_eq!(impact.affected_nodes().len(), 1);
+    assert_eq!(
+        impact.affected_nodes()[0].status(),
+        ImpactNodeStatus::DirectlyChanged
+    );
+
+    let query = current.graph().query();
+    let company_id = node_id("21000000-0000-0000-0000-000000000000");
+    let document_id = node_id("20000000-0000-0000-0000-000000000000");
+    assert_eq!(
+        query
+            .owner(&company_id)
+            .expect("Company owner must exist")
+            .id(),
+        query
+            .node(&document_id)
+            .expect("Document node must exist")
+            .id()
+    );
+    assert!(previous.validate().is_valid());
+    assert!(current.validate().is_valid());
 }

@@ -360,8 +360,8 @@ use oneagent_graph::{
     StandardAttribute, StandardAttributeKind,
 };
 use oneagent_metadata::{
-    CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataPayload,
-    MetadataRegisterRecord, MetadataSpecificPayload,
+    CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataMemberPayload,
+    MetadataPayload, MetadataRegisterRecord, MetadataSpecificPayload,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1231,13 +1231,28 @@ fn collect_metadata_child(
 
     let child_node_kind = semantic_child_node_kind(descriptor.kind(), child.kind());
 
-    insert_node(
-        graph,
-        child.id().clone(),
-        child.name().clone(),
+    let provenance = declared_provenance(child_source);
+    if matches!(
         child_node_kind,
-        declared_provenance(child_source),
-    );
+        NodeKind::Attribute | NodeKind::TabularSection
+    ) {
+        insert_metadata_member_node(
+            graph,
+            child.id().clone(),
+            child.name().clone(),
+            child_node_kind,
+            child.member_payload().clone(),
+            provenance,
+        )?;
+    } else {
+        insert_node(
+            graph,
+            child.id().clone(),
+            child.name().clone(),
+            child_node_kind,
+            provenance,
+        );
+    }
 
     if is_depends_on_metadata_member_source(child_node_kind) {
         for reference in child.references() {
@@ -1899,6 +1914,26 @@ fn insert_metadata_node(
         name,
         NodeKind::Metadata(kind),
         GraphNodePayload::Metadata(payload),
+        vec![provenance],
+    )
+    .map_err(EdtGraphError::NodePayload)?;
+    graph.insert_node(node);
+    Ok(())
+}
+
+fn insert_metadata_member_node(
+    graph: &mut SemanticGraph,
+    id: EntityId,
+    name: EntityName,
+    kind: NodeKind,
+    payload: MetadataMemberPayload,
+    provenance: Provenance,
+) -> Result<(), EdtGraphError> {
+    let node = GraphNode::new_with_payload_and_provenance(
+        id,
+        name,
+        kind,
+        GraphNodePayload::MetadataMember(payload),
         vec![provenance],
     )
     .map_err(EdtGraphError::NodePayload)?;

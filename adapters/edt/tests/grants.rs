@@ -216,6 +216,24 @@ fn grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance() {
     assert_eq!(access_right_references.len(), 39);
     assert_complete_grant_provenance(&access_rights, &grants, &access_right_references);
     assert_supported_resource_kinds(graph, &access_right_references);
+    for (member_id, synonym) in [
+        ("eff602bb-e50a-4e16-8e5c-abd3a54d2ae3", Some("Proucts")),
+        ("3e68cfb1-d0d1-4135-9b7a-49e46d1cc844", None),
+        ("3ba9bcb4-cd68-4336-b62f-dee2d7321b6f", Some("Price")),
+        ("5b278afd-1f58-4a5b-9118-219f70d8fd3a", Some("Quantity")),
+        ("8c8bc708-211f-406d-9f3c-9f6a73b00a91", Some("Ammount")),
+    ] {
+        let member = graph
+            .node(&id(member_id))
+            .expect("real grants member node must exist");
+        assert_eq!(
+            member
+                .metadata_member_payload()
+                .expect("real grants member payload must exist")
+                .synonym(),
+            synonym
+        );
+    }
 
     let product_read_id = access_right_id("bb9ecb4f-1ae1-4cfd-b2d1-badd172736e9", "Read");
     let product_update_id = access_right_id("bb9ecb4f-1ae1-4cfd-b2d1-badd172736e9", "Update");

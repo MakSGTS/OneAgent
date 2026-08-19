@@ -10,6 +10,11 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::command_parameter::{
+    EdtCommandParameterSourceKind, EdtCommandParameterTypeCollector,
+    EdtCommandParameterTypeObservation,
+};
+
 /// Parsed descriptor of a top-level EDT metadata object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EdtMetadataObjectDescriptor {
@@ -20,6 +25,7 @@ pub struct EdtMetadataObjectDescriptor {
     extension: Option<EdtMetadataObjectExtensionDescriptor>,
     descriptor_path: PathBuf,
     document_register_declarations: Vec<EdtDocumentRegisterDeclarationOutcome>,
+    command_parameter_types: Vec<EdtCommandParameterTypeObservation>,
 }
 
 impl EdtMetadataObjectDescriptor {
@@ -41,6 +47,7 @@ impl EdtMetadataObjectDescriptor {
             extension,
             descriptor_path,
             document_register_declarations: Vec::new(),
+            command_parameter_types: Vec::new(),
         }
     }
 
@@ -80,6 +87,12 @@ impl EdtMetadataObjectDescriptor {
         &self.descriptor_path
     }
 
+    /// Returns typed parameter-type observations for a top-level Common Command.
+    #[must_use]
+    pub fn command_parameter_types(&self) -> &[EdtCommandParameterTypeObservation] {
+        &self.command_parameter_types
+    }
+
     #[allow(dead_code)]
     pub(crate) fn document_register_declarations(
         &self,
@@ -92,6 +105,14 @@ impl EdtMetadataObjectDescriptor {
         declarations: Vec<EdtDocumentRegisterDeclarationOutcome>,
     ) -> Self {
         self.document_register_declarations = declarations;
+        self
+    }
+
+    fn with_command_parameter_types(
+        mut self,
+        command_parameter_types: Vec<EdtCommandParameterTypeObservation>,
+    ) -> Self {
+        self.command_parameter_types = command_parameter_types;
         self
     }
 }
@@ -262,6 +283,7 @@ fn find_descriptor_file(object_directory: &Path) -> Result<PathBuf, EdtMetadataO
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_descriptor(
     xml: &str,
     kind: MetadataKind,
@@ -278,6 +300,7 @@ fn parse_descriptor(
     let mut path = Vec::<String>::new();
     let mut raw_document_register_declarations = Vec::new();
     let mut register_declaration_ordinal = 0;
+    let mut command_parameter_types = EdtCommandParameterTypeCollector::default();
 
     loop {
         match reader.read_event() {
@@ -290,6 +313,16 @@ fn parse_descriptor(
                         next_register_declaration_context(&mut register_declaration_ordinal);
                     raw_document_register_declarations.push((raw_value, context));
                     continue;
+                }
+
+                if is_direct_command_parameter_value(kind, &path, &element) {
+                    let raw_value = read_command_parameter_value(&mut reader, &event)?;
+                    command_parameter_types.observe_value(raw_value);
+                    continue;
+                }
+
+                if is_direct_command_parameter_container(kind, &path, &element) {
+                    command_parameter_types.observe_container();
                 }
 
                 path.push(element);
@@ -306,6 +339,15 @@ fn parse_descriptor(
                         next_register_declaration_context(&mut register_declaration_ordinal);
                     raw_document_register_declarations.push((String::new(), context));
                     continue;
+                }
+
+                if is_direct_command_parameter_value(kind, &path, &element) {
+                    command_parameter_types.observe_value(String::new());
+                    continue;
+                }
+
+                if is_direct_command_parameter_container(kind, &path, &element) {
+                    command_parameter_types.observe_container();
                 }
 
                 if uuid.is_none() {
@@ -361,21 +403,76 @@ fn parse_descriptor(
     let name = EntityName::new(name).map_err(|_| EdtMetadataObjectError::InvalidName)?;
     let extension =
         extension_descriptor(object_belonging.as_deref(), extended_configuration_object)?;
-    let document_register_declarations = if kind == MetadataKind::Document {
-        parse_document_register_declarations(
-            raw_document_register_declarations,
-            &id,
-            &name,
-            &descriptor_path,
-        )
-    } else {
-        Vec::new()
-    };
+    let document_register_declarations = finish_document_register_declarations(
+        kind,
+        raw_document_register_declarations,
+        &id,
+        &name,
+        &descriptor_path,
+    );
+    let command_parameter_types = finish_common_command_parameter_types(
+        kind,
+        command_parameter_types,
+        &id,
+        &name,
+        &descriptor_path,
+    );
 
     Ok(
         EdtMetadataObjectDescriptor::new(id, name, synonym, kind, extension, descriptor_path)
-            .with_document_register_declarations(document_register_declarations),
+            .with_document_register_declarations(document_register_declarations)
+            .with_command_parameter_types(command_parameter_types),
     )
+}
+
+fn finish_document_register_declarations(
+    kind: MetadataKind,
+    declarations: Vec<(String, EdtDocumentRegisterDeclarationContext)>,
+    owner_id: &EntityId,
+    owner_name: &EntityName,
+    descriptor_path: &Path,
+) -> Vec<EdtDocumentRegisterDeclarationOutcome> {
+    if kind == MetadataKind::Document {
+        parse_document_register_declarations(declarations, owner_id, owner_name, descriptor_path)
+    } else {
+        Vec::new()
+    }
+}
+
+fn finish_common_command_parameter_types(
+    kind: MetadataKind,
+    collector: EdtCommandParameterTypeCollector,
+    source_id: &EntityId,
+    source_name: &EntityName,
+    descriptor_path: &Path,
+) -> Vec<EdtCommandParameterTypeObservation> {
+    if kind == MetadataKind::Command {
+        collector.finish(
+            source_id,
+            source_name,
+            EdtCommandParameterSourceKind::CommonCommand,
+            descriptor_path,
+        )
+    } else {
+        Vec::new()
+    }
+}
+
+fn is_direct_command_parameter_container(
+    kind: MetadataKind,
+    path: &[String],
+    element: &str,
+) -> bool {
+    kind == MetadataKind::Command && path.len() == 1 && element == "commandParameterType"
+}
+
+fn is_direct_command_parameter_value(kind: MetadataKind, path: &[String], element: &str) -> bool {
+    kind == MetadataKind::Command
+        && path.len() == 2
+        && path
+            .last()
+            .is_some_and(|component| component == "commandParameterType")
+        && element == "types"
 }
 
 fn is_direct_document_register_declaration(
@@ -397,6 +494,13 @@ fn read_document_register_value(
     unescape(&raw_value)
         .map_err(|source| EdtMetadataObjectError::MalformedXml(source.to_string()))
         .map(std::borrow::Cow::into_owned)
+}
+
+fn read_command_parameter_value(
+    reader: &mut Reader<&[u8]>,
+    event: &quick_xml::events::BytesStart<'_>,
+) -> Result<String, EdtMetadataObjectError> {
+    read_document_register_value(reader, event)
 }
 
 fn next_register_declaration_context(ordinal: &mut usize) -> EdtDocumentRegisterDeclarationContext {
@@ -747,6 +851,11 @@ mod tests {
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
+    use crate::{
+        EdtCommandParameterSourceKind, EdtCommandParameterTypeOutcomeKind,
+        EdtCommandParameterTypeReason, EdtMetadataReferenceRole,
+    };
+
     use super::{
         EdtDocumentRegisterDeclaration, EdtDocumentRegisterDeclarationOutcome,
         EdtDocumentRegisterDeclarationProvenance, EdtMalformedDocumentRegisterDeclarationReason,
@@ -838,6 +947,96 @@ mod tests {
         assert_eq!(descriptor.kind(), MetadataKind::Document);
         assert!(descriptor.extension().is_none());
         assert!(descriptor.document_register_declarations().is_empty());
+    }
+
+    #[test]
+    fn reads_real_common_command_parameter_types_repeatedly() {
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let directory = repository.join("OneAgent_EDTproject/src/CommonCommands/AccessRights");
+        let first = FileSystemEdtMetadataObjectReader
+            .read(&directory, MetadataKind::Command)
+            .expect("real Common Command must parse");
+        let repeated = FileSystemEdtMetadataObjectReader
+            .read(&directory, MetadataKind::Command)
+            .expect("repeated Common Command read must parse");
+
+        assert_eq!(first, repeated);
+        assert_eq!(
+            first
+                .command_parameter_types()
+                .iter()
+                .map(|observation| observation.raw_token().unwrap_or_default())
+                .collect::<Vec<_>>(),
+            vec![
+                "CatalogRef.ExternalUsers",
+                "CatalogRef.ExternalUsersGroups",
+                "CatalogRef.UserGroups",
+                "CatalogRef.Users",
+            ]
+        );
+        assert!(first.command_parameter_types().iter().all(|observation| {
+            observation.source_id() == first.id()
+                && observation.source_name() == first.name()
+                && observation.source_kind() == EdtCommandParameterSourceKind::CommonCommand
+                && observation.role() == EdtMetadataReferenceRole::CommandParameterType
+                && observation.outcome() == EdtCommandParameterTypeOutcomeKind::Accepted
+                && observation.target_kind() == Some(MetadataKind::Catalog)
+        }));
+
+        let defined_type = FileSystemEdtMetadataObjectReader
+            .read(
+                &repository.join("OneAgent_EDTproject/src/CommonCommands/AttachedFiles"),
+                MetadataKind::Command,
+            )
+            .expect("real deferred Common Command must parse");
+        let [observation] = defined_type.command_parameter_types() else {
+            panic!("deferred Common Command must have one observation");
+        };
+        assert_eq!(
+            observation.raw_token(),
+            Some("DefinedType.AttachedFilesOwner")
+        );
+        assert_eq!(
+            observation.outcome(),
+            EdtCommandParameterTypeOutcomeKind::Unsupported
+        );
+        assert_eq!(
+            observation.reason(),
+            Some(EdtCommandParameterTypeReason::DeferredDefinedType)
+        );
+        assert_eq!(observation.target_kind(), None);
+    }
+
+    #[test]
+    fn generated_common_command_values_are_deduplicated_and_order_independent() {
+        let xml = |values: &str| {
+            format!(
+                r#"<mdclass:CommonCommand xmlns:mdclass="urn:test" uuid="common-command">
+  <name>GeneratedCommand</name>
+  <commandParameterType>{values}</commandParameterType>
+</mdclass:CommonCommand>"#
+            )
+        };
+        let first = generated_descriptor(
+            &xml(
+                "<types>TaskRef.Task</types><types>CatalogRef.Catalog</types><types>TaskRef.Task</types>",
+            ),
+            MetadataKind::Command,
+        );
+        let reordered = generated_descriptor(
+            &xml(
+                "<types>TaskRef.Task</types><types>TaskRef.Task</types><types>CatalogRef.Catalog</types>",
+            ),
+            MetadataKind::Command,
+        );
+
+        assert_eq!(first, reordered);
+        assert_eq!(first.command_parameter_types().len(), 2);
+        assert_eq!(
+            first.command_parameter_types()[0].raw_token(),
+            Some("CatalogRef.Catalog")
+        );
+        assert_eq!(first.command_parameter_types()[1].occurrence_count(), 2);
     }
 
     #[test]

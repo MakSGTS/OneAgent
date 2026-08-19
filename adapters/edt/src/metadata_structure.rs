@@ -4,12 +4,16 @@ use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::NodeKind;
 use oneagent_metadata::{MetadataKind, MetadataMemberPayload};
 use quick_xml::Reader;
+use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, BytesText, Event};
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::EdtMetadataObjectDescriptor;
+use crate::command_parameter::EdtCommandParameterTypeCollector;
+use crate::{
+    EdtCommandParameterSourceKind, EdtCommandParameterTypeObservation, EdtMetadataObjectDescriptor,
+};
 
 /// Supported child metadata element kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -70,6 +74,7 @@ pub struct EdtMetadataChildDescriptor {
     parent_id: EntityId,
     member_payload: MetadataMemberPayload,
     references: Vec<EdtMetadataReferenceDescriptor>,
+    command_parameter_types: Vec<EdtCommandParameterTypeObservation>,
 }
 
 impl EdtMetadataChildDescriptor {
@@ -102,6 +107,26 @@ impl EdtMetadataChildDescriptor {
         member_payload: MetadataMemberPayload,
         references: Vec<EdtMetadataReferenceDescriptor>,
     ) -> Self {
+        Self::new_with_command_parameter_types(
+            id,
+            name,
+            kind,
+            parent_id,
+            member_payload,
+            references,
+            Vec::new(),
+        )
+    }
+
+    const fn new_with_command_parameter_types(
+        id: EntityId,
+        name: EntityName,
+        kind: EdtMetadataChildKind,
+        parent_id: EntityId,
+        member_payload: MetadataMemberPayload,
+        references: Vec<EdtMetadataReferenceDescriptor>,
+        command_parameter_types: Vec<EdtCommandParameterTypeObservation>,
+    ) -> Self {
         Self {
             id,
             name,
@@ -109,6 +134,7 @@ impl EdtMetadataChildDescriptor {
             parent_id,
             member_payload,
             references,
+            command_parameter_types,
         }
     }
 
@@ -147,6 +173,12 @@ impl EdtMetadataChildDescriptor {
     pub fn references(&self) -> &[EdtMetadataReferenceDescriptor] {
         &self.references
     }
+
+    /// Returns typed parameter-type observations for a subordinate Command.
+    #[must_use]
+    pub fn command_parameter_types(&self) -> &[EdtCommandParameterTypeObservation] {
+        &self.command_parameter_types
+    }
 }
 
 /// Semantic role of an explicit EDT metadata reference.
@@ -154,6 +186,9 @@ impl EdtMetadataChildDescriptor {
 pub enum EdtMetadataReferenceRole {
     /// Metadata object reference declared as an EDT type.
     Type,
+
+    /// Metadata reference declared as a Command parameter type.
+    CommandParameterType,
 }
 
 impl EdtMetadataReferenceRole {
@@ -162,6 +197,7 @@ impl EdtMetadataReferenceRole {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Type => "type",
+            Self::CommandParameterType => "command_parameter_type",
         }
     }
 }
@@ -261,6 +297,7 @@ struct PendingChild {
     synonym: Option<String>,
     unsupported_synonym_encoding: bool,
     references: Vec<EdtMetadataReferenceDescriptor>,
+    command_parameter_types: EdtCommandParameterTypeCollector,
     nested_attributes: Vec<PendingChild>,
     depth: usize,
 }
@@ -281,6 +318,15 @@ fn parse_children(
         match reader.read_event() {
             Ok(Event::Start(event)) => {
                 let element_name = local_name(event.name().as_ref());
+
+                if let Some(child) = pending.last_mut()
+                    && is_direct_command_parameter_value(child, &path, &element_name)
+                {
+                    let raw_value = read_command_parameter_value(&mut reader, &event)?;
+                    child.command_parameter_types.observe_value(raw_value);
+                    continue;
+                }
+
                 path.push(element_name.clone());
 
                 if let Some(kind) = child_kind(&element_name) {
@@ -293,6 +339,7 @@ fn parse_children(
                         synonym: None,
                         unsupported_synonym_encoding: false,
                         references: Vec::new(),
+                        command_parameter_types: EdtCommandParameterTypeCollector::default(),
                         nested_attributes: Vec::new(),
                         depth: path.len(),
                     });
@@ -300,6 +347,7 @@ fn parse_children(
 
                 if let Some(child) = pending.last_mut() {
                     observe_member_synonym_start(child, &path);
+                    observe_command_parameter_container(child, &path);
                 }
             }
 
@@ -323,6 +371,11 @@ fn parse_children(
 
                 if let Some(child) = pending.last_mut() {
                     observe_member_synonym_empty(child, &path, &element_name);
+                    if is_direct_command_parameter_value(child, &path, &element_name) {
+                        child.command_parameter_types.observe_value(String::new());
+                    } else if is_direct_command_parameter_container(child, &path, &element_name) {
+                        child.command_parameter_types.observe_container();
+                    }
                 }
             }
 
@@ -379,7 +432,9 @@ fn observe_child_text(
         child.name = Some(decode_text(event)?);
     }
 
-    if path.last().is_some_and(|element| element == "types") {
+    if child.kind != EdtMetadataChildKind::Command
+        && path.last().is_some_and(|element| element == "types")
+    {
         let value = decode_text(event)?;
         if let Some(reference) = parse_metadata_reference_type(&value).map_err(|()| {
             EdtMetadataStructureError::InvalidReferenceName {
@@ -409,6 +464,53 @@ fn decode_text(event: &BytesText<'_>) -> Result<String, EdtMetadataStructureErro
         .decode()
         .map(std::borrow::Cow::into_owned)
         .map_err(|source| EdtMetadataStructureError::MalformedXml(source.to_string()))
+}
+
+fn read_command_parameter_value(
+    reader: &mut Reader<&[u8]>,
+    event: &BytesStart<'_>,
+) -> Result<String, EdtMetadataStructureError> {
+    let raw_value = reader
+        .read_text(event.to_end().name())
+        .map_err(|source| EdtMetadataStructureError::MalformedXml(source.to_string()))?;
+
+    unescape(&raw_value)
+        .map_err(|source| EdtMetadataStructureError::MalformedXml(source.to_string()))
+        .map(std::borrow::Cow::into_owned)
+}
+
+fn observe_command_parameter_container(child: &mut PendingChild, path: &[String]) {
+    if child.kind == EdtMetadataChildKind::Command
+        && path.len() == child.depth + 1
+        && path
+            .last()
+            .is_some_and(|element| element == "commandParameterType")
+    {
+        child.command_parameter_types.observe_container();
+    }
+}
+
+fn is_direct_command_parameter_container(
+    child: &PendingChild,
+    path: &[String],
+    element_name: &str,
+) -> bool {
+    child.kind == EdtMetadataChildKind::Command
+        && path.len() == child.depth
+        && element_name == "commandParameterType"
+}
+
+fn is_direct_command_parameter_value(
+    child: &PendingChild,
+    path: &[String],
+    element_name: &str,
+) -> bool {
+    child.kind == EdtMetadataChildKind::Command
+        && path.len() == child.depth + 1
+        && path
+            .last()
+            .is_some_and(|element| element == "commandParameterType")
+        && element_name == "types"
 }
 
 fn observe_member_synonym_start(child: &mut PendingChild, path: &[String]) {
@@ -528,13 +630,24 @@ fn finish_child(
     })?;
     let member_payload = finish_member_payload(&child, descriptor_path)?;
 
-    let descriptor = EdtMetadataChildDescriptor::new_with_member_payload(
+    let command_parameter_types = if child.kind == EdtMetadataChildKind::Command {
+        child.command_parameter_types.finish(
+            &id,
+            &name,
+            EdtCommandParameterSourceKind::SubordinateCommand,
+            descriptor_path,
+        )
+    } else {
+        Vec::new()
+    };
+    let descriptor = EdtMetadataChildDescriptor::new_with_command_parameter_types(
         id,
         name,
         child.kind,
         parent_id.clone(),
         member_payload,
         child.references,
+        command_parameter_types,
     );
     let immediate_owner_id = descriptor.id().clone();
     let mut descriptors = vec![descriptor];
@@ -802,7 +915,10 @@ mod tests {
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
-    use crate::EdtMetadataObjectDescriptor;
+    use crate::{
+        EdtCommandParameterSourceKind, EdtCommandParameterTypeOutcomeKind,
+        EdtCommandParameterTypeReason, EdtMetadataObjectDescriptor,
+    };
 
     use super::{
         EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataReferenceRole,
@@ -1489,5 +1605,194 @@ mod tests {
         .expect_err("malformed member synonym XML must be rejected");
 
         assert!(matches!(error, EdtMetadataStructureError::MalformedXml(_)));
+    }
+
+    #[test]
+    fn reads_real_catalog_document_and_task_command_parameter_types() {
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let cases = [
+            (
+                "OneAgent_EDTproject/src/Catalogs/UserGroups/UserGroups.mdo",
+                "catalog-user-groups",
+                "OpenUserGroups",
+                "CatalogRef.Users",
+                MetadataKind::Catalog,
+            ),
+            (
+                "OneAgent_EDTproject/src/Documents/CustomerOrder/CustomerOrder.mdo",
+                "document-customer-order",
+                "CancelCustomerOrder",
+                "DocumentRef.CustomerOrder",
+                MetadataKind::Document,
+            ),
+            (
+                "OneAgent_EDTproject/src/Tasks/PerformerTask/PerformerTask.mdo",
+                "task-performer-task",
+                "Completed2",
+                "TaskRef.PerformerTask",
+                MetadataKind::Task,
+            ),
+        ];
+
+        for (path, owner_id, command_name, raw_token, target_kind) in cases {
+            let descriptor_path = repository.join(path);
+            let source = fs::read_to_string(&descriptor_path)
+                .expect("repository-owned Command source must be readable");
+            let name_marker = format!("<name>{command_name}</name>");
+            let name_offset = source
+                .find(&name_marker)
+                .expect("repository-owned Command name must be present");
+            let start = source[..name_offset]
+                .rfind("<commands ")
+                .expect("repository-owned Command start must be present");
+            let end = name_offset
+                + source[name_offset..]
+                    .find("</commands>")
+                    .expect("repository-owned Command end must be present")
+                + "</commands>".len();
+            let xml = format!(
+                "<mdclass:Document xmlns:mdclass=\"urn:test\"><name>Evidence</name>{}</mdclass:Document>",
+                &source[start..end]
+            );
+            let owner_id = EntityId::new(owner_id).expect("owner identifier must be valid");
+            let first = parse_children(&xml, &owner_id, &descriptor_path)
+                .expect("real Command fragment must parse");
+            let repeated = parse_children(&xml, &owner_id, &descriptor_path)
+                .expect("repeated real Command fragment must parse");
+
+            assert_eq!(first, repeated);
+            let command = first
+                .iter()
+                .find(|child| child.name().as_str() == command_name)
+                .expect("real Command must be present");
+            let [observation] = command.command_parameter_types() else {
+                panic!("real Command must have one parameter observation");
+            };
+            assert_eq!(observation.source_id(), command.id());
+            assert_eq!(observation.source_name(), command.name());
+            assert_eq!(
+                observation.source_kind(),
+                EdtCommandParameterSourceKind::SubordinateCommand
+            );
+            assert_eq!(
+                observation.role(),
+                EdtMetadataReferenceRole::CommandParameterType
+            );
+            assert_eq!(observation.raw_token(), Some(raw_token));
+            assert_eq!(observation.target_kind(), Some(target_kind));
+            assert_eq!(
+                observation.outcome(),
+                EdtCommandParameterTypeOutcomeKind::Accepted
+            );
+            assert!(command.references().is_empty());
+        }
+    }
+
+    #[test]
+    fn command_parameter_outcomes_are_typed_deduplicated_and_order_independent() {
+        let xml = |values: &str| {
+            format!(
+                r#"<mdclass:Document xmlns:mdclass="urn:test" uuid="document-generated">
+  <name>Generated</name>
+  <commands uuid="accepted-command">
+    <name>Accepted</name>
+    <commandParameterType>{values}</commandParameterType>
+  </commands>
+  <commands uuid="empty-command">
+    <name>Empty</name>
+    <commandParameterType/>
+  </commands>
+  <commands uuid="missing-command">
+    <name>Missing</name>
+  </commands>
+  <commands uuid="defined-command">
+    <name>Defined</name>
+    <commandParameterType><types>DefinedType.DocumentComment</types></commandParameterType>
+  </commands>
+  <commands uuid="duplicate-container-command">
+    <name>DuplicateContainer</name>
+    <commandParameterType><types>CatalogRef.Products</types></commandParameterType>
+    <commandParameterType><types>DocumentRef.CustomerOrder</types></commandParameterType>
+  </commands>
+  <commands uuid="malformed-command">
+    <name>Malformed</name>
+    <commandParameterType><types>CatalogRef.</types><types/></commandParameterType>
+  </commands>
+</mdclass:Document>"#
+            )
+        };
+        let first = generated_children(&xml(
+            "<types>TaskRef.PerformerTask</types><types>CatalogRef.Products</types><types>TaskRef.PerformerTask</types>",
+        ))
+        .expect("generated Commands must parse");
+        let reordered = generated_children(&xml(
+            "<types>TaskRef.PerformerTask</types><types>TaskRef.PerformerTask</types><types>CatalogRef.Products</types>",
+        ))
+        .expect("reordered generated Commands must parse");
+
+        assert_eq!(first, reordered);
+        let command = |name: &str| {
+            first
+                .iter()
+                .find(|child| child.name().as_str() == name)
+                .expect("generated Command must exist")
+        };
+        let accepted = command("Accepted").command_parameter_types();
+        assert_eq!(accepted.len(), 2);
+        assert_eq!(accepted[0].raw_token(), Some("CatalogRef.Products"));
+        assert_eq!(accepted[1].raw_token(), Some("TaskRef.PerformerTask"));
+        assert_eq!(accepted[1].occurrence_count(), 2);
+
+        let [empty] = command("Empty").command_parameter_types() else {
+            panic!("empty container must have one observation");
+        };
+        assert_eq!(empty.outcome(), EdtCommandParameterTypeOutcomeKind::Ignored);
+        assert_eq!(
+            empty.reason(),
+            Some(EdtCommandParameterTypeReason::EmptyContainer)
+        );
+
+        let [missing] = command("Missing").command_parameter_types() else {
+            panic!("missing container must have one observation");
+        };
+        assert_eq!(
+            missing.outcome(),
+            EdtCommandParameterTypeOutcomeKind::Missing
+        );
+        assert_eq!(
+            missing.reason(),
+            Some(EdtCommandParameterTypeReason::MissingContainer)
+        );
+
+        let [defined] = command("Defined").command_parameter_types() else {
+            panic!("Defined Type must have one observation");
+        };
+        assert_eq!(
+            defined.outcome(),
+            EdtCommandParameterTypeOutcomeKind::Unsupported
+        );
+        assert_eq!(
+            defined.reason(),
+            Some(EdtCommandParameterTypeReason::DeferredDefinedType)
+        );
+
+        let [duplicate] = command("DuplicateContainer").command_parameter_types() else {
+            panic!("duplicate container must have one observation");
+        };
+        assert_eq!(
+            duplicate.outcome(),
+            EdtCommandParameterTypeOutcomeKind::Malformed
+        );
+        assert_eq!(
+            duplicate.reason(),
+            Some(EdtCommandParameterTypeReason::DuplicateContainer)
+        );
+        assert_eq!(duplicate.occurrence_count(), 2);
+
+        let malformed = command("Malformed").command_parameter_types();
+        assert_eq!(malformed.len(), 2);
+        assert!(malformed.iter().all(|observation| {
+            observation.outcome() == EdtCommandParameterTypeOutcomeKind::Malformed
+        }));
     }
 }

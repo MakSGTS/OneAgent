@@ -1,6 +1,7 @@
 //! Adapter for reading `1C:EDT` project sources.
 
 mod bsl_graph;
+mod command_parameter;
 mod coverage;
 mod metadata_object;
 mod metadata_structure;
@@ -17,6 +18,11 @@ mod writes_resolution;
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
     FileSystemEdtMetadataObjectReader,
+};
+
+pub use command_parameter::{
+    EdtCommandParameterSourceKind, EdtCommandParameterTypeObservation,
+    EdtCommandParameterTypeOutcomeKind, EdtCommandParameterTypeReason,
 };
 
 pub use metadata_structure::{

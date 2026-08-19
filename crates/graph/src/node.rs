@@ -1,7 +1,7 @@
 //! Nodes stored in the semantic graph.
 
 use oneagent_common::{EntityId, EntityName};
-use oneagent_metadata::MetadataPayload;
+use oneagent_metadata::{MetadataMemberPayload, MetadataPayload};
 use std::fmt::{Display, Formatter};
 
 use crate::{NodeKind, Provenance};
@@ -14,6 +14,8 @@ pub enum GraphNodePayload {
     None,
     /// Source-independent content of a metadata node.
     Metadata(MetadataPayload),
+    /// Source-independent content of an `Attribute` or `TabularSection` node.
+    MetadataMember(MetadataMemberPayload),
 }
 
 impl GraphNodePayload {
@@ -21,11 +23,12 @@ impl GraphNodePayload {
     #[must_use]
     pub const fn is_compatible_with(&self, kind: NodeKind) -> bool {
         match (self, kind) {
-            (Self::None, _) => true,
+            (Self::None, _)
+            | (Self::MetadataMember(_), NodeKind::Attribute | NodeKind::TabularSection) => true,
             (Self::Metadata(payload), NodeKind::Metadata(metadata_kind)) => {
                 payload.is_compatible_with(metadata_kind)
             }
-            (Self::Metadata(_), _) => false,
+            (Self::Metadata(_) | Self::MetadataMember(_), _) => false,
         }
     }
 
@@ -33,8 +36,17 @@ impl GraphNodePayload {
     #[must_use]
     pub const fn metadata(&self) -> Option<&MetadataPayload> {
         match self {
-            Self::None => None,
             Self::Metadata(payload) => Some(payload),
+            Self::None | Self::MetadataMember(_) => None,
+        }
+    }
+
+    /// Returns subordinate member content when this is a member payload.
+    #[must_use]
+    pub const fn metadata_member(&self) -> Option<&MetadataMemberPayload> {
+        match self {
+            Self::None | Self::Metadata(_) => None,
+            Self::MetadataMember(payload) => Some(payload),
         }
     }
 }
@@ -171,6 +183,12 @@ impl GraphNode {
         self.payload.metadata()
     }
 
+    /// Returns source-independent `Attribute` or `TabularSection` content.
+    #[must_use]
+    pub const fn metadata_member_payload(&self) -> Option<&MetadataMemberPayload> {
+        self.payload.metadata_member()
+    }
+
     /// Returns provenance records attached to the node.
     #[must_use]
     pub fn provenance(&self) -> &[Provenance] {
@@ -187,8 +205,8 @@ impl GraphNode {
 mod tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_metadata::{
-        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataPayload,
-        MetadataSpecificPayload,
+        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataMemberPayload,
+        MetadataPayload, MetadataSpecificPayload,
     };
 
     use super::{GraphNode, GraphNodePayload};
@@ -217,6 +235,7 @@ mod tests {
 
         assert_eq!(node.payload(), &GraphNodePayload::None);
         assert_eq!(node.metadata_payload(), None);
+        assert_eq!(node.metadata_member_payload(), None);
     }
 
     #[test]
@@ -262,5 +281,61 @@ mod tests {
                 .synonym(),
             Some("Sales")
         );
+    }
+
+    #[test]
+    fn accepts_member_payload_for_attribute_and_tabular_section() {
+        for kind in [NodeKind::Attribute, NodeKind::TabularSection] {
+            let node = GraphNode::new_with_payload(
+                id("metadata.member"),
+                name("Member"),
+                kind,
+                GraphNodePayload::MetadataMember(MetadataMemberPayload::new(Some(
+                    "Member synonym".to_owned(),
+                ))),
+            )
+            .expect("member payload must be valid for accepted member kinds");
+
+            assert_eq!(node.metadata_payload(), None);
+            assert_eq!(
+                node.metadata_member_payload()
+                    .expect("member payload must exist")
+                    .synonym(),
+                Some("Member synonym")
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_member_payload_for_every_unrelated_node_kind() {
+        let unrelated = [
+            NodeKind::Metadata(MetadataKind::Catalog),
+            NodeKind::Module,
+            NodeKind::Procedure,
+            NodeKind::Function,
+            NodeKind::Query,
+            NodeKind::Form,
+            NodeKind::Command,
+            NodeKind::StandardAttribute,
+            NodeKind::Dimension,
+            NodeKind::Resource,
+            NodeKind::Measure,
+            NodeKind::Role,
+            NodeKind::AccessRight,
+            NodeKind::Subsystem,
+            NodeKind::Unknown,
+        ];
+
+        for kind in unrelated {
+            let error = GraphNode::new_with_payload(
+                id("unrelated"),
+                name("Unrelated"),
+                kind,
+                GraphNodePayload::MetadataMember(MetadataMemberPayload::empty()),
+            )
+            .expect_err("member payload must be rejected for unrelated node kinds");
+
+            assert_eq!(error.node_kind(), kind);
+        }
     }
 }

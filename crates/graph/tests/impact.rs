@@ -1,10 +1,11 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, ImpactAnalysisError,
+    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload, ImpactAnalysisError,
     ImpactNodeAvailability, ImpactNodeStatus, ImpactReasonKind, ImpactSnapshot, NodeId, NodeKind,
     OwnershipImpactMode, ProducerId, Provenance, ProvenanceImpactMode, ResolutionState,
     SemanticGraph, SemanticGraphEdgeFilter, SemanticImpactAnalyzer, SemanticImpactOptions,
 };
+use oneagent_metadata::MetadataMemberPayload;
 
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
@@ -481,6 +482,43 @@ fn ownership_propagation_is_explicitly_configured() {
                 .iter()
                 .any(|reason| reason.kind() == ImpactReasonKind::OwnershipPropagation)
     }));
+}
+
+#[test]
+fn member_payload_change_is_a_direct_impact_without_implicit_propagation() {
+    let attribute_id = id("metadata.document.sales:attribute:Company");
+    let graph = |synonym: &str| {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(
+            GraphNode::new_with_payload(
+                attribute_id.clone(),
+                name("Company"),
+                NodeKind::Attribute,
+                GraphNodePayload::MetadataMember(MetadataMemberPayload::new(Some(
+                    synonym.to_owned(),
+                ))),
+            )
+            .expect("Attribute member payload must be valid"),
+        );
+        graph
+    };
+    let previous = graph("Company");
+    let current = graph("Organization");
+    let diff = previous.diff(&current);
+
+    let impact =
+        SemanticImpactAnalyzer::analyze(&previous, &current, &diff, &SemanticImpactOptions::new(2))
+            .expect("member payload impact must succeed");
+
+    assert_eq!(impact.affected_nodes().len(), 1);
+    assert_eq!(
+        impact.affected_nodes()[0].node_id().as_str(),
+        attribute_id.as_str()
+    );
+    assert_eq!(
+        impact.affected_nodes()[0].status(),
+        ImpactNodeStatus::DirectlyChanged
+    );
 }
 
 #[test]

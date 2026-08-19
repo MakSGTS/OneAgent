@@ -4,7 +4,9 @@ use oneagent_graph::{
     SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphTraversalDirection,
     SemanticGraphTraversalOptions,
 };
-use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
+use oneagent_metadata::{
+    CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
+};
 
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
@@ -630,4 +632,35 @@ fn node_lookup_exposes_payload_without_changing_exact_name_behavior() {
     );
     assert_eq!(query.nodes_by_name(&name("Products")), vec![node]);
     assert!(query.nodes_by_name(&name("Goods")).is_empty());
+}
+
+#[test]
+fn member_payload_is_visible_without_becoming_an_exact_name_index() {
+    let attribute_id = id("metadata.document.sales:attribute:Company");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(
+        GraphNode::new_with_payload(
+            attribute_id.clone(),
+            name("Company"),
+            NodeKind::Attribute,
+            GraphNodePayload::MetadataMember(MetadataMemberPayload::new(Some(
+                "Organization".to_owned(),
+            ))),
+        )
+        .expect("Attribute member payload must be valid"),
+    );
+
+    let query = graph.query();
+    let node = query
+        .node(&node_id(attribute_id.as_str()))
+        .expect("Attribute node must exist");
+
+    assert_eq!(
+        node.metadata_member_payload()
+            .expect("member payload must exist")
+            .synonym(),
+        Some("Organization")
+    );
+    assert_eq!(query.nodes_by_name(&name("Company")), vec![node]);
+    assert!(query.nodes_by_name(&name("Organization")).is_empty());
 }

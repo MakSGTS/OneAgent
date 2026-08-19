@@ -164,6 +164,36 @@ impl CommonMetadataPayload {
     }
 }
 
+/// Source-independent semantic content of a subordinate metadata member.
+///
+/// The first accepted member-content slice is shared by `Attribute` and
+/// `TabularSection` graph nodes. Compatibility with those node kinds is
+/// enforced by the graph domain rather than this source-independent value.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MetadataMemberPayload {
+    synonym: Option<String>,
+}
+
+impl MetadataMemberPayload {
+    /// Creates member content with an optional localized display synonym.
+    #[must_use]
+    pub const fn new(synonym: Option<String>) -> Self {
+        Self { synonym }
+    }
+
+    /// Creates member content with no accepted semantic value.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self::new(None)
+    }
+
+    /// Returns the explicitly declared localized synonym when present.
+    #[must_use]
+    pub fn synonym(&self) -> Option<&str> {
+        self.synonym.as_deref()
+    }
+}
+
 /// Closed kind-specific metadata content supported by the domain model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MetadataSpecificPayload {
@@ -399,8 +429,9 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use super::{
-        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataObject,
-        MetadataPayload, MetadataRegisterRecord, MetadataSpecificPayload, MetadataTree,
+        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataMemberPayload,
+        MetadataObject, MetadataPayload, MetadataRegisterRecord, MetadataSpecificPayload,
+        MetadataTree,
     };
 
     fn id(value: &str) -> EntityId {
@@ -476,6 +507,16 @@ mod tests {
 
         assert_eq!(absent.synonym(), None);
         assert_eq!(present.synonym(), Some("Продажи"));
+    }
+
+    #[test]
+    fn member_payload_preserves_absent_and_explicit_synonym() {
+        let absent = MetadataMemberPayload::empty();
+        let present = MetadataMemberPayload::new(Some("Товары".to_owned()));
+
+        assert_eq!(absent.synonym(), None);
+        assert_eq!(present.synonym(), Some("Товары"));
+        assert_ne!(absent, present);
     }
 
     #[test]

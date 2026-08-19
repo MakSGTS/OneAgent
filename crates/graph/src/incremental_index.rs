@@ -377,7 +377,9 @@ mod tests {
     use std::ptr;
 
     use oneagent_common::{EntityId, EntityName};
-    use oneagent_metadata::{CommonMetadataPayload, MetadataKind, MetadataPayload};
+    use oneagent_metadata::{
+        CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
+    };
 
     use super::{
         IncrementalIndexChangeError, NormalizedSemanticIndexChanges,
@@ -447,6 +449,16 @@ mod tests {
             vec![provenance(id_value, origin)],
         )
         .expect("metadata payload must match the node kind")
+    }
+
+    fn member_node_with_payload(id_value: &str, synonym: &str) -> GraphNode {
+        GraphNode::new_with_payload(
+            id(id_value),
+            name("Company"),
+            NodeKind::Attribute,
+            GraphNodePayload::MetadataMember(MetadataMemberPayload::new(Some(synonym.to_owned()))),
+        )
+        .expect("member payload must match the node kind")
     }
 
     fn edge(source: &str, target: &str, kind: EdgeKind, origin: FactOrigin) -> GraphEdge {
@@ -1313,6 +1325,30 @@ mod tests {
         let incremental = previous_state
             .apply_changes(&changes)
             .expect("lookup-neutral refresh must apply");
+
+        assert_eq!(incremental, previous_state);
+        assert_eq!(incremental, SemanticNodeIndexState::from_graph(&current));
+    }
+
+    #[test]
+    fn member_payload_refresh_matches_a_clean_node_index_rebuild() {
+        let mut previous = SemanticGraph::new();
+        previous.insert_node(member_node_with_payload(
+            "metadata.document.sales:attribute:Company",
+            "Company",
+        ));
+        let mut current = SemanticGraph::new();
+        current.insert_node(member_node_with_payload(
+            "metadata.document.sales:attribute:Company",
+            "Organization",
+        ));
+
+        let previous_state = SemanticNodeIndexState::from_graph(&previous);
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("member payload transition must normalize");
+        let incremental = previous_state
+            .apply_changes(&changes)
+            .expect("member payload refresh must apply");
 
         assert_eq!(incremental, previous_state);
         assert_eq!(incremental, SemanticNodeIndexState::from_graph(&current));

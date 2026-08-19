@@ -19,7 +19,6 @@ pub mod query;
 pub mod reference_request;
 pub mod report;
 pub mod resolution;
-#[allow(dead_code)]
 mod semantic_index;
 pub mod standard_attribute;
 pub mod validation;

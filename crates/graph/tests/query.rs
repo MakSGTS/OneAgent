@@ -1,6 +1,6 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind, SemanticGraph,
+    EdgeId, EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind, SemanticGraph,
     SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphTraversalDirection,
     SemanticGraphTraversalOptions,
 };
@@ -16,6 +16,30 @@ fn name(value: &str) -> EntityName {
 
 fn node_id(value: &str) -> NodeId {
     NodeId::new(value)
+}
+
+const fn const_query(graph: &SemanticGraph) -> SemanticGraphQuery<'_> {
+    SemanticGraphQuery::new(graph)
+}
+
+fn node_ids<'graph>(nodes: impl IntoIterator<Item = &'graph GraphNode>) -> Vec<EntityId> {
+    nodes.into_iter().map(|node| node.id().clone()).collect()
+}
+
+fn sorted_edge_ids<'graph>(edges: impl IntoIterator<Item = &'graph GraphEdge>) -> Vec<EdgeId> {
+    let mut ids = edges
+        .into_iter()
+        .map(|edge| {
+            SemanticGraphQuery::edge_id(
+                &node_id(edge.source().as_str()),
+                &node_id(edge.target().as_str()),
+                edge.kind(),
+            )
+        })
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 struct QueryFixtureIds {
@@ -131,6 +155,144 @@ fn insert_edges(graph: &mut SemanticGraph, ids: QueryFixtureIds, reverse: bool) 
             graph.insert_edge(edge).expect("edge must be valid");
         }
     }
+}
+
+#[test]
+fn const_query_construction_preserves_empty_snapshot_behavior() {
+    let graph = SemanticGraph::new();
+    let query = const_query(&graph);
+
+    assert!(query.nodes().is_empty());
+    assert!(query.edges().is_empty());
+    assert!(query.nodes_by_name(&name("Missing")).is_empty());
+    assert!(query.outgoing_edges(&node_id("missing")).is_empty());
+    assert!(query.owner(&node_id("missing")).is_none());
+}
+
+#[test]
+fn indexed_primitives_match_independent_canonical_scans() {
+    let graph = graph_fixture(false);
+    let ids = QueryFixtureIds::new();
+    let query = graph.query();
+    let repeated = graph.query();
+    let cloned = query.clone();
+    let post = node_id(ids.post.as_str());
+    let company = node_id(ids.company.as_str());
+
+    assert_eq!(query.node_by_entity_id(&ids.post), graph.node(&ids.post));
+    assert_eq!(node_ids(query.nodes()), node_ids(graph.nodes()));
+    assert_eq!(
+        node_ids(query.nodes_by_kind(NodeKind::Procedure)),
+        node_ids(
+            graph
+                .nodes()
+                .filter(|node| node.kind() == NodeKind::Procedure)
+        )
+    );
+    assert_eq!(
+        node_ids(query.nodes_by_name(&name("Sales"))),
+        node_ids(graph.nodes().filter(|node| node.name() == &name("Sales")))
+    );
+    assert_eq!(
+        node_ids(query.nodes_by_name_and_kind(
+            &name("Sales"),
+            NodeKind::Metadata(MetadataKind::Document),
+        )),
+        node_ids(graph.nodes().filter(|node| {
+            node.name() == &name("Sales")
+                && node.kind() == NodeKind::Metadata(MetadataKind::Document)
+        }))
+    );
+
+    let all_edge_ids = sorted_edge_ids(graph.edges());
+    assert_eq!(sorted_edge_ids(query.edges()), all_edge_ids);
+    assert!(all_edge_ids.iter().all(|id| query.edge(id).is_some()));
+    assert_eq!(
+        sorted_edge_ids(query.edges_by_kind(EdgeKind::Calls)),
+        sorted_edge_ids(graph.edges().filter(|edge| edge.kind() == EdgeKind::Calls))
+    );
+    assert_eq!(
+        sorted_edge_ids(query.outgoing_edges(&post)),
+        sorted_edge_ids(graph.outgoing(&ids.post))
+    );
+    assert_eq!(
+        sorted_edge_ids(query.incoming_edges(&company)),
+        sorted_edge_ids(graph.incoming(&ids.company))
+    );
+    assert_eq!(
+        sorted_edge_ids(query.outgoing_edges_by_kind(&post, EdgeKind::Calls)),
+        sorted_edge_ids(
+            graph
+                .outgoing(&ids.post)
+                .into_iter()
+                .filter(|edge| edge.kind() == EdgeKind::Calls)
+        )
+    );
+    assert_eq!(
+        sorted_edge_ids(query.incoming_edges_by_kind(&company, EdgeKind::Contains)),
+        sorted_edge_ids(
+            graph
+                .incoming(&ids.company)
+                .into_iter()
+                .filter(|edge| edge.kind() == EdgeKind::Contains)
+        )
+    );
+
+    assert_eq!(node_ids(query.nodes()), node_ids(repeated.nodes()));
+    assert_eq!(
+        sorted_edge_ids(query.edges()),
+        sorted_edge_ids(cloned.edges())
+    );
+}
+
+#[test]
+fn indexed_containment_matches_multiple_owner_canonical_scans() {
+    let mut graph = graph_fixture(false);
+    let ids = QueryFixtureIds::new();
+    graph
+        .insert_edge(GraphEdge::new(
+            ids.document_returns.clone(),
+            ids.company.clone(),
+            EdgeKind::Contains,
+        ))
+        .expect("multiple ownership must remain representable");
+
+    let query = graph.query();
+    let company = node_id(ids.company.as_str());
+    let configuration = node_id(ids.configuration.as_str());
+    let mut canonical_owners = graph
+        .incoming(&ids.company)
+        .into_iter()
+        .filter(|edge| edge.kind() == EdgeKind::Contains)
+        .filter_map(|edge| graph.node(edge.source()))
+        .collect::<Vec<_>>();
+    canonical_owners.sort_by_key(|node| node.id());
+    canonical_owners.dedup_by_key(|node| node.id());
+
+    assert_eq!(node_ids(query.owners(&company)), node_ids(canonical_owners));
+    assert!(query.owner(&company).is_none());
+    assert_eq!(
+        sorted_edge_ids(query.owner_edges(&company)),
+        sorted_edge_ids(
+            graph
+                .incoming(&ids.company)
+                .into_iter()
+                .filter(|edge| edge.kind() == EdgeKind::Contains)
+        )
+    );
+
+    let mut canonical_children = graph
+        .outgoing(&ids.configuration)
+        .into_iter()
+        .filter(|edge| edge.kind() == EdgeKind::Contains)
+        .filter_map(|edge| graph.node(edge.target()))
+        .collect::<Vec<_>>();
+    canonical_children.sort_by_key(|node| node.id());
+    canonical_children.dedup_by_key(|node| node.id());
+    assert_eq!(
+        node_ids(query.children(&configuration)),
+        node_ids(canonical_children)
+    );
 }
 
 #[test]

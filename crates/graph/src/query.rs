@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, VecDeque};
 
 use oneagent_common::{EntityId, EntityName};
 
+use crate::semantic_index::SemanticIndex;
 use crate::{
     EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph,
     edge_identity::edge_id as stable_edge_id,
@@ -264,16 +265,16 @@ impl<'graph> SemanticGraphQuery<'graph> {
         is_dependency_edge_kind(kind)
     }
 
-    /// Looks up a node by stable [`NodeId`] in `O(log n)` graph storage time.
+    /// Looks up a node by stable [`NodeId`] through the derived snapshot index.
     #[must_use]
     pub fn node(&self, id: &NodeId) -> Option<&'graph GraphNode> {
-        entity_id_from_node_id(id).and_then(|id| self.graph.node(&id))
+        entity_id_from_node_id(id).and_then(|id| self.index().node(&id))
     }
 
     /// Looks up a node by the concrete entity identifier used by graph storage.
     #[must_use]
     pub fn node_by_entity_id(&self, id: &EntityId) -> Option<&'graph GraphNode> {
-        self.graph.node(id)
+        self.index().node(id)
     }
 
     /// Returns whether a node exists.
@@ -285,13 +286,13 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// Returns all nodes in deterministic `NodeId` order.
     #[must_use]
     pub fn nodes(&self) -> Vec<&'graph GraphNode> {
-        self.graph.nodes().collect()
+        self.index().nodes().collect()
     }
 
     /// Returns nodes of `kind` in deterministic `NodeId` order.
     #[must_use]
     pub fn nodes_by_kind(&self, kind: NodeKind) -> Vec<&'graph GraphNode> {
-        self.graph.nodes_by_kind(kind)
+        self.index().nodes_by_kind(kind).to_vec()
     }
 
     /// Returns nodes with exact canonical name in deterministic `NodeId` order.
@@ -300,10 +301,7 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// [`GraphNode::name`] field. It performs exact matching only.
     #[must_use]
     pub fn nodes_by_name(&self, name: &EntityName) -> Vec<&'graph GraphNode> {
-        self.graph
-            .nodes()
-            .filter(|node| node.name() == name)
-            .collect()
+        self.index().nodes_by_name(name).to_vec()
     }
 
     /// Returns nodes with exact canonical name and kind in deterministic `NodeId` order.
@@ -313,9 +311,11 @@ impl<'graph> SemanticGraphQuery<'graph> {
         name: &EntityName,
         kind: NodeKind,
     ) -> Vec<&'graph GraphNode> {
-        self.graph
-            .nodes()
-            .filter(|node| node.name() == name && node.kind() == kind)
+        self.index()
+            .nodes_by_name(name)
+            .iter()
+            .copied()
+            .filter(|node| node.kind() == kind)
             .collect()
     }
 
@@ -326,10 +326,11 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// callers and to the Validation API.
     #[must_use]
     pub fn owners(&self, child: &NodeId) -> Vec<&'graph GraphNode> {
-        self.owner_edges(child)
-            .into_iter()
-            .filter_map(|edge| self.graph.node(edge.source()))
-            .collect()
+        let Some(id) = entity_id_from_node_id(child) else {
+            return Vec::new();
+        };
+
+        self.index().owners(&id).to_vec()
     }
 
     /// Returns the single owner of `child`, when exactly one owner exists.
@@ -349,41 +350,40 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// Returns containment owner edges of `child` in deterministic edge order.
     #[must_use]
     pub fn owner_edges(&self, child: &NodeId) -> Vec<&'graph GraphEdge> {
-        self.incoming_edges_by_kind(child, EdgeKind::Contains)
+        let Some(id) = entity_id_from_node_id(child) else {
+            return Vec::new();
+        };
+
+        self.index().owner_edges(&id).to_vec()
     }
 
     /// Returns immediate child nodes owned by `owner` in deterministic `NodeId` order.
     #[must_use]
     pub fn children(&self, owner: &NodeId) -> Vec<&'graph GraphNode> {
-        let mut children = self
-            .outgoing_edges_by_kind(owner, EdgeKind::Contains)
-            .into_iter()
-            .filter_map(|edge| self.graph.node(edge.target()))
-            .collect::<Vec<_>>();
+        let Some(id) = entity_id_from_node_id(owner) else {
+            return Vec::new();
+        };
 
-        children.sort_by_key(|node| node.id().clone());
-        children.dedup_by_key(|node| node.id().clone());
-        children
+        self.index().children(&id).to_vec()
     }
 
     /// Returns immediate child nodes of `kind` in deterministic `NodeId` order.
     #[must_use]
     pub fn children_by_kind(&self, owner: &NodeId, kind: NodeKind) -> Vec<&'graph GraphNode> {
-        self.children(owner)
-            .into_iter()
-            .filter(|node| node.kind() == kind)
-            .collect()
+        let Some(id) = entity_id_from_node_id(owner) else {
+            return Vec::new();
+        };
+
+        self.index().children_by_kind(&id, kind).to_vec()
     }
 
     /// Looks up an edge by stable [`EdgeId`].
     ///
-    /// The current storage does not maintain a separate edge-id index, so this
-    /// lookup scans deterministic edge storage and compares stable identifiers.
+    /// The snapshot index uses the same centralized stable edge identity as
+    /// query, diff and validation APIs.
     #[must_use]
     pub fn edge(&self, id: &EdgeId) -> Option<&'graph GraphEdge> {
-        self.graph.edges().find(|edge| {
-            stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind()) == *id
-        })
+        self.index().edge(id)
     }
 
     /// Returns whether an edge exists.
@@ -395,13 +395,13 @@ impl<'graph> SemanticGraphQuery<'graph> {
     /// Returns all edges in deterministic `EdgeId` order.
     #[must_use]
     pub fn edges(&self) -> Vec<&'graph GraphEdge> {
-        sorted_edges(self.graph.edges())
+        self.index().edges().collect()
     }
 
     /// Returns edges of `kind` in deterministic `EdgeId` order.
     #[must_use]
     pub fn edges_by_kind(&self, kind: EdgeKind) -> Vec<&'graph GraphEdge> {
-        sorted_edges(self.graph.edges().filter(|edge| edge.kind() == kind))
+        self.index().edges_by_kind(kind).to_vec()
     }
 
     /// Returns outgoing edges of `node` in deterministic `EdgeId` order.
@@ -413,7 +413,7 @@ impl<'graph> SemanticGraphQuery<'graph> {
             return Vec::new();
         };
 
-        sorted_edges(self.graph.outgoing(&id))
+        self.index().outgoing_edges(&id).to_vec()
     }
 
     /// Returns incoming edges of `node` in deterministic `EdgeId` order.
@@ -425,25 +425,27 @@ impl<'graph> SemanticGraphQuery<'graph> {
             return Vec::new();
         };
 
-        sorted_edges(self.graph.incoming(&id))
+        self.index().incoming_edges(&id).to_vec()
     }
 
     /// Returns outgoing edges of `kind` in deterministic `EdgeId` order.
     #[must_use]
     pub fn outgoing_edges_by_kind(&self, node: &NodeId, kind: EdgeKind) -> Vec<&'graph GraphEdge> {
-        self.outgoing_edges(node)
-            .into_iter()
-            .filter(|edge| edge.kind() == kind)
-            .collect()
+        let Some(id) = entity_id_from_node_id(node) else {
+            return Vec::new();
+        };
+
+        self.index().outgoing_edges_by_kind(&id, kind).to_vec()
     }
 
     /// Returns incoming edges of `kind` in deterministic `EdgeId` order.
     #[must_use]
     pub fn incoming_edges_by_kind(&self, node: &NodeId, kind: EdgeKind) -> Vec<&'graph GraphEdge> {
-        self.incoming_edges(node)
-            .into_iter()
-            .filter(|edge| edge.kind() == kind)
-            .collect()
+        let Some(id) = entity_id_from_node_id(node) else {
+            return Vec::new();
+        };
+
+        self.index().incoming_edges_by_kind(&id, kind).to_vec()
     }
 
     /// Returns direct downstream neighbor nodes in deterministic `NodeId` order.
@@ -698,6 +700,12 @@ impl<'graph> SemanticGraphQuery<'graph> {
         });
         neighbors
     }
+
+    fn index(&self) -> SemanticIndex<'graph> {
+        // Lazy borrowed state would make the facade invariant, while eager
+        // state would prevent its existing const construction.
+        SemanticIndex::new(self.graph)
+    }
 }
 
 const DEPENDENCY_EDGE_KINDS: [EdgeKind; 5] = [
@@ -717,19 +725,6 @@ const fn is_dependency_edge_kind(kind: EdgeKind) -> bool {
             | EdgeKind::Writes
             | EdgeKind::DependsOn
     )
-}
-
-fn sorted_edges<'graph>(
-    edges: impl IntoIterator<Item = &'graph GraphEdge>,
-) -> Vec<&'graph GraphEdge> {
-    let mut edges = edges.into_iter().collect::<Vec<_>>();
-    edges.sort_by_key(|edge| {
-        stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind())
-    });
-    edges.dedup_by_key(|edge| {
-        stable_edge_id(edge.source().as_str(), edge.target().as_str(), edge.kind())
-    });
-    edges
 }
 
 fn entity_id_from_node_id(id: &NodeId) -> Option<EntityId> {

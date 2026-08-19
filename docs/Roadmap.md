@@ -141,6 +141,310 @@ Sprint 4 is the next dependency-ordered target. It becomes `active` only after
 its architecture boundary, task decomposition, acceptance criteria, and
 validation plan are approved.
 
+#### Sprint 4 Semantic Index execution plan
+
+This plan implements the accepted boundary in
+[ADR-0026](adr/0026-semantic-index-boundary.md). `SemanticGraph` remains the
+only canonical owner of nodes, edges, identities, provenance, and validation
+state. The Semantic Index is one crate-internal, deterministic, read-only view
+derived from a complete borrowed graph snapshot. Querying or constructing it
+must not normalize, repair, omit, or reinterpret graph facts.
+
+Current lookup responsibilities and compatibility constraints are:
+
+| Surface | Current responsibility | Sprint 4 constraint |
+|---|---|---|
+| `SemanticGraph` | Owns nodes in a `BTreeMap` and edges in a `BTreeSet`; node identity lookup uses the map, while node-kind and incoming or outgoing edge operations scan canonical storage. | Remains the semantic authority and public snapshot construction source; direct graph behavior is preserved. |
+| `SemanticGraphQuery` | Provides the public source-independent read facade; exact name, node kind, stable edge identity, edge kind, adjacency, and derived ownership operations include scan-based paths. | Remains the public read facade with the same results, ordering, traversal policy, and construction entry points. |
+| `SemanticResolutionIndex` | Builds node-id, exact-name, owner-and-child-name, and child-to-owner maps from a complete graph snapshot and returns typed missing, ambiguous, incompatible-kind, and invalid-owner errors. | Becomes a compatibility facade over the shared index representation without changing resolution policy, errors, or candidate ordering. |
+| Validation | Scans canonical edges and builds its own ownership view so invalid and multiple-owner states remain observable. | Continues to validate canonical graph facts; the index must not hide or repair invalid states. |
+| Diff and build Diff | Compare complete canonical snapshots; Diff independently derives the same stable edge identity used by Query and Validation. | Keep snapshot and change semantics unchanged while using one centralized edge-identity implementation. |
+| Impact | Uses Query over previous and current snapshots for node and edge seeds, reverse dependency propagation, and optional ownership propagation. | Query migration must preserve affected nodes, reasons, directions, depth, and deterministic ordering. |
+| Coverage | Observes canonical node, edge, query, reference, and provenance capabilities. | No Coverage Registry status or evidence transition belongs to Sprint 4. |
+| EDT | Production resolution uses `SemanticResolutionIndex`; production and integration tests use Query identity, kind, edge-kind, adjacency, and ownership operations. | Existing source resolution, graph emission, diagnostics, statistics, and repeated-build results remain unchanged. |
+
+##### Public API and lifecycle compatibility gate
+
+The accepted implementation path requires no public API redesign. Preserve the
+public types, method names, parameters, return types, error variants, and
+construction entry points `SemanticGraph::query()`, `SemanticGraphQuery::new`,
+`SemanticGraph::resolution_index()`, and `SemanticResolutionIndex::new`,
+including the current `const` construction capability of the Query entry
+points. The facades may own or lazily materialize the shared internal lookup
+representation, but callers must not need a new public index type or a new
+construction sequence.
+
+Every facade instance observes the complete graph snapshot it borrows. A graph
+mutation requires construction of a new facade and derived view; no index state
+may survive as authority across snapshots. If repository evidence shows that
+this compatibility contract cannot be implemented, stop before changing a
+public API and prepare a separate architecture compatibility decision. Do not
+combine that decision with an implementation slice.
+
+##### Lookup ownership
+
+Each required ADR-0026 lookup dimension has exactly one implementation owner:
+
+| ADR-0026 lookup dimension | Owning task |
+|---|---|
+| Node identity | Task 1 — Snapshot identity and classification index |
+| Exact canonical node name | Task 1 — Snapshot identity and classification index |
+| Node kind | Task 1 — Snapshot identity and classification index |
+| Stable edge identity | Task 1 — Snapshot identity and classification index |
+| Edge kind | Task 1 — Snapshot identity and classification index |
+| Outgoing adjacency by node and by node plus edge kind | Task 2 — Adjacency and containment index |
+| Incoming adjacency by node and by node plus edge kind | Task 2 — Adjacency and containment index |
+| Containment ownership and owned-child lookup | Task 2 — Adjacency and containment index |
+
+Tasks 3 and 4 migrate compatibility facades to those lookup dimensions; they
+must not create alternative maps or policies. Task 5 reviews the integrated
+result and owns no new lookup behavior.
+
+All implementation tasks use the
+[Semantic Index implementation profile](codex/profiles/semantic-index-implementation.md)
+and [Semantic Index task template](codex/templates/semantic-index-task.md).
+They run their focused checks first and then the common full implementation
+gate:
+
+```bash
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+##### Task 1 — Snapshot identity and classification index
+
+**Prerequisites:** the public API and lifecycle compatibility gate above is
+accepted; ADR-0026 remains accepted; the Semantic Index task-template readiness
+stage remains complete.
+
+**Included scope:**
+
+- add one crate-internal complete-snapshot index representation in
+  `oneagent-graph`, borrowing canonical nodes and edges rather than copying a
+  competing graph model;
+- implement deterministic lookup state for node identity, exact
+  `GraphNode::name`, node kind, stable edge identity, and edge kind;
+- centralize stable edge-id construction so Query, Diff, Validation, and the
+  new index cannot drift while preserving the current encoded identity;
+- define ordered values by `NodeId` for node results and `EdgeId` for edge
+  results; preserve all nodes sharing an exact name and treat missing keys as
+  empty or absent without placeholders;
+- prove construction equivalence with canonical `SemanticGraph::nodes()` and
+  `SemanticGraph::edges()` over representative and empty graphs.
+
+**Excluded scope:** adjacency and containment maps; Query or Resolution lookup
+migration; public API changes; graph mutation hooks; benchmarks or performance
+targets.
+
+**Acceptance evidence:** focused tests cover an empty graph, missing keys,
+duplicate exact names, every represented node and edge kind, canonical edge-id
+equivalence, reversed insertion order, repeated construction from the same
+snapshot, and unchanged Diff and Validation edge identities. The index exposes
+borrowed canonical objects and cannot create or mutate graph facts.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph --lib semantic_index::tests
+cargo test -p oneagent-graph --test diff
+cargo test -p oneagent-graph --test validation
+```
+
+Run the common full implementation gate after the focused checks.
+
+##### Task 2 — Adjacency and containment index
+
+**Prerequisites:** Task 1 is complete and its identity and classification maps
+are the only shared snapshot representation.
+
+**Included scope:**
+
+- extend that representation with outgoing and incoming adjacency keyed by
+  node and by node plus `EdgeKind`;
+- derive containment owner, all-owner, child, child-kind, and
+  owner-plus-exact-child-name lookup data from canonical `Contains` edges and
+  the Task 1 node maps;
+- retain every canonical `Contains` fact so multiple owners, duplicate local
+  child names, wrong-owner references, self-loops, and other invalid ownership
+  states remain observable to Resolution and Validation;
+- preserve `EdgeId` ordering for adjacency, `NodeId` ordering for owner and
+  child results, and empty results for unknown nodes or absent kinds.
+
+**Excluded scope:** Query and Resolution facade migration; ownership
+normalization or validation policy changes; traversal policy changes;
+incremental updates.
+
+**Acceptance evidence:** focused tests cover outgoing and incoming lookups with
+multiple edge kinds, node-plus-kind filtering, unknown nodes, empty snapshots,
+self-loops, multiple owners, same-named children under different owners,
+same-named children under one owner, wrong-owner membership, reversed insertion
+order, and repeated construction. Every result is equivalent to a canonical
+scan of the same graph snapshot.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph --lib semantic_index::tests
+cargo test -p oneagent-graph --test validation
+```
+
+Run the common full implementation gate after the focused checks.
+
+##### Task 3 — Resolution compatibility migration
+
+**Prerequisites:** Tasks 1 and 2 are complete; their shared snapshot
+representation covers all lookup state currently derived by
+`SemanticResolutionIndex`.
+
+**Included scope:**
+
+- make `SemanticResolutionIndex` delegate node-id, exact-name,
+  owner-and-child-name, child-to-owner, and kind-filtered resolution to the
+  shared representation;
+- preserve every public constructor and resolver signature, borrowed return,
+  `ResolutionError` variant, candidate list, and deterministic candidate order;
+- add explicit pre-replacement equivalence evidence for successful, missing,
+  ambiguous, incompatible-kind, missing-owner, multiple-owner, and
+  invalid-owner outcomes;
+- verify EDT production consumers for metadata references, Includes, and
+  Grants retain graph emission, diagnostics, resolution statistics, and
+  repeated-build behavior.
+
+**Excluded scope:** Query scan migration; new resolution rules; name
+normalization; adapter-specific index state; changes to graph or EDT semantic
+facts.
+
+**Acceptance evidence:** existing Resolution tests remain green and focused
+tests add any missing empty-snapshot, missing-owner, multiple-owner, repeated
+construction, and indexed-versus-canonical cases. The complete EDT test suite
+passes without changing accepted source or semantic contracts.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph --lib resolution::tests
+cargo test -p oneagent-edt
+```
+
+Run the common full implementation gate after the focused checks.
+
+##### Task 4 — Query migration and consumer equivalence
+
+**Prerequisites:** Task 3 is complete; Resolution compatibility has proved that
+the shared representation preserves name and ownership policy.
+
+**Included scope:**
+
+- keep `SemanticGraphQuery` as the public source-independent facade while
+  delegating node identity, exact name, node kind, stable edge identity, edge
+  kind, outgoing and incoming adjacency, and containment operations to the
+  shared representation;
+- preserve exact results and ordering for `node`, `node_by_entity_id`,
+  `contains_node`, name and kind queries, `edge`, `contains_edge`, edge-kind
+  queries, incoming and outgoing queries, owners, owner edges, children, and
+  children by kind;
+- preserve neighbor, dependency, usage, bounded traversal, cycle, self-loop,
+  deduplication, and edge-filter behavior that composes those primitive
+  lookups;
+- establish indexed-versus-canonical scan equivalence before removing eligible
+  scan paths, including representative and empty graphs, and prove repeated
+  Query construction returns the same ordered results;
+- verify Impact and EDT Query consumers without changing their public behavior.
+
+**Excluded scope:** changes to Query result semantics or dependency-edge
+policy; removal of canonical graph iteration APIs; migration of unrelated
+Validation, Diff, Coverage, or EDT logic to an index; new query operations;
+performance targets without a benchmark baseline.
+
+**Acceptance evidence:** the Query suite covers every migrated primitive and
+the derived traversal behavior for empty, missing, duplicate-name,
+multiple-owner, invalid-owner, insertion-order, cycle, self-loop, and repeated
+construction cases. Query and Resolution equivalence is recorded before any
+scan implementation is removed. Query, Impact, Validation, Diff, build Diff,
+Coverage, and EDT suites remain green with unchanged observable results.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph --test query
+cargo test -p oneagent-graph --lib resolution::tests
+cargo test -p oneagent-graph --test impact
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test diff
+cargo test -p oneagent-graph --test build_diff
+cargo test -p oneagent-graph --test coverage
+cargo test -p oneagent-edt
+```
+
+Run the common full implementation gate after the focused checks.
+
+##### Task 5 — Sprint 4 Semantic Index integration review
+
+**Prerequisites:** Tasks 1 through 4 are complete in dependency order with
+their focused and full validation evidence. Record the Sprint 4 activation
+baseline and review the complete implementation diff from that baseline.
+
+Use the [Review profile](codex/profiles/review.md) and
+[Review task template](codex/templates/review-task.md). This task owns no
+production implementation. Its prompt may explicitly authorize creation of
+`docs/reviews/sprint-4-semantic-index.md` and the corresponding Roadmap status
+update only after a `pass` completion decision.
+
+**Included scope:**
+
+- verify one canonical `SemanticGraph`, one shared derived snapshot
+  representation, borrowed canonical objects, and rebuild-after-mutation
+  lifecycle;
+- trace every ADR-0026 lookup dimension to its single owning task and executed
+  focused evidence;
+- verify Query public construction and results, Resolution typed behavior,
+  Validation visibility of invalid facts, Diff identity and snapshot behavior,
+  Impact propagation, Coverage invariants, and EDT production and integration
+  behavior;
+- verify empty, missing, duplicate-name, ambiguous, invalid-ownership,
+  insertion-order, and repeated-construction evidence and confirm Query and
+  Resolution equivalence preceded scan replacement;
+- confirm Sprint 5 incremental maintenance and all persistence, Runtime,
+  transport, source-adapter, IDE, and unsupported search concerns remain
+  deferred.
+
+**Excluded scope:** fixing findings, changing production code, adding lookup
+dimensions, changing Coverage Registry status, or accepting missing evidence as
+implementation success. Blocking findings return the task to the owning
+implementation slice.
+
+**Acceptance evidence:** record exact commands, test counts, zero-match
+filters, findings, missing evidence, scope conformance, and one decision:
+`pass`, `pass with non-blocking follow-ups`, or `blocked`. Sprint 4 completion
+requires `pass`; only then record the review and change Sprint 4 from `active`
+to `completed`.
+
+**Focused validation:** execute the complete Task 4 focused matrix against the
+reviewed baseline, then run the common full implementation gate.
+
+##### Sprint 4 state gates
+
+Sprint 4 remains `next` while this plan is prepared. Its architecture boundary
+and task-template readiness gate are complete. The remaining activation step is
+explicit approval of this execution plan after a live repository-state recheck;
+only that approval may change the status from `next` to `active`.
+
+Sprint 4 may later be marked `completed` only after Tasks 1 through 4 are
+complete, Task 5 issues `pass`, all focused and full validation commands have
+executed successfully, the integration review is recorded, public compatibility
+is preserved, every ADR-0026 lookup dimension has equivalence evidence, and no
+Sprint 5 or later concern has been pulled forward.
+
+Incremental maintenance, invalidation, structural sharing, and retained state
+across graph mutations remain owned exclusively by Sprint 5. Persistence,
+cache formats, Runtime services, HTTP, CLI, MCP, LSP, IDE integration,
+source-adapter-specific indexing, fuzzy or ranked search, and unsupported
+performance targets remain assigned to later accepted work.
+
 ### Planned sprints
 
 #### v0.2 — Semantic Core

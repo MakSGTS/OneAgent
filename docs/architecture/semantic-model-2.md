@@ -1451,6 +1451,61 @@ Number qualifiers, history/search settings, produced types, line-number
 settings and standard attributes, multiple locale values, alternative synonym
 encodings, deeper nesting, and non-Document owner families remain deferred.
 
+### Accepted Sprint 7 Form and Command boundary
+
+The Sprint 7 source investigation in
+`form-command-source-investigation.md` distinguishes the completed declaration
+slice from unmodeled executable, reference, and navigation facts. Existing
+Common Forms, Common Commands, subordinate Forms, and subordinate Commands keep
+their current node kinds, UUID or owner-scoped fallback identity, immediate
+metadata ownership, provenance, Query behavior, validation, and Coverage.
+Those facts are compatibility constraints rather than new Sprint 7 outcomes.
+
+ADR-0029 accepts a bounded extension. Subordinate Form `Module.bsl` and
+Common/subordinate Command `CommandModule.bsl` artifacts may contribute
+ordinary `Module`, `Procedure`, `Function`, Query, Calls, and related existing
+BSL facts through the canonical graph pipeline. New subordinate module
+identities derive from the canonical Form or Command owner plus a stable module
+role. Form and Command nodes own those modules through `Contains`; no parallel
+UI-specific symbol graph is introduced.
+
+Mapped `commandParameterType` observations may use the public semantic
+reference-request lifecycle with a distinct Command parameter role. The source
+is the canonical Common or subordinate Command, and the target allowlist is
+exactly the nine metadata kinds already accepted for the completed metadata
+type-reference slice. Unique resolution may emit both the direct `References`
+fact and its justified normalized `DependsOn`; unsupported, missing,
+ambiguous, incompatible, malformed, and partial observations emit no edge and
+create no placeholder node.
+
+ADR-0029 also accepts one new direct navigation relation:
+
+```text
+Procedure --Opens--> Form
+```
+
+The first producer is limited to a complete static literal `OpenForm(...)`
+call inside an accepted Command-module Procedure. `CommonForm.<Name>` resolves
+to a Common Form metadata node. An explicit
+`<SupportedKind>.<Owner>.Form.<Name>` target resolves first to the exact typed
+metadata owner and then to its exact subordinate Form child. The edge carries
+resolved provenance, participates directly in generic dependency, usage, and
+reverse Impact navigation, and does not create companion `References` or
+`DependsOn` edges.
+
+Default-form aliases, shorthand ListForm or ObjectForm spellings, dynamic or
+computed targets, calls outside accepted Command-module Procedures, Form
+internals, Form commands and events, Command Groups, multilingual subordinate
+payload, explicit command execution, and other conceptual UI edges remain
+deferred. The conceptual nested UI taxonomy remains a target vocabulary, not
+the live public Rust layout or a wildcard endpoint policy.
+
+Architecture acceptance does not change production behavior, capability
+status, or aggregate Coverage counts. Independent source-independent graph,
+EDT parser, production emission, Query, Diff, incremental-equivalence, Impact,
+diagnostic, report, determinism, and Coverage evidence must pass before the
+corresponding capabilities can transition.
+
 `MetadataKind::Form` and `NodeKind::Metadata(MetadataKind::Form)` are not
 applicable to the EDT adapter: common forms are top-level
 `MetadataKind::CommonForm` entities, while forms owned by documents, catalogs,

@@ -1001,6 +1001,434 @@ Forms, Commands, queries, roles, subsystems, event subscriptions, Designer XML,
 Runtime, persistence, AI, MCP, IDE, and all unproven EDT member forms remain
 deferred. Sprint 7 Forms and Commands is the next planning target.
 
+#### Sprint 7 Forms and Commands execution plan
+
+Sprint 7 expands the completed Form and Command declaration slice with only the
+executable, reference, and navigation facts accepted by
+[ADR-0029](adr/0029-form-command-navigation-semantics.md). It does not replace
+the existing flat graph with the complete conceptual UI taxonomy and does not
+infer semantics from directory names, command placement, or an `OpenForm`
+spelling alone.
+
+The live planning baseline at `eab870a` is:
+
+- Common Forms are top-level
+  `NodeKind::Metadata(MetadataKind::CommonForm)` nodes;
+- Common Commands are top-level
+  `NodeKind::Metadata(MetadataKind::Command)` nodes;
+- subordinate Forms and Commands are `NodeKind::Form` and
+  `NodeKind::Command` children of their immediate metadata object;
+- UUID or owner-scoped UUID-less identity, declared provenance, canonical
+  `Contains`, Query ownership navigation, Validation, Diff, Impact, repeated
+  builds, and current Coverage are already implemented for those declaration
+  facts;
+- top-level Common Form `Module.bsl` can already enter the generic module path,
+  and its existing identity is a compatibility constraint;
+- subordinate Form `Module.bsl`, Common/subordinate Command
+  `CommandModule.bsl`, command parameter types, and static form-opening
+  navigation do not reach the current production graph;
+- the live `EdgeKind` enum does not contain `Opens`;
+- `Form.form` internals and Command Groups have no accepted production model.
+
+Those implemented facts are `already_complete` planning prerequisites, not new
+Sprint 7 tasks. No empty commit may recreate or restate them. Their proving
+baseline remains committed and must stay green throughout the sprint.
+
+The repository-owned
+[Form and Command source investigation](architecture/form-command-source-investigation.md)
+records the current artifact corpus, implemented-versus-missing matrix,
+consumer inventory, supported source forms, and confirmed unknowns. ADR-0029
+accepts the smallest coherent delta:
+
+1. canonical Form and Command entities own recognized executable Module nodes;
+2. mapped command parameter metadata types use the public request lifecycle and
+   may emit precise `References` and `DependsOn` facts;
+3. a complete static literal `OpenForm(...)` inside an accepted Command-module
+   Procedure may emit one resolved `Procedure --Opens--> Form` relation.
+
+Default-form and shorthand targets, dynamic expressions, calls outside the
+accepted source scope, Form internals, Form commands and events, Command Groups,
+localized subordinate payload, explicit `Executes` semantics, placeholder
+Forms, Designer XML, and other UI relations remain deferred.
+
+##### Prerequisite gate
+
+Sprint 6 and its integration review are complete. Before Task 1 begins, the
+Sprint 7 planning change containing the source investigation, ADR-0029, this
+execution plan, and the synchronized Semantic Model 2.0 boundary must be
+committed or otherwise proven as the exact immutable execution baseline.
+
+Every later task begins only from the committed result of its predecessor or a
+current `already_complete` proof satisfying every acceptance criterion. A
+stored prompt, historical status, or uncommitted working-tree change is not a
+prerequisite.
+
+##### Readiness and template decision
+
+The live audit covered `MetadataKind`, `NodeKind`, `EdgeKind`, graph node
+payload compatibility, ownership and relation validation, Query, Semantic
+Index, incremental indexing, Diff, Impact, Coverage, EDT discovery,
+metadata-structure parsing, module discovery, BSL analysis, production-builder
+tests, and real EDT Form, Command, Common Form, Common Command, Command Group,
+`Form.form`, `Module.bsl`, and `CommandModule.bsl` artifacts.
+
+The existing [graph implementation profile](codex/profiles/graph-implementation.md),
+[parser implementation profile](codex/profiles/parser-implementation.md),
+[review profile](codex/profiles/review.md), [graph model
+template](codex/templates/graph-model-task.md), [parser
+template](codex/templates/parser-task.md), [graph emission
+template](codex/templates/graph-emission-task.md), and [review
+template](codex/templates/review-task.md) cover every accepted task boundary.
+The sprint-planning and sequential-execution contracts provide the required
+prerequisite, `already_complete`, failure, review, and final-state gates. No
+Codex Framework change is planned.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / Template | Owned outcome | Prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Implement the source-independent Form/Command graph prerequisites. | Graph implementation / graph model | `Opens`, precise endpoints and consumers, Form/Command module ownership, and Command reference/dependency schema. | Accepted Sprint 7 planning baseline. | `Define Sprint 7 graph navigation model` |
+| 2 | Parse accepted Form and Command module layouts. | Parser implementation / parser | Typed, deterministic module observations joined to canonical Form and Command owners. | Task 1. | `Parse Sprint 7 form and command modules` |
+| 3 | Emit Form and Command modules and BSL declarations. | Graph implementation / graph emission | Canonical Module ownership plus existing BSL semantic contribution through the production builder. | Task 2. | `Emit Sprint 7 form and command modules` |
+| 4 | Parse typed Command parameter references. | Parser implementation / parser | Source observations with a distinct role and the accepted nine-kind allowlist. | Task 3. | `Parse Sprint 7 command parameter references` |
+| 5 | Integrate Command parameter reference resolution. | Graph implementation / graph emission | Public request lifecycle, terminal outcomes, diagnostics, `References`, and justified `DependsOn`. | Task 4. | `Integrate Sprint 7 command references` |
+| 6 | Parse static Command-module form-opening candidates. | Parser implementation / parser | Complete-statement `OpenForm` candidates with exact source scope and typed rejections. | Task 5. | `Parse Sprint 7 static form navigation` |
+| 7 | Resolve and emit canonical Form navigation. | Graph implementation / graph emission | Owner-scoped/Common Form resolution, diagnostics, and deterministic provenance-backed `Opens`. | Task 6. | `Emit Sprint 7 form navigation` |
+| 8 | Complete production evidence, Coverage, and current-state documentation. | Graph implementation / graph emission | Representative end-to-end evidence, independent Coverage transitions, aggregate verification, and synchronized docs. | Tasks 1–7. | `Complete Sprint 7 production evidence` |
+| 9 | Review the integrated Sprint 7 baseline. | Review / review | Findings, full command evidence, sprint decision, and Sprint 8 hand-off. | Task 8 and all implementation validation. | `Complete Sprint 7 forms and commands review` |
+
+The dependency graph is strictly sequential:
+
+```text
+Accepted planning baseline
+    -> Task 1 graph contract
+    -> Task 2 module parser
+    -> Task 3 module emission
+    -> Task 4 parameter parser
+    -> Task 5 parameter reference integration
+    -> Task 6 navigation parser
+    -> Task 7 navigation emission
+    -> Task 8 production evidence and Coverage
+    -> Task 9 integration review
+    -> Sprint 8 planning eligibility
+```
+
+##### Task 1 — Implement the source-independent graph prerequisites
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph model task template](codex/templates/graph-model-task.md). Add only
+the source-independent model required by ADR-0029:
+
+- `EdgeKind::Opens` with stable machine-readable identity;
+- exact `Procedure --Opens--> Form` and
+  `Procedure --Opens--> Metadata(CommonForm)` validation;
+- generic Query edge filtering, dependency/usage classification, bounded
+  traversal, Diff, Impact, Semantic Index, incremental-index, report, and
+  Coverage integration;
+- precise `Form --Contains--> Module`, `Command --Contains--> Module`, and
+  top-level Common Command module ownership;
+- precise Command parameter `References` and `DependsOn` source/target
+  matrices for only the accepted nine target kinds.
+
+The task must update every exhaustive enum consumer and preserve public
+constructors and existing result ordering where compatible. `Opens` is a direct
+dependency/usage and reverse-Impact relation, but it emits no companion
+`References` or `DependsOn`. Existing Form, Command, Module, Contains,
+References, DependsOn, Calls, Query, Diff, and Impact behavior remains
+unchanged outside the additive contract.
+
+Excluded scope is all EDT parsing or emission, new UI node kinds, placeholder
+nodes, command execution edges, Form internals, Command Groups, and payload
+changes. Acceptance evidence includes exhaustive positive and negative endpoint
+tests, dependency/usage and Impact direction, deterministic identity and
+ordering, complete/incremental index equivalence, Diff behavior, and unchanged
+existing coverage capabilities.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph --lib
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test diff
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 2 — Parse accepted Form and Command module layouts
+
+Use the [parser implementation profile](codex/profiles/parser-implementation.md)
+and [parser task template](codex/templates/parser-task.md). Extend EDT module
+discovery without graph insertion:
+
+- join `Forms/<Name>/Module.bsl` to the exact subordinate Form declared by the
+  same metadata object;
+- join `Commands/<Name>/CommandModule.bsl` to the exact subordinate Command;
+- join `CommonCommands/<Name>/CommandModule.bsl` to the exact Common Command;
+- preserve the existing Common Form `Module.bsl` behavior and identity;
+- create deterministic `form_module` and `command_module` descriptors from the
+  canonical owner identity;
+- return typed outcomes for missing optional modules, orphan directories,
+  mismatched names, duplicate observations, unreadable files, and unsupported
+  layouts.
+
+The parser must not synthesize owners, recurse into `Form.form`, analyze BSL,
+emit graph facts, or change Coverage. Acceptance evidence uses raw
+repository-owned layouts plus generated reordered, missing, orphaned,
+duplicate, and malformed cases. Repeated reads must be equal.
+
+Focused validation addition:
+
+```bash
+cargo test -p oneagent-edt module_reader
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 3 — Emit modules and existing BSL semantics
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md).
+Convert only Task 2 observations into canonical Module nodes and exactly one
+provenance-backed `Contains` edge from the accepted Form or Command owner.
+
+Feed accepted module descriptors through the existing BSL declaration, Query,
+Calls, diagnostic, and provenance pipeline without introducing a parallel UI
+symbol model. Node collection must precede ownership insertion. Existing
+Common Form module identity, ordinary metadata modules, call resolution,
+Query/Reads/Writes behavior, and source ordering must remain compatible.
+
+Acceptance evidence covers subordinate Form, subordinate Command, Common
+Command, and existing Common Form module paths; Module, Procedure, and Function
+ownership; missing modules; invalid owners; repeated builds; reversed
+discovery order; graph/build Diff; Validation; Query; and deterministic
+provenance. This task emits no Command parameter references or `Opens` edge.
+
+Focused validation addition:
+
+```bash
+cargo test -p oneagent-edt
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 4 — Parse typed Command parameter references
+
+Use the [parser implementation profile](codex/profiles/parser-implementation.md)
+and [parser task template](codex/templates/parser-task.md). Preserve direct
+`commandParameterType/types` observations from Common and subordinate Commands
+with a distinct semantic role, canonical Command source identity, raw token,
+mapped target kind, and canonical target name.
+
+Accept only the ADR-0029 nine-kind allowlist. Primitive, Defined Type,
+platform, unrecognized, malformed, duplicate, missing, and multiple values must
+have deterministic accepted, ignored, unsupported, or typed-invalid outcomes.
+The parser must not resolve targets, create requests, insert graph facts, infer
+parameter types from BSL, or broaden Attribute/Dimension/Resource type parsing.
+
+Acceptance evidence includes real Catalog, Document, Task, Common Command, and
+deferred Defined Type samples; empty parameter types; duplicate/multiple
+values; malformed names; reordered input; and repeated reads.
+
+Focused validation addition:
+
+```bash
+cargo test -p oneagent-edt metadata_structure
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 5 — Integrate Command parameter references
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md).
+Convert Task 4 observations into the ADR-0024 public request lifecycle with
+collection provenance, immutable canonical identity, exact name-and-kind
+resolution, ordered candidates, deterministic aggregation, terminal request
+states, diagnostics, statistics, reports, and build Diff.
+
+Unique accepted resolution emits one direct `References` and one derived
+`DependsOn` edge from the canonical Common or subordinate Command. Missing,
+ambiguous, incompatible, partial, malformed, unsupported, and duplicate
+outcomes must match ADR-0029 and emit no placeholder or lower-confidence edge.
+
+Existing metadata-member and access-right requests and their Coverage remain
+unchanged. Acceptance evidence covers both Command source kinds, all accepted
+target kinds through the smallest representative matrix, negative outcomes,
+duplicate provenance aggregation, source-order independence, repeated builds,
+Query, Diff, Impact, validation, reports, diagnostics, and statistics.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph --test reference_request_build
+cargo test -p oneagent-edt
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 6 — Parse static form-opening candidates
+
+Use the [parser implementation profile](codex/profiles/parser-implementation.md)
+and [parser task template](codex/templates/parser-task.md). Implement a typed
+complete-statement extractor for the ADR-0029 first navigation grammar. A
+candidate must preserve the accepted Command-module identity, containing
+Procedure identity, complete static first-argument literal, parsed target kind,
+owner name where applicable, Form name, source location, and deterministic
+candidate order.
+
+Positive forms are only `CommonForm.<Name>` and
+`<SupportedKind>.<Owner>.Form.<Name>`. Dynamic expressions, concatenation,
+variables, default Form aliases, ListForm/ObjectForm shorthand, Functions,
+unsupported prefixes, calls outside accepted Command modules, incomplete
+statements, comments, and strings that only contain `OpenForm(` must not become
+edge-producing candidates.
+
+This task does not resolve a graph target, emit edges, change Command parameter
+behavior, parse `Form.form`, or implement general BSL platform-call semantics.
+Focused tests must be backed by exact repository-owned positive and negative
+source excerpts and cover multiline calls, reordered candidates, malformed
+input, and repeated extraction.
+
+Focused validation addition:
+
+```bash
+cargo test -p oneagent-bsl
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 7 — Resolve and emit Form navigation
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md).
+Resolve Task 6 candidates only after all metadata, Form, Command, Module, and
+callable nodes have been collected.
+
+Common Form targets use exact name-and-kind resolution. Subordinate targets
+resolve the exact typed metadata owner and then the exact `NodeKind::Form`
+child under that owner. Unique success emits one canonical
+`Procedure --Opens--> Form` edge with deterministic resolved provenance.
+Missing, ambiguous, incompatible, partial, dynamic, default, shorthand, and
+unsupported outcomes emit typed diagnostics and no edge.
+
+Acceptance evidence covers Common and subordinate targets, equal Form names
+under different owners, wrong owner, missing and ambiguous owners, missing and
+ambiguous children, incompatible kinds, partial workspaces, duplicate evidence,
+Query dependency/usage, reverse Impact, Diff, validation, diagnostics, reports,
+source-order independence, and repeated builds. No companion `References`,
+`DependsOn`, `Calls`, or placeholder edge may appear.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-edt
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 8 — Complete production evidence and Coverage
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md). Add
+the smallest representative real-format EDT fixture matrix that closes every
+accepted Task 1–7 criterion through `FileSystemEdtSemanticGraphBuilder`.
+
+The matrix must prove module ownership and BSL contribution, Common and
+subordinate Command parameter references, explicit subordinate and Common Form
+navigation, negative and partial outcomes, deterministic provenance and
+diagnostics, Query, Validation, Diff, Impact, request ledgers, reports,
+statistics, source-order independence, repeated builds, and incremental-index
+equivalence with a clean rebuild.
+
+Only after all evidence passes, transition the independent graph-domain and EDT
+Coverage capabilities required by ADR-0029, recompute aggregate counts from the
+live registries, and synchronize
+`architecture/semantic-model-2.md` and this Roadmap with the implemented
+boundary and remaining limitations. Existing declaration capabilities must not
+be reopened or double-counted. Deferred Form internals, Command Groups,
+dynamic/default targets, payload, and execution relations remain outside the
+completion claim.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph coverage
+cargo test -p oneagent-edt coverage
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 9 — Review the integrated Sprint 7 baseline
+
+Use the [review profile](codex/profiles/review.md) and
+[review task template](codex/templates/review-task.md). Audit every Task 1–8
+commit against ADR-0029, the source investigation, the live implementation, and
+the current Roadmap. Re-run the complete repository Definition of Done and all
+focused graph model, module parser, BSL, production builder, reference request,
+navigation, Query, Diff, Impact, Validation, Coverage, determinism, and
+incremental-equivalence checks.
+
+Verify that existing Form and Command identities, ownership, Common Form module
+identity, completed metadata references, Calls, Reads, Writes, Includes,
+Grants, Sprint 6 member behavior, and aggregate Coverage remain compatible.
+Verify that no `Form.form` internals, Command Groups, dynamic/default targets,
+new payload, explicit execution relation, Designer XML, or later-sprint concern
+was pulled forward.
+
+The review owns one decision: `pass`, `pass with non-blocking follow-ups`, or
+`blocked`. It may create the authorized review artifact and update Roadmap state
+only when the decision is non-blocking and all validation succeeds. It must not
+silently fix findings in the review change.
+
+##### Planning validation and suggested commit
+
+This Sprint 7 kickoff is documentation-only. Validate Markdown consistency,
+relative links, manifest numbering, dependency order, accepted-versus-deferred
+scope, and the unchanged `next` status. Run `git diff --check` and inspect the
+complete task-owned documentation diff. Do not run the Rust workspace gate for
+the planning change because it modifies no production file.
+
+Suggested planning commit message, as a recommendation only:
+
+```text
+Plan Sprint 7 forms and commands
+```
+
+The message does not authorize staging or committing.
+
+##### Sprint 7 state gates and completion criteria
+
+Sprint 7 remains `next` during planning. It becomes active only when the
+accepted planning baseline is committed and Task 1 begins under an explicit
+execution instruction.
+
+A task is `already_complete` only when current committed evidence and successful
+required validation prove every acceptance criterion. Record the proving
+baseline and do not create an empty commit. This rule applies especially to the
+already implemented Form/Command declaration and ownership slice and existing
+Common Form module behavior.
+
+Stop the sprint sequence after any prerequisite, implementation, validation,
+staging, commit, or review failure. Do not skip a blocked task or start a
+dependent task. A blocked Task 9 leaves Sprint 7 incomplete and Sprint 8
+ineligible for planning.
+
+Sprint 7 may transition to `completed` only when:
+
+- Tasks 1–8 are committed in dependency order or proven `already_complete`;
+- every ADR-0029 module, reference, navigation, provenance, diagnostic,
+  determinism, Query, Diff, Impact, incremental-equivalence, and Coverage
+  criterion is proven through the production builder;
+- existing compatibility behavior remains green;
+- current-state architecture and Roadmap text matches live implementation;
+- the complete repository Definition of Done passes;
+- Task 9 records `pass` or `pass with non-blocking follow-ups`.
+
+Only that non-blocking review transition makes Sprint 8 Registers and Queries
+eligible as the next planning target. Planning or architecture acceptance alone
+does not change Sprint 7 status, capability status, or Coverage counts.
+
 The v0.3 release integration review follows Sprint 14.
 
 #### v0.4 — Runtime API

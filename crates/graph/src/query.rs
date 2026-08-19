@@ -9,7 +9,7 @@ use std::collections::{BTreeSet, VecDeque};
 
 use oneagent_common::{EntityId, EntityName};
 
-use crate::semantic_index::SemanticIndex;
+use crate::semantic_index::{SemanticIndex, SemanticIndexState};
 use crate::{
     EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph,
     edge_identity::edge_id as stable_edge_id,
@@ -240,13 +240,27 @@ impl<'graph> SemanticGraphRelation<'graph> {
 #[derive(Debug, Clone)]
 pub struct SemanticGraphQuery<'graph> {
     graph: &'graph SemanticGraph,
+    accepted_state: Option<SemanticIndexState>,
 }
 
 impl<'graph> SemanticGraphQuery<'graph> {
     /// Creates a read-only query object for `graph`.
     #[must_use]
     pub const fn new(graph: &'graph SemanticGraph) -> Self {
-        Self { graph }
+        Self {
+            graph,
+            accepted_state: None,
+        }
+    }
+
+    pub(crate) fn from_index_state(
+        graph: &'graph SemanticGraph,
+        state: &SemanticIndexState,
+    ) -> Self {
+        Self {
+            graph,
+            accepted_state: Some(state.clone()),
+        }
     }
 
     /// Builds the stable edge identifier used by query, diff and validation APIs.
@@ -702,9 +716,10 @@ impl<'graph> SemanticGraphQuery<'graph> {
     }
 
     fn index(&self) -> SemanticIndex<'graph> {
-        // Lazy borrowed state would make the facade invariant, while eager
-        // state would prevent its existing const construction.
-        SemanticIndex::new(self.graph)
+        self.accepted_state.as_ref().map_or_else(
+            || SemanticIndex::new(self.graph),
+            |state| SemanticIndex::from_state(self.graph, state),
+        )
     }
 }
 

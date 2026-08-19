@@ -3,7 +3,7 @@
 use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
 
-use crate::semantic_index::SemanticIndex;
+use crate::semantic_index::{SemanticIndex, SemanticIndexState};
 use crate::{GraphNode, NodeId, NodeKind, SemanticGraph};
 
 /// Semantic reference resolved against a graph.
@@ -114,6 +114,15 @@ impl<'graph> SemanticResolutionIndex<'graph> {
     pub fn new(graph: &'graph SemanticGraph) -> Self {
         Self {
             index: SemanticIndex::new(graph),
+        }
+    }
+
+    pub(crate) fn from_index_state(
+        graph: &'graph SemanticGraph,
+        state: &SemanticIndexState,
+    ) -> Self {
+        Self {
+            index: SemanticIndex::from_state(graph, state),
         }
     }
 

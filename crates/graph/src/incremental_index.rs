@@ -388,8 +388,8 @@ mod tests {
         ResolutionState, SemanticGraph, SemanticGraphDiff,
         node::GraphNodePayload,
         semantic_index::{
-            SemanticIndexState, SemanticIndexStateError, SemanticNodeIndexError,
-            SemanticNodeIndexState,
+            AcceptedSemanticIndex, SemanticIndexLifecycleError, SemanticIndexState,
+            SemanticIndexStateError, SemanticNodeIndexError, SemanticNodeIndexState,
         },
     };
 
@@ -916,7 +916,10 @@ mod tests {
         let error = first
             .apply_changes(&changes)
             .expect_err("already-current node state must be stale");
-        assert_eq!(error, SemanticNodeIndexError::StaleBaseState);
+        assert_eq!(
+            error,
+            SemanticNodeIndexError::MissingBucketMember(id("node"))
+        );
         assert_eq!(first, stale_before);
     }
 
@@ -1221,7 +1224,172 @@ mod tests {
         let error = first
             .apply_changes(&changes)
             .expect_err("already-current composite state must be stale");
-        assert_eq!(error, SemanticIndexStateError::StaleBaseState);
+        assert!(matches!(
+            error,
+            SemanticIndexStateError::Edge(
+                crate::semantic_index::SemanticEdgeIndexError::MissingEdge(_)
+            )
+        ));
         assert_eq!(first, unchanged);
+    }
+
+    #[test]
+    fn accepted_lifecycle_query_and_resolution_match_clean_current_facades() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("owner", "Owner", NodeKind::Module),
+                node("child.a", "Before", NodeKind::Procedure),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [edge(
+                "owner",
+                "child.a",
+                EdgeKind::Contains,
+                FactOrigin::Declared,
+            )],
+        );
+
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("child.b", "After", NodeKind::Function),
+                node("owner", "Owner", NodeKind::Module),
+                node("child.a", "After", NodeKind::Function),
+            ],
+        );
+        insert_edges(
+            &mut current,
+            [
+                edge("owner", "child.b", EdgeKind::Contains, FactOrigin::Declared),
+                edge("owner", "child.a", EdgeKind::Contains, FactOrigin::Declared),
+                edge("child.a", "owner", EdgeKind::Calls, FactOrigin::Resolved),
+            ],
+        );
+
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("facade transition must normalize");
+        let accepted = AcceptedSemanticIndex::rebuild(&previous)
+            .transition(&current, &changes)
+            .expect("facade transition must publish");
+        let incremental_query = accepted.query();
+        let clean_query = current.query();
+        let node_ids = |nodes: Vec<&GraphNode>| {
+            nodes
+                .into_iter()
+                .map(|node| node.id().clone())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            node_ids(incremental_query.nodes_by_name(&name("After"))),
+            node_ids(clean_query.nodes_by_name(&name("After")))
+        );
+        assert_eq!(
+            node_ids(incremental_query.children(&crate::NodeId::new("owner"))),
+            node_ids(clean_query.children(&crate::NodeId::new("owner")))
+        );
+        assert_eq!(
+            incremental_query
+                .edges()
+                .into_iter()
+                .map(|edge| (edge.source().clone(), edge.target().clone(), edge.kind()))
+                .collect::<Vec<_>>(),
+            clean_query
+                .edges()
+                .into_iter()
+                .map(|edge| (edge.source().clone(), edge.target().clone(), edge.kind()))
+                .collect::<Vec<_>>()
+        );
+        assert!(incremental_query.nodes_by_name(&name("Before")).is_empty());
+        assert!(ptr::eq(
+            incremental_query
+                .node(&crate::NodeId::new("child.a"))
+                .expect("current node must resolve"),
+            current
+                .node(&id("child.a"))
+                .expect("canonical node must exist")
+        ));
+
+        let incremental_resolution = accepted.resolution_index();
+        let clean_resolution = current.resolution_index();
+        assert_eq!(
+            incremental_resolution
+                .resolve_entity_id(&id("child.a"))
+                .map(|node| node.id().clone()),
+            clean_resolution
+                .resolve_entity_id(&id("child.a"))
+                .map(|node| node.id().clone())
+        );
+        assert_eq!(
+            incremental_resolution.resolve_child(&id("owner"), &name("After")),
+            clean_resolution.resolve_child(&id("owner"), &name("After"))
+        );
+        assert_eq!(
+            incremental_resolution.resolve_child(&id("owner"), &name("Before")),
+            clean_resolution.resolve_child(&id("owner"), &name("Before"))
+        );
+    }
+
+    #[test]
+    fn lifecycle_rejects_wrong_base_target_and_replay_without_losing_retry() {
+        let mut previous = SemanticGraph::new();
+        previous.insert_node(node("node", "Before", NodeKind::Procedure));
+        let mut current = SemanticGraph::new();
+        current.insert_node(node("node", "After", NodeKind::Function));
+        let mut wrong_target = SemanticGraph::new();
+        wrong_target.insert_node(node("node", "After", NodeKind::Function));
+        let mut unrelated_previous = SemanticGraph::new();
+        unrelated_previous.insert_node(node("node", "Before", NodeKind::Procedure));
+
+        let changes = NormalizedSemanticIndexChanges::between(&previous, &current)
+            .expect("lifecycle transition must normalize");
+        let accepted_previous = AcceptedSemanticIndex::rebuild(&previous);
+        let previous_state = accepted_previous.state().clone();
+
+        let wrong_target_error = accepted_previous
+            .transition(&wrong_target, &changes)
+            .expect_err("wrong target instance must fail");
+        assert_eq!(
+            wrong_target_error,
+            SemanticIndexLifecycleError::WrongTargetSnapshot
+        );
+        assert_eq!(accepted_previous.state(), &previous_state);
+
+        let unrelated_error = AcceptedSemanticIndex::rebuild(&unrelated_previous)
+            .transition(&current, &changes)
+            .expect_err("unrelated base instance must fail");
+        assert_eq!(
+            unrelated_error,
+            SemanticIndexLifecycleError::StaleBaseSnapshot
+        );
+
+        let first = accepted_previous
+            .transition(&current, &changes)
+            .expect("retry after failure must succeed");
+        let retry = accepted_previous
+            .transition(&current, &changes)
+            .expect("repeated retry from previous must succeed");
+        assert_eq!(first.state(), retry.state());
+        assert!(ptr::eq(first.graph(), changes.current()));
+
+        let replay_error = first
+            .transition(&current, &changes)
+            .expect_err("already-current state must reject replay");
+        assert_eq!(replay_error, SemanticIndexLifecycleError::StaleBaseSnapshot);
+
+        let empty_changes = NormalizedSemanticIndexChanges::between(&current, &current)
+            .expect("current-to-current transition must normalize");
+        let idempotent = first
+            .transition(&current, &empty_changes)
+            .expect("current-to-current empty transition must succeed");
+        assert_eq!(idempotent.state(), first.state());
+
+        let rebuilt = AcceptedSemanticIndex::rebuild(&current);
+        assert_eq!(rebuilt.state(), first.state());
     }
 }

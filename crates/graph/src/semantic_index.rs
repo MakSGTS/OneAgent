@@ -1,12 +1,13 @@
 //! Deterministic derived indexes for one complete semantic graph snapshot.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ptr;
 
 use oneagent_common::{EntityId, EntityName};
 
 use crate::{
     EdgeId, EdgeKind, EdgeSnapshot, GraphEdge, GraphNode, NodeId, NodeKind, NodeSnapshot,
-    SemanticGraph,
+    SemanticGraph, SemanticGraphQuery, SemanticResolutionIndex,
     edge_identity::edge_id,
     incremental_index::{NormalizedSemanticIndexChanges, NormalizedSemanticIndexOperation},
 };
@@ -46,15 +47,10 @@ impl SemanticNodeIndexState {
     }
 
     /// Applies only node projections and returns a complete private candidate.
-    #[allow(dead_code)]
     pub(crate) fn apply_changes(
         &self,
         changes: &NormalizedSemanticIndexChanges<'_, '_>,
     ) -> Result<Self, SemanticNodeIndexError> {
-        if self != &Self::from_graph(changes.previous()) {
-            return Err(SemanticNodeIndexError::StaleBaseState);
-        }
-
         let mut next = self.clone();
         for operation in changes.operations() {
             match operation {
@@ -73,11 +69,12 @@ impl SemanticNodeIndexState {
             }
         }
 
-        if next != Self::from_graph(changes.current()) {
-            return Err(SemanticNodeIndexError::CurrentStateMismatch);
-        }
-
         Ok(next)
+    }
+
+    fn is_internally_consistent(&self) -> bool {
+        is_exact_node_partition(&self.identities, self.by_name.values())
+            && is_exact_node_partition(&self.identities, self.by_kind.values())
     }
 
     fn insert(&mut self, node: &NodeSnapshot) -> Result<(), SemanticNodeIndexError> {
@@ -148,13 +145,11 @@ impl SemanticNodeIndexState {
 /// Typed atomic node-state transition failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SemanticNodeIndexError {
-    StaleBaseState,
     InvalidNodeId(NodeId),
     DuplicateNode(EntityId),
     MissingNode(EntityId),
     MissingBucketMember(EntityId),
     InvalidRefresh(EntityId),
-    CurrentStateMismatch,
 }
 
 fn snapshot_entity_id(node: &NodeSnapshot) -> Result<EntityId, SemanticNodeIndexError> {
@@ -419,14 +414,10 @@ impl SemanticEdgeIndexState {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub(crate) fn apply_changes(
         &self,
         changes: &NormalizedSemanticIndexChanges<'_, '_>,
     ) -> Result<Self, SemanticEdgeIndexError> {
-        if self != &Self::from_graph(changes.previous()) {
-            return Err(SemanticEdgeIndexError::StaleBaseState);
-        }
         let mut next = self.clone();
         for operation in changes.operations() {
             match operation {
@@ -449,10 +440,37 @@ impl SemanticEdgeIndexState {
                 | NormalizedSemanticIndexOperation::RefreshNode { .. } => {}
             }
         }
-        if next != Self::from_graph(changes.current()) {
-            return Err(SemanticEdgeIndexError::CurrentStateMismatch);
-        }
         Ok(next)
+    }
+
+    fn is_internally_consistent(&self, nodes: &BTreeSet<EntityId>) -> bool {
+        let contains = self
+            .kinds
+            .get(&EdgeKind::Contains)
+            .cloned()
+            .unwrap_or_default();
+        is_exact_edge_partition(&self.identities, self.kinds.values())
+            && is_exact_edge_partition(&self.identities, self.outgoing.values())
+            && is_exact_edge_partition(&self.identities, self.outgoing_kinds.values())
+            && is_exact_edge_partition(&self.identities, self.incoming.values())
+            && is_exact_edge_partition(&self.identities, self.incoming_kinds.values())
+            && is_exact_edge_partition(&contains, self.owner_edges.values())
+            && self
+                .owners
+                .iter()
+                .all(|(child, owners)| nodes.contains(child) && owners.is_subset(nodes))
+            && self
+                .children
+                .iter()
+                .all(|(owner, children)| nodes.contains(owner) && children.is_subset(nodes))
+            && self
+                .child_kinds
+                .iter()
+                .all(|((owner, _), children)| nodes.contains(owner) && children.is_subset(nodes))
+            && self
+                .child_names
+                .iter()
+                .all(|((owner, _), children)| nodes.contains(owner) && children.is_subset(nodes))
     }
 
     #[cfg(test)]
@@ -502,7 +520,6 @@ impl SemanticEdgeIndexState {
 /// Typed atomic edge-state transition failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SemanticEdgeIndexError {
-    StaleBaseState,
     InvalidNodeId(NodeId),
     DuplicateEdge(EdgeId),
     MissingEdge(EdgeId),
@@ -511,7 +528,6 @@ pub(crate) enum SemanticEdgeIndexError {
     MissingNodeBucketMember(EntityId),
     RetainedIncidentEdge(EntityId),
     InvalidRefresh(EdgeId),
-    CurrentStateMismatch,
 }
 
 /// Owned semantic-index state prepared and published as one unit.
@@ -529,14 +545,10 @@ impl SemanticIndexState {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn apply_changes(
         &self,
         changes: &NormalizedSemanticIndexChanges<'_, '_>,
     ) -> Result<Self, SemanticIndexStateError> {
-        if self != &Self::from_graph(changes.previous()) {
-            return Err(SemanticIndexStateError::StaleBaseState);
-        }
         let next = Self {
             nodes: self
                 .nodes
@@ -547,8 +559,10 @@ impl SemanticIndexState {
                 .apply_changes(changes)
                 .map_err(SemanticIndexStateError::Edge)?,
         };
-        if next != Self::from_graph(changes.current()) {
-            return Err(SemanticIndexStateError::CurrentStateMismatch);
+        if !next.nodes.is_internally_consistent()
+            || !next.edges.is_internally_consistent(&next.nodes.identities)
+        {
+            return Err(SemanticIndexStateError::InternalStateInvalid);
         }
         Ok(next)
     }
@@ -567,10 +581,74 @@ impl SemanticIndexState {
 /// Typed composite-state transition failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SemanticIndexStateError {
-    StaleBaseState,
     Node(SemanticNodeIndexError),
     Edge(SemanticEdgeIndexError),
-    CurrentStateMismatch,
+    InternalStateInvalid,
+}
+
+/// One accepted complete derived state paired with its exact graph snapshot.
+#[derive(Debug)]
+#[allow(dead_code)]
+pub(crate) struct AcceptedSemanticIndex<'graph> {
+    graph: &'graph SemanticGraph,
+    state: SemanticIndexState,
+}
+
+#[allow(dead_code)]
+impl<'graph> AcceptedSemanticIndex<'graph> {
+    pub(crate) fn rebuild(graph: &'graph SemanticGraph) -> Self {
+        Self {
+            graph,
+            state: SemanticIndexState::from_graph(graph),
+        }
+    }
+
+    pub(crate) fn transition<'current>(
+        &self,
+        current: &'current SemanticGraph,
+        changes: &NormalizedSemanticIndexChanges<'_, '_>,
+    ) -> Result<AcceptedSemanticIndex<'current>, SemanticIndexLifecycleError> {
+        if !ptr::eq(self.graph, changes.previous()) {
+            return Err(SemanticIndexLifecycleError::StaleBaseSnapshot);
+        }
+        if !ptr::eq(current, changes.current()) {
+            return Err(SemanticIndexLifecycleError::WrongTargetSnapshot);
+        }
+        let state = self
+            .state
+            .apply_changes(changes)
+            .map_err(SemanticIndexLifecycleError::State)?;
+        Ok(AcceptedSemanticIndex {
+            graph: current,
+            state,
+        })
+    }
+
+    pub(crate) fn query(&self) -> SemanticGraphQuery<'graph> {
+        SemanticGraphQuery::from_index_state(self.graph, &self.state)
+    }
+
+    pub(crate) fn resolution_index(&self) -> SemanticResolutionIndex<'graph> {
+        SemanticResolutionIndex::from_index_state(self.graph, &self.state)
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn state(&self) -> &SemanticIndexState {
+        &self.state
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn graph(&self) -> &'graph SemanticGraph {
+        self.graph
+    }
+}
+
+/// Typed lifecycle failure produced before a new state is published.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SemanticIndexLifecycleError {
+    StaleBaseSnapshot,
+    WrongTargetSnapshot,
+    State(SemanticIndexStateError),
 }
 
 fn snapshot_node_entity_id(id: &NodeId) -> Result<EntityId, SemanticEdgeIndexError> {
@@ -642,6 +720,34 @@ fn remove_node_membership<Key: Ord>(
     Ok(())
 }
 
+fn is_exact_node_partition<'a>(
+    identities: &BTreeSet<EntityId>,
+    buckets: impl Iterator<Item = &'a BTreeSet<EntityId>>,
+) -> bool {
+    let mut counts = BTreeMap::<EntityId, usize>::new();
+    for bucket in buckets {
+        for id in bucket {
+            *counts.entry(id.clone()).or_default() += 1;
+        }
+    }
+    identities.iter().all(|id| counts.get(id) == Some(&1))
+        && counts.keys().all(|id| identities.contains(id))
+}
+
+fn is_exact_edge_partition<'a>(
+    identities: &BTreeSet<EdgeId>,
+    buckets: impl Iterator<Item = &'a BTreeSet<EdgeId>>,
+) -> bool {
+    let mut counts = BTreeMap::<EdgeId, usize>::new();
+    for bucket in buckets {
+        for id in bucket {
+            *counts.entry(id.clone()).or_default() += 1;
+        }
+    }
+    identities.iter().all(|id| counts.get(id) == Some(&1))
+        && counts.keys().all(|id| identities.contains(id))
+}
+
 /// Crate-internal read-only lookup state derived from one borrowed graph snapshot.
 #[derive(Debug)]
 pub(crate) struct SemanticIndex<'graph> {
@@ -665,6 +771,11 @@ impl<'graph> SemanticIndex<'graph> {
     /// Builds lookup state without changing or copying canonical graph facts.
     pub(crate) fn new(graph: &'graph SemanticGraph) -> Self {
         let state = SemanticIndexState::from_graph(graph);
+        Self::from_state(graph, &state)
+    }
+
+    /// Resolves one already accepted owned state through its canonical graph.
+    pub(crate) fn from_state(graph: &'graph SemanticGraph, state: &SemanticIndexState) -> Self {
         let NodeViews {
             identities: nodes_by_id,
             names: nodes_by_name,

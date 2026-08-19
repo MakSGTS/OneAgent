@@ -137,6 +137,7 @@ planned reuse; every sprint still performs a focused readiness check at kickoff.
 | Sprint 4 — Semantic Index | v0.2 | Build the deterministic complete-snapshot index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) and migrate Query and Resolution compatibility facades. | [Sprint review](reviews/sprint-4-semantic-index.md) | completed |
 | Sprint 5 — Incremental Indexing | v0.2 | Update the shared semantic index deterministically from canonical graph snapshot changes while retaining unaffected derived lookup state. | [Sprint review](reviews/sprint-5-incremental-indexing.md), [v0.2 release review](reviews/v0.2-release-review.md) | completed |
 | Sprint 6 — Attributes and Tabular Sections | v0.3 | Preserve repository-proven optional Attribute and TabularSection synonym as typed member content without changing identity, immediate ownership, or the completed reference slice. | [Sprint review](reviews/sprint-6-attributes-tabular-sections.md) | completed |
+| Sprint 7 — Forms and Commands | v0.3 | Add accepted Form and Command modules, mapped Command parameter references, and precise static Form navigation without expanding the deferred UI model. | [Sprint review](reviews/sprint-7-forms-commands.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
@@ -146,8 +147,11 @@ Sprint 6 is completed under
 [ADR-0028](adr/0028-attribute-tabular-section-semantics.md) with a `pass`
 decision in the
 [Sprint 6 integration review](reviews/sprint-6-attributes-tabular-sections.md).
-Sprint 7 is active and remains pending its integration review; v0.3 remains
-planned through Sprint 14.
+Sprint 7 is completed under
+[ADR-0029](adr/0029-form-command-navigation-semantics.md) with a `pass`
+decision in the
+[Sprint 7 integration review](reviews/sprint-7-forms-commands.md). Sprint 8 is
+the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -732,8 +736,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | active |
-| Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | planned |
+| Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | next |
 | Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
@@ -1381,8 +1384,8 @@ existing complete/incremental Semantic Index clean-rebuild oracle. EDT
 `semantic_edge.opens` is now `Supported` with complete evidence. Live registry
 tests verify 101 EDT capabilities (96 `Supported`, 5 `NotApplicable`) and 85
 graph-domain capabilities (82 `Supported`, 3 `NotApplicable`), with no
-Critical, High, or Medium gaps. Sprint 7 remains active until Task 9 records a
-non-blocking review decision.
+Critical, High, or Medium gaps. Task 9 subsequently records the non-blocking
+review decision that completes Sprint 7.
 
 ##### Task 9 — Review the integrated Sprint 7 baseline
 
@@ -1406,6 +1409,15 @@ The review owns one decision: `pass`, `pass with non-blocking follow-ups`, or
 only when the decision is non-blocking and all validation succeeds. It must not
 silently fix findings in the review change.
 
+Task 9 records `pass` in the
+[Sprint 7 integration review](reviews/sprint-7-forms-commands.md). The review
+covers the committed range
+`77a52c6821e64f8fe7b9c71d2304a4ab77585cd7..c16e136eeff2df3296669f8ad682adbd9cdd3180`,
+reports no blocking or non-blocking findings, missing evidence, compatibility
+breaks, or scope violations, and records the successful focused and complete
+workspace validation. Sprint 8 is therefore eligible as the next planning
+target.
+
 ##### Planning validation and suggested commit
 
 The Sprint 7 kickoff was documentation-only. Its validation covered Markdown
@@ -1428,8 +1440,9 @@ Sprint 7 remained `next` during planning. It became active when the
 accepted planning baseline is committed and Task 1 begins under an explicit
 execution instruction.
 
-The current state is `active`: Tasks 1–8 are committed or are the current
-validated change, and Task 9 still owns the completion decision.
+The current state is `completed`: Tasks 1–8 are committed in dependency order,
+Task 9 records `pass`, and the required focused and complete workspace
+validation succeeded.
 
 A task is `already_complete` only when current committed evidence and successful
 required validation prove every acceptance criterion. Record the proving
@@ -1453,9 +1466,9 @@ Sprint 7 may transition to `completed` only when:
 - the complete repository Definition of Done passes;
 - Task 9 records `pass` or `pass with non-blocking follow-ups`.
 
-Only that non-blocking review transition makes Sprint 8 Registers and Queries
+The non-blocking review transition makes Sprint 8 Registers and Queries
 eligible as the next planning target. Planning or architecture acceptance alone
-does not change Sprint 7 status, capability status, or Coverage counts.
+does not change sprint status, capability status, or Coverage counts.
 
 The v0.3 release integration review follows Sprint 14.
 

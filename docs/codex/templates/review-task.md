@@ -12,13 +12,17 @@ diff, architecture decision, or completed capability.
 ## Required task-specific sections
 
 - Authoritative ADRs / architecture documents
+- Prerequisites / required gate
 - Review target
 - Reviewed baseline / commit or diff range
 - Scope
 - Excluded
 - Review Criteria
 - Acceptance evidence matrix, when the review is a completion gate
+- Authorized review outputs and state transition, when changes are requested
 - Task-specific Validation, if any
+- Suggested commit message, when review outputs are explicitly authorized
+  (recommendation only)
 
 ## Additional acceptance requirements
 
@@ -32,6 +36,10 @@ diff, architecture decision, or completed capability.
   decision: `pass`, `pass with non-blocking follow-ups`, or `blocked`.
 - Base a completion decision on executed evidence for every applicable
   acceptance criterion, not on implementation claims alone.
+- Keep review artifact creation and Roadmap state transitions explicit and
+  bounded. Do not treat an integration review as permission to fix findings.
+- Transition a sprint or release only after a non-blocking decision and all
+  required validation succeeds.
 
 ## Additional report sections
 
@@ -41,6 +49,7 @@ diff, architecture decision, or completed capability.
 - Missing evidence
 - Scope and exclusion conformance
 - Completion decision, when applicable
+- Review artifacts and state transition, when authorized
 - Deferred or non-blocking follow-ups
 - Risk assessment
 - Recommended next action

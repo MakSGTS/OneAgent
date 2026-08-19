@@ -13,6 +13,7 @@ evidence.
 ## Required task-specific sections
 
 - Authoritative ADRs / architecture documents
+- Prerequisites / required gate
 - Task
 - Source contract / production source
 - Scope

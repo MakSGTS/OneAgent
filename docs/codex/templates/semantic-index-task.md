@@ -12,6 +12,7 @@ the canonical source-independent semantic graph.
 ## Required task-specific sections
 
 - Authoritative ADRs / architecture documents
+- Prerequisites / required gate
 - Task
 - Canonical source snapshot / semantic authority
 - Index dimensions and lookup contracts

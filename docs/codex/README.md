@@ -99,6 +99,7 @@ docs/codex/
     parser.md
     review.md
     semantic-index.md
+    sequential-sprint-execution.md
   profiles/
     architecture.md
     graph-implementation.md
@@ -116,6 +117,8 @@ docs/codex/
     parser-task.md
     review-task.md
     semantic-index-task.md
+    sprint-execution-loop.md
+    sprint-planning-task.md
 ```
 
 ## Dependency model
@@ -183,6 +186,11 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 16. Historical `HEAD` values, coverage counts, and repository baselines are
     context, not live evidence. Recheck every mutable fact before using it to
     select or execute a new task.
+17. Every task prompt declares its prerequisites or explicitly states that it
+    has none. Enforce the required gate before implementation.
+18. Stored prompt text does not permanently authorize staging or committing.
+    Resolve commit authorization from the current user instruction that launches
+    execution.
 
 ## Choosing a profile
 
@@ -216,6 +224,10 @@ module composition.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/architecture-task.md` for architecture output.
 - Use `docs/codex/templates/review-task.md` for review output.
+- Use `docs/codex/templates/sprint-planning-task.md` for a sprint kickoff,
+  readiness audit, and ordered Roadmap execution plan.
+- Use `docs/codex/templates/sprint-execution-loop.md` for a master prompt that
+  executes an accepted sprint plan in dependency order.
 
 A template defines task structure. It is not a complete long-form prompt.
 
@@ -243,8 +255,17 @@ Semantic Index tasks build deterministic derived views without creating a
 second semantic authority. They must define lifecycle, staleness, compatibility,
 ordering, and equivalence with canonical query or full-rebuild behavior.
 
-Review tasks inspect existing work. They do not modify files unless the user
-explicitly changes the task from review to implementation.
+Review tasks inspect existing work. They may create explicitly authorized review
+artifacts and Roadmap state transitions, but they do not modify implementation
+files unless the user changes the task from review to implementation.
+
+Sprint planning tasks audit the live baseline, decide whether the reusable
+framework is ready, and record an ordered executable plan without implementing
+production behavior.
+
+Sprint execution-loop prompts orchestrate accepted child prompts. They do not
+replace the child task's selected Profile or Template, and they obtain commit
+authorization only from the current instruction that launches the loop.
 
 ## Canonical short task prompt
 
@@ -263,6 +284,10 @@ docs/codex/templates/graph-emission-task.md
 
 Authoritative ADRs:
 - docs/adr/NNNN-example-semantics.md
+
+Prerequisites / Required gate:
+- The accepted ADR is committed and the working tree contains no conflicting
+  task-created change.
 
 Task:
 Implement one accepted semantic edge production slice.

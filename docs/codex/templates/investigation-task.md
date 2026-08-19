@@ -12,6 +12,7 @@ fixture, source-format, or compatibility investigations.
 ## Required task-specific sections
 
 - Authoritative ADRs / architecture documents, if any
+- Prerequisites / required gate, if any
 - Investigation objective
 - Questions to answer
 - Evidence scope

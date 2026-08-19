@@ -104,6 +104,7 @@ kickoff because distant scope remains provisional.
 | Stage | Required before | Required task-contract coverage | Planned reuse | Status |
 |---|---|---|---|---|
 | Task prompt template update completed — Semantic Index | Sprint 4 | Read-only investigation, snapshot and incremental index boundaries, query/resolution equivalence, lifecycle and staleness, and sprint integration-review evidence implemented by the [Semantic Index profile](codex/profiles/semantic-index-implementation.md), [Semantic Index template](codex/templates/semantic-index-task.md), [investigation template](codex/templates/investigation-task.md), and [review template](codex/templates/review-task.md). | Sprints 4–5 | completed |
+| Task prompt template update completed — Sequential Sprint Planning and Execution | Sprint 7 | Live readiness audit, explicit prerequisite gates, dependency-ordered task manifests, current-instruction commit authorization, already-complete evidence, failure stopping, integration-review transitions, and final repository-state reporting implemented by the [Sprint planning template](codex/templates/sprint-planning-task.md), [Sprint execution-loop template](codex/templates/sprint-execution-loop.md), [sequential execution workflow](codex/workflows/sequential-sprint-execution.md), and updated task templates. | Sprints 7–46 | completed |
 | Task prompt template update required — Source Adapter Ingestion | Sprint 14 | Multi-artifact source discovery and parsing, partial and malformed input, canonical identity equivalence across adapters, and end-to-end adapter conformance. | Sprint 14 | planned |
 | Task prompt template update required — Runtime Services and APIs | Sprint 15 | Long-running service lifecycle, ownership, concurrency, cancellation, shutdown, health, transport compatibility, observability, and client/server integration evidence. | Sprints 15–19 and 21; baseline for Sprints 28 and 32 | planned |
 | Task prompt template update required — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence. | Sprint 20 | planned |
@@ -121,10 +122,10 @@ kickoff because distant scope remains provisional.
 | Task prompt template update required — Release | Sprint 46 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 46 | planned |
 
 The current architecture, implementation, graph-model, graph-emission, parser,
-investigation, Semantic Index, and review contracts are forecast to cover
-Sprints 4–13 without another task-template family. Later sprints are covered by
-the first applicable stage above plus its planned reuse; every sprint still
-performs a focused readiness check at kickoff.
+investigation, Semantic Index, review, sprint-planning, and sequential-execution
+contracts are forecast to cover Sprints 4–13 without another domain task-template
+family. Later sprints are covered by the first applicable stage above plus its
+planned reuse; every sprint still performs a focused readiness check at kickoff.
 
 ### Completed sprints
 

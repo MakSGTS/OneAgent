@@ -11,6 +11,7 @@ Use this template for parsing one real serialized source artifact family.
 ## Required task-specific sections
 
 - Authoritative ADRs / source-format documents
+- Prerequisites / required gate
 - Task
 - Source evidence / fixtures
 - Scope

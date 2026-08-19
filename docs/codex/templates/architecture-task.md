@@ -13,6 +13,7 @@ prerequisites.
 ## Required task-specific sections
 
 - Authoritative ADRs / architecture documents
+- Prerequisites / required gate
 - Task
 - Scope
 - Included

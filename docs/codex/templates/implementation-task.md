@@ -11,6 +11,7 @@ Use this template for implementing one accepted capability or behavior.
 ## Required task-specific sections
 
 - Authoritative ADRs / architecture documents
+- Prerequisites / required gate
 - Task
 - Scope
 - Included

@@ -18,8 +18,10 @@ set, diff, or architecture change.
 
 ## Task-family expectations
 
-- Do not change files unless the user explicitly converts the review into an
-  implementation task.
+- Do not change implementation files unless the user explicitly converts the
+  review into an implementation task.
+- Create review artifacts or Roadmap state transitions only when the current
+  task explicitly authorizes those outputs.
 - Prioritize confirmed findings by severity.
 - Separate missing evidence from defects.
 - Compare against accepted ADRs, architecture documents, tests, and task scope.

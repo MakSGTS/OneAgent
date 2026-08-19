@@ -136,11 +136,12 @@ performs a focused readiness check at kickoff.
 
 | Sprint | Version | Goal | Status |
 |---|---|---|---|
-| Sprint 4 — Semantic Index | v0.2 | Build the derived semantic index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) over the completed graph and EDT semantic model. | completed |
+| Sprint 5 — Incremental Indexing | v0.2 | Update the shared semantic index deterministically from canonical graph snapshot changes while retaining unaffected derived lookup state. | active |
 
-Sprint 4 is completed with a `pass` integration decision recorded in the
-[Sprint 4 Semantic Index review](reviews/sprint-4-semantic-index.md). Sprint 5
-remains the next planned dependency-ordered target.
+Sprint 5 is active under
+[ADR-0027](adr/0027-incremental-semantic-index-maintenance.md). Sprint 4 remains
+completed with a `pass` decision recorded in the
+[Sprint 4 Semantic Index review](reviews/sprint-4-semantic-index.md).
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -441,15 +442,287 @@ cache formats, Runtime services, HTTP, CLI, MCP, LSP, IDE integration,
 source-adapter-specific indexing, fuzzy or ranked search, and unsupported
 performance targets remain assigned to later accepted work.
 
-### Planned sprints
+#### Sprint 5 Incremental Indexing execution plan
 
-#### v0.2 — Semantic Core
+Sprint 5 implements
+[ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) as eight ordered,
+atomic outcomes. The work reuses `SemanticGraphDiff`, retains unaffected owned
+lookup membership, preserves the Sprint 4 public Query and Resolution surface,
+and proves equality with a clean full rebuild. It does not add source events,
+persistence, Runtime services, or a second semantic model.
 
-| Sprint | Goal | Status |
+Tasks 2 through 7 use the semantic-index Codex profile, task template, and
+workflow. Task 8 uses the integration-review profile and template. Each task
+has one commit boundary and must begin from the successful commit produced by
+its predecessor.
+
+| Task | Atomic outcome | Primary ownership |
 |---|---|---|
-| Sprint 5 — Incremental Indexing | Update the semantic index deterministically from workspace changes without rebuilding unaffected state. | planned |
+| 1 | Accept the architecture and executable plan. | ADR, lifecycle boundary, task ownership, and state gates. |
+| 2 | Normalize canonical snapshot changes deterministically. | Change vocabulary, ordering, dependency validation, and typed normalization failures. |
+| 3 | Maintain node lookup dimensions incrementally. | Identity, exact-name, node-kind, and node replacement projections. |
+| 4 | Maintain edge, adjacency, and containment dimensions incrementally. | Edge identity/kind, endpoint indexes, containment, and incident-edge invalidation. |
+| 5 | Integrate accepted state with the index lifecycle, Query, and Resolution. | Freshness, atomic publication, retry, fallback, and public compatibility. |
+| 6 | Prove full-rebuild equivalence. | Independent oracle and transition/sequence matrix for every Sprint 4 dimension. |
+| 7 | Complete downstream consumer evidence. | Validation, Diff, Impact, Coverage, reference-request build, and EDT compatibility. |
+| 8 | Review the integrated Sprint 5 baseline. | Scope audit, complete gates, findings, Sprint decision, and v0.2 hand-off. |
 
-The v0.2 release integration review follows Sprint 5.
+The common full implementation gate for every Rust-changing task is:
+
+```bash
+cargo fmt --all --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo doc --workspace --no-deps
+git diff --check
+```
+
+##### Task 1 — Accept the architecture and executable plan
+
+**Prerequisites:** Sprint 4 is completed with a recorded `pass`; ADR-0026 and
+the shared semantic-index implementation are the accepted baseline; the full
+workspace gate passes before Sprint 5 changes begin.
+
+**Included scope:** accept ADR-0027; define canonical previous/current/diff
+input, owned retained state, operation ordering, invalidation, freshness,
+failure/retry, fallback, lifecycle integration, rebuild equivalence, complexity
+expectations, task ownership, and Sprint state gates; publish this eight-task
+plan.
+
+**Excluded scope:** Rust implementation, public API changes, benchmarks,
+persistence, source adapters, Runtime, transport, and future semantic-model
+expansion.
+
+**Acceptance evidence:** ADR-0027 is `Accepted`; every required architecture
+decision and rejected alternative is explicit; this plan gives each outcome a
+prerequisite, scope boundary, evidence requirement, focused validation, and
+commit boundary; no prompt-framework change is required by repository
+evidence.
+
+**Focused validation:** inspect the ADR and roadmap links and headings, run
+`git diff --check`, review `git diff -- docs/Roadmap.md
+docs/adr/0027-incremental-semantic-index-maintenance.md`, and confirm with
+`git status --short` that no unrelated path is staged.
+
+**Commit boundary:** commit only the ADR and roadmap as
+`Plan Sprint 5 incremental indexing`.
+
+##### Task 2 — Normalize canonical snapshot changes deterministically
+
+**Prerequisites:** Task 1 is committed; ADR-0027 is the accepted authority;
+the baseline full gate remains green.
+
+**Included scope:** add a crate-internal normalization boundary over an exact
+previous graph, current graph, and canonical `SemanticGraphDiff`; represent
+unique node/edge removal, addition, replacement, and refresh work; impose the
+accepted total phase and stable-id order; validate supplied-diff freshness,
+old/new entity presence, endpoint completeness, incident-edge deletion, stable
+identity consistency, no-op transitions, cancellation, and deterministic
+retry input without mutating lookup state.
+
+**Excluded scope:** applying operations to index maps, Query or Resolution
+integration, consumer changes, source events, persistence, and performance
+claims.
+
+**Acceptance evidence:** focused unit tests cover empty, no-op, node and edge
+change classes, mixed/reversed construction, deterministic order, cancellation,
+wrong-pair or contradictory supplied diffs, missing dependencies, and repeated
+normalization. Typed failures leave all inputs untouched.
+
+**Focused validation:** run `cargo test -p oneagent-graph --lib
+incremental_index::tests`, `cargo test -p oneagent-graph --test diff`,
+`cargo test -p oneagent-graph --test build_diff`, then the common full gate.
+
+**Commit boundary:** commit normalization and its tests as
+`Add deterministic incremental index changes`.
+
+##### Task 3 — Maintain node lookup dimensions incrementally
+
+**Prerequisites:** Task 2 is committed and its normalized operation ordering is
+stable.
+
+**Included scope:** introduce the owned semantic-index state and incrementally
+apply node identity, exact-name, and node-kind projection changes; retain
+unaffected entries; correctly remove old and add new name/kind keys for node
+replacement; keep payload/provenance-only refreshes lookup-neutral; expose
+crate-internal comparison helpers needed by later oracle tests.
+
+**Excluded scope:** edge identity, adjacency, containment, public lifecycle
+integration, consumer migration, persistence, and optimization guarantees.
+
+**Acceptance evidence:** tests cover node add/remove, duplicate exact names,
+name and kind replacement, combined replacement, payload/provenance refresh,
+empty buckets, missing keys, reversed construction, mixed node batches, stale
+or invalid input, retry, and preservation of unaffected node projections.
+
+**Focused validation:** run `cargo test -p oneagent-graph --lib
+incremental_index::tests`, `cargo test -p oneagent-graph --lib
+semantic_index::tests`, `cargo test -p oneagent-graph --test query`, then the
+common full gate.
+
+**Commit boundary:** commit node-state maintenance and tests as
+`Update semantic node indexes incrementally`.
+
+##### Task 4 — Maintain edge, adjacency, and containment dimensions incrementally
+
+**Prerequisites:** Task 3 is committed; node projection application and
+normalization dependency checks are green.
+
+**Included scope:** apply edge identity and kind changes, incoming/outgoing and
+kind-filtered adjacency, containment owner/child/name/kind projections,
+provenance refresh, endpoint/kind replacement, incident-edge deletion, and
+containment rekeying after node name/kind replacement. Retain unaffected edge
+and containment membership.
+
+**Excluded scope:** public lifecycle constructors, downstream consumer
+migration, new validation policy, persistence, Runtime, and benchmark targets.
+
+**Acceptance evidence:** tests cover edge add/remove/refresh/replacement,
+self-loops, cycles, duplicate names, multiple owners, invalid ownership,
+node deletion with incident edges, containment child name/kind replacement,
+mixed batches, deterministic order, stale failure, retry, and unaffected
+membership preservation.
+
+**Focused validation:** run `cargo test -p oneagent-graph --lib
+incremental_index::tests`, `cargo test -p oneagent-graph --lib
+semantic_index::tests`, and the graph integration targets `validation`, `diff`,
+`query`, and `resolution`, then the common full gate.
+
+**Commit boundary:** commit edge-state maintenance and tests as
+`Update semantic edge indexes incrementally`.
+
+##### Task 5 — Integrate lifecycle, Query, and Resolution
+
+**Prerequisites:** Task 4 is committed and every Sprint 4 lookup dimension can
+be represented by the owned state.
+
+**Included scope:** pair accepted state with its exact graph snapshot; build a
+clean state, apply a complete normalized transition atomically, validate before
+publication, preserve the previous state after failure, distinguish retry from
+stale-base application, provide clean-rebuild fallback, and let crate-internal
+Query and Resolution construction reuse accepted state without changing their
+public constructors, signatures, ordering, covariance, or typed failures.
+
+**Excluded scope:** public mutable indexes, lazy graph-borrowing cells, Runtime
+publication, async orchestration, source adapters, persistence, and new Query or
+Resolution semantics.
+
+**Acceptance evidence:** lifecycle tests prove clean build, successful
+transition, no-op current-to-current, deterministic retry, already-current and
+unrelated stale failure, wrong target, failure followed by retry, unchanged
+previous state, fallback, borrowed canonical results, and compatibility of all
+existing public entry points.
+
+**Focused validation:** run focused incremental-index unit tests and graph
+integration targets `query`, `resolution`, and `validation`, plus EDT tests,
+then the common full gate.
+
+**Commit boundary:** commit lifecycle and facade integration as
+`Integrate incremental semantic index lifecycle`.
+
+##### Task 6 — Prove full-rebuild equivalence
+
+**Prerequisites:** Task 5 is committed; both clean-build and incremental
+lifecycle paths are available from crate-internal tests.
+
+**Included scope:** construct an independent clean full-rebuild oracle; compare
+all Sprint 4 state dimensions, Query primitives and derived results, Resolution
+successes and typed failures, ordering, and invalid-state visibility after each
+single transition and every step of supported multi-step sequences. Include
+previous/current/missing key universes so stale entries are observable.
+
+**Excluded scope:** using incremental invalidation helpers to calculate
+expected results, benchmark claims, persistence, new public APIs, and future
+semantic facts.
+
+**Acceptance evidence:** the matrix covers empty/no-op; every node and edge
+change class; adjacency and containment changes; duplicate names; multiple
+owners; invalid ownership; self-loops; cycles; mixed/reversed batches; incident
+deletion; retry; stale failure; failure/retry; and multi-step sequences, with
+the clean graph constructed independently.
+
+**Focused validation:** run incremental unit tests and graph integration
+targets `query`, `resolution`, `validation`, `diff`, and `build_diff`, then the
+common full gate.
+
+**Commit boundary:** commit the oracle and equivalence matrix as
+`Prove incremental index rebuild equivalence`.
+
+##### Task 7 — Complete downstream consumer evidence
+
+**Prerequisites:** Task 6 is committed and full-rebuild equivalence is green.
+
+**Included scope:** audit and, only where necessary, adapt Validation, Diff,
+Impact, Coverage, reference-request building, and EDT so canonical ownership and
+their accepted public behavior remain unchanged while Query and Resolution use
+the shared lifecycle consistently. Add integration evidence for clean and
+incremental graph sequences without moving invalidation policy into consumers.
+
+**Excluded scope:** new consumer policy, source-specific change generation,
+Runtime services, transports, persistence, public API expansion, and unrelated
+refactors.
+
+**Acceptance evidence:** focused tests prove Validation still reads canonical
+facts, Diff/build Diff stay directional snapshot comparisons, Impact uses the
+matching previous/current Query views, Coverage and reference requests preserve
+ordering and missing/invalid behavior, EDT remains a producer, and no consumer
+owns index invalidation.
+
+**Focused validation:** run incremental unit tests; graph targets `query`,
+`resolution`, `validation`, `diff`, `build_diff`, `impact`, `coverage`, and
+`reference_request_build`; EDT tests; then the common full gate.
+
+**Commit boundary:** commit only required consumer integration and evidence as
+`Complete incremental index integration evidence`.
+
+##### Task 8 — Review the integrated Sprint 5 baseline
+
+**Prerequisites:** Tasks 1 through 7 are committed in order; their focused and
+full gates are green; the worktree contains no unexplained Sprint changes.
+
+**Included scope:** review architecture conformance, normalized input and
+ordering, every invalidation dimension, freshness and atomic failure behavior,
+retry and fallback, public compatibility, rebuild equivalence, downstream
+ownership, tests, documentation, commit boundaries, and Sprint/v0.2 readiness.
+Record findings and exact command outcomes in a Sprint 5 integration-review
+artifact; update this roadmap only when the evidence permits the state change.
+
+**Excluded scope:** silently fixing material findings inside the review commit,
+new features, broad refactors, benchmark claims, persistence, Runtime, and
+future-sprint work. A material finding keeps the Sprint blocked for a dedicated
+fix task and rerun.
+
+**Acceptance evidence:** record exact commands, test counts, zero-match
+filters, findings, missing evidence, scope conformance, and one decision:
+`pass`, `pass with non-blocking follow-ups`, or `blocked`. Sprint 5 completion
+requires `pass`; the separate v0.2 release review remains the next decision.
+
+**Focused validation:** execute the complete Task 7 focused matrix against the
+reviewed baseline, then run the common full implementation gate.
+
+**Commit boundary:** commit the review artifact and justified roadmap state as
+`Complete Sprint 5 incremental indexing review`.
+
+##### Sprint 5 state gates
+
+Sprint 5 is `active` after Task 1 accepts ADR-0027 and this execution plan. It
+may become `completed` only when Tasks 2 through 7 are committed in dependency
+order, Task 8 records `pass`, all focused and full validation commands complete
+successfully, every ADR-0027 lookup dimension has independent rebuild
+equivalence evidence, public compatibility is preserved, and no later-sprint
+concern was pulled forward.
+
+A `blocked` review leaves Sprint 5 active until dedicated fixes and the full
+review cycle succeed. Sprint 5 completion does not itself declare v0.2 ready;
+the v0.2 release integration review follows Sprint 5.
+
+Persistence, cache serialization, cross-process identity, Runtime services,
+async publication, filesystem/Git/workspace watchers, HTTP, CLI, MCP, LSP, IDE
+integration, source-specific invalidation, new semantic facts, and unsupported
+performance claims remain deferred.
+
+### Planned sprints
 
 #### v0.3 — 1C Knowledge Model
 

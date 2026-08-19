@@ -1,10 +1,10 @@
 //! Deterministic semantic resolution over a semantic graph.
 
 use oneagent_common::{EntityId, EntityName};
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 
-use crate::{EdgeKind, GraphNode, NodeId, NodeKind, SemanticGraph};
+use crate::semantic_index::SemanticIndex;
+use crate::{GraphNode, NodeId, NodeKind, SemanticGraph};
 
 /// Semantic reference resolved against a graph.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -105,52 +105,15 @@ impl std::error::Error for ResolutionError {}
 /// Deterministic semantic resolution index built from a semantic graph.
 #[derive(Debug)]
 pub struct SemanticResolutionIndex<'graph> {
-    nodes_by_id: BTreeMap<EntityId, &'graph GraphNode>,
-    nodes_by_name: BTreeMap<EntityName, BTreeSet<EntityId>>,
-    children_by_owner_name: BTreeMap<(EntityId, EntityName), BTreeSet<EntityId>>,
-    owners_by_child: BTreeMap<EntityId, BTreeSet<EntityId>>,
+    index: SemanticIndex<'graph>,
 }
 
 impl<'graph> SemanticResolutionIndex<'graph> {
     /// Builds a deterministic resolution index from a graph snapshot.
     #[must_use]
     pub fn new(graph: &'graph SemanticGraph) -> Self {
-        let mut nodes_by_id = BTreeMap::new();
-        let mut nodes_by_name = BTreeMap::<EntityName, BTreeSet<EntityId>>::new();
-
-        for node in graph.nodes() {
-            nodes_by_id.insert(node.id().clone(), node);
-            nodes_by_name
-                .entry(node.name().clone())
-                .or_default()
-                .insert(node.id().clone());
-        }
-
-        let mut children_by_owner_name =
-            BTreeMap::<(EntityId, EntityName), BTreeSet<EntityId>>::new();
-        let mut owners_by_child = BTreeMap::<EntityId, BTreeSet<EntityId>>::new();
-
-        for edge in graph
-            .edges()
-            .filter(|edge| edge.kind() == EdgeKind::Contains)
-        {
-            if let Some(child) = nodes_by_id.get(edge.target()) {
-                children_by_owner_name
-                    .entry((edge.source().clone(), child.name().clone()))
-                    .or_default()
-                    .insert(edge.target().clone());
-                owners_by_child
-                    .entry(edge.target().clone())
-                    .or_default()
-                    .insert(edge.source().clone());
-            }
-        }
-
         Self {
-            nodes_by_id,
-            nodes_by_name,
-            children_by_owner_name,
-            owners_by_child,
+            index: SemanticIndex::new(graph),
         }
     }
 
@@ -203,14 +166,9 @@ impl<'graph> SemanticResolutionIndex<'graph> {
     /// [`ResolutionError::AmbiguousTarget`] when multiple nodes have it.
     pub fn resolve_name(&self, name: &EntityName) -> Result<&'graph GraphNode, ResolutionError> {
         let reference = SemanticReference::Name(name.clone());
-        let candidates =
-            self.nodes_by_name
-                .get(name)
-                .ok_or_else(|| ResolutionError::MissingTarget {
-                    reference: reference.clone(),
-                })?;
+        let candidates = self.index.nodes_by_name(name);
 
-        self.expect_single_candidate(reference, candidates)
+        Self::expect_single_candidate(reference, candidates)
     }
 
     /// Resolves a node by exact semantic name and validates its kind.
@@ -225,32 +183,21 @@ impl<'graph> SemanticResolutionIndex<'graph> {
         expected: NodeKind,
     ) -> Result<&'graph GraphNode, ResolutionError> {
         let reference = SemanticReference::Name(name.clone());
-        let candidates =
-            self.nodes_by_name
-                .get(name)
-                .ok_or_else(|| ResolutionError::MissingTarget {
-                    reference: reference.clone(),
-                })?;
+        let candidates = self.index.nodes_by_name(name);
         let matching = candidates
             .iter()
-            .filter_map(|id| {
-                let node = self.nodes_by_id.get(id).copied()?;
-
-                (node.kind() == expected).then_some(id.clone())
-            })
-            .collect::<BTreeSet<_>>();
+            .copied()
+            .filter(|node| node.kind() == expected)
+            .collect::<Vec<_>>();
 
         if matching.is_empty() {
-            let Some(first_id) = candidates.iter().next() else {
-                return Err(ResolutionError::MissingTarget { reference });
-            };
-            let Some(first_node) = self.nodes_by_id.get(first_id).copied() else {
+            let Some(first_node) = candidates.first().copied() else {
                 return Err(ResolutionError::MissingTarget { reference });
             };
 
             Self::ensure_kind(first_node, &[expected])
         } else {
-            self.expect_single_candidate(reference, &matching)
+            Self::expect_single_candidate(reference, &matching)
         }
     }
 
@@ -271,14 +218,9 @@ impl<'graph> SemanticResolutionIndex<'graph> {
             owner: owner.clone(),
             name: name.clone(),
         };
-        let candidates = self
-            .children_by_owner_name
-            .get(&(owner.clone(), name.clone()))
-            .ok_or_else(|| ResolutionError::MissingTarget {
-                reference: reference.clone(),
-            })?;
+        let candidates = self.index.children_by_name(owner, name);
 
-        self.expect_single_candidate(reference, candidates)
+        Self::expect_single_candidate(reference, candidates)
     }
 
     /// Resolves a child node by owner identifier, exact local name and kind.
@@ -314,9 +256,10 @@ impl<'graph> SemanticResolutionIndex<'graph> {
         let child_node = self.resolve_entity_id(child)?;
 
         if self
-            .owners_by_child
-            .get(child)
-            .is_some_and(|owners| owners.contains(owner))
+            .index
+            .owners(child)
+            .iter()
+            .any(|candidate| candidate.id() == owner)
         {
             Ok(child_node)
         } else {
@@ -339,14 +282,9 @@ impl<'graph> SemanticResolutionIndex<'graph> {
         let reference = SemanticReference::Owner {
             child: child.clone(),
         };
-        let candidates =
-            self.owners_by_child
-                .get(child)
-                .ok_or_else(|| ResolutionError::MissingTarget {
-                    reference: reference.clone(),
-                })?;
+        let candidates = self.index.owners(child);
 
-        self.expect_single_candidate(reference, candidates)
+        Self::expect_single_candidate(reference, candidates)
     }
 
     /// Resolves the owner of a node and validates the owner kind.
@@ -370,29 +308,21 @@ impl<'graph> SemanticResolutionIndex<'graph> {
         id: &EntityId,
         reference: SemanticReference,
     ) -> Result<&'graph GraphNode, ResolutionError> {
-        self.nodes_by_id
-            .get(id)
-            .copied()
+        self.index
+            .node(id)
             .ok_or(ResolutionError::MissingTarget { reference })
     }
 
     fn expect_single_candidate(
-        &self,
         reference: SemanticReference,
-        candidates: &BTreeSet<EntityId>,
+        candidates: &[&'graph GraphNode],
     ) -> Result<&'graph GraphNode, ResolutionError> {
         match candidates.len() {
             0 => Err(ResolutionError::MissingTarget { reference }),
-            1 => {
-                let id = candidates
-                    .iter()
-                    .next()
-                    .expect("single candidate must exist");
-                self.resolve_entity_id(id)
-            }
+            1 => Ok(candidates[0]),
             _ => Err(ResolutionError::AmbiguousTarget {
                 reference,
-                candidates: candidates.iter().cloned().collect(),
+                candidates: candidates.iter().map(|node| node.id().clone()).collect(),
             }),
         }
     }
@@ -683,6 +613,80 @@ mod tests {
             .expect("owner must resolve");
 
         assert_eq!(owner.id().as_str(), "metadata.document.sales");
+    }
+
+    #[test]
+    fn missing_owner_is_typed_for_an_existing_child() {
+        let child = id("metadata.document.sales:attribute:Unowned");
+        let mut graph = SemanticGraph::new();
+        insert_node(
+            &mut graph,
+            child.clone(),
+            name("Unowned"),
+            NodeKind::Attribute,
+        );
+
+        let error = graph
+            .resolution_index()
+            .resolve_owner(&child)
+            .expect_err("unowned child must fail");
+
+        assert_eq!(
+            error,
+            ResolutionError::MissingTarget {
+                reference: SemanticReference::Owner { child },
+            }
+        );
+    }
+
+    #[test]
+    fn multiple_owners_report_deterministic_ambiguity() {
+        let mut graph = graph_with_owned_attributes(false);
+        let child = id("metadata.document.sales:attribute:Company");
+        let other_owner = id("metadata.document.returns");
+        insert_contains(&mut graph, &other_owner, child.clone());
+
+        let error = graph
+            .resolution_index()
+            .resolve_owner(&child)
+            .expect_err("multiple owners must be ambiguous");
+
+        assert_eq!(
+            error,
+            ResolutionError::AmbiguousTarget {
+                reference: SemanticReference::Owner { child },
+                candidates: vec![
+                    id("metadata.document.returns"),
+                    id("metadata.document.sales"),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn empty_and_repeated_resolution_indexes_preserve_results() {
+        let empty = SemanticGraph::new();
+        let missing = id("metadata.document.missing");
+        let first_empty_error = empty
+            .resolution_index()
+            .resolve_entity_id(&missing)
+            .expect_err("empty snapshot must not resolve a node");
+        let second_empty_error = empty
+            .resolution_index()
+            .resolve_entity_id(&missing)
+            .expect_err("repeated empty snapshot must not resolve a node");
+        let graph = graph_with_owned_attributes(false);
+        let first = graph
+            .resolution_index()
+            .resolve_name(&name("Company"))
+            .expect_err("duplicate name must remain ambiguous");
+        let second = graph
+            .resolution_index()
+            .resolve_name(&name("Company"))
+            .expect_err("repeated facade must remain ambiguous");
+
+        assert_eq!(first_empty_error, second_empty_error);
+        assert_eq!(first, second);
     }
 
     #[test]

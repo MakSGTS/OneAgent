@@ -43,6 +43,7 @@ technical workflows:
 - implementation;
 - graph model;
 - graph emission;
+- semantic index;
 - parser;
 - review.
 
@@ -73,6 +74,12 @@ Task prompts are the only layer that contains concrete task-specific scope and
 acceptance criteria. Future prompts should be concise and should reference the
 smallest sufficient profile and template combination.
 
+A stored task prompt is not a live repository baseline. After its task is
+completed, treat its `HEAD`, counts, status, and implementation inventory as
+historical execution context. Prepare new tasks from the current repository,
+accepted architecture, and reusable framework modules instead of cloning an old
+prompt unchanged.
+
 ## Directory structure
 
 ```text
@@ -91,6 +98,7 @@ docs/codex/
     implementation.md
     parser.md
     review.md
+    semantic-index.md
   profiles/
     architecture.md
     graph-implementation.md
@@ -98,13 +106,16 @@ docs/codex/
     investigation.md
     parser-implementation.md
     review.md
+    semantic-index-implementation.md
   templates/
     architecture-task.md
     graph-emission-task.md
     graph-model-task.md
     implementation-task.md
+    investigation-task.md
     parser-task.md
     review-task.md
+    semantic-index-task.md
 ```
 
 ## Dependency model
@@ -166,6 +177,12 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
     copy them.
 14. If a reusable rule appears repeatedly in task prompts, move it into the
     appropriate framework layer instead of continuing duplication.
+15. A suggested commit message is planning metadata only. It does not authorize
+    staging or committing. Include a commit action only when the current user
+    instruction explicitly authorizes it consistently with Repository Safety.
+16. Historical `HEAD` values, coverage counts, and repository baselines are
+    context, not live evidence. Recheck every mutable fact before using it to
+    select or execute a new task.
 
 ## Choosing a profile
 
@@ -173,6 +190,8 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
   that does not need graph- or parser-specific behavior.
 - Use `docs/codex/profiles/graph-implementation.md` for graph model or graph
   emission implementation tasks.
+- Use `docs/codex/profiles/semantic-index-implementation.md` for repeated
+  complete-snapshot or incremental Semantic Index implementation tasks.
 - Use `docs/codex/profiles/parser-implementation.md` for real source parser
   tasks.
 - Use `docs/codex/profiles/architecture.md` for architecture-only work and ADRs.
@@ -187,9 +206,13 @@ module composition.
 
 - Use `docs/codex/templates/implementation-task.md` for general implementation
   task contracts.
+- Use `docs/codex/templates/investigation-task.md` for read-only evidence
+  gathering.
 - Use `docs/codex/templates/graph-model-task.md` for public graph model changes.
 - Use `docs/codex/templates/graph-emission-task.md` for semantic graph producer
   emission.
+- Use `docs/codex/templates/semantic-index-task.md` for complete-snapshot or
+  incremental Semantic Index work.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/architecture-task.md` for architecture output.
 - Use `docs/codex/templates/review-task.md` for review output.
@@ -215,6 +238,10 @@ preserve deterministic identity and define validation/query impact.
 
 Graph emission tasks connect production source facts to semantic graph nodes or
 edges. They must preserve provenance, determinism, and Coverage evidence.
+
+Semantic Index tasks build deterministic derived views without creating a
+second semantic authority. They must define lifecycle, staleness, compatibility,
+ordering, and equivalence with canonical query or full-rebuild behavior.
 
 Review tasks inspect existing work. They do not modify files unless the user
 explicitly changes the task from review to implementation.
@@ -302,6 +329,7 @@ A task should usually produce one coherent outcome such as:
 
 - one ADR for one unresolved architectural capability;
 - one graph-model prerequisite;
+- one snapshot-index or incremental-index implementation slice;
 - one parser for one source artifact family;
 - one resolver/emitter production slice;
 - one review of one completed implementation;

@@ -82,6 +82,47 @@ Sprint status uses three values:
 - `next` — the next planning and kickoff target, but not yet active;
 - `planned` — ordered future work whose detailed scope is defined at kickoff.
 
+### Task prompt template readiness forecast
+
+Task prompt templates are a pre-kickoff governance dependency. A stage named
+`Task prompt template update required` must be completed before detailed task
+decomposition begins for the first affected sprint. These stages do not add a
+second execution sequence, change sprint numbering, or become product sprints
+unless they later acquire independent implementation scope.
+
+At each stage, audit the live [Codex Framework](codex/README.md) and accepted
+architecture first.
+Create or revise only the smallest reusable Profile, Workflow, and Template set
+that the affected task family needs. If the existing framework already satisfies
+the accepted contracts, close the stage with recorded evidence instead of
+creating speculative modules. Reassess planned reuse at every later sprint
+kickoff because distant scope remains provisional.
+
+| Stage | Required before | Required task-contract coverage | Planned reuse | Status |
+|---|---|---|---|---|
+| Task prompt template update completed — Semantic Index | Sprint 4 | Read-only investigation, snapshot and incremental index boundaries, query/resolution equivalence, lifecycle and staleness, and sprint integration-review evidence implemented by the [Semantic Index profile](codex/profiles/semantic-index-implementation.md), [Semantic Index template](codex/templates/semantic-index-task.md), [investigation template](codex/templates/investigation-task.md), and [review template](codex/templates/review-task.md). | Sprints 4–5 | completed |
+| Task prompt template update required — Source Adapter Ingestion | Sprint 14 | Multi-artifact source discovery and parsing, partial and malformed input, canonical identity equivalence across adapters, and end-to-end adapter conformance. | Sprint 14 | planned |
+| Task prompt template update required — Runtime Services and APIs | Sprint 15 | Long-running service lifecycle, ownership, concurrency, cancellation, shutdown, health, transport compatibility, observability, and client/server integration evidence. | Sprints 15–19 and 21; baseline for Sprints 28 and 32 | planned |
+| Task prompt template update required — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence. | Sprint 20 | planned |
+| Task prompt template update required — Context Engine | Sprint 22 | Deterministic context selection, provenance, budgets, truncation, relevance evidence, reproducible evaluation, and data-boundary rules. | Sprints 22 and 33 | planned |
+| Task prompt template update required — LLM Providers | Sprint 23 | Provider capabilities, request/response compatibility, discovery, secrets, timeouts, retries, cancellation, error taxonomy, and contract tests. | Sprints 23–26 | planned |
+| Task prompt template update required — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests. | Sprints 27, 29, and 33 | planned |
+| Task prompt template update required — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence. | Sprints 28–29 and 35; protocol baseline for Sprint 32 | planned |
+| Task prompt template update required — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence. | Sprints 30–34 | planned |
+| Task prompt template update required — Diagnostics and Rules | Sprint 36 | Stable diagnostic identity, severity and configuration, deterministic rule registration and execution, suppression, reporting, and regression evidence. | Sprints 36–37 and 39 | planned |
+| Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
+| Task prompt template update required — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation. | Sprints 40–41 | planned |
+| Task prompt template update required — API Stability and Plugin SDK | Sprint 42 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 42–43 | planned |
+| Task prompt template update required — Performance and Security | Sprint 44 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 44 | planned |
+| Task prompt template update required — Documentation and Examples | Sprint 45 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 45 | planned |
+| Task prompt template update required — Release | Sprint 46 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 46 | planned |
+
+The current architecture, implementation, graph-model, graph-emission, parser,
+investigation, Semantic Index, and review contracts are forecast to cover
+Sprints 4–13 without another task-template family. Later sprints are covered by
+the first applicable stage above plus its planned reuse; every sprint still
+performs a focused readiness check at kickoff.
+
 ### Completed sprints
 
 | Sprint | Version | Goal | Evidence | Status |

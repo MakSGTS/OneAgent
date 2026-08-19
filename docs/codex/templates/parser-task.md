@@ -18,7 +18,7 @@ Use this template for parsing one real serialized source artifact family.
 - Excluded
 - Acceptance Criteria
 - Task-specific Validation
-- Suggested commit message
+- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

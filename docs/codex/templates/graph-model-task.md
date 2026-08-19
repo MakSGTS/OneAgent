@@ -19,7 +19,7 @@ behavior, serialization, or public graph APIs.
 - Excluded
 - Acceptance Criteria
 - Task-specific Validation
-- Suggested commit message
+- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

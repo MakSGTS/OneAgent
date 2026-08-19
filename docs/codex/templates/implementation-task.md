@@ -17,7 +17,7 @@ Use this template for implementing one accepted capability or behavior.
 - Excluded
 - Acceptance Criteria
 - Task-specific Validation
-- Suggested commit message
+- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

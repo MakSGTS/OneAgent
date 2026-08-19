@@ -26,7 +26,9 @@ pub use metadata_structure::{
 };
 
 pub use module_reader::{
-    EdtModuleDescriptor, EdtModuleError, EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader,
+    EdtModuleDescriptor, EdtModuleError, EdtModuleKind, EdtModuleLayoutObservation,
+    EdtModuleLayoutOutcomeKind, EdtModuleLayoutRejectionReason, EdtModuleOwnerKind,
+    EdtModuleReader, FileSystemEdtModuleReader,
 };
 
 pub use role_rights::{

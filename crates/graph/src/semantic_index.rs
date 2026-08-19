@@ -16,6 +16,15 @@ pub(crate) struct SemanticIndex<'graph> {
     nodes_by_kind: BTreeMap<NodeKind, Vec<&'graph GraphNode>>,
     edges_by_id: BTreeMap<EdgeId, &'graph GraphEdge>,
     edges_by_kind: BTreeMap<EdgeKind, Vec<&'graph GraphEdge>>,
+    outgoing_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    outgoing_edges_by_kind: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
+    incoming_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    incoming_edges_by_kind: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
+    owner_edges_by_child: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    owners_by_child: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
+    children_by_owner: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
+    children_by_owner_kind: BTreeMap<(EntityId, NodeKind), Vec<&'graph GraphNode>>,
+    children_by_owner_name: BTreeMap<(EntityId, EntityName), Vec<&'graph GraphNode>>,
 }
 
 impl<'graph> SemanticIndex<'graph> {
@@ -52,12 +61,23 @@ impl<'graph> SemanticIndex<'graph> {
             edges_by_id.insert(id, edge);
         }
 
+        let relations = build_relation_indexes(&nodes_by_id, &edges_by_id);
+
         Self {
             nodes_by_id,
             nodes_by_name,
             nodes_by_kind,
             edges_by_id,
             edges_by_kind,
+            outgoing_edges: relations.outgoing_edges,
+            outgoing_edges_by_kind: relations.outgoing_edges_by_kind,
+            incoming_edges: relations.incoming_edges,
+            incoming_edges_by_kind: relations.incoming_edges_by_kind,
+            owner_edges_by_child: relations.owner_edges_by_child,
+            owners_by_child: relations.owners_by_child,
+            children_by_owner: relations.children_by_owner,
+            children_by_owner_kind: relations.children_by_owner_kind,
+            children_by_owner_name: relations.children_by_owner_name,
         }
     }
 
@@ -88,6 +108,175 @@ impl<'graph> SemanticIndex<'graph> {
     pub(crate) fn edges_by_kind(&self, kind: EdgeKind) -> &[&'graph GraphEdge] {
         self.edges_by_kind.get(&kind).map_or(&[], Vec::as_slice)
     }
+
+    pub(crate) fn outgoing_edges(&self, node: &EntityId) -> &[&'graph GraphEdge] {
+        self.outgoing_edges.get(node).map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn outgoing_edges_by_kind(
+        &self,
+        node: &EntityId,
+        kind: EdgeKind,
+    ) -> &[&'graph GraphEdge] {
+        self.outgoing_edges_by_kind
+            .get(&(node.clone(), kind))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn incoming_edges(&self, node: &EntityId) -> &[&'graph GraphEdge] {
+        self.incoming_edges.get(node).map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn incoming_edges_by_kind(
+        &self,
+        node: &EntityId,
+        kind: EdgeKind,
+    ) -> &[&'graph GraphEdge] {
+        self.incoming_edges_by_kind
+            .get(&(node.clone(), kind))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn owner_edges(&self, child: &EntityId) -> &[&'graph GraphEdge] {
+        self.owner_edges_by_child
+            .get(child)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn owners(&self, child: &EntityId) -> &[&'graph GraphNode] {
+        self.owners_by_child.get(child).map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn children(&self, owner: &EntityId) -> &[&'graph GraphNode] {
+        self.children_by_owner.get(owner).map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn children_by_kind(
+        &self,
+        owner: &EntityId,
+        kind: NodeKind,
+    ) -> &[&'graph GraphNode] {
+        self.children_by_owner_kind
+            .get(&(owner.clone(), kind))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn children_by_name(
+        &self,
+        owner: &EntityId,
+        name: &EntityName,
+    ) -> &[&'graph GraphNode] {
+        self.children_by_owner_name
+            .get(&(owner.clone(), name.clone()))
+            .map_or(&[], Vec::as_slice)
+    }
+}
+
+struct RelationIndexes<'graph> {
+    outgoing_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    outgoing_edges_by_kind: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
+    incoming_edges: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    incoming_edges_by_kind: BTreeMap<(EntityId, EdgeKind), Vec<&'graph GraphEdge>>,
+    owner_edges_by_child: BTreeMap<EntityId, Vec<&'graph GraphEdge>>,
+    owners_by_child: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
+    children_by_owner: BTreeMap<EntityId, Vec<&'graph GraphNode>>,
+    children_by_owner_kind: BTreeMap<(EntityId, NodeKind), Vec<&'graph GraphNode>>,
+    children_by_owner_name: BTreeMap<(EntityId, EntityName), Vec<&'graph GraphNode>>,
+}
+
+fn build_relation_indexes<'graph>(
+    nodes_by_id: &BTreeMap<EntityId, &'graph GraphNode>,
+    edges_by_id: &BTreeMap<EdgeId, &'graph GraphEdge>,
+) -> RelationIndexes<'graph> {
+    let mut indexes = RelationIndexes {
+        outgoing_edges: BTreeMap::new(),
+        outgoing_edges_by_kind: BTreeMap::new(),
+        incoming_edges: BTreeMap::new(),
+        incoming_edges_by_kind: BTreeMap::new(),
+        owner_edges_by_child: BTreeMap::new(),
+        owners_by_child: BTreeMap::new(),
+        children_by_owner: BTreeMap::new(),
+        children_by_owner_kind: BTreeMap::new(),
+        children_by_owner_name: BTreeMap::new(),
+    };
+
+    for edge in edges_by_id.values().copied() {
+        indexes
+            .outgoing_edges
+            .entry(edge.source().clone())
+            .or_default()
+            .push(edge);
+        indexes
+            .outgoing_edges_by_kind
+            .entry((edge.source().clone(), edge.kind()))
+            .or_default()
+            .push(edge);
+        indexes
+            .incoming_edges
+            .entry(edge.target().clone())
+            .or_default()
+            .push(edge);
+        indexes
+            .incoming_edges_by_kind
+            .entry((edge.target().clone(), edge.kind()))
+            .or_default()
+            .push(edge);
+
+        if edge.kind() != EdgeKind::Contains {
+            continue;
+        }
+
+        indexes
+            .owner_edges_by_child
+            .entry(edge.target().clone())
+            .or_default()
+            .push(edge);
+
+        let (Some(owner), Some(child)) = (
+            nodes_by_id.get(edge.source()).copied(),
+            nodes_by_id.get(edge.target()).copied(),
+        ) else {
+            continue;
+        };
+
+        indexes
+            .owners_by_child
+            .entry(edge.target().clone())
+            .or_default()
+            .push(owner);
+        indexes
+            .children_by_owner
+            .entry(edge.source().clone())
+            .or_default()
+            .push(child);
+        indexes
+            .children_by_owner_kind
+            .entry((edge.source().clone(), child.kind()))
+            .or_default()
+            .push(child);
+        indexes
+            .children_by_owner_name
+            .entry((edge.source().clone(), child.name().clone()))
+            .or_default()
+            .push(child);
+    }
+
+    for nodes in indexes
+        .owners_by_child
+        .values_mut()
+        .chain(indexes.children_by_owner.values_mut())
+        .chain(indexes.children_by_owner_kind.values_mut())
+        .chain(indexes.children_by_owner_name.values_mut())
+    {
+        sort_and_deduplicate_nodes(nodes);
+    }
+
+    indexes
+}
+
+fn sort_and_deduplicate_nodes(nodes: &mut Vec<&GraphNode>) {
+    nodes.sort_by_key(|node| node.id());
+    nodes.dedup_by_key(|node| node.id());
 }
 
 #[cfg(test)]
@@ -255,6 +444,127 @@ mod tests {
             edge_ids(&normal_index)
                 .windows(2)
                 .all(|pair| pair[0] < pair[1])
+        );
+    }
+
+    #[test]
+    fn adjacency_indexes_match_independent_canonical_scans() {
+        let graph = fixture(false);
+        let reversed = fixture(true);
+        let index = SemanticIndex::new(&graph);
+        let reversed_index = SemanticIndex::new(&reversed);
+        let source = id("node.00");
+        let target = id("node.01");
+        let missing = id("node.missing");
+
+        let edge_ids = |edges: &[&GraphEdge]| {
+            edges
+                .iter()
+                .map(|edge| {
+                    SemanticGraphQuery::edge_id(
+                        &crate::NodeId::new(edge.source().as_str()),
+                        &crate::NodeId::new(edge.target().as_str()),
+                        edge.kind(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut canonical = graph
+            .edges()
+            .filter(|edge| edge.source() == &source)
+            .collect::<Vec<_>>();
+        canonical.sort_by_key(|edge| {
+            SemanticGraphQuery::edge_id(
+                &crate::NodeId::new(edge.source().as_str()),
+                &crate::NodeId::new(edge.target().as_str()),
+                edge.kind(),
+            )
+        });
+
+        assert_eq!(
+            edge_ids(index.outgoing_edges(&source)),
+            edge_ids(&canonical)
+        );
+        assert_eq!(
+            edge_ids(index.outgoing_edges(&source)),
+            edge_ids(reversed_index.outgoing_edges(&source))
+        );
+        assert_eq!(index.outgoing_edges(&source).len(), EDGE_KINDS.len());
+        assert_eq!(index.incoming_edges(&target).len(), EDGE_KINDS.len());
+        assert_eq!(
+            index.outgoing_edges_by_kind(&source, EdgeKind::Calls),
+            index.incoming_edges_by_kind(&target, EdgeKind::Calls)
+        );
+        assert_eq!(
+            index.outgoing_edges_by_kind(&source, EdgeKind::Calls).len(),
+            1
+        );
+        assert!(index.outgoing_edges(&missing).is_empty());
+        assert!(index.incoming_edges(&missing).is_empty());
+        assert!(
+            edge_ids(index.outgoing_edges(&source))
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+        );
+    }
+
+    #[test]
+    fn containment_indexes_preserve_duplicate_and_invalid_states() {
+        let owner_a = GraphNode::new(id("owner.a"), name("Owner A"), NodeKind::Module);
+        let owner_b = GraphNode::new(id("owner.b"), name("Owner B"), NodeKind::Module);
+        let child_a = GraphNode::new(id("child.a"), name("Shared"), NodeKind::Attribute);
+        let child_b = GraphNode::new(id("child.b"), name("Shared"), NodeKind::Attribute);
+        let mut graph = SemanticGraph::new();
+        for node in [owner_a, owner_b, child_a, child_b] {
+            graph.insert_node(node);
+        }
+        for edge in [
+            GraphEdge::new(id("owner.a"), id("child.a"), EdgeKind::Contains),
+            GraphEdge::new(id("owner.b"), id("child.a"), EdgeKind::Contains),
+            GraphEdge::new(id("owner.a"), id("child.b"), EdgeKind::Contains),
+            GraphEdge::new(id("owner.a"), id("owner.a"), EdgeKind::Contains),
+        ] {
+            graph.insert_edge(edge).expect("edge endpoints must exist");
+        }
+
+        let index = SemanticIndex::new(&graph);
+        let node_ids = |nodes: &[&GraphNode]| {
+            nodes
+                .iter()
+                .map(|node| node.id().as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            node_ids(index.owners(&id("child.a"))),
+            vec!["owner.a".to_owned(), "owner.b".to_owned()]
+        );
+        assert_eq!(index.owner_edges(&id("child.a")).len(), 2);
+        assert_eq!(
+            node_ids(index.children(&id("owner.a"))),
+            vec![
+                "child.a".to_owned(),
+                "child.b".to_owned(),
+                "owner.a".to_owned()
+            ]
+        );
+        assert_eq!(
+            node_ids(index.children_by_kind(&id("owner.a"), NodeKind::Attribute)),
+            vec!["child.a".to_owned(), "child.b".to_owned()]
+        );
+        assert_eq!(
+            node_ids(index.children_by_name(&id("owner.a"), &name("Shared"))),
+            vec!["child.a".to_owned(), "child.b".to_owned()]
+        );
+        assert_eq!(
+            node_ids(index.owners(&id("owner.a"))),
+            vec!["owner.a".to_owned()]
+        );
+        assert!(index.children(&id("missing")).is_empty());
+        assert!(
+            index
+                .children_by_name(&id("owner.b"), &name("Missing"))
+                .is_empty()
         );
     }
 }

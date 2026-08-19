@@ -57,7 +57,7 @@ impl Display for SemanticReferenceRequestId {
 /// Source-independent semantic intent of a reference request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SemanticReferenceCategory {
-    /// Metadata member type reference.
+    /// Metadata type reference from an accepted semantic source.
     MetadataType,
     /// Callable symbol reference.
     Callable,

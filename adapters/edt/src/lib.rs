@@ -377,6 +377,7 @@ const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
 const EDT_SUBSYSTEM_CONTENT_RESOLUTION_PRODUCER: &str = "oneagent.edt.subsystem-content-resolution";
 const EDT_METADATA_REFERENCE_COLLECTION_PRODUCER: &str =
     "oneagent.edt.metadata-reference-collection";
+const EDT_COMMAND_PARAMETER_REJECTION_PRODUCER: &str = "oneagent.edt.command-parameter-rejection";
 
 /// Result of building an EDT semantic graph.
 ///
@@ -667,6 +668,12 @@ impl FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
+        emit_rejected_command_parameters(
+            &metadata_references,
+            &mut diagnostics,
+            &mut reference_statistics,
+        )?;
+
         let reference_requests = resolve_metadata_references(
             &mut graph,
             &metadata_references,
@@ -790,12 +797,26 @@ struct MetadataReferenceProjectionEvidence {
     role: EdtMetadataReferenceRole,
     target_kind: MetadataKind,
     target_name: EntityName,
+    raw_token: Option<String>,
+    occurrence_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RejectedCommandParameterEvidence {
+    descriptor_path: PathBuf,
+    metadata_object_id: EntityId,
+    source_id: EntityId,
+    raw_token: Option<String>,
+    outcome: EdtCommandParameterTypeOutcomeKind,
+    reason: EdtCommandParameterTypeReason,
+    occurrence_count: usize,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct MetadataReferenceCollection {
     requests: SemanticReferenceRequestLedger,
     evidence: BTreeMap<SemanticReferenceRequestId, BTreeSet<MetadataReferenceProjectionEvidence>>,
+    rejected_command_parameters: BTreeSet<RejectedCommandParameterEvidence>,
 }
 
 impl MetadataReferenceCollection {
@@ -836,7 +857,13 @@ impl MetadataReferenceCollection {
                 .or_default()
                 .extend(evidence);
         }
+        self.rejected_command_parameters
+            .extend(other.rejected_command_parameters);
         Ok(())
+    }
+
+    fn insert_rejected_command_parameter(&mut self, evidence: RejectedCommandParameterEvidence) {
+        self.rejected_command_parameters.insert(evidence);
     }
 
     const fn requests(&self) -> &SemanticReferenceRequestLedger {
@@ -848,6 +875,10 @@ impl MetadataReferenceCollection {
         request_id: &SemanticReferenceRequestId,
     ) -> Option<&BTreeSet<MetadataReferenceProjectionEvidence>> {
         self.evidence.get(request_id)
+    }
+
+    fn rejected_command_parameters(&self) -> &BTreeSet<RejectedCommandParameterEvidence> {
+        &self.rejected_command_parameters
     }
 }
 
@@ -994,6 +1025,8 @@ fn collect_metadata_object(
             descriptor.id(),
         )?),
     )?;
+
+    collect_top_level_command_parameter_types(graph, &descriptor, &mut collected.references)?;
 
     let children = structure_reader
         .read_children(&descriptor)
@@ -1346,11 +1379,101 @@ fn collect_metadata_child(
                 role: reference.role(),
                 target_kind: reference.target_kind(),
                 target_name: reference.target_name().clone(),
+                raw_token: None,
+                occurrence_count: 1,
             })?;
         }
     }
 
+    collect_command_parameter_types(
+        graph,
+        descriptor,
+        child.command_parameter_types(),
+        references,
+    )?;
+
     Ok(())
+}
+
+fn collect_command_parameter_types(
+    graph: &SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+    observations: &[EdtCommandParameterTypeObservation],
+    references: &mut MetadataReferenceCollection,
+) -> Result<(), EdtGraphError> {
+    for observation in observations {
+        let actual_kind = graph
+            .node(observation.source_id())
+            .map(oneagent_graph::GraphNode::kind);
+        let valid_source = matches!(
+            (observation.source_kind(), actual_kind),
+            (
+                EdtCommandParameterSourceKind::CommonCommand,
+                Some(NodeKind::Metadata(MetadataKind::Command))
+            ) | (
+                EdtCommandParameterSourceKind::SubordinateCommand,
+                Some(NodeKind::Command)
+            )
+        );
+        if !valid_source {
+            return Err(EdtGraphError::InvalidCommandParameterSource {
+                source_id: observation.source_id().clone(),
+                source_kind: observation.source_kind(),
+                actual_kind,
+            });
+        }
+
+        match observation.outcome() {
+            EdtCommandParameterTypeOutcomeKind::Accepted => {
+                references.insert(MetadataReferenceProjectionEvidence {
+                    descriptor_path: observation.descriptor_path().to_path_buf(),
+                    metadata_object_id: descriptor.id().clone(),
+                    source_id: observation.source_id().clone(),
+                    role: observation.role(),
+                    target_kind: observation
+                        .target_kind()
+                        .expect("accepted Command parameter must have a target kind"),
+                    target_name: observation
+                        .target_name()
+                        .expect("accepted Command parameter must have a target name")
+                        .clone(),
+                    raw_token: observation.raw_token().map(str::to_owned),
+                    occurrence_count: observation.occurrence_count(),
+                })?;
+            }
+            EdtCommandParameterTypeOutcomeKind::Unsupported
+            | EdtCommandParameterTypeOutcomeKind::Malformed => {
+                references.insert_rejected_command_parameter(RejectedCommandParameterEvidence {
+                    descriptor_path: observation.descriptor_path().to_path_buf(),
+                    metadata_object_id: descriptor.id().clone(),
+                    source_id: observation.source_id().clone(),
+                    raw_token: observation.raw_token().map(str::to_owned),
+                    outcome: observation.outcome(),
+                    reason: observation
+                        .reason()
+                        .expect("rejected Command parameter must have a typed reason"),
+                    occurrence_count: observation.occurrence_count(),
+                });
+            }
+            EdtCommandParameterTypeOutcomeKind::Ignored
+            | EdtCommandParameterTypeOutcomeKind::Missing => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn collect_top_level_command_parameter_types(
+    graph: &SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+    references: &mut MetadataReferenceCollection,
+) -> Result<(), EdtGraphError> {
+    collect_command_parameter_types(
+        graph,
+        descriptor,
+        descriptor.command_parameter_types(),
+        references,
+    )
 }
 
 fn collect_metadata_child_ownership(
@@ -1398,6 +1521,59 @@ const fn semantic_child_node_kind(
     }
 }
 
+fn emit_rejected_command_parameters(
+    references: &MetadataReferenceCollection,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) -> Result<(), EdtGraphError> {
+    for evidence in references.rejected_command_parameters() {
+        let (reference_outcome, code, kind, message) = match evidence.outcome {
+            EdtCommandParameterTypeOutcomeKind::Malformed => (
+                SemanticReferenceOutcome::MalformedFormat,
+                SemanticDiagnosticCode::ReferenceMalformedFormat,
+                SemanticDiagnosticKind::MalformedReferenceFormat,
+                "EDT Command parameter type is malformed",
+            ),
+            EdtCommandParameterTypeOutcomeKind::Unsupported => (
+                SemanticReferenceOutcome::UnsupportedPrefix,
+                SemanticDiagnosticCode::ReferenceUnsupportedPrefix,
+                SemanticDiagnosticKind::UnsupportedReferencePrefix,
+                "EDT Command parameter type is unsupported",
+            ),
+            EdtCommandParameterTypeOutcomeKind::Accepted
+            | EdtCommandParameterTypeOutcomeKind::Ignored
+            | EdtCommandParameterTypeOutcomeKind::Missing => {
+                unreachable!("only rejected Command parameters enter rejection projection")
+            }
+        };
+        reference_statistics.record(reference_outcome, true);
+        let raw_reference = evidence.raw_token.clone().unwrap_or_else(|| {
+            format!(
+                "commandParameterType:{}",
+                command_parameter_reason_str(evidence.reason)
+            )
+        });
+        diagnostics.insert(
+            SemanticDiagnostic::new(
+                code,
+                SemanticDiagnosticSeverity::Error,
+                kind,
+                format!(
+                    "{message}: {}",
+                    command_parameter_reason_str(evidence.reason)
+                ),
+                SemanticReference::Raw(raw_reference),
+            )
+            .with_source_node(evidence.source_id.clone())
+            .with_provenance(vec![command_parameter_rejection_provenance(
+                rejected_command_parameter_source_id(evidence)?,
+            )]),
+        );
+    }
+
+    Ok(())
+}
+
 fn resolve_metadata_references(
     graph: &mut SemanticGraph,
     references: &MetadataReferenceCollection,
@@ -1420,11 +1596,14 @@ fn resolve_metadata_references(
                     request_id: request.id().clone(),
                 });
             };
-            let resolver_provenance =
-                metadata_reference_resolver_provenance(evidence, ResolutionState::Resolved)?;
             let expected_kind = request.expected_kinds()[0];
             match index.resolve_name_of_kind(target_name, expected_kind) {
                 Ok(target) => {
+                    let resolver_provenance = metadata_reference_resolver_provenance(
+                        evidence,
+                        ResolutionState::Resolved,
+                        Some(target.id()),
+                    )?;
                     let terminal = request
                         .clone()
                         .into_resolved(target.id().clone(), target.kind(), resolver_provenance)
@@ -1455,8 +1634,11 @@ fn resolve_metadata_references(
     };
 
     for (request, evidence, target_id) in resolved_references.1 {
-        let reference_provenance =
-            metadata_reference_resolver_provenance(evidence, ResolutionState::Resolved)?;
+        let reference_provenance = metadata_reference_resolver_provenance(
+            evidence,
+            ResolutionState::Resolved,
+            Some(&target_id),
+        )?;
         graph
             .insert_edge(GraphEdge::new_with_provenance(
                 request.source_node().clone(),
@@ -1508,7 +1690,7 @@ fn terminal_metadata_reference_request(
             vec![owner.clone(), child.clone()],
         ),
     };
-    let provenance = metadata_reference_resolver_provenance(evidence, state)?;
+    let provenance = metadata_reference_resolver_provenance(evidence, state, None)?;
 
     let terminal = match error {
         ResolutionError::MissingTarget { .. }
@@ -1535,11 +1717,12 @@ fn terminal_metadata_reference_request(
 fn metadata_reference_resolver_provenance(
     evidence: &BTreeSet<MetadataReferenceProjectionEvidence>,
     resolution: ResolutionState,
+    resolved_target: Option<&EntityId>,
 ) -> Result<Vec<Provenance>, EdtGraphError> {
     evidence
         .iter()
         .map(|evidence| {
-            metadata_reference_source_id(evidence).map(|source| {
+            metadata_reference_source_id(evidence, resolved_target).map(|source| {
                 graph_provenance(source, FactOrigin::Resolved, Confidence::High, resolution)
             })
         })
@@ -2281,10 +2464,10 @@ fn contains_edge_source_id(
 
 fn metadata_reference_source_id(
     reference: &MetadataReferenceProjectionEvidence,
+    resolved_target: Option<&EntityId>,
 ) -> Result<EntityId, EdtGraphError> {
-    source_id_from_path_fragment(
-        &reference.descriptor_path,
-        format!(
+    let fragment = match reference.role {
+        EdtMetadataReferenceRole::Type => format!(
             "metadata_object={};edge=references;source={};role={};target_kind={};target_name={}",
             reference.metadata_object_id.as_str(),
             reference.source_id.as_str(),
@@ -2292,6 +2475,21 @@ fn metadata_reference_source_id(
             reference.target_kind.as_str(),
             reference.target_name.as_str()
         ),
+        EdtMetadataReferenceRole::CommandParameterType => format!(
+            "metadata_object={};edge=references;source={};role={};raw_token={};occurrences={};target_kind={};target_name={};target={}",
+            reference.metadata_object_id.as_str(),
+            reference.source_id.as_str(),
+            reference.role.as_str(),
+            reference.raw_token.as_deref().unwrap_or_default(),
+            reference.occurrence_count,
+            reference.target_kind.as_str(),
+            reference.target_name.as_str(),
+            resolved_target.map(EntityId::as_str).unwrap_or_default()
+        ),
+    };
+    source_id_from_path_fragment(
+        &reference.descriptor_path,
+        fragment,
         EdtGraphError::InvalidIdentifier,
     )
 }
@@ -2300,10 +2498,22 @@ fn metadata_dependency_source_id(
     reference: &MetadataReferenceProjectionEvidence,
     target_id: &EntityId,
 ) -> Result<EntityId, EdtGraphError> {
+    let origin = match reference.role {
+        EdtMetadataReferenceRole::Type => "metadata_member_type_reference",
+        EdtMetadataReferenceRole::CommandParameterType => "command_parameter_type_reference",
+    };
+    let command_parameter = match reference.role {
+        EdtMetadataReferenceRole::Type => String::new(),
+        EdtMetadataReferenceRole::CommandParameterType => format!(
+            ";raw_token={};occurrences={}",
+            reference.raw_token.as_deref().unwrap_or_default(),
+            reference.occurrence_count
+        ),
+    };
     source_id_from_path_fragment(
         &reference.descriptor_path,
         format!(
-            "metadata_object={};edge=depends_on;origin=metadata_member_type_reference;source={};role={};target_kind={};target_name={};target={}",
+            "metadata_object={};edge=depends_on;origin={origin};source={};role={}{command_parameter};target_kind={};target_name={};target={}",
             reference.metadata_object_id.as_str(),
             reference.source_id.as_str(),
             reference.role.as_str(),
@@ -2318,10 +2528,18 @@ fn metadata_dependency_source_id(
 fn metadata_reference_collection_source_id(
     reference: &MetadataReferenceProjectionEvidence,
 ) -> Result<EntityId, EdtGraphError> {
+    let command_parameter = match reference.role {
+        EdtMetadataReferenceRole::Type => String::new(),
+        EdtMetadataReferenceRole::CommandParameterType => format!(
+            ";raw_token={};occurrences={}",
+            reference.raw_token.as_deref().unwrap_or_default(),
+            reference.occurrence_count
+        ),
+    };
     source_id_from_path_fragment(
         &reference.descriptor_path,
         format!(
-            "metadata_object={};fact=reference_request_collection;source={};role={};target_kind={};target_name={}",
+            "metadata_object={};fact=reference_request_collection;source={};role={}{command_parameter};target_kind={};target_name={}",
             reference.metadata_object_id.as_str(),
             reference.source_id.as_str(),
             reference.role.as_str(),
@@ -2340,6 +2558,63 @@ fn metadata_reference_collection_provenance(source: EntityId) -> Provenance {
         Confidence::Exact,
         ResolutionState::Unresolved,
     )
+}
+
+fn rejected_command_parameter_source_id(
+    evidence: &RejectedCommandParameterEvidence,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        &evidence.descriptor_path,
+        format!(
+            "metadata_object={};fact=command_parameter_rejection;source={};outcome={};reason={};raw_token={};occurrences={}",
+            evidence.metadata_object_id.as_str(),
+            evidence.source_id.as_str(),
+            command_parameter_outcome_str(evidence.outcome),
+            command_parameter_reason_str(evidence.reason),
+            evidence.raw_token.as_deref().unwrap_or_default(),
+            evidence.occurrence_count
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
+fn command_parameter_rejection_provenance(source: EntityId) -> Provenance {
+    Provenance::new(
+        Some(source),
+        ProducerId::new(EDT_COMMAND_PARAMETER_REJECTION_PRODUCER),
+        FactOrigin::Parsed,
+        Confidence::Exact,
+        ResolutionState::Unresolved,
+    )
+}
+
+const fn command_parameter_outcome_str(
+    outcome: EdtCommandParameterTypeOutcomeKind,
+) -> &'static str {
+    match outcome {
+        EdtCommandParameterTypeOutcomeKind::Accepted => "accepted",
+        EdtCommandParameterTypeOutcomeKind::Ignored => "ignored",
+        EdtCommandParameterTypeOutcomeKind::Unsupported => "unsupported",
+        EdtCommandParameterTypeOutcomeKind::Malformed => "malformed",
+        EdtCommandParameterTypeOutcomeKind::Missing => "missing",
+    }
+}
+
+const fn command_parameter_reason_str(reason: EdtCommandParameterTypeReason) -> &'static str {
+    match reason {
+        EdtCommandParameterTypeReason::MissingContainer => "missing_container",
+        EdtCommandParameterTypeReason::EmptyContainer => "empty_container",
+        EdtCommandParameterTypeReason::DuplicateContainer => "duplicate_container",
+        EdtCommandParameterTypeReason::PrimitiveType => "primitive_type",
+        EdtCommandParameterTypeReason::DeferredDefinedType => "deferred_defined_type",
+        EdtCommandParameterTypeReason::UnsupportedPlatformType => "unsupported_platform_type",
+        EdtCommandParameterTypeReason::UnsupportedPrefix => "unsupported_prefix",
+        EdtCommandParameterTypeReason::EmptyValue => "empty_value",
+        EdtCommandParameterTypeReason::MissingComponent => "missing_component",
+        EdtCommandParameterTypeReason::AdditionalComponents => "additional_components",
+        EdtCommandParameterTypeReason::EmptyComponent => "empty_component",
+        EdtCommandParameterTypeReason::InvalidTargetName => "invalid_target_name",
+    }
 }
 
 fn metadata_extension_source_id(
@@ -2444,6 +2719,16 @@ pub enum EdtGraphError {
         actual_kind: Option<NodeKind>,
     },
 
+    /// A Command parameter observation has no compatible canonical graph source.
+    InvalidCommandParameterSource {
+        /// Canonical Command identifier from the parser observation.
+        source_id: EntityId,
+        /// Accepted parser source family.
+        source_kind: EdtCommandParameterSourceKind,
+        /// Actual graph node kind, or `None` when the source is missing.
+        actual_kind: Option<NodeKind>,
+    },
+
     /// A role-right artifact could not be read.
     RoleRights(EdtRoleRightsError),
 
@@ -2528,6 +2813,14 @@ impl Display for EdtGraphError {
                 formatter,
                 "Form or Command module owner `{owner_id}` is incompatible with {expected_kind:?}; actual kind: {actual_kind:?}"
             ),
+            Self::InvalidCommandParameterSource {
+                source_id,
+                source_kind,
+                actual_kind,
+            } => write!(
+                formatter,
+                "Command parameter source `{source_id}` is incompatible with {source_kind:?}; actual kind: {actual_kind:?}"
+            ),
             Self::RoleRights(error) => {
                 write!(formatter, "failed to read EDT role rights: {error}")
             }
@@ -2569,7 +2862,8 @@ impl std::error::Error for EdtGraphError {
             | Self::InvalidMetadataReferenceRequest { .. }
             | Self::SubsystemDescriptorOutsideProject { .. }
             | Self::InvalidSubsystemSource { .. }
-            | Self::InvalidFormCommandModuleOwner { .. } => None,
+            | Self::InvalidFormCommandModuleOwner { .. }
+            | Self::InvalidCommandParameterSource { .. } => None,
             Self::Bsl(error) => Some(error),
         }
     }
@@ -5638,6 +5932,8 @@ mod graph_tests {
                 target_kind: MetadataKind::Catalog,
                 target_name: EntityName::new("AbsentInPartialWorkspace")
                     .expect("target name must be valid"),
+                raw_token: None,
+                occurrence_count: 1,
             })
             .expect("accepted request must be collected");
         let collected_id = collected.requests().requests()[0].id().clone();
@@ -5666,6 +5962,91 @@ mod graph_tests {
         let statistics = SemanticReferenceStatistics::from_reference_requests(&terminal);
         assert_eq!(statistics.total(), 1);
         assert_eq!(statistics.unresolved(), 1);
+    }
+
+    #[test]
+    fn command_request_identity_survives_partial_to_resolved_transition() {
+        let source_id = EntityId::new("command.partial").expect("command identifier must be valid");
+        let target_id =
+            EntityId::new("catalog.partial-target").expect("target identifier must be valid");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            source_id.clone(),
+            EntityName::new("PartialCommand").expect("command name must be valid"),
+            NodeKind::Command,
+        ));
+        let mut collected = MetadataReferenceCollection::default();
+        collected
+            .insert(MetadataReferenceProjectionEvidence {
+                descriptor_path: PathBuf::from("src/Documents/Partial/Partial.mdo"),
+                metadata_object_id: EntityId::new("document.partial")
+                    .expect("metadata object id must be valid"),
+                source_id: source_id.clone(),
+                role: EdtMetadataReferenceRole::CommandParameterType,
+                target_kind: MetadataKind::Catalog,
+                target_name: EntityName::new("PartialTarget").expect("target name must be valid"),
+                raw_token: Some("CatalogRef.PartialTarget".to_owned()),
+                occurrence_count: 2,
+            })
+            .expect("accepted command request must be collected");
+        let collected_id = collected.requests().requests()[0].id().clone();
+        let mut partial_diagnostics = BTreeSet::new();
+        let partial = resolve_metadata_references(
+            &mut graph,
+            &collected,
+            &mut partial_diagnostics,
+            super::query_source_resolution::WorkspaceResolutionScope::Partial,
+        )
+        .expect("partial command resolution must succeed");
+
+        graph.insert_node(GraphNode::new(
+            target_id.clone(),
+            EntityName::new("PartialTarget").expect("target name must be valid"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+        ));
+        let mut complete_diagnostics = BTreeSet::new();
+        let complete = resolve_metadata_references(
+            &mut graph,
+            &collected,
+            &mut complete_diagnostics,
+            super::query_source_resolution::WorkspaceResolutionScope::Complete,
+        )
+        .expect("complete command resolution must succeed");
+        let partial_request = partial
+            .query()
+            .request(&collected_id)
+            .expect("partial request must remain observable");
+        let complete_request = complete
+            .query()
+            .request(&collected_id)
+            .expect("resolved request must retain identity");
+
+        assert_eq!(partial_request.id(), complete_request.id());
+        assert_eq!(
+            partial_request.outcome(),
+            SemanticReferenceRequestOutcome::PartialWorkspace
+        );
+        assert_eq!(partial_request.state(), ResolutionState::Partial);
+        assert_eq!(
+            complete_request.outcome(),
+            SemanticReferenceRequestOutcome::Resolved
+        );
+        assert_eq!(complete_request.state(), ResolutionState::Resolved);
+        assert_eq!(complete_request.candidates(), &[target_id]);
+        assert!(partial_diagnostics.is_empty());
+        assert!(complete_diagnostics.is_empty());
+        assert_eq!(
+            graph
+                .outgoing_by_kind(&source_id, EdgeKind::References)
+                .len(),
+            1
+        );
+        assert_eq!(
+            graph
+                .outgoing_by_kind(&source_id, EdgeKind::DependsOn)
+                .len(),
+            1
+        );
     }
 
     #[test]

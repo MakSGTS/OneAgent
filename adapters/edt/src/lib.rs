@@ -650,6 +650,8 @@ impl FileSystemEdtSemanticGraphBuilder {
             role_rights.extend(collected.role_rights);
         }
 
+        configuration_modules.sort_by(|left, right| left.id().cmp(right.id()));
+
         resolve_metadata_extensions(&mut graph, &metadata_extensions)?;
 
         emit_subsystem_includes(
@@ -999,6 +1001,12 @@ fn collect_metadata_object(
         collect_metadata_child_ownership(graph, &descriptor, child)?;
     }
 
+    let form_command_observations = module_reader
+        .read_form_command_modules(&descriptor, &children, object_directory)
+        .map_err(EdtGraphError::Module)?;
+    let form_command_modules =
+        emit_form_command_modules(graph, &descriptor, &form_command_observations)?;
+
     let modules = module_reader
         .read_modules(descriptor.id(), descriptor.name(), object_directory)
         .map_err(EdtGraphError::Module)?;
@@ -1035,8 +1043,75 @@ fn collect_metadata_object(
             modules.clone(),
         ));
     collected.modules.extend(modules);
+    collected.modules.extend(form_command_modules);
 
     Ok(collected)
+}
+
+fn emit_form_command_modules(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+    observations: &[EdtModuleLayoutObservation],
+) -> Result<Vec<EdtModuleDescriptor>, EdtGraphError> {
+    let mut modules = Vec::new();
+
+    for observation in observations {
+        if observation.outcome() != EdtModuleLayoutOutcomeKind::Accepted {
+            continue;
+        }
+        let owner_id = observation
+            .owner_id()
+            .expect("accepted module observation must have an owner");
+        let owner_kind = observation
+            .owner_kind()
+            .expect("accepted module observation must have an owner kind");
+        let module = observation
+            .module()
+            .expect("accepted module observation must have a descriptor");
+        let actual_owner_kind = graph.node(owner_id).map(oneagent_graph::GraphNode::kind);
+        let compatible = matches!(
+            (owner_kind, actual_owner_kind),
+            (EdtModuleOwnerKind::Form, Some(NodeKind::Form))
+                | (EdtModuleOwnerKind::Command, Some(NodeKind::Command))
+                | (
+                    EdtModuleOwnerKind::CommonCommand,
+                    Some(NodeKind::Metadata(MetadataKind::Command))
+                )
+        );
+        if !compatible {
+            return Err(EdtGraphError::InvalidFormCommandModuleOwner {
+                owner_id: owner_id.clone(),
+                expected_kind: owner_kind,
+                actual_kind: actual_owner_kind,
+            });
+        }
+
+        let module_source = form_command_module_source_id(descriptor, owner_id, module)?;
+        insert_node(
+            graph,
+            module.id().clone(),
+            module.name().clone(),
+            NodeKind::Module,
+            parsed_provenance(module_source),
+        );
+        insert_edge(
+            graph,
+            owner_id.clone(),
+            module.id().clone(),
+            EdgeKind::Contains,
+            parsed_provenance(contains_edge_source_id(
+                module.path(),
+                descriptor.id(),
+                owner_id,
+                module.id(),
+            )?),
+        )?;
+        modules.push(module.clone());
+    }
+
+    modules.sort_by(|left, right| left.id().cmp(right.id()));
+    modules.dedup_by(|left, right| left.id() == right.id());
+    Ok(modules)
 }
 
 fn metadata_payload(descriptor: &EdtMetadataObjectDescriptor) -> MetadataPayload {
@@ -2163,6 +2238,23 @@ fn module_source_id(
     )
 }
 
+fn form_command_module_source_id(
+    descriptor: &EdtMetadataObjectDescriptor,
+    owner_id: &EntityId,
+    module: &EdtModuleDescriptor,
+) -> Result<EntityId, EdtGraphError> {
+    source_id_from_path_fragment(
+        module.path(),
+        format!(
+            "metadata_object={};owner={};module={}",
+            descriptor.id().as_str(),
+            owner_id.as_str(),
+            module.id().as_str()
+        ),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
 fn contains_edge_source_id(
     path: &Path,
     metadata_object_id: &EntityId,
@@ -2336,6 +2428,16 @@ pub enum EdtGraphError {
         actual_kind: Option<NodeKind>,
     },
 
+    /// An accepted Form or Command module observation has no compatible graph owner.
+    InvalidFormCommandModuleOwner {
+        /// Canonical owner identifier from the parser observation.
+        owner_id: EntityId,
+        /// Accepted parser owner family.
+        expected_kind: EdtModuleOwnerKind,
+        /// Actual graph node kind, or `None` when the owner is missing.
+        actual_kind: Option<NodeKind>,
+    },
+
     /// A role-right artifact could not be read.
     RoleRights(EdtRoleRightsError),
 
@@ -2412,6 +2514,14 @@ impl Display for EdtGraphError {
                 formatter,
                 "flat Subsystem source `{subsystem_node_id}` for metadata object `{subsystem_id}` is invalid; actual kind: {actual_kind:?}"
             ),
+            Self::InvalidFormCommandModuleOwner {
+                owner_id,
+                expected_kind,
+                actual_kind,
+            } => write!(
+                formatter,
+                "Form or Command module owner `{owner_id}` is incompatible with {expected_kind:?}; actual kind: {actual_kind:?}"
+            ),
             Self::RoleRights(error) => {
                 write!(formatter, "failed to read EDT role rights: {error}")
             }
@@ -2452,7 +2562,8 @@ impl std::error::Error for EdtGraphError {
             | Self::InvalidName
             | Self::InvalidMetadataReferenceRequest { .. }
             | Self::SubsystemDescriptorOutsideProject { .. }
-            | Self::InvalidSubsystemSource { .. } => None,
+            | Self::InvalidSubsystemSource { .. }
+            | Self::InvalidFormCommandModuleOwner { .. } => None,
             Self::Bsl(error) => Some(error),
         }
     }

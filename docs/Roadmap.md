@@ -13,7 +13,7 @@ boundaries; they do not define a second task sequence.
 | Version | Outcome | Sprint range | Status |
 |---|---|---:|---|
 | v0.1 — Foundation | Workspace, Runtime foundation, discovery, EDT reader, and base metadata model | Sprint 1 | completed |
-| v0.2 — Semantic Core | Typed semantic graph, semantic index, and deterministic incremental indexing | Sprints 2–5 | in progress |
+| v0.2 — Semantic Core | Typed semantic graph, semantic index, and deterministic incremental indexing | Sprints 2–5 | completed |
 | v0.3 — 1C Knowledge Model | Broader metadata semantics and Designer XML ingestion | Sprints 6–14 | planned |
 | v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | planned |
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | planned |
@@ -24,6 +24,9 @@ boundaries; they do not define a second task sequence.
 Calendar forecasts are intentionally kept outside this document until capacity,
 scope, and release criteria are baselined. Adding a forecast must not duplicate
 or override the dependency order recorded in the sprint tables.
+
+The v0.2 boundary is closed with a `pass` decision in the
+[v0.2 release review](reviews/v0.2-release-review.md).
 
 ## Roadmap reconciliation
 
@@ -131,17 +134,11 @@ performs a focused readiness check at kickoff.
 | Sprint 2 — Semantic Core Foundation | v0.2 | Establish the typed semantic graph, EDT metadata and module nodes, BSL declaration extraction, and local and cross-module call resolution. | [Sprint review](reviews/sprint-2-semantic-core-foundation.md) | completed |
 | Sprint 3 — Semantic Coverage | v0.2 | Audit and complete graph-domain and EDT semantic coverage, close all Critical, High, and Medium gaps, and complete the integration review. | Semantic Coverage Audit and integration-review records below | completed |
 | Sprint 4 — Semantic Index | v0.2 | Build the deterministic complete-snapshot index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) and migrate Query and Resolution compatibility facades. | [Sprint review](reviews/sprint-4-semantic-index.md) | completed |
+| Sprint 5 — Incremental Indexing | v0.2 | Update the shared semantic index deterministically from canonical graph snapshot changes while retaining unaffected derived lookup state. | [Sprint review](reviews/sprint-5-incremental-indexing.md), [v0.2 release review](reviews/v0.2-release-review.md) | completed |
 
-### Current planning focus
-
-| Sprint | Version | Goal | Status |
-|---|---|---|---|
-| Sprint 5 — Incremental Indexing | v0.2 | Update the shared semantic index deterministically from canonical graph snapshot changes while retaining unaffected derived lookup state. | active |
-
-Sprint 5 is active under
-[ADR-0027](adr/0027-incremental-semantic-index-maintenance.md). Sprint 4 remains
-completed with a `pass` decision recorded in the
-[Sprint 4 Semantic Index review](reviews/sprint-4-semantic-index.md).
+Sprint 5 is completed under
+[ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
+decision. The separate v0.2 release review also records `pass`.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -706,16 +703,14 @@ reviewed baseline, then run the common full implementation gate.
 
 ##### Sprint 5 state gates
 
-Sprint 5 is `active` after Task 1 accepts ADR-0027 and this execution plan. It
-may become `completed` only when Tasks 2 through 7 are committed in dependency
-order, Task 8 records `pass`, all focused and full validation commands complete
+Sprint 5 is `completed`. Tasks 1 through 7 are committed in dependency order,
+Task 8 records `pass`, all focused and full validation commands completed
 successfully, every ADR-0027 lookup dimension has independent rebuild
 equivalence evidence, public compatibility is preserved, and no later-sprint
 concern was pulled forward.
 
-A `blocked` review leaves Sprint 5 active until dedicated fixes and the full
-review cycle succeed. Sprint 5 completion does not itself declare v0.2 ready;
-the v0.2 release integration review follows Sprint 5.
+The separate v0.2 release integration review records `pass`, so the explicit
+version status is `completed`.
 
 Persistence, cache serialization, cross-process identity, Runtime services,
 async publication, filesystem/Git/workspace watchers, HTTP, CLI, MCP, LSP, IDE

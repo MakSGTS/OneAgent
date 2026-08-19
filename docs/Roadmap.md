@@ -733,6 +733,237 @@ performance claims remain deferred.
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
 
+#### Sprint 6 Attributes and Tabular Sections execution plan
+
+Sprint 6 expands only the attribute and tabular-section capability justified by
+repository-owned EDT evidence. It does not reopen the completed Sprint 3 first
+slice or assume that an EDT XML shape has source-independent meaning before it
+has been investigated and accepted.
+
+The implemented baseline at Sprint 6 planning time is:
+
+- `Attribute` and `TabularSection` are independently addressable graph nodes;
+- top-level attributes and tabular sections are owned by their metadata object,
+  while a nested attribute is owned only by its nearest enclosing tabular
+  section;
+- source UUIDs remain canonical identities, and the UUID-less attribute
+  fallback includes its immediate owner so equal names under different tabular
+  sections do not collide;
+- Attribute type observations use the public metadata-type reference-request
+  lifecycle and can project the accepted nine-kind `References` and
+  `DependsOn` first slice, typed diagnostics, statistics, and deterministic
+  provenance;
+- graph Validation, Query ownership navigation, Diff, Impact ownership policy,
+  Coverage, and a real EDT production fixture already cover that first slice;
+- repeated builds and source-order-independent graph construction are already
+  proven for the existing fixture.
+
+Those facts remain compatibility constraints, not new Sprint 6 deliverables.
+In particular, Sprint 6 must not add a second metadata-object owner for a nested
+attribute, change UUID identity, infer references from unaccepted content, or
+copy member nodes and relations into top-level typed metadata payload.
+
+The current repository fixture proves one Document with a top-level attribute,
+one tabular section, and one nested reference attribute. It does not by itself
+authorize additional member properties, deeper nesting, collection ordering
+semantics, kind-specific standard attributes, tabular-section references, or
+new target-kind mappings. The first task therefore owns the real-source and
+gap investigation. Any source form not established by repository-owned
+artifacts remains deferred until that investigation supplies evidence.
+
+The existing [investigation profile](codex/profiles/investigation.md),
+[architecture profile](codex/profiles/architecture.md),
+[graph implementation profile](codex/profiles/graph-implementation.md),
+[parser implementation profile](codex/profiles/parser-implementation.md), and
+[review profile](codex/profiles/review.md), together with their existing task
+templates, cover the ordered work below. The Sprint 6 readiness audit found no
+concrete reusable prompt-contract gap, so no Codex Framework change is planned.
+
+| Order | Task | Owned outcome | Prerequisite | Suggested commit message |
+|---:|---|---|---|---|
+| 1 | Investigate the live Attribute and TabularSection source boundary. | Repository-owned artifact corpus, implemented-versus-missing matrix, consumer inventory, and candidate source contracts. | Sprint 5 and the v0.2 release review are completed. | `Investigate Sprint 6 member source contracts` |
+| 2 | Accept the Sprint 6 semantic and compatibility contract. | One architecture decision and executable scope for the smallest evidence-backed expansion. | Task 1 evidence is complete. | `Define Sprint 6 member semantics` |
+| 3 | Implement source-independent member-model prerequisites. | Accepted metadata/graph types, schema invariants, and Query, Diff, and Impact compatibility. | Task 2 is accepted. | `Implement Sprint 6 member graph model` |
+| 4 | Implement the accepted EDT member parser contract. | Source parsing, identity inputs, nearest-owner observations, typed invalid outcomes, and parser determinism. | Tasks 2 and 3 are complete. | `Parse Sprint 6 EDT member semantics` |
+| 5 | Emit canonical member nodes and ownership facts. | Graph contribution, canonical identity use, immediate containment, provenance, and build validation. | Task 4 is complete. | `Emit Sprint 6 member ownership` |
+| 6 | Integrate accepted member references. | Reference requests, exact resolution, projections, diagnostics, statistics, and reference determinism for only the accepted new source forms. | Task 5 is complete. | `Integrate Sprint 6 member references` |
+| 7 | Complete production evidence, Coverage, and current-state documentation. | End-to-end fixture matrix, registry transition, aggregate verification, and synchronized current-state text. | Tasks 3 through 6 are complete. | `Complete Sprint 6 member coverage` |
+| 8 | Review the integrated Sprint 6 baseline. | Findings, command evidence, Sprint decision, and Sprint 7 hand-off. | Task 7 and all implementation validation are complete. | `Complete Sprint 6 attributes and tabular sections review` |
+
+##### Task 1 — Investigate the live source boundary
+
+Use the [investigation profile](codex/profiles/investigation.md) and
+[investigation task template](codex/templates/investigation-task.md). Inspect
+the live metadata-domain and graph types, EDT metadata-structure reader and
+builder, real fixtures, Coverage entries, tests, and all Query, Validation,
+Diff, Impact, and reference-request consumers. Record a repository-owned sample
+matrix for top-level attributes, tabular sections, and nested attributes across
+every metadata-owner family that the corpus actually proves.
+
+The investigation owns classification of duplicate names, UUID presence and
+absence, immediate and deeper XML nesting, direct and composite types, source
+ordering, malformed content, and any candidate member properties. It must say
+which observations are already supported, which are accepted source facts but
+not modeled, and which remain unknown. It must not promote a sample-specific
+XML element into architecture, edit production code, or change Coverage.
+
+Acceptance evidence is an investigation record with exact artifact paths,
+parser entry points, graph consumers, positive and negative examples, and a
+smallest candidate Sprint 6 delta. Focused validation is Markdown diff/link
+validation. No broad Rust validation is required for a documentation-only
+investigation.
+
+##### Task 2 — Accept semantics and compatibility before implementation
+
+Use the [architecture profile](codex/profiles/architecture.md) and
+[architecture task template](codex/templates/architecture-task.md). Convert
+only Task 1's proven source facts into an accepted source-independent contract.
+The decision owns the canonical member vocabulary and content boundary;
+identity inputs and fallback encoding; immediate-owner and invalid-owner rules;
+duplicate-name behavior; reference categories and target allowlists;
+provenance responsibility; deterministic ordering and equality; malformed,
+missing, ambiguous, and partial outcomes; and public API compatibility.
+
+The contract must preserve source UUIDs, owner-scoped UUID-less identity,
+single nearest-owner containment, exact name-and-kind resolution, immutable
+ordered request ledgers, and modified-not-remove/add Diff behavior for semantic
+content changes. It must explicitly decide whether the existing graph model is
+sufficient. A new graph kind, metadata payload field, containment rule,
+reference family, or public API is permitted only when the investigation proves
+that the existing contract cannot represent an accepted semantic fact.
+
+Acceptance requires an accepted ADR or an evidence-backed amendment to an
+existing applicable decision, a consumer migration inventory, rejected
+alternatives, compatibility impact, Coverage criteria, and ordered
+implementation prerequisites. Focused validation is documentation diff and
+link validation; the task changes no production behavior.
+
+##### Task 3 — Implement source-independent member-model prerequisites
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+with the [graph model task template](codex/templates/graph-model-task.md). This
+task exclusively owns source-independent metadata and graph types required by
+Task 2, graph construction invariants, endpoint/ownership schema changes, and
+public Query, Diff, and Impact integration. It must keep adapters out of graph
+and metadata domains and retain compatibility constructors where Task 2
+requires them.
+
+Tests must cover equality and canonical ordering, duplicate identities,
+permitted and forbidden owners, payload-kind or other invalid-state rejection,
+exact Query navigation, stable node identity across semantic-content changes,
+Diff classification, Impact ownership behavior, and repeated deterministic
+validation. If Task 2 proves that no model change is required, this task is
+closed by a focused evidence update rather than a speculative abstraction.
+Focused validation targets affected metadata and graph packages; full
+validation is the repository Definition of Done.
+
+##### Task 4 — Implement the accepted EDT parser contract
+
+Use the [parser implementation profile](codex/profiles/parser-implementation.md)
+and [parser task template](codex/templates/parser-task.md). Extend only the
+source forms accepted by Task 2. The parser owns source UUID preservation,
+owner-scoped fallback identity creation, immediate-owner observations,
+source-order normalization, accepted member content, and typed outcomes for
+missing identifiers and names, duplicate or conflicting observations,
+malformed values, unsupported nesting, and unsupported source variants.
+
+Parser tests must use raw repository-owned EDT artifacts and cover present and
+missing UUIDs, same-name members under different owners, exact duplicate
+behavior, nearest-owner selection, accepted direct and composite types,
+malformed and unknown values, reordered equivalent input, and repeated reads.
+This task does not insert graph nodes or edges, resolve references, transition
+Coverage, or implement forms and commands. Focused validation targets the EDT
+reader and parser tests; full validation is the repository Definition of Done.
+
+##### Task 5 — Emit canonical nodes and immediate ownership
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md). Map
+Task 4 observations to the accepted source-independent model, reuse their
+canonical identities, emit member nodes, and emit exactly one provenance-backed
+`Contains` edge from the immediate accepted owner. Node collection must remain
+separate from ownership-edge insertion so XML completion order cannot change
+the graph.
+
+Production-builder evidence must cover top-level and nested members, equal
+names under different owners, UUID and UUID-less identities, missing or invalid
+owners, forbidden second owners, deterministic provenance, Query owner/child
+navigation, graph validation, build Diff, optional Impact ownership traversal,
+source-order independence, and repeated builds. This task does not broaden
+reference targets or create placeholder nodes. Focused validation targets EDT
+graph construction and graph validation; full validation is the repository
+Definition of Done.
+
+##### Task 6 — Integrate only accepted member references
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md). This
+task owns conversion of any newly accepted Task 2 member-reference observations
+to the public request lifecycle, collection and resolver provenance, exact
+name-and-kind resolution, deterministic aggregation, terminal request states,
+candidate sets, direct `References` projections, justified derived
+`DependsOn` projections, diagnostics, and statistics. Existing Attribute,
+Dimension, and Resource metadata-type behavior must remain unchanged.
+
+Tests must cover resolved, missing, ambiguous, incompatible-kind, partial,
+duplicate, invalid-owner, and repeated-build outcomes, plus ledger/report/diff
+consistency and the absence of unresolved or placeholder edges. No reference
+category, target-kind mapping, tabular-section reference, or dependency edge is
+added unless Task 2 explicitly accepts it. Focused validation targets graph
+reference-request and EDT resolution tests; full validation is the repository
+Definition of Done.
+
+##### Task 7 — Complete production evidence and Coverage
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md). Add
+the smallest representative real-format EDT fixture matrix that closes the
+accepted Sprint 6 criteria across Tasks 3 through 6. Prove graph and build
+validation, Query, Diff, Impact where applicable, reference ledgers and reports,
+diagnostics, deterministic provenance and ordering, source-order independence,
+and equal repeated builds through the production builder.
+
+Only after that evidence passes, update the graph-domain and EDT Coverage
+entries independently, recompute aggregate counts from the live registries, and
+synchronize `docs/architecture/semantic-model-2.md` and this Roadmap with the
+implemented boundary and remaining limitations. Planning and architecture
+acceptance alone do not add evidence or change status. Focused registry and
+production-fixture tests and the complete repository Definition of Done must
+pass in the same commit.
+
+##### Task 8 — Review the integrated Sprint 6 baseline
+
+Use the [review profile](codex/profiles/review.md) and
+[review task template](codex/templates/review-task.md). Audit every Task 1–7
+commit against the accepted decision and current repository state. Re-run the
+full Definition of Done and focused graph-domain, EDT parser, production
+builder, reference-request, Coverage, Query, Diff, Impact, validation, and
+determinism tests. Verify that existing Sprint 3 facts remain compatible and
+that no Forms, Commands, Sprint 7 concern, or later-sprint source contract was
+pulled forward.
+
+The review record owns findings, exact commands and outcomes, residual risks,
+deferred scope, and one decision: `pass`, `pass with non-blocking follow-ups`,
+or `blocked`. Sprint 6 may become `completed` only after a non-blocking review
+decision, all accepted capabilities and documentation are synchronized, and
+the full validation cycle succeeds. Sprint 7 becomes the next planning target
+only after that transition.
+
+##### Sprint 6 state gates
+
+Sprint 6 remains `planned` after this planning task. It may become active only
+when Task 1 evidence exists, Task 2 accepts the executable semantic boundary,
+the working tree is safe, and the task-template readiness audit still confirms
+that the current framework is sufficient.
+
+Sprint 6 is complete only when Tasks 1 through 7 are committed in dependency
+order, Task 8 records a non-blocking decision, every accepted identity,
+ownership, reference, provenance, invalid-state, ordering, and repeated-build
+criterion is proven, Coverage reflects only live evidence, and the full
+Definition of Done passes. Forms, Commands, queries, roles, subsystems, event
+subscriptions, Designer XML, Runtime, persistence, AI, MCP, IDE, and all
+unproven EDT member forms remain deferred.
+
 The v0.3 release integration review follows Sprint 14.
 
 #### v0.4 — Runtime API

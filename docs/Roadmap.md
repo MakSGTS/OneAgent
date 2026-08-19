@@ -135,10 +135,17 @@ performs a focused readiness check at kickoff.
 | Sprint 3 — Semantic Coverage | v0.2 | Audit and complete graph-domain and EDT semantic coverage, close all Critical, High, and Medium gaps, and complete the integration review. | Semantic Coverage Audit and integration-review records below | completed |
 | Sprint 4 — Semantic Index | v0.2 | Build the deterministic complete-snapshot index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) and migrate Query and Resolution compatibility facades. | [Sprint review](reviews/sprint-4-semantic-index.md) | completed |
 | Sprint 5 — Incremental Indexing | v0.2 | Update the shared semantic index deterministically from canonical graph snapshot changes while retaining unaffected derived lookup state. | [Sprint review](reviews/sprint-5-incremental-indexing.md), [v0.2 release review](reviews/v0.2-release-review.md) | completed |
+| Sprint 6 — Attributes and Tabular Sections | v0.3 | Preserve repository-proven optional Attribute and TabularSection synonym as typed member content without changing identity, immediate ownership, or the completed reference slice. | [Sprint review](reviews/sprint-6-attributes-tabular-sections.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
 decision. The separate v0.2 release review also records `pass`.
+
+Sprint 6 is completed under
+[ADR-0028](adr/0028-attribute-tabular-section-semantics.md) with a `pass`
+decision in the
+[Sprint 6 integration review](reviews/sprint-6-attributes-tabular-sections.md).
+Sprint 7 is the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -723,8 +730,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 6 — Attributes and Tabular Sections | Expand the knowledge model for attributes, tabular sections, ownership, identity, and references. | in progress — review pending |
-| Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | planned |
+| Sprint 7 — Forms and Commands | Model forms, commands, their ownership, references, and navigation semantics. | next |
 | Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | planned |
 | Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
@@ -805,9 +811,9 @@ Graph-domain and EDT Coverage for `SemanticNode(Attribute)` and
 remain unchanged. Number qualifiers, history/search flags, produced types,
 line-number settings and standard attributes, multiple locale values,
 alternative synonym encodings, deeper nesting, non-Document owner families,
-and duplicate-identity policy remain deferred. Sprint 6 remains in progress
-until the independent Task 8 review records its findings and completion
-decision.
+and duplicate-identity policy remain deferred. The independent Task 8
+[integration review](reviews/sprint-6-attributes-tabular-sections.md) records
+`pass` and completes Sprint 6.
 
 | Order | Task | Owned outcome | Prerequisite | Suggested commit message |
 |---:|---|---|---|---|
@@ -981,18 +987,18 @@ only after that transition.
 
 ##### Sprint 6 state gates
 
-Sprint 6 remains `planned` after this planning task. It may become active only
-when Task 1 evidence exists, Task 2 accepts the executable semantic boundary,
-the working tree is safe, and the task-template readiness audit still confirms
-that the current framework is sufficient.
+Sprint 6 is `completed`. Tasks 1 through 5 and Task 7 are committed in
+dependency order, Task 6 is recorded as `already_complete` under ADR-0028, and
+Task 8 records `pass` in the
+[Sprint 6 integration review](reviews/sprint-6-attributes-tabular-sections.md).
+Every accepted identity, ownership, content, provenance, invalid-state,
+ordering, and repeated-build criterion is proven; the completed reference slice
+remains green; Coverage reflects live production evidence; and the full
+Definition of Done passes.
 
-Sprint 6 is complete only when Tasks 1 through 7 are committed in dependency
-order, Task 8 records a non-blocking decision, every accepted identity,
-ownership, reference, provenance, invalid-state, ordering, and repeated-build
-criterion is proven, Coverage reflects only live evidence, and the full
-Definition of Done passes. Forms, Commands, queries, roles, subsystems, event
-subscriptions, Designer XML, Runtime, persistence, AI, MCP, IDE, and all
-unproven EDT member forms remain deferred.
+Forms, Commands, queries, roles, subsystems, event subscriptions, Designer XML,
+Runtime, persistence, AI, MCP, IDE, and all unproven EDT member forms remain
+deferred. Sprint 7 Forms and Commands is the next planning target.
 
 The v0.3 release integration review follows Sprint 14.
 

@@ -130,15 +130,17 @@ performs a focused readiness check at kickoff.
 | Sprint 1 — Foundation | v0.1 | Establish the Cargo workspace, quality gates, Runtime foundation, workspace discovery, EDT configuration reader, and metadata domain model. | [Sprint review](reviews/sprint-1-foundation.md), [v0.1 release review](reviews/v0.1-release-review.md) | completed |
 | Sprint 2 — Semantic Core Foundation | v0.2 | Establish the typed semantic graph, EDT metadata and module nodes, BSL declaration extraction, and local and cross-module call resolution. | [Sprint review](reviews/sprint-2-semantic-core-foundation.md) | completed |
 | Sprint 3 — Semantic Coverage | v0.2 | Audit and complete graph-domain and EDT semantic coverage, close all Critical, High, and Medium gaps, and complete the integration review. | Semantic Coverage Audit and integration-review records below | completed |
+| Sprint 4 — Semantic Index | v0.2 | Build the deterministic complete-snapshot index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) and migrate Query and Resolution compatibility facades. | [Sprint review](reviews/sprint-4-semantic-index.md) | completed |
 
 ### Current planning focus
 
 | Sprint | Version | Goal | Status |
 |---|---|---|---|
-| Sprint 4 — Semantic Index | v0.2 | Build the derived semantic index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) over the completed graph and EDT semantic model. | active |
+| Sprint 4 — Semantic Index | v0.2 | Build the derived semantic index defined by [ADR-0026](adr/0026-semantic-index-boundary.md) over the completed graph and EDT semantic model. | completed |
 
-Sprint 4 is the active dependency-ordered target. Its architecture boundary,
-task decomposition, acceptance criteria, and validation plan are approved.
+Sprint 4 is completed with a `pass` integration decision recorded in the
+[Sprint 4 Semantic Index review](reviews/sprint-4-semantic-index.md). Sprint 5
+remains the next planned dependency-ordered target.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -427,15 +429,11 @@ reviewed baseline, then run the common full implementation gate.
 
 ##### Sprint 4 state gates
 
-Sprint 4 is `active`. Its architecture boundary, task-template readiness gate,
-execution plan, and live repository-state recheck are complete, and execution
-of the approved dependency-ordered tasks has started.
-
-Sprint 4 may later be marked `completed` only after Tasks 1 through 4 are
-complete, Task 5 issues `pass`, all focused and full validation commands have
-executed successfully, the integration review is recorded, public compatibility
-is preserved, every ADR-0026 lookup dimension has equivalence evidence, and no
-Sprint 5 or later concern has been pulled forward.
+Sprint 4 is `completed`. Tasks 1 through 4 are committed in dependency order,
+Task 5 issued `pass`, all focused and full validation commands executed
+successfully, the integration review is recorded, public compatibility is
+preserved, every ADR-0026 lookup dimension has equivalence evidence, and no
+Sprint 5 or later concern was pulled forward.
 
 Incremental maintenance, invalidation, structural sharing, and retained state
 across graph mutations remain owned exclusively by Sprint 5. Persistence,

@@ -384,8 +384,9 @@ mod tests {
         NormalizedSemanticIndexOperation,
     };
     use crate::{
-        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
-        ResolutionState, SemanticGraph, SemanticGraphDiff,
+        Confidence, EdgeId, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind,
+        ProducerId, Provenance, ResolutionError, ResolutionState, SemanticGraph, SemanticGraphDiff,
+        SemanticGraphRelation, SemanticGraphTraversalDirection, SemanticGraphTraversalOptions,
         node::GraphNodePayload,
         semantic_index::{
             AcceptedSemanticIndex, SemanticIndexLifecycleError, SemanticIndexState,
@@ -469,6 +470,429 @@ mod tests {
                 .insert_edge(edge)
                 .expect("test edge endpoints must exist");
         }
+    }
+
+    const NODE_KINDS: [NodeKind; 17] = [
+        NodeKind::Metadata(MetadataKind::Catalog),
+        NodeKind::Module,
+        NodeKind::Procedure,
+        NodeKind::Function,
+        NodeKind::Query,
+        NodeKind::Form,
+        NodeKind::Command,
+        NodeKind::Attribute,
+        NodeKind::StandardAttribute,
+        NodeKind::TabularSection,
+        NodeKind::Dimension,
+        NodeKind::Resource,
+        NodeKind::Measure,
+        NodeKind::Role,
+        NodeKind::AccessRight,
+        NodeKind::Subsystem,
+        NodeKind::Unknown,
+    ];
+
+    const EDGE_KINDS: [EdgeKind; 9] = [
+        EdgeKind::Contains,
+        EdgeKind::Calls,
+        EdgeKind::References,
+        EdgeKind::Reads,
+        EdgeKind::Writes,
+        EdgeKind::Grants,
+        EdgeKind::Includes,
+        EdgeKind::Extends,
+        EdgeKind::DependsOn,
+    ];
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ObservedEdge {
+        id: EdgeId,
+        source: EntityId,
+        target: EntityId,
+        kind: EdgeKind,
+        provenance: Vec<Provenance>,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ObservedRelation {
+        node: EntityId,
+        edge: ObservedEdge,
+        direction: SemanticGraphTraversalDirection,
+    }
+
+    fn observed_node(node: Option<&GraphNode>) -> Option<GraphNode> {
+        node.cloned()
+    }
+
+    fn observed_nodes(nodes: Vec<&GraphNode>) -> Vec<GraphNode> {
+        nodes.into_iter().cloned().collect()
+    }
+
+    fn observed_edge(edge: &GraphEdge) -> ObservedEdge {
+        let source = NodeId::new(edge.source().as_str());
+        let target = NodeId::new(edge.target().as_str());
+        ObservedEdge {
+            id: crate::SemanticGraphQuery::edge_id(&source, &target, edge.kind()),
+            source: edge.source().clone(),
+            target: edge.target().clone(),
+            kind: edge.kind(),
+            provenance: edge.provenance().to_vec(),
+        }
+    }
+
+    fn observed_edge_option(edge: Option<&GraphEdge>) -> Option<ObservedEdge> {
+        edge.map(observed_edge)
+    }
+
+    fn observed_edges(edges: Vec<&GraphEdge>) -> Vec<ObservedEdge> {
+        edges.into_iter().map(observed_edge).collect()
+    }
+
+    fn observed_relations(relations: Vec<SemanticGraphRelation<'_>>) -> Vec<ObservedRelation> {
+        relations
+            .into_iter()
+            .map(|relation| ObservedRelation {
+                node: relation.node().id().clone(),
+                edge: observed_edge(relation.edge()),
+                direction: relation.direction(),
+            })
+            .collect()
+    }
+
+    fn observed_resolution(
+        result: Result<&GraphNode, ResolutionError>,
+    ) -> Result<GraphNode, ResolutionError> {
+        result.cloned()
+    }
+
+    struct KeyUniverse {
+        entity_ids: BTreeSet<EntityId>,
+        node_ids: Vec<NodeId>,
+        names: BTreeSet<EntityName>,
+        edge_ids: BTreeSet<EdgeId>,
+    }
+
+    fn key_universe(previous: &SemanticGraph, current: &SemanticGraph) -> KeyUniverse {
+        let mut entity_ids = previous
+            .nodes()
+            .chain(current.nodes())
+            .map(|node| node.id().clone())
+            .collect::<BTreeSet<_>>();
+        entity_ids.insert(id("missing.node"));
+        let node_ids = entity_ids
+            .iter()
+            .map(|id| NodeId::new(id.as_str()))
+            .collect::<Vec<_>>();
+        let mut names = previous
+            .nodes()
+            .chain(current.nodes())
+            .map(|node| node.name().clone())
+            .collect::<BTreeSet<_>>();
+        names.insert(name("Missing"));
+        let mut edge_ids = previous
+            .edges()
+            .chain(current.edges())
+            .map(observed_edge)
+            .map(|edge| edge.id)
+            .collect::<BTreeSet<_>>();
+        edge_ids.insert(crate::SemanticGraphQuery::edge_id(
+            &NodeId::new("missing.source"),
+            &NodeId::new("missing.target"),
+            EdgeKind::Calls,
+        ));
+
+        KeyUniverse {
+            entity_ids,
+            node_ids,
+            names,
+            edge_ids,
+        }
+    }
+
+    fn assert_full_rebuild_equivalent(
+        previous: &SemanticGraph,
+        current: &SemanticGraph,
+        accepted: &AcceptedSemanticIndex<'_>,
+    ) {
+        assert_eq!(accepted.state(), &SemanticIndexState::from_graph(current));
+        assert!(ptr::eq(accepted.graph(), current));
+
+        let universe = key_universe(previous, current);
+        assert_query_equivalent(&accepted.query(), &current.query(), &universe);
+        assert_resolution_equivalent(
+            &accepted.resolution_index(),
+            &current.resolution_index(),
+            &universe,
+        );
+    }
+
+    fn assert_query_equivalent(
+        incremental: &crate::SemanticGraphQuery<'_>,
+        rebuilt: &crate::SemanticGraphQuery<'_>,
+        universe: &KeyUniverse,
+    ) {
+        assert_eq!(
+            observed_nodes(incremental.nodes()),
+            observed_nodes(rebuilt.nodes())
+        );
+        assert_eq!(
+            observed_edges(incremental.edges()),
+            observed_edges(rebuilt.edges())
+        );
+
+        for entity_id in &universe.entity_ids {
+            assert_eq!(
+                observed_node(incremental.node_by_entity_id(entity_id)),
+                observed_node(rebuilt.node_by_entity_id(entity_id))
+            );
+        }
+        for node_id in &universe.node_ids {
+            assert_node_query_equivalent(incremental, rebuilt, node_id);
+            assert_filtered_node_query_equivalent(incremental, rebuilt, node_id);
+            assert_traversal_equivalent(incremental, rebuilt, node_id);
+        }
+        for edge_id in &universe.edge_ids {
+            assert_eq!(
+                observed_edge_option(incremental.edge(edge_id)),
+                observed_edge_option(rebuilt.edge(edge_id))
+            );
+            assert_eq!(
+                incremental.contains_edge(edge_id),
+                rebuilt.contains_edge(edge_id)
+            );
+        }
+        for name in &universe.names {
+            assert_eq!(
+                observed_nodes(incremental.nodes_by_name(name)),
+                observed_nodes(rebuilt.nodes_by_name(name))
+            );
+            for kind in NODE_KINDS {
+                assert_eq!(
+                    observed_nodes(incremental.nodes_by_name_and_kind(name, kind)),
+                    observed_nodes(rebuilt.nodes_by_name_and_kind(name, kind))
+                );
+            }
+        }
+        for kind in NODE_KINDS {
+            assert_eq!(
+                observed_nodes(incremental.nodes_by_kind(kind)),
+                observed_nodes(rebuilt.nodes_by_kind(kind))
+            );
+        }
+        for kind in EDGE_KINDS {
+            assert_eq!(
+                observed_edges(incremental.edges_by_kind(kind)),
+                observed_edges(rebuilt.edges_by_kind(kind))
+            );
+        }
+    }
+
+    fn assert_node_query_equivalent(
+        incremental: &crate::SemanticGraphQuery<'_>,
+        rebuilt: &crate::SemanticGraphQuery<'_>,
+        node_id: &NodeId,
+    ) {
+        assert_eq!(
+            observed_node(incremental.node(node_id)),
+            observed_node(rebuilt.node(node_id))
+        );
+        assert_eq!(
+            incremental.contains_node(node_id),
+            rebuilt.contains_node(node_id)
+        );
+        assert_eq!(
+            observed_nodes(incremental.owners(node_id)),
+            observed_nodes(rebuilt.owners(node_id))
+        );
+        assert_eq!(
+            observed_node(incremental.owner(node_id)),
+            observed_node(rebuilt.owner(node_id))
+        );
+        assert_eq!(
+            observed_edges(incremental.owner_edges(node_id)),
+            observed_edges(rebuilt.owner_edges(node_id))
+        );
+        assert_eq!(
+            observed_nodes(incremental.children(node_id)),
+            observed_nodes(rebuilt.children(node_id))
+        );
+        assert_eq!(
+            observed_edges(incremental.outgoing_edges(node_id)),
+            observed_edges(rebuilt.outgoing_edges(node_id))
+        );
+        assert_eq!(
+            observed_edges(incremental.incoming_edges(node_id)),
+            observed_edges(rebuilt.incoming_edges(node_id))
+        );
+        assert_eq!(
+            observed_nodes(incremental.downstream_neighbors(node_id)),
+            observed_nodes(rebuilt.downstream_neighbors(node_id))
+        );
+        assert_eq!(
+            observed_nodes(incremental.upstream_neighbors(node_id)),
+            observed_nodes(rebuilt.upstream_neighbors(node_id))
+        );
+        assert_eq!(
+            observed_relations(incremental.direct_dependencies(node_id)),
+            observed_relations(rebuilt.direct_dependencies(node_id))
+        );
+        assert_eq!(
+            observed_relations(incremental.direct_usages(node_id)),
+            observed_relations(rebuilt.direct_usages(node_id))
+        );
+    }
+
+    fn assert_filtered_node_query_equivalent(
+        incremental: &crate::SemanticGraphQuery<'_>,
+        rebuilt: &crate::SemanticGraphQuery<'_>,
+        node_id: &NodeId,
+    ) {
+        for kind in NODE_KINDS {
+            assert_eq!(
+                observed_nodes(incremental.children_by_kind(node_id, kind)),
+                observed_nodes(rebuilt.children_by_kind(node_id, kind))
+            );
+        }
+        for kind in EDGE_KINDS {
+            assert_eq!(
+                observed_edges(incremental.outgoing_edges_by_kind(node_id, kind)),
+                observed_edges(rebuilt.outgoing_edges_by_kind(node_id, kind))
+            );
+            assert_eq!(
+                observed_edges(incremental.incoming_edges_by_kind(node_id, kind)),
+                observed_edges(rebuilt.incoming_edges_by_kind(node_id, kind))
+            );
+            assert_eq!(
+                observed_nodes(incremental.downstream_neighbors_by_kind(node_id, kind)),
+                observed_nodes(rebuilt.downstream_neighbors_by_kind(node_id, kind))
+            );
+            assert_eq!(
+                observed_nodes(incremental.upstream_neighbors_by_kind(node_id, kind)),
+                observed_nodes(rebuilt.upstream_neighbors_by_kind(node_id, kind))
+            );
+            assert_eq!(
+                observed_relations(incremental.direct_dependencies_by_kind(node_id, kind)),
+                observed_relations(rebuilt.direct_dependencies_by_kind(node_id, kind))
+            );
+            assert_eq!(
+                observed_relations(incremental.direct_usages_by_kind(node_id, kind)),
+                observed_relations(rebuilt.direct_usages_by_kind(node_id, kind))
+            );
+        }
+    }
+
+    fn assert_traversal_equivalent(
+        incremental: &crate::SemanticGraphQuery<'_>,
+        rebuilt: &crate::SemanticGraphQuery<'_>,
+        node_id: &NodeId,
+    ) {
+        for direction in [
+            SemanticGraphTraversalDirection::Downstream,
+            SemanticGraphTraversalDirection::Upstream,
+        ] {
+            let options = SemanticGraphTraversalOptions::new(direction, 3).with_include_start(true);
+            assert_eq!(
+                incremental.traverse(node_id, &options),
+                rebuilt.traverse(node_id, &options)
+            );
+            for kind in EDGE_KINDS {
+                let options = SemanticGraphTraversalOptions::new(direction, 3)
+                    .with_edge_kind(kind)
+                    .with_include_start(true);
+                assert_eq!(
+                    incremental.traverse(node_id, &options),
+                    rebuilt.traverse(node_id, &options)
+                );
+            }
+        }
+    }
+
+    fn assert_resolution_equivalent(
+        incremental: &crate::SemanticResolutionIndex<'_>,
+        rebuilt: &crate::SemanticResolutionIndex<'_>,
+        universe: &KeyUniverse,
+    ) {
+        for (entity_id, node_id) in universe.entity_ids.iter().zip(&universe.node_ids) {
+            assert_entity_resolution_equivalent(incremental, rebuilt, entity_id, node_id);
+        }
+        for name in &universe.names {
+            assert_eq!(
+                observed_resolution(incremental.resolve_name(name)),
+                observed_resolution(rebuilt.resolve_name(name))
+            );
+            for kind in NODE_KINDS {
+                assert_eq!(
+                    observed_resolution(incremental.resolve_name_of_kind(name, kind)),
+                    observed_resolution(rebuilt.resolve_name_of_kind(name, kind))
+                );
+            }
+        }
+        for owner in &universe.entity_ids {
+            for child_name in &universe.names {
+                assert_eq!(
+                    observed_resolution(incremental.resolve_child(owner, child_name)),
+                    observed_resolution(rebuilt.resolve_child(owner, child_name))
+                );
+                for kind in NODE_KINDS {
+                    assert_eq!(
+                        observed_resolution(
+                            incremental.resolve_child_of_kind(owner, child_name, kind)
+                        ),
+                        observed_resolution(rebuilt.resolve_child_of_kind(owner, child_name, kind))
+                    );
+                }
+            }
+            for child in &universe.entity_ids {
+                assert_eq!(
+                    observed_resolution(incremental.resolve_owned_child(owner, child)),
+                    observed_resolution(rebuilt.resolve_owned_child(owner, child))
+                );
+            }
+        }
+    }
+
+    fn assert_entity_resolution_equivalent(
+        incremental: &crate::SemanticResolutionIndex<'_>,
+        rebuilt: &crate::SemanticResolutionIndex<'_>,
+        entity_id: &EntityId,
+        node_id: &NodeId,
+    ) {
+        assert_eq!(
+            observed_resolution(incremental.resolve_entity_id(entity_id)),
+            observed_resolution(rebuilt.resolve_entity_id(entity_id))
+        );
+        assert_eq!(
+            observed_resolution(incremental.resolve_node_id(node_id)),
+            observed_resolution(rebuilt.resolve_node_id(node_id))
+        );
+        assert_eq!(
+            observed_resolution(incremental.resolve_owner(entity_id)),
+            observed_resolution(rebuilt.resolve_owner(entity_id))
+        );
+        for kind in NODE_KINDS {
+            assert_eq!(
+                observed_resolution(incremental.resolve_entity_id_of_kind(entity_id, kind)),
+                observed_resolution(rebuilt.resolve_entity_id_of_kind(entity_id, kind))
+            );
+            assert_eq!(
+                observed_resolution(incremental.resolve_owner_of_kind(entity_id, kind)),
+                observed_resolution(rebuilt.resolve_owner_of_kind(entity_id, kind))
+            );
+        }
+    }
+
+    fn transition_and_assert<'current>(
+        accepted: &AcceptedSemanticIndex<'_>,
+        current: &'current SemanticGraph,
+    ) -> AcceptedSemanticIndex<'current> {
+        let previous = accepted.graph();
+        let changes = NormalizedSemanticIndexChanges::between(previous, current)
+            .expect("oracle transition must normalize");
+        let next = accepted
+            .transition(current, &changes)
+            .expect("oracle transition must publish");
+        assert_full_rebuild_equivalent(previous, current, &next);
+        next
     }
 
     #[test]
@@ -1391,5 +1815,303 @@ mod tests {
 
         let rebuilt = AcceptedSemanticIndex::rebuild(&current);
         assert_eq!(rebuilt.state(), first.state());
+    }
+
+    #[test]
+    fn full_rebuild_oracle_covers_empty_no_op_and_node_change_matrix() {
+        let empty_previous = SemanticGraph::new();
+        let empty_current = SemanticGraph::new();
+        transition_and_assert(
+            &AcceptedSemanticIndex::rebuild(&empty_previous),
+            &empty_current,
+        );
+
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("stable", "Stable", NodeKind::Module),
+                node("removed", "Removed", NodeKind::Query),
+                node("renamed", "Before", NodeKind::Procedure),
+                node("rekinded", "Rekinded", NodeKind::Procedure),
+                metadata_node_with_payload(
+                    "refreshed",
+                    "Refreshed",
+                    "Old synonym",
+                    FactOrigin::Parsed,
+                ),
+                node("duplicate.old", "Duplicate", NodeKind::Function),
+            ],
+        );
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("duplicate.new", "Duplicate", NodeKind::Procedure),
+                node("duplicate.old", "Duplicate", NodeKind::Function),
+                metadata_node_with_payload(
+                    "refreshed",
+                    "Refreshed",
+                    "New synonym",
+                    FactOrigin::Derived,
+                ),
+                node("rekinded", "Rekinded", NodeKind::Function),
+                node("renamed", "After", NodeKind::Procedure),
+                node("added", "Added", NodeKind::Attribute),
+                node("stable", "Stable", NodeKind::Module),
+            ],
+        );
+        transition_and_assert(&AcceptedSemanticIndex::rebuild(&previous), &current);
+
+        let mut equivalent_previous = SemanticGraph::new();
+        insert_nodes(
+            &mut equivalent_previous,
+            [
+                node("z", "Z", NodeKind::Procedure),
+                node("a", "A", NodeKind::Module),
+            ],
+        );
+        let mut equivalent_current = SemanticGraph::new();
+        insert_nodes(
+            &mut equivalent_current,
+            [
+                node("a", "A", NodeKind::Module),
+                node("z", "Z", NodeKind::Procedure),
+            ],
+        );
+        transition_and_assert(
+            &AcceptedSemanticIndex::rebuild(&equivalent_previous),
+            &equivalent_current,
+        );
+    }
+
+    #[test]
+    fn full_rebuild_oracle_covers_edge_adjacency_and_replacement_matrix() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("a", "A", NodeKind::Module),
+                node("b", "B", NodeKind::Procedure),
+                node("c", "C", NodeKind::Function),
+                node("d", "D", NodeKind::Query),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [
+                edge("a", "b", EdgeKind::Calls, FactOrigin::Resolved),
+                edge("a", "c", EdgeKind::References, FactOrigin::Resolved),
+                edge("d", "a", EdgeKind::Reads, FactOrigin::Resolved),
+                edge("c", "d", EdgeKind::Writes, FactOrigin::Parsed),
+            ],
+        );
+
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("d", "D", NodeKind::Query),
+                node("c", "C", NodeKind::Function),
+                node("b", "B", NodeKind::Procedure),
+                node("a", "A", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut current,
+            [
+                edge("b", "a", EdgeKind::Calls, FactOrigin::Resolved),
+                edge("a", "c", EdgeKind::DependsOn, FactOrigin::Derived),
+                edge("a", "b", EdgeKind::Calls, FactOrigin::Derived),
+                edge("c", "a", EdgeKind::Includes, FactOrigin::Declared),
+                edge("a", "d", EdgeKind::Grants, FactOrigin::Declared),
+            ],
+        );
+
+        transition_and_assert(&AcceptedSemanticIndex::rebuild(&previous), &current);
+    }
+
+    #[test]
+    fn full_rebuild_oracle_covers_adversarial_containment_and_incident_deletion() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node("owner.old", "OldOwner", NodeKind::Module),
+                node("deleted", "Deleted", NodeKind::Procedure),
+                node("retained", "Same", NodeKind::Procedure),
+                node("wrong", "Wrong", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut previous,
+            [
+                edge(
+                    "owner.old",
+                    "deleted",
+                    EdgeKind::Contains,
+                    FactOrigin::Declared,
+                ),
+                edge(
+                    "owner.old",
+                    "retained",
+                    EdgeKind::Contains,
+                    FactOrigin::Declared,
+                ),
+                edge("deleted", "wrong", EdgeKind::Calls, FactOrigin::Resolved),
+            ],
+        );
+
+        let mut current = SemanticGraph::new();
+        insert_nodes(
+            &mut current,
+            [
+                node("owner.new", "NewOwner", NodeKind::Module),
+                node("owner.old", "OldOwner", NodeKind::Module),
+                node("retained", "Same", NodeKind::Procedure),
+                node("duplicate", "Same", NodeKind::Procedure),
+                node("wrong", "Wrong", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut current,
+            [
+                edge(
+                    "owner.new",
+                    "retained",
+                    EdgeKind::Contains,
+                    FactOrigin::Declared,
+                ),
+                edge(
+                    "owner.old",
+                    "retained",
+                    EdgeKind::Contains,
+                    FactOrigin::Declared,
+                ),
+                edge(
+                    "owner.new",
+                    "duplicate",
+                    EdgeKind::Contains,
+                    FactOrigin::Declared,
+                ),
+                edge(
+                    "owner.new",
+                    "owner.new",
+                    EdgeKind::Contains,
+                    FactOrigin::Derived,
+                ),
+                edge(
+                    "owner.old",
+                    "owner.new",
+                    EdgeKind::Contains,
+                    FactOrigin::Derived,
+                ),
+                edge(
+                    "owner.new",
+                    "owner.old",
+                    EdgeKind::Contains,
+                    FactOrigin::Derived,
+                ),
+            ],
+        );
+
+        transition_and_assert(&AcceptedSemanticIndex::rebuild(&previous), &current);
+    }
+
+    #[test]
+    fn full_rebuild_oracle_covers_mixed_multistep_repeated_and_failure_retry_paths() {
+        let mut initial = SemanticGraph::new();
+        insert_nodes(
+            &mut initial,
+            [
+                node("root", "Root", NodeKind::Module),
+                node("first", "First", NodeKind::Procedure),
+            ],
+        );
+        insert_edges(
+            &mut initial,
+            [edge(
+                "root",
+                "first",
+                EdgeKind::Contains,
+                FactOrigin::Declared,
+            )],
+        );
+
+        let mut middle = SemanticGraph::new();
+        insert_nodes(
+            &mut middle,
+            [
+                node("second", "Second", NodeKind::Function),
+                node("first", "Renamed", NodeKind::Function),
+                node("root", "Root", NodeKind::Module),
+            ],
+        );
+        insert_edges(
+            &mut middle,
+            [
+                edge("first", "second", EdgeKind::Calls, FactOrigin::Resolved),
+                edge("root", "second", EdgeKind::Contains, FactOrigin::Declared),
+                edge("root", "first", EdgeKind::Contains, FactOrigin::Declared),
+            ],
+        );
+
+        let mut final_graph = SemanticGraph::new();
+        insert_nodes(
+            &mut final_graph,
+            [
+                node("third", "Third", NodeKind::Query),
+                node("root", "Root", NodeKind::Module),
+                node("second", "Second", NodeKind::Function),
+            ],
+        );
+        insert_edges(
+            &mut final_graph,
+            [
+                edge("second", "third", EdgeKind::Reads, FactOrigin::Resolved),
+                edge("root", "third", EdgeKind::Contains, FactOrigin::Declared),
+            ],
+        );
+
+        let accepted_initial = AcceptedSemanticIndex::rebuild(&initial);
+        let accepted_middle = transition_and_assert(&accepted_initial, &middle);
+        let accepted_final = transition_and_assert(&accepted_middle, &final_graph);
+
+        let retry_changes = NormalizedSemanticIndexChanges::between(&middle, &final_graph)
+            .expect("retry transition must normalize");
+        let retry = accepted_middle
+            .transition(&final_graph, &retry_changes)
+            .expect("repeated transition from the accepted base must succeed");
+        assert_full_rebuild_equivalent(&middle, &final_graph, &retry);
+        assert_eq!(retry.state(), accepted_final.state());
+
+        let mut wrong_target = SemanticGraph::new();
+        insert_nodes(
+            &mut wrong_target,
+            [
+                node("root", "Root", NodeKind::Module),
+                node("second", "Second", NodeKind::Function),
+                node("third", "Third", NodeKind::Query),
+            ],
+        );
+        let before_failure = accepted_middle.state().clone();
+        let error = accepted_middle
+            .transition(&wrong_target, &retry_changes)
+            .expect_err("wrong target instance must fail before publication");
+        assert_eq!(error, SemanticIndexLifecycleError::WrongTargetSnapshot);
+        assert_eq!(accepted_middle.state(), &before_failure);
+
+        let recovered = accepted_middle
+            .transition(&final_graph, &retry_changes)
+            .expect("accepted retry after failure must succeed");
+        assert_full_rebuild_equivalent(&middle, &final_graph, &recovered);
+
+        let replay_error = recovered
+            .transition(&final_graph, &retry_changes)
+            .expect_err("accepted replay must reject a stale base");
+        assert_eq!(replay_error, SemanticIndexLifecycleError::StaleBaseSnapshot);
+
+        let rebuilt = AcceptedSemanticIndex::rebuild(&final_graph);
+        assert_full_rebuild_equivalent(&final_graph, &final_graph, &rebuilt);
     }
 }

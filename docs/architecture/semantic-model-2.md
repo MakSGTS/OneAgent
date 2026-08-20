@@ -2256,6 +2256,27 @@ generic query evidence, dependency and Impact exclusions, negative outcomes,
 determinism evidence, and real-format integration fixture are implemented, so
 `semantic_edge.includes` is `Supported` by the EDT Coverage Registry.
 
+Sprint 10 is governed by
+`docs/adr/0032-subsystem-hierarchy-semantics.md`. The accepted extension keeps
+the existing UUID-derived metadata and flat Subsystem representations, adds
+direct `NodeKind::Subsystem --Includes--> NodeKind::Subsystem` hierarchy only
+when the parent's `<subsystems>`, the child's qualified `<parentSubsystem>`, and
+the immediate physical nesting agree, and applies the ADR-0020 direct content
+contract to every successfully discovered nested Subsystem. Configuration
+ownership of metadata Subsystem objects remains `Contains`; flat Subsystem
+hierarchy remains composition rather than ownership.
+
+Only direct hierarchy and direct metadata membership are canonical graph facts.
+Transitive metadata membership is an ordered, cycle-safe, source-independent
+Query projection across outgoing Subsystem hierarchy edges and is never stored
+as derived Includes closure. Includes remains excluded from dependency and
+Impact traversal. `Subsystem.<...>` content, command-interface behavior,
+directory-only inference, placeholder Subsystems, contradictory-source
+recovery, and unrelated metadata-family expansion remain deferred. This is an
+accepted planning contract, not implemented support; the current top-level-only
+production and Coverage statements above remain authoritative until the Sprint
+10 implementation and review gates pass.
+
 ### Provenance inventory
 
 EDT attaches provenance while creating metadata object nodes, child nodes,

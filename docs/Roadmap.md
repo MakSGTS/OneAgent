@@ -2080,6 +2080,296 @@ absence of unrelated changes. Suggested planning commit message:
 Plan Sprint 9 roles and access rights
 ```
 
+#### Sprint 10 Subsystems and Composition execution plan
+
+Sprint 10 extends the completed top-level Subsystem and direct Includes slice
+through the bounded hierarchy contract accepted by
+[ADR-0032](adr/0032-subsystem-hierarchy-semantics.md). Nested EDT Subsystems
+retain the existing UUID-derived metadata and flat semantic nodes. Direct
+parent-child hierarchy reuses `Includes` between flat Subsystem nodes, while
+transitive metadata membership is computed through Query and never persisted as
+derived closure.
+
+The planning data gate is satisfied by the
+[source investigation](architecture/subsystem-hierarchy-source-investigation.md)
+and the repository-local `OneAgent_EDTproject/src/Subsystems/` corpus selected
+by the sprint bootstrap. The root `.gitignore` excludes this real-source tree,
+so it is planning evidence rather than a committed fixture. The live corpus contains
+127 parseable Subsystem descriptors: 13 top-level and 114 nested through five
+levels. Every nested descriptor has exactly one qualified `parentSubsystem`,
+every immediate parent has the matching direct `subsystems` declaration, and
+all 114 relations agree with physical nesting. Duplicate local names under
+different parents prove that complete-path and UUID identity are required.
+Existing metadata, Subsystem, Includes, Query, Validation, Diff, Impact,
+Coverage, and complete/incremental index consumers provide executable oracles.
+
+The current architecture, parser implementation, graph implementation, graph
+model, graph emission, review, sprint-planning, and sequential-execution
+framework contracts express the required evidence, safety, validation, and
+reporting requirements. No Codex Framework change or post-sprint framework
+audit is justified.
+
+##### Sprint 10 objective
+
+Discover repository-proven nested EDT Subsystems deterministically, preserve
+their direct hierarchy and direct content as canonical Includes facts, expose
+cycle-safe transitive metadata membership without persisted closure, and prove
+all existing top-level and unrelated semantic behavior remains compatible.
+
+##### Included scope
+
+- additive `Subsystem --Includes--> Subsystem` graph endpoint and deterministic
+  hierarchy-cycle validation;
+- one source-independent transitive metadata-membership Query projection;
+- recursive discovery through explicit `Subsystems/<Name>` descendants;
+- agreement validation among parent `<subsystems>`, child
+  `<parentSubsystem>`, and immediate physical nesting;
+- existing UUID-derived metadata/flat Subsystem identities and configuration
+  ownership for nested descriptors;
+- ADR-0020 direct content parsing, resolution, diagnostics, statistics, and
+  Includes emission for nested Subsystems;
+- deterministic hierarchy provenance, ordering, duplicate handling, repeated
+  builds, Diff, reports, and complete/incremental index equivalence;
+- one tracked provenance-backed reduced production fixture, Coverage-regression
+  evidence, Semantic Model current-
+  state synchronization, Roadmap transition, and integration review.
+
+##### Excluded scope
+
+- new NodeKind or EdgeKind variants, persisted transitive closure, or a second
+  membership authority;
+- hierarchy as `Contains`, metadata Subsystem hierarchy endpoints, directory-
+  only inference, or silent repair of contradictory source projections;
+- semantic meaning for `Subsystem.<...>` content tokens, including observed
+  self-content declarations;
+- command-interface files, configuration inventory hierarchy, aliases,
+  localized/case-insensitive resolution, extension or cross-project hierarchy,
+  external or placeholder Subsystems, and partial recovery from hierarchy
+  errors;
+- dependency or Impact propagation through Includes;
+- unrelated content-prefix or metadata-family expansion;
+- persistence, Runtime, API, CLI, MCP, LSP, IDE, authorization, or later-sprint
+  behavior;
+- speculative Coverage capability or aggregate-count changes.
+
+##### Sprint 10 prerequisite gate
+
+Task 01 may begin only from one committed Sprint 10 planning baseline containing
+the source investigation, ADR-0032, this Roadmap plan, the Semantic Model
+planning synchronization, and the complete prompt suite under
+`docs/codex/prompts/sprint-10-subsystems-composition/`. Every dependent task
+requires the preceding task's committed outcome. Stored prompt text never
+authorizes staging or committing; authorization comes only from the current
+execution instruction.
+
+The immediately preceding prompt suite is exactly
+`docs/codex/prompts/sprint-9-roles-access-rights/`, containing its tracked master
+prompt and Tasks 01–04. It remains untouched during planning and implementation.
+Only the final Sprint 10 review may retire those exact tracked files after a
+non-blocking decision and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Implement Subsystem hierarchy graph rules. | Graph implementation / graph model | Additive hierarchy endpoint, deterministic cycle validation, transitive membership Query, and generic graph/index evidence. | Accepted Sprint 10 planning baseline. | `Implement Sprint 10 subsystem hierarchy graph rules` |
+| 2 | Parse nested Subsystem hierarchy. | Parser implementation / parser | Deterministic recursive source model and strict three-projection agreement with typed failures, without graph emission. | Task 1. | `Parse Sprint 10 nested subsystem hierarchy` |
+| 3 | Emit nested Subsystem composition. | Graph implementation / graph emission | Nested metadata/flat nodes, configuration ownership, direct hierarchy and content Includes, provenance, diagnostics, and statistics. | Tasks 1–2. | `Emit Sprint 10 nested subsystem composition` |
+| 4 | Complete Sprint 10 production evidence. | Graph implementation / graph emission | Representative corpus/fixture, consumers, index equivalence, Coverage regression, and synchronized current-state docs. | Tasks 1–3. | `Complete Sprint 10 production evidence` |
+| 5 | Review the integrated Sprint 10 baseline. | Review / review | Findings, full validation evidence, sprint decision, previous-suite retirement, and Sprint 11 hand-off. | Task 4 and all implementation validation. | `Complete Sprint 10 subsystems and composition review` |
+
+Dependency graph:
+
+```text
+Committed Sprint 10 planning baseline
+    -> Task 1 hierarchy graph rules
+    -> Task 2 nested hierarchy parser
+    -> Task 3 nested composition production
+    -> Task 4 production and documentation evidence
+    -> Task 5 integration review and conditional Sprint 9 suite retirement
+    -> Sprint 11 planning eligibility
+```
+
+##### Task 1 — Subsystem hierarchy graph rules
+
+**Included:** extend Includes validation additively for flat Subsystem targets;
+reject self-loops and deterministic directed hierarchy cycles; add the ADR-0032
+read-only transitive metadata-membership Query; prove stable direct edge
+identity, duplicate-path result deduplication, wrong/unknown inputs, cycle-safe
+query behavior, Diff, reports, complete-index, incremental-index, and unchanged
+dependency/Impact policy.
+
+**Excluded:** EDT source parsing, recursive discovery, producer emission,
+fixtures, provenance production, Coverage transitions, and unrelated Query
+redesign.
+
+**Acceptance evidence:** the old metadata-member Includes endpoint remains
+exact; only flat Subsystem-to-Subsystem is added; every other endpoint remains
+invalid; transitive results contain unique metadata members ordered by stable
+identity and no persisted derived edges; invalid cycles are reported
+deterministically; generic consumers and clean index rebuilds remain equivalent.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph --test query
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test impact
+cargo test -p oneagent-graph --lib incremental_index::tests
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 2 — Nested Subsystem hierarchy parser
+
+**Included:** add one focused recursive EDT hierarchy source model; parse direct
+`subsystems` and `parentSubsystem`; require exact agreement with immediate
+physical nesting and the complete qualified ancestor path; preserve descriptor
+UUID/name/path/content inputs; sort deterministically; and return typed fatal
+errors for missing, multiple, duplicate, malformed, mismatched, cyclic, escaped,
+or unreadable source structures.
+
+**Excluded:** graph node or edge insertion, provenance emission, content target
+resolution, diagnostics/statistics projection, Coverage changes, and fallback or
+repair behavior.
+
+**Acceptance evidence:** real descriptors across depths 1–5 parse; six
+repository-proven duplicate local names remain distinct by ancestor path and
+UUID; missing/extra/duplicate declarations and directories, malformed parent
+tokens, wrong roots, reordering, cycles, and path escapes have deterministic
+outcomes; no graph behavior changes in this task.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-edt --lib subsystem_hierarchy::tests
+cargo test -p oneagent-edt --lib metadata_object::tests
+cargo test -p oneagent-edt --lib subsystem_content::tests
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 3 — Nested Subsystem composition production
+
+**Included:** integrate the committed parser into the filesystem graph builder;
+insert nested metadata and flat Subsystem nodes with existing IDs; preserve
+configuration Contains ownership; emit direct hierarchy Includes with complete
+resolved provenance; run nested descriptors through ADR-0020 direct content
+resolution; and preserve deterministic diagnostics, statistics, aggregation,
+validation, and repeated-build behavior.
+
+**Excluded:** new source grammar, graph kinds, transitive stored edges,
+Subsystem content semantics, Coverage transitions, current-state documentation
+completion, and unrelated metadata discovery.
+
+**Acceptance evidence:** representative nested fixtures emit exact nodes and
+direct edges, including duplicate local names under different parents and
+nested metadata content; all source-agreement failures are fatal without partial
+graph output; content failures remain recoverable under ADR-0020; repeated and
+reordered builds are identical; top-level IDs, facts, diagnostics, and
+statistics remain compatible.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-edt --test subsystem_hierarchy
+cargo test -p oneagent-edt --test includes
+cargo test -p oneagent-graph --test validation
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 4 — Complete production evidence
+
+**Included:** add a tracked provenance-documented reduced hierarchy fixture
+derived from the live ignored source corpus; prove depth, direct and transitive membership,
+duplicate local names, add/remove/reparent/content transitions, Query, Diff,
+reports, validation, complete and incremental index clean-rebuild equivalence,
+unchanged dependency/Impact behavior, Coverage registry stability, and
+unrelated semantic compatibility; synchronize Semantic Model and Roadmap
+current-state text without completing the sprint.
+
+**Excluded:** new parser or graph semantics, hierarchy-aware dependency/Impact,
+new Coverage capability rows without live registry proof, command-interface or
+unsupported content families, and Sprint 11 planning.
+
+**Acceptance evidence:** every ADR-0032 completion criterion is executable;
+repository-proven depth and duplicate-name shapes are represented; no persisted
+transitive edge exists; generic and indexed consumers agree with clean builds;
+graph and EDT Coverage statuses and aggregate counts change only if derived live
+registry evidence requires it; the complete workspace gate passes.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --test subsystem_hierarchy
+cargo test -p oneagent-edt --test includes
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 5 — Sprint 10 integration review
+
+Review the exact planning and Task 1–4 commit range without silently fixing
+implementation findings. Recheck ADR-0032, source-agreement failures, graph
+endpoint/cycle behavior, nested production, provenance, direct and transitive
+membership, all consumers, Coverage, documentation, repository safety, and the
+complete validation matrix. Create
+`docs/reviews/sprint-10-subsystems-composition.md` and transition Sprint 10 to
+`completed` only for `pass` or `pass with non-blocking follow-ups`.
+
+After a non-blocking decision and successful complete validation, atomically
+retire every tracked prompt file under the verified immediately preceding suite
+`docs/codex/prompts/sprint-9-roles-access-rights/` in the same review commit.
+Any inventory mismatch, untracked endangered file, or retained link dependency
+blocks retirement and the final commit.
+
+Focused review additions:
+
+```bash
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --lib subsystem_hierarchy::tests
+cargo test -p oneagent-edt --test subsystem_hierarchy
+cargo test -p oneagent-edt --test includes
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace validation and record exact command results.
+
+##### Sprint 10 state gates and completion criteria
+
+Sprint 10 remains `next` during planning. It becomes `active` only after the
+planning baseline is committed and Task 1 begins. A task is `already_complete`
+only when current committed evidence and successful required validation prove
+every criterion; no empty commit is created.
+
+Stop after the first prerequisite, implementation, validation, staging, commit,
+or review failure. Do not skip, reorder, combine, or partially commit dependent
+tasks. A blocked Task 5 leaves Sprint 10 incomplete, keeps the Sprint 9 prompt
+suite intact, and leaves Sprint 11 ineligible.
+
+Sprint 10 may transition to `completed` only when Tasks 1–4 are committed or
+proven already complete, the complete ADR-0032 parser/model/production/query/
+provenance/determinism evidence passes, top-level and unrelated compatibility
+remain intact, Coverage state is truthful, the complete repository Definition
+of Done passes, and Task 5 records a non-blocking review decision. Only then may
+Sprint 11 Event Subscriptions become `next` and the exact Sprint 9 prompt suite
+be retired in the final review commit.
+
+Planning is documentation-only. Validate Markdown structure, links, prompt
+numbering, manifest order, prerequisite graph, commit-message agreement,
+accepted-versus-deferred scope, unchanged `next` state, verified previous-suite
+inventory, `git diff --check`, and absence of unrelated changes. Suggested
+planning commit message:
+
+```text
+Plan Sprint 10 subsystems and composition
+```
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

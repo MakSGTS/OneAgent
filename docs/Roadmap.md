@@ -140,6 +140,7 @@ planned reuse; every sprint still performs a focused readiness check at kickoff.
 | Sprint 7 — Forms and Commands | v0.3 | Add accepted Form and Command modules, mapped Command parameter references, and precise static Form navigation without expanding the deferred UI model. | [Sprint review](reviews/sprint-7-forms-commands.md) | completed |
 | Sprint 8 — Registers and Queries | v0.3 | Expand direct persistent Query sources through public requests, retained Reads, and normalized Query dependencies without broadening the accepted grammar. | [Sprint review](reviews/sprint-8-registers-queries.md) | completed |
 | Sprint 9 — Roles and Access Rights | v0.3 | Preserve optional opaque EDT row restrictions as typed conditional direct Grants without changing unconditional AccessRight compatibility or claiming effective authorization. | [Sprint review](reviews/sprint-9-roles-access-rights.md) | completed |
+| Sprint 10 — Subsystems and Composition | v0.3 | Preserve strict nested Subsystem source agreement, direct hierarchy and composition, and computed transitive membership without persisted closure. | [Sprint review](reviews/sprint-10-subsystems-composition.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
@@ -159,7 +160,10 @@ decision in the
 is completed under [ADR-0031](adr/0031-conditional-grants-semantics.md) with a
 `pass` decision in the
 [Sprint 9 integration review](reviews/sprint-9-roles-access-rights.md). Sprint
-10 is the next planning target; v0.3 remains planned through Sprint 14.
+10 is completed under
+[ADR-0032](adr/0032-subsystem-hierarchy-semantics.md) with a `pass` decision in
+the [Sprint 10 integration review](reviews/sprint-10-subsystems-composition.md).
+Sprint 11 is the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -744,8 +748,8 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | active |
-| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
+| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
+| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | next |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
@@ -2308,7 +2312,7 @@ Diff, reports, validation, and repeated builds. Complete and incremental index
 tests cover hierarchy/member add, remove, reparent, and content replacement
 against clean rebuilds. EDT Coverage remains 101 capabilities (96 `Supported`,
 5 `NotApplicable`); graph Coverage remains 85 capabilities (82 `Supported`, 3
-`NotApplicable`). Sprint 10 remains `active` pending Task 5 review.
+`NotApplicable`). Task 5 records `pass`; Sprint 10 is `completed`.
 
 **Focused validation:**
 
@@ -2350,6 +2354,14 @@ cargo test -p oneagent-edt --test semantic_index
 ```
 
 Run the complete workspace validation and record exact command results.
+
+**Review result:** the exact planning and Task 1–4 range passed the focused and
+complete validation matrices with no blocking or non-blocking findings,
+missing evidence, open questions, or scope violations. The
+[Sprint 10 integration review](reviews/sprint-10-subsystems-composition.md)
+records the acceptance matrix and executed results. Sprint 11 Event
+Subscriptions is `next`; the verified Sprint 9 prompt suite is retired in the
+same review commit.
 
 ##### Sprint 10 state gates and completion criteria
 

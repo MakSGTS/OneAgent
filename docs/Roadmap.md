@@ -3579,6 +3579,185 @@ planning commit message:
 Plan Sprint 13 XDTO and service model
 ```
 
+#### Sprint 14 Designer XML Adapter execution plan
+
+Sprint 14 is planned from committed readiness head
+`5b8c57b44247ffed5b26a52877b3b333bbf64703`. Sprint 13 is `completed`, its
+post-review Web Service XDTO correction is committed and validated, and Sprint
+14 is the unique `next` target. The v0.3 release review remains ineligible until
+Sprint 14 completes with a non-blocking integration-review decision.
+
+The ignored paired `OneAgent_DesignerXML/` and `OneAgent_EDTproject/` corpora,
+the tracked [Designer XML corpus registration](architecture/designer-xml-source-corpus.md),
+accepted graph contracts, current EDT builder, and filesystem/workspace tests
+provide repository-owned evidence. The corpus proves real hierarchical
+`ConfigDumpInfo.xml` and `Configuration.xml` markers, matching configuration
+identity, matching representative normalized BSL modules, distinct layouts,
+and a documented four-binding bridge loss boundary. It does not pre-accept a
+detector, completeness policy, field mapping, or whole-graph equivalence.
+
+The committed Source Adapter profile, workflow, and task template cover
+multi-artifact discovery, assembly, parsing, completeness, canonical mapping,
+conformance, determinism, and production evidence. Existing investigation,
+architecture, review, sprint-planning, and sequential-execution contracts cover
+the other task families. No concrete reusable framework gap remains.
+
+##### Sprint 14 objective
+
+Ingest the evidence-backed first slice of complete or explicitly partial
+hierarchical Designer XML dumps through a dedicated source adapter, preserving
+canonical configuration, supported top-level metadata, module, and BSL
+declaration identities and semantics across EDT and Designer sources without
+claiming field-for-field or whole-graph equivalence.
+
+##### Included scope
+
+- exact investigation of markers, hierarchy, artifact roles, joins, serialized
+  values, module layouts, failures, and paired EDT compatibility;
+- an accepted ADR for detection, completeness, identity, mapping, provenance,
+  conformance projection, first slice, and deferred scope;
+- deterministic filesystem detection, conflict handling, and project boundaries;
+- a dedicated `oneagent-designer-xml` adapter and configuration loader;
+- accepted top-level metadata enumeration and parsing;
+- accepted module assembly and BSL source loading;
+- canonical graph contribution for configuration, metadata, modules,
+  Procedures, Functions, and immediate `Contains` facts;
+- typed complete/partial, missing, duplicate, malformed, unsupported,
+  ambiguous, incompatible, unreadable, overlap, and marker-conflict outcomes;
+- provenance-backed paired fixtures and a non-empty canonical conformance
+  projection with one controlled semantic change;
+- deterministic production, reordering, repeated-build, Query, Diff,
+  Validation, report, complete-index, and incremental-index evidence;
+- documentation, truthful adapter-specific coverage evidence, integration
+  review, and conditional Sprint 13 prompt-suite retirement.
+
+##### Excluded scope
+
+- field-for-field EDT/Designer equality and affected form-event payloads;
+- metadata members, role rights, Subsystem hierarchy/content, Event
+  Subscriptions, report DCS, XDTO/service children, reference requests, and
+  semantic relations beyond accepted ownership and BSL declarations unless
+  Task 2 proves a bounded prerequisite;
+- conversion into an EDT tree, runtime 1C tooling, or ignored-corpus CI use;
+- extensions, flat dumps, binary interpretation, parent-configuration
+  semantics, unknown fallback nodes, persistence, Runtime/API/CLI, MCP/LSP/IDE,
+  packaging, benchmarks, and performance claims;
+- graph/public semantic model expansion, unrelated EDT changes, dependencies,
+  refactors, or speculative Coverage transitions.
+
+##### Sprint 14 prerequisite and retirement gate
+
+Task 01 requires one committed Sprint 14 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-14-designer-xml-adapter/`. Every dependent task
+requires the preceding committed outcome. Stored prompts do not authorize
+commits; authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-13-xdto-service-model/`, with these seven tracked
+files: `00-sprint-13-execution-loop.md`,
+`01-implement-xdto-service-graph-model.md`, `02-parse-xdto-packages.md`,
+`03-parse-http-web-services.md`, `04-emit-xdto-service-semantics.md`,
+`05-complete-sprint-13-production-evidence.md`, and
+`06-sprint-13-integration-review.md`. It remains untouched through Task 7.
+Only Task 8 may retire this exact inventory after a non-blocking review and
+successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate Designer XML source contracts. | Investigation / investigation | Detector, artifact, completeness, identity, module, fixture, failure, consumer, and conformance evidence with explicit unknowns. | Accepted Sprint 14 planning baseline. | `Investigate Sprint 14 Designer XML source contracts` |
+| 2 | Define the Designer XML adapter contract. | Architecture / architecture | Accepted detection, assembly, failure, canonical mapping, provenance, conformance, first-slice, deferred-scope, and completion contract. | Task 1. | `Define Sprint 14 Designer XML adapter contract` |
+| 3 | Implement Designer XML discovery and configuration loading. | Source adapter / source adapter | Workspace detection, project boundaries, explicit scope, configuration assembly/loading, typed failures, and focused production tests. | Task 2. | `Implement Sprint 14 Designer XML discovery` |
+| 4 | Parse Designer XML metadata objects. | Source adapter / source adapter | Deterministic accepted top-level artifact enumeration and descriptor mapping without graph emission. | Task 3. | `Parse Sprint 14 Designer XML metadata` |
+| 5 | Parse Designer XML modules. | Source adapter / source adapter | Deterministic accepted module assembly and BSL source observations without graph emission. | Task 4. | `Parse Sprint 14 Designer XML modules` |
+| 6 | Emit Designer XML semantics. | Source adapter / source adapter | Canonical graph contribution for accepted configuration, metadata, module, Procedure, Function, and ownership facts. | Task 5. | `Emit Sprint 14 Designer XML semantics` |
+| 7 | Complete Sprint 14 conformance evidence. | Source adapter / source adapter | Paired fixtures, canonical projection, negative/determinism/consumer/index evidence, truthful coverage, and current-state docs. | Task 6. | `Complete Sprint 14 conformance evidence` |
+| 8 | Review the integrated Sprint 14 baseline. | Review / review | Findings, validation, sprint decision, Sprint 13 suite retirement, v0.3 release-review eligibility, and Sprint 15 hand-off. | Task 7 and all implementation validation. | `Complete Sprint 14 Designer XML adapter review` |
+
+```text
+Committed Sprint 14 planning baseline
+    -> Task 1 source investigation
+    -> Task 2 accepted adapter architecture
+    -> Task 3 discovery and configuration loading
+    -> Task 4 metadata parsing
+    -> Task 5 module parsing
+    -> Task 6 semantic contribution
+    -> Task 7 paired conformance and current-state evidence
+    -> Task 8 integration review and conditional Sprint 13 suite retirement
+    -> v0.3 release review eligibility and Sprint 15 planning
+```
+
+##### Task contracts
+
+Task 1 creates only
+`docs/architecture/designer-xml-source-investigation.md`. It records exact
+source markers, namespaces, versions, artifact paths and roles, join keys,
+module paths, positive/negative shapes, complete/partial evidence, paired
+mappings, deliberate differences, the smallest non-empty conformance
+projection, consumers, fixture candidates, and unknowns. It selects no
+architecture and changes no production behavior.
+
+Task 2 creates `docs/adr/0036-designer-xml-adapter.md` and synchronizes only
+planning-level architecture text required by the decision. It defines the exact
+detector, conflicts, project boundary, complete/partial caller contract,
+assembly, failure scope, canonical mapping, module roles, provenance,
+conformance oracle, rejected alternatives, first slice, Coverage completion,
+and deferred scope. It implements no production behavior and marks no support
+complete.
+
+Task 3 adds the dedicated crate and smallest workspace/filesystem changes for
+accepted detection, configuration loading, explicit scope, and typed errors.
+Task 4 adds only top-level metadata enumeration and parsing. Task 5 adds only
+module assembly and BSL source observations. Task 6 orchestrates these committed
+stages into canonical graph facts through existing public graph and BSL APIs.
+Each implementation task keeps stages independently testable, uses real-source
+fixtures, covers applicable malformed/missing/duplicate/reordered/repeated
+cases, preserves EDT behavior, and runs focused plus full workspace validation.
+
+Task 7 adds the smallest provenance-backed paired fixture allowed by corpus
+policy. Its canonical projection compares accepted nodes, identities, names,
+payloads, ownership, declarations, terminal outcomes, and public consumers,
+while excluding only ADR-0036 deliberate differences such as source paths,
+producer identifiers, serialization order, encoding, and line endings. It adds
+non-empty assertions and a controlled semantic change, then synchronizes
+Semantic Model, Roadmap current state, fixture provenance, and truthful
+adapter-specific Coverage evidence without completing the sprint.
+
+Task 8 reviews the planning-through-Task-7 range and creates
+`docs/reviews/sprint-14-designer-xml-adapter.md` only for `pass` or `pass with
+non-blocking follow-ups` after all focused and full validation succeeds. That
+decision transitions Sprint 14 to `completed`, makes the v0.3 release review
+eligible, and leaves Sprint 15 as the next planning target after the release
+gate. It atomically retires the exact Sprint 13 suite in the same review commit;
+an inventory mismatch, endangered untracked file, or retained link dependency
+blocks retirement and the final commit. The review never silently fixes code.
+
+##### Sprint 14 state gates and completion criteria
+
+Sprint 14 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-7, the accepted ADR-0036 first
+slice, successful production and conformance evidence, preserved identities and
+EDT behavior, explicit deferred scope, truthful Coverage, the complete workspace
+gate, and a non-blocking Task 8 decision. A blocked review keeps Sprint 14
+incomplete, preserves the Sprint 13 suite, and leaves the v0.3 release review
+and Sprint 15 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, scope, unchanged `next` state,
+previous-suite inventory, `git diff --check`, and unrelated-change absence.
+Suggested planning commit message:
+
+```text
+Plan Sprint 14 Designer XML adapter
+```
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

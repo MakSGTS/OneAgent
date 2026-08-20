@@ -3,6 +3,7 @@
 mod bsl_graph;
 mod command_parameter;
 mod coverage;
+mod event_subscription;
 mod form_navigation;
 mod form_navigation_emission;
 mod metadata_object;
@@ -21,6 +22,14 @@ mod writes_resolution;
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
     FileSystemEdtMetadataObjectReader,
+};
+
+pub use event_subscription::{
+    EdtEventSubscriptionDescriptor, EdtEventSubscriptionError, EdtEventSubscriptionHandler,
+    EdtEventSubscriptionHandlerReason, EdtEventSubscriptionReader,
+    EdtEventSubscriptionSourceContext, EdtEventSubscriptionSourceObservation,
+    EdtEventSubscriptionSourceOutcomeKind, EdtEventSubscriptionSourceReason,
+    FileSystemEdtEventSubscriptionReader,
 };
 
 pub use command_parameter::{

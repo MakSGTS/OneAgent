@@ -1,7 +1,7 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    EdgeId, EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind, SemanticGraph,
-    SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphTraversalDirection,
+    EdgeChange, EdgeId, EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind,
+    SemanticGraph, SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphTraversalDirection,
     SemanticGraphTraversalOptions,
 };
 use oneagent_metadata::{
@@ -494,6 +494,105 @@ fn dependencies_and_usages_follow_dependency_edge_policy() {
         usages[0].direction(),
         SemanticGraphTraversalDirection::Upstream
     );
+}
+
+#[test]
+fn query_register_reads_and_dependencies_remain_distinct_across_consumers() {
+    let query_id = id("query.inventory_cost");
+    let register_id = id("metadata.accumulation_register.inventory_cost");
+    let build = |reverse: bool| {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            query_id.clone(),
+            name("InventoryCostQuery"),
+            NodeKind::Query,
+        ));
+        graph.insert_node(GraphNode::new(
+            register_id.clone(),
+            name("InventoryCost"),
+            NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        ));
+        let edges = [
+            GraphEdge::new(query_id.clone(), register_id.clone(), EdgeKind::Reads),
+            GraphEdge::new(query_id.clone(), register_id.clone(), EdgeKind::DependsOn),
+        ];
+        if reverse {
+            for edge in edges.into_iter().rev() {
+                graph.insert_edge(edge).expect("edge must be stored");
+            }
+        } else {
+            for edge in edges {
+                graph.insert_edge(edge).expect("edge must be stored");
+            }
+        }
+        graph
+    };
+    let graph = build(false);
+    let reversed = build(true);
+    let query_node_id = node_id(query_id.as_str());
+    let register_node_id = node_id(register_id.as_str());
+    let query = graph.query();
+    let mut dependency_kinds = query
+        .direct_dependencies(&query_node_id)
+        .into_iter()
+        .map(|relation| relation.edge().kind())
+        .collect::<Vec<_>>();
+    dependency_kinds.sort();
+    let mut usage_kinds = query
+        .direct_usages(&register_node_id)
+        .into_iter()
+        .map(|relation| relation.edge().kind())
+        .collect::<Vec<_>>();
+    usage_kinds.sort();
+
+    assert_eq!(dependency_kinds, vec![EdgeKind::Reads, EdgeKind::DependsOn]);
+    assert_eq!(usage_kinds, dependency_kinds);
+    assert_eq!(
+        query
+            .direct_dependencies_by_kind(&query_node_id, EdgeKind::Reads)
+            .len(),
+        1
+    );
+    assert_eq!(
+        query
+            .direct_dependencies_by_kind(&query_node_id, EdgeKind::DependsOn)
+            .len(),
+        1
+    );
+    let mut reversed_dependency_kinds = reversed
+        .query()
+        .direct_dependencies(&query_node_id)
+        .into_iter()
+        .map(|relation| relation.edge().kind())
+        .collect::<Vec<_>>();
+    reversed_dependency_kinds.sort();
+    assert_eq!(reversed_dependency_kinds, dependency_kinds);
+
+    let report = graph.report();
+    assert_eq!(report.edges().by_kind()[&EdgeKind::Reads], 1);
+    assert_eq!(report.edges().by_kind()[&EdgeKind::DependsOn], 1);
+
+    let mut without_edges = SemanticGraph::new();
+    without_edges.insert_node(GraphNode::new(
+        query_id,
+        name("InventoryCostQuery"),
+        NodeKind::Query,
+    ));
+    without_edges.insert_node(GraphNode::new(
+        register_id,
+        name("InventoryCost"),
+        NodeKind::Metadata(MetadataKind::AccumulationRegister),
+    ));
+    let diff = without_edges.diff(&graph);
+    assert_eq!(diff.added_edges().len(), 2);
+    let mut changed_kinds = diff
+        .added_edges()
+        .iter()
+        .map(EdgeChange::edge_kind)
+        .collect::<Vec<_>>();
+    changed_kinds.sort();
+    assert_eq!(changed_kinds, vec![EdgeKind::Reads, EdgeKind::DependsOn]);
+    assert_ne!(diff.added_edges()[0].id(), diff.added_edges()[1].id());
 }
 
 #[test]

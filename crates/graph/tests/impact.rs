@@ -5,7 +5,7 @@ use oneagent_graph::{
     OwnershipImpactMode, ProducerId, Provenance, ProvenanceImpactMode, ResolutionState,
     SemanticGraph, SemanticGraphEdgeFilter, SemanticImpactAnalyzer, SemanticImpactOptions,
 };
-use oneagent_metadata::MetadataMemberPayload;
+use oneagent_metadata::{MetadataKind, MetadataMemberPayload};
 
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
@@ -167,6 +167,76 @@ fn modified_dependency_affects_direct_and_transitive_usages() {
         == ImpactReasonKind::DependencyPropagation
         && reason.edge_kind() == Some(EdgeKind::Calls)
         && reason.depth() == 1));
+}
+
+#[test]
+fn query_reads_and_depends_on_reasons_share_one_affected_query() {
+    let build = |register_name: &str| {
+        let mut graph = SemanticGraph::new();
+        add_node(
+            &mut graph,
+            "query.inventory_cost",
+            "InventoryCostQuery",
+            NodeKind::Query,
+        );
+        add_node(
+            &mut graph,
+            "metadata.accumulation_register.inventory_cost",
+            register_name,
+            NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        );
+        add_edge(
+            &mut graph,
+            "query.inventory_cost",
+            "metadata.accumulation_register.inventory_cost",
+            EdgeKind::Reads,
+        );
+        add_edge(
+            &mut graph,
+            "query.inventory_cost",
+            "metadata.accumulation_register.inventory_cost",
+            EdgeKind::DependsOn,
+        );
+        graph
+    };
+    let previous = build("InventoryCost");
+    let current = build("InventoryCostRenamed");
+    let diff = previous.diff(&current);
+
+    let result =
+        SemanticImpactAnalyzer::analyze(&previous, &current, &diff, &SemanticImpactOptions::new(1))
+            .expect("query data-source impact must succeed");
+    let affected_query = result
+        .affected_nodes()
+        .iter()
+        .find(|node| node.node_id().as_str() == "query.inventory_cost")
+        .expect("Query must be affected exactly once");
+    let mut reasons = affected_query
+        .reasons()
+        .iter()
+        .filter_map(|reason| {
+            reason
+                .edge_kind()
+                .map(|edge_kind| (edge_kind, reason.snapshot()))
+        })
+        .collect::<Vec<_>>();
+    reasons.sort();
+
+    assert_eq!(result.affected_nodes().len(), 2);
+    assert_eq!(
+        affected_query.status(),
+        ImpactNodeStatus::TransitivelyAffected
+    );
+    assert_eq!(affected_query.depth(), 1);
+    assert_eq!(
+        reasons,
+        vec![
+            (EdgeKind::Reads, ImpactSnapshot::Previous),
+            (EdgeKind::Reads, ImpactSnapshot::Current),
+            (EdgeKind::DependsOn, ImpactSnapshot::Previous),
+            (EdgeKind::DependsOn, ImpactSnapshot::Current),
+        ]
+    );
 }
 
 #[test]

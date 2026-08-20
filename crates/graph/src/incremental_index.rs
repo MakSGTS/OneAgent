@@ -1969,6 +1969,46 @@ mod tests {
     }
 
     #[test]
+    fn query_register_data_source_edges_match_clean_rebuild() {
+        let mut previous = SemanticGraph::new();
+        insert_nodes(
+            &mut previous,
+            [
+                node(
+                    "query.inventory_cost",
+                    "InventoryCostQuery",
+                    NodeKind::Query,
+                ),
+                node(
+                    "metadata.accumulation_register.inventory_cost",
+                    "InventoryCost",
+                    NodeKind::Metadata(MetadataKind::AccumulationRegister),
+                ),
+            ],
+        );
+        let mut current = previous.clone();
+        insert_edges(
+            &mut current,
+            [
+                edge(
+                    "query.inventory_cost",
+                    "metadata.accumulation_register.inventory_cost",
+                    EdgeKind::Reads,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "query.inventory_cost",
+                    "metadata.accumulation_register.inventory_cost",
+                    EdgeKind::DependsOn,
+                    FactOrigin::Derived,
+                ),
+            ],
+        );
+
+        transition_and_assert(&AcceptedSemanticIndex::rebuild(&previous), &current);
+    }
+
+    #[test]
     fn full_rebuild_oracle_covers_adversarial_containment_and_incident_deletion() {
         let mut previous = SemanticGraph::new();
         insert_nodes(

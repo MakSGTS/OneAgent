@@ -976,15 +976,31 @@ fn references_graph_rejects_invalid_endpoints_with_exact_deterministic_context()
 }
 
 #[test]
-fn reads_schema_accepts_first_slice_metadata_targets() {
+fn query_data_source_edges_accept_exact_metadata_target_matrix() {
     let schema = SemanticGraphSchema;
+    let accepted_targets = [
+        MetadataKind::Catalog,
+        MetadataKind::InformationRegister,
+        MetadataKind::AccumulationRegister,
+        MetadataKind::AccountingRegister,
+    ];
 
-    for metadata_kind in [MetadataKind::Catalog, MetadataKind::InformationRegister] {
-        assert!(schema.allows(
-            NodeKind::Query,
-            EdgeKind::Reads,
-            NodeKind::Metadata(metadata_kind),
-        ));
+    for edge_kind in [EdgeKind::Reads, EdgeKind::DependsOn] {
+        for target_kind in node_kinds() {
+            let expected =
+                matches!(target_kind, NodeKind::Metadata(kind) if accepted_targets.contains(&kind));
+            assert_eq!(
+                schema.allows(NodeKind::Query, edge_kind, target_kind),
+                expected,
+                "{edge_kind:?} endpoint decision differs for Query -> {target_kind:?}",
+            );
+        }
+        for source_kind in node_kinds() {
+            assert!(
+                !schema.allows(source_kind, edge_kind, NodeKind::Query),
+                "{edge_kind:?} unexpectedly accepts reversed {source_kind:?} -> Query",
+            );
+        }
     }
 }
 
@@ -1014,7 +1030,10 @@ fn reads_schema_rejects_metadata_targets_outside_allowlist() {
     for metadata_kind in metadata_kinds().into_iter().filter(|kind| {
         !matches!(
             kind,
-            MetadataKind::Catalog | MetadataKind::InformationRegister
+            MetadataKind::Catalog
+                | MetadataKind::InformationRegister
+                | MetadataKind::AccumulationRegister
+                | MetadataKind::AccountingRegister
         )
     }) {
         assert!(
@@ -1073,10 +1092,12 @@ fn reads_schema_rejects_unknown_targets() {
 }
 
 #[test]
-fn reads_graph_validation_accepts_both_first_slice_target_kinds() {
+fn query_data_source_graph_validation_accepts_both_edge_kinds_for_all_targets() {
     let query_id = id("query.reads");
     let catalog_id = id("metadata.catalog.products");
     let information_register_id = id("metadata.information_register.objects");
+    let accumulation_register_id = id("metadata.accumulation_register.stock");
+    let accounting_register_id = id("metadata.accounting_register.ledger");
     let mut graph = SemanticGraph::new();
 
     for (node_id, node_name, node_kind) in [
@@ -1091,6 +1112,16 @@ fn reads_graph_validation_accepts_both_first_slice_target_kinds() {
             "Objects",
             NodeKind::Metadata(MetadataKind::InformationRegister),
         ),
+        (
+            accumulation_register_id.clone(),
+            "Stock",
+            NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        ),
+        (
+            accounting_register_id.clone(),
+            "Ledger",
+            NodeKind::Metadata(MetadataKind::AccountingRegister),
+        ),
     ] {
         graph.insert_node(GraphNode::new_with_provenance(
             node_id,
@@ -1099,21 +1130,30 @@ fn reads_graph_validation_accepts_both_first_slice_target_kinds() {
             vec![provenance("query.reads")],
         ));
     }
-    for target_id in [catalog_id, information_register_id] {
-        graph
-            .insert_edge(GraphEdge::new_with_provenance(
-                query_id.clone(),
-                target_id,
-                EdgeKind::Reads,
-                vec![provenance("query.reads")],
-            ))
-            .expect("Reads edge must be stored");
+    for target_id in [
+        catalog_id,
+        information_register_id,
+        accumulation_register_id,
+        accounting_register_id,
+    ] {
+        for edge_kind in [EdgeKind::Reads, EdgeKind::DependsOn] {
+            graph
+                .insert_edge(GraphEdge::new_with_provenance(
+                    query_id.clone(),
+                    target_id.clone(),
+                    edge_kind,
+                    vec![provenance("query.reads")],
+                ))
+                .expect("Query data-source edge must be stored");
+        }
     }
 
     let result = graph.validate();
 
     assert!(result.is_valid());
     assert!(result.issues().is_empty());
+    assert_eq!(graph.query().edges_by_kind(EdgeKind::Reads).len(), 4);
+    assert_eq!(graph.query().edges_by_kind(EdgeKind::DependsOn).len(), 4);
 }
 
 #[test]

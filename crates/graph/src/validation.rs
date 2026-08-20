@@ -1194,6 +1194,7 @@ const fn allows_depends_on(source: NodeKind, target: NodeKind) -> bool {
             source,
             NodeKind::Command | NodeKind::Metadata(MetadataKind::Command)
         ) && is_metadata_type_target(target))
+        || (matches!(source, NodeKind::Query) && is_query_data_source_target(target))
 }
 
 const fn is_metadata_type_target(kind: NodeKind) -> bool {
@@ -1222,11 +1223,19 @@ const fn allows_opens(source: NodeKind, target: NodeKind) -> bool {
 }
 
 const fn allows_reads(source: NodeKind, target: NodeKind) -> bool {
-    matches!(source, NodeKind::Query)
-        && matches!(
-            target,
-            NodeKind::Metadata(MetadataKind::Catalog | MetadataKind::InformationRegister)
+    matches!(source, NodeKind::Query) && is_query_data_source_target(target)
+}
+
+const fn is_query_data_source_target(kind: NodeKind) -> bool {
+    matches!(
+        kind,
+        NodeKind::Metadata(
+            MetadataKind::Catalog
+                | MetadataKind::InformationRegister
+                | MetadataKind::AccumulationRegister
+                | MetadataKind::AccountingRegister
         )
+    )
 }
 
 const fn allows_writes(source: NodeKind, target: NodeKind) -> bool {

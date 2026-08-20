@@ -381,5 +381,5 @@ fn includes_malformed_descriptor_is_a_fatal_typed_build_error() {
         .build_graph_with_diagnostics(root.path())
         .expect_err("invalid Subsystem descriptor must fail the build");
 
-    assert!(matches!(error, EdtGraphError::SubsystemContent(_)));
+    assert!(matches!(error, EdtGraphError::SubsystemHierarchy(_)));
 }

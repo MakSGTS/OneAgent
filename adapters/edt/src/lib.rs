@@ -385,6 +385,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const EDT_GRAPH_PRODUCER: &str = "oneagent.edt.semantic-graph-builder";
 const EDT_SUBSYSTEM_CONTENT_RESOLUTION_PRODUCER: &str = "oneagent.edt.subsystem-content-resolution";
+const EDT_SUBSYSTEM_HIERARCHY_RESOLUTION_PRODUCER: &str =
+    "oneagent.edt.subsystem-hierarchy-resolution";
 const EDT_METADATA_REFERENCE_COLLECTION_PRODUCER: &str =
     "oneagent.edt.metadata-reference-collection";
 const EDT_COMMAND_PARAMETER_REJECTION_PRODUCER: &str = "oneagent.edt.command-parameter-rejection";
@@ -607,7 +609,7 @@ impl FileSystemEdtSemanticGraphBuilder {
         let mut configuration_writes_sources = Vec::new();
         let mut metadata_references = MetadataReferenceCollection::default();
         let mut metadata_extensions = BTreeSet::new();
-        let mut subsystem_content = BTreeSet::new();
+        let (mut subsystem_content, mut subsystem_hierarchy) = (BTreeSet::new(), BTreeSet::new());
         let mut role_rights = Vec::new();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
@@ -652,7 +654,7 @@ impl FileSystemEdtSemanticGraphBuilder {
                 continue;
             };
 
-            let collected = collect_top_level_metadata(
+            let collected = collect_supported_metadata_directory(
                 project_root,
                 &entry.path(),
                 kind,
@@ -664,15 +666,16 @@ impl FileSystemEdtSemanticGraphBuilder {
             metadata_references.extend(collected.references)?;
             metadata_extensions.extend(collected.extensions);
             subsystem_content.extend(collected.subsystem_content);
+            subsystem_hierarchy.extend(collected.subsystem_hierarchy);
             role_rights.extend(collected.role_rights);
         }
 
         configuration_modules.sort_by(|left, right| left.id().cmp(right.id()));
 
         resolve_metadata_extensions(&mut graph, &metadata_extensions)?;
-
-        emit_subsystem_includes(
+        emit_subsystem_composition(
             &mut graph,
+            &subsystem_hierarchy,
             &subsystem_content,
             &mut diagnostics,
             &mut reference_statistics,
@@ -714,6 +717,20 @@ impl FileSystemEdtSemanticGraphBuilder {
             reference_statistics,
             reference_requests,
         )
+    }
+}
+
+fn collect_supported_metadata_directory(
+    project_root: &Path,
+    directory: &Path,
+    kind: MetadataKind,
+    configuration_id: &EntityId,
+    graph: &mut SemanticGraph,
+) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
+    if kind == MetadataKind::Subsystem {
+        collect_subsystem_hierarchy(project_root, configuration_id, graph)
+    } else {
+        collect_top_level_metadata(project_root, directory, kind, configuration_id, graph)
     }
 }
 
@@ -825,7 +842,21 @@ struct CollectedTopLevelMetadata {
     references: MetadataReferenceCollection,
     extensions: BTreeSet<PendingMetadataExtension>,
     subsystem_content: BTreeSet<PendingSubsystemContentObservation>,
+    subsystem_hierarchy: BTreeSet<PendingSubsystemHierarchyObservation>,
     role_rights: Vec<EdtRoleRightsDescriptor>,
+}
+
+impl CollectedTopLevelMetadata {
+    fn extend(&mut self, other: Self) -> Result<(), EdtGraphError> {
+        self.modules.extend(other.modules);
+        self.writes_sources.extend(other.writes_sources);
+        self.references.extend(other.references)?;
+        self.extensions.extend(other.extensions);
+        self.subsystem_content.extend(other.subsystem_content);
+        self.subsystem_hierarchy.extend(other.subsystem_hierarchy);
+        self.role_rights.extend(other.role_rights);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -939,6 +970,18 @@ struct PendingSubsystemContentObservation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PendingSubsystemHierarchyObservation {
+    parent_descriptor_path: PathBuf,
+    child_descriptor_path: PathBuf,
+    parent_metadata_id: EntityId,
+    child_metadata_id: EntityId,
+    parent_subsystem_node_id: EntityId,
+    child_subsystem_node_id: EntityId,
+    raw_child_declaration: String,
+    raw_parent_declaration: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum SubsystemContentTarget {
     Malformed,
     Unsupported {
@@ -949,6 +992,76 @@ enum SubsystemContentTarget {
         metadata_kind: MetadataKind,
         local_name: EntityName,
     },
+}
+
+fn collect_subsystem_hierarchy(
+    project_root: &Path,
+    configuration_id: &EntityId,
+    graph: &mut SemanticGraph,
+) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
+    let hierarchy = FileSystemEdtSubsystemHierarchyReader
+        .read(project_root)
+        .map_err(EdtGraphError::SubsystemHierarchy)?;
+    let descriptors_by_id = hierarchy
+        .descriptors()
+        .iter()
+        .map(|descriptor| (descriptor.metadata().id().clone(), descriptor))
+        .collect::<BTreeMap<_, _>>();
+    let mut collected = CollectedTopLevelMetadata::default();
+
+    for source in hierarchy.descriptors() {
+        let descriptor = source.metadata().clone();
+        let object_directory = descriptor
+            .descriptor_path()
+            .parent()
+            .ok_or_else(|| EdtGraphError::InvalidSubsystemDescriptorDirectory {
+                path: descriptor.descriptor_path().to_path_buf(),
+            })?
+            .to_path_buf();
+        let object = collect_metadata_descriptor(
+            project_root,
+            &object_directory,
+            descriptor,
+            configuration_id,
+            graph,
+        )?;
+        collected.extend(object)?;
+    }
+
+    for relation in hierarchy.relations() {
+        let parent = descriptors_by_id.get(relation.parent_id()).ok_or_else(|| {
+            EdtGraphError::InvalidSubsystemHierarchyRelation {
+                parent_id: relation.parent_id().clone(),
+                child_id: relation.child_id().clone(),
+            }
+        })?;
+        let child = descriptors_by_id.get(relation.child_id()).ok_or_else(|| {
+            EdtGraphError::InvalidSubsystemHierarchyRelation {
+                parent_id: relation.parent_id().clone(),
+                child_id: relation.child_id().clone(),
+            }
+        })?;
+        collected
+            .subsystem_hierarchy
+            .insert(PendingSubsystemHierarchyObservation {
+                parent_descriptor_path: project_relative_subsystem_descriptor_path(
+                    project_root,
+                    parent.metadata().descriptor_path(),
+                )?,
+                child_descriptor_path: project_relative_subsystem_descriptor_path(
+                    project_root,
+                    child.metadata().descriptor_path(),
+                )?,
+                parent_metadata_id: relation.parent_id().clone(),
+                child_metadata_id: relation.child_id().clone(),
+                parent_subsystem_node_id: subsystem_node_id(parent.metadata())?,
+                child_subsystem_node_id: subsystem_node_id(child.metadata())?,
+                raw_child_declaration: relation.raw_child_declaration().to_owned(),
+                raw_parent_declaration: relation.raw_parent_declaration().to_owned(),
+            });
+    }
+
+    Ok(collected)
 }
 
 fn collect_top_level_metadata(
@@ -989,12 +1102,7 @@ fn collect_top_level_metadata(
             graph,
         )?;
 
-        collected.modules.extend(object.modules);
-        collected.writes_sources.extend(object.writes_sources);
-        collected.references.extend(object.references)?;
-        collected.extensions.extend(object.extensions);
-        collected.subsystem_content.extend(object.subsystem_content);
-        collected.role_rights.extend(object.role_rights);
+        collected.extend(object)?;
     }
 
     Ok(collected)
@@ -1007,14 +1115,28 @@ fn collect_metadata_object(
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
-    let metadata_reader = FileSystemEdtMetadataObjectReader;
+    let descriptor = FileSystemEdtMetadataObjectReader
+        .read(object_directory, kind)
+        .map_err(EdtGraphError::MetadataObject)?;
+    collect_metadata_descriptor(
+        project_root,
+        object_directory,
+        descriptor,
+        configuration_id,
+        graph,
+    )
+}
+
+fn collect_metadata_descriptor(
+    project_root: &Path,
+    object_directory: &Path,
+    descriptor: EdtMetadataObjectDescriptor,
+    configuration_id: &EntityId,
+    graph: &mut SemanticGraph,
+) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     let module_reader = FileSystemEdtModuleReader;
     let structure_reader = FileSystemEdtMetadataStructureReader;
     let mut collected = CollectedTopLevelMetadata::default();
-
-    let descriptor = metadata_reader
-        .read(object_directory, kind)
-        .map_err(EdtGraphError::MetadataObject)?;
     let descriptor_source = metadata_object_source_id(&descriptor)?;
 
     let payload = metadata_payload(&descriptor);
@@ -1234,14 +1356,8 @@ fn collect_subsystem_content(
     let content = FileSystemEdtSubsystemContentReader
         .read(descriptor)
         .map_err(EdtGraphError::SubsystemContent)?;
-    let descriptor_path = content
-        .descriptor_path()
-        .strip_prefix(project_root)
-        .map_err(|_| EdtGraphError::SubsystemDescriptorOutsideProject {
-            project_root: project_root.to_path_buf(),
-            path: content.descriptor_path().to_path_buf(),
-        })?
-        .to_path_buf();
+    let descriptor_path =
+        project_relative_subsystem_descriptor_path(project_root, content.descriptor_path())?;
     let subsystem_node_id = subsystem_node_id(descriptor)?;
 
     for raw_token in content.raw_content() {
@@ -1255,6 +1371,24 @@ fn collect_subsystem_content(
     }
 
     Ok(())
+}
+
+fn project_relative_subsystem_descriptor_path(
+    project_root: &Path,
+    descriptor_path: &Path,
+) -> Result<PathBuf, EdtGraphError> {
+    if let Ok(relative) = descriptor_path.strip_prefix(project_root) {
+        return Ok(relative.to_path_buf());
+    }
+    if let Ok(canonical_project_root) = fs::canonicalize(project_root)
+        && let Ok(relative) = descriptor_path.strip_prefix(canonical_project_root)
+    {
+        return Ok(relative.to_path_buf());
+    }
+    Err(EdtGraphError::SubsystemDescriptorOutsideProject {
+        project_root: project_root.to_path_buf(),
+        path: descriptor_path.to_path_buf(),
+    })
 }
 
 fn normalize_subsystem_content_target(raw_token: &str) -> SubsystemContentTarget {
@@ -1766,6 +1900,46 @@ fn metadata_reference_resolver_provenance(
             })
         })
         .collect()
+}
+
+fn emit_subsystem_composition(
+    graph: &mut SemanticGraph,
+    hierarchy: &BTreeSet<PendingSubsystemHierarchyObservation>,
+    content: &BTreeSet<PendingSubsystemContentObservation>,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    statistics: &mut SemanticReferenceStatistics,
+) -> Result<(), EdtGraphError> {
+    emit_subsystem_hierarchy(graph, hierarchy)?;
+    emit_subsystem_includes(graph, content, diagnostics, statistics)
+}
+
+fn emit_subsystem_hierarchy(
+    graph: &mut SemanticGraph,
+    observations: &BTreeSet<PendingSubsystemHierarchyObservation>,
+) -> Result<(), EdtGraphError> {
+    for observation in observations {
+        for node_id in [
+            &observation.parent_subsystem_node_id,
+            &observation.child_subsystem_node_id,
+        ] {
+            let actual_kind = graph.node(node_id).map(GraphNode::kind);
+            if actual_kind != Some(NodeKind::Subsystem) {
+                return Err(EdtGraphError::InvalidSubsystemHierarchyEndpoint {
+                    node_id: node_id.clone(),
+                    actual_kind,
+                });
+            }
+        }
+
+        insert_edge(
+            graph,
+            observation.parent_subsystem_node_id.clone(),
+            observation.child_subsystem_node_id.clone(),
+            EdgeKind::Includes,
+            subsystem_hierarchy_provenance(subsystem_hierarchy_source_id(observation)?),
+        )?;
+    }
+    Ok(())
 }
 
 fn emit_subsystem_includes(
@@ -2354,6 +2528,55 @@ fn graph_provenance(
     )
 }
 
+fn subsystem_hierarchy_provenance(source: EntityId) -> Provenance {
+    Provenance::new(
+        Some(source),
+        ProducerId::new(EDT_SUBSYSTEM_HIERARCHY_RESOLUTION_PRODUCER),
+        FactOrigin::Resolved,
+        Confidence::Exact,
+        ResolutionState::Resolved,
+    )
+}
+
+fn subsystem_hierarchy_source_id(
+    observation: &PendingSubsystemHierarchyObservation,
+) -> Result<EntityId, EdtGraphError> {
+    let child_descriptor = observation
+        .child_descriptor_path
+        .to_string_lossy()
+        .replace('\\', "/");
+    let fields = [
+        encoded_source_field("stage", "subsystem_hierarchy_resolution"),
+        encoded_source_field(
+            "parent_metadata_uuid",
+            observation.parent_metadata_id.as_str(),
+        ),
+        encoded_source_field(
+            "child_metadata_uuid",
+            observation.child_metadata_id.as_str(),
+        ),
+        encoded_source_field("child_descriptor", &child_descriptor),
+        encoded_source_field("parent_field", "mdclass:Subsystem/subsystems"),
+        encoded_source_field("raw_child", &observation.raw_child_declaration),
+        encoded_source_field("child_field", "mdclass:Subsystem/parentSubsystem"),
+        encoded_source_field("raw_parent", &observation.raw_parent_declaration),
+        encoded_source_field(
+            "resolved_parent",
+            observation.parent_subsystem_node_id.as_str(),
+        ),
+        encoded_source_field(
+            "resolved_child",
+            observation.child_subsystem_node_id.as_str(),
+        ),
+        encoded_source_field("outcome", "resolved"),
+    ];
+    source_id_from_path_fragment(
+        &observation.parent_descriptor_path,
+        fields.join(";"),
+        EdtGraphError::InvalidIdentifier,
+    )
+}
+
 fn subsystem_content_provenance(source: EntityId, resolution: ResolutionState) -> Provenance {
     Provenance::new(
         Some(source),
@@ -2775,6 +2998,31 @@ pub enum EdtGraphError {
     /// Direct Subsystem content declarations could not be read.
     SubsystemContent(EdtSubsystemContentError),
 
+    /// Recursive Subsystem hierarchy source discovery failed.
+    SubsystemHierarchy(EdtSubsystemHierarchyError),
+
+    /// A hierarchy descriptor path has no containing object directory.
+    InvalidSubsystemDescriptorDirectory {
+        /// Discovered descriptor path.
+        path: PathBuf,
+    },
+
+    /// A hierarchy relation refers to a descriptor absent from its source model.
+    InvalidSubsystemHierarchyRelation {
+        /// Parent metadata UUID.
+        parent_id: EntityId,
+        /// Child metadata UUID.
+        child_id: EntityId,
+    },
+
+    /// A hierarchy relation has a missing or incompatible flat Subsystem endpoint.
+    InvalidSubsystemHierarchyEndpoint {
+        /// Expected flat Subsystem node identifier.
+        node_id: EntityId,
+        /// Actual node kind, or `None` when the node is missing.
+        actual_kind: Option<NodeKind>,
+    },
+
     /// A discovered Subsystem descriptor is outside the project root.
     SubsystemDescriptorOutsideProject {
         /// EDT project root.
@@ -2878,6 +3126,12 @@ impl Display for EdtGraphError {
             Self::SubsystemContent(error) => {
                 write!(formatter, "failed to read EDT Subsystem content: {error}")
             }
+            Self::SubsystemHierarchy(_)
+            | Self::InvalidSubsystemDescriptorDirectory { .. }
+            | Self::InvalidSubsystemHierarchyRelation { .. }
+            | Self::InvalidSubsystemHierarchyEndpoint { .. } => {
+                format_subsystem_hierarchy_graph_error(self, formatter)
+            }
             Self::SubsystemDescriptorOutsideProject { project_root, path } => write!(
                 formatter,
                 "EDT Subsystem descriptor {} is outside project root {}",
@@ -2932,6 +3186,37 @@ impl Display for EdtGraphError {
     }
 }
 
+fn format_subsystem_hierarchy_graph_error(
+    error: &EdtGraphError,
+    formatter: &mut Formatter<'_>,
+) -> std::fmt::Result {
+    match error {
+        EdtGraphError::SubsystemHierarchy(error) => {
+            write!(formatter, "failed to read EDT Subsystem hierarchy: {error}")
+        }
+        EdtGraphError::InvalidSubsystemDescriptorDirectory { path } => write!(
+            formatter,
+            "EDT Subsystem descriptor has no object directory: {}",
+            path.display()
+        ),
+        EdtGraphError::InvalidSubsystemHierarchyRelation {
+            parent_id,
+            child_id,
+        } => write!(
+            formatter,
+            "EDT Subsystem hierarchy relation `{parent_id}` -> `{child_id}` has missing source descriptors"
+        ),
+        EdtGraphError::InvalidSubsystemHierarchyEndpoint {
+            node_id,
+            actual_kind,
+        } => write!(
+            formatter,
+            "flat Subsystem hierarchy endpoint `{node_id}` is invalid; actual kind: {actual_kind:?}"
+        ),
+        _ => unreachable!("Subsystem hierarchy formatter received another error category"),
+    }
+}
+
 impl std::error::Error for EdtGraphError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -2943,6 +3228,7 @@ impl std::error::Error for EdtGraphError {
             Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
             Self::SubsystemContent(error) => Some(error),
+            Self::SubsystemHierarchy(error) => Some(error),
             Self::RoleRights(error) => Some(error),
             Self::Graph(error) => Some(error),
             Self::ReferenceRequest(error) => Some(error),
@@ -2950,6 +3236,9 @@ impl std::error::Error for EdtGraphError {
             Self::InvalidIdentifier
             | Self::InvalidName
             | Self::InvalidMetadataReferenceRequest { .. }
+            | Self::InvalidSubsystemDescriptorDirectory { .. }
+            | Self::InvalidSubsystemHierarchyRelation { .. }
+            | Self::InvalidSubsystemHierarchyEndpoint { .. }
             | Self::SubsystemDescriptorOutsideProject { .. }
             | Self::InvalidSubsystemSource { .. }
             | Self::InvalidFormCommandModuleOwner { .. }

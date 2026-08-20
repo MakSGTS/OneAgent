@@ -2331,8 +2331,9 @@ Executable registry state is Graph Domain 88 capabilities: 84 `Supported` and
 4 `NotApplicable`; EDT 104 capabilities: 99 `Supported` and 5
 `NotApplicable`. Both registries have zero Critical, High, or Medium gaps.
 `MetadataKind::EventSubscription`, its EDT metadata node, and
-`EdgeKind::Triggers` have complete production evidence. Sprint 11 remains
-active until the integration review records its decision.
+`EdgeKind::Triggers` have complete production evidence. The Sprint 11
+integration review records `pass`; Sprint 11 is completed and Sprint 12 SKD
+and Report Model is the next planning target.
 
 ### Provenance inventory
 

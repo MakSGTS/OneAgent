@@ -141,6 +141,7 @@ planned reuse; every sprint still performs a focused readiness check at kickoff.
 | Sprint 8 — Registers and Queries | v0.3 | Expand direct persistent Query sources through public requests, retained Reads, and normalized Query dependencies without broadening the accepted grammar. | [Sprint review](reviews/sprint-8-registers-queries.md) | completed |
 | Sprint 9 — Roles and Access Rights | v0.3 | Preserve optional opaque EDT row restrictions as typed conditional direct Grants without changing unconditional AccessRight compatibility or claiming effective authorization. | [Sprint review](reviews/sprint-9-roles-access-rights.md) | completed |
 | Sprint 10 — Subsystems and Composition | v0.3 | Preserve strict nested Subsystem source agreement, direct hierarchy and composition, and computed transitive membership without persisted closure. | [Sprint review](reviews/sprint-10-subsystems-composition.md) | completed |
+| Sprint 11 — Event Subscriptions | v0.3 | Preserve stable Event Subscription identity, typed event content, exact and family source References, and owned handler References and Triggers without runtime-dispatch claims. | [Sprint review](reviews/sprint-11-event-subscriptions.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
@@ -163,8 +164,10 @@ is completed under [ADR-0031](adr/0031-conditional-grants-semantics.md) with a
 10 is completed under
 [ADR-0032](adr/0032-subsystem-hierarchy-semantics.md) with a `pass` decision in
 the [Sprint 10 integration review](reviews/sprint-10-subsystems-composition.md).
-Sprint 11 is active with Tasks 1-5 implemented and awaiting its integration
-review; v0.3 remains planned through Sprint 14.
+Sprint 11 is completed under
+[ADR-0033](adr/0033-event-subscription-semantics.md) with a `pass` decision in
+the [Sprint 11 integration review](reviews/sprint-11-event-subscriptions.md).
+Sprint 12 is the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -750,8 +753,8 @@ performance claims remain deferred.
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
-| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | active |
-| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
+| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | completed |
+| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | next |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
 
@@ -2399,8 +2402,8 @@ Plan Sprint 10 subsystems and composition
 Sprint 11 was planned from committed Sprint 10 review head
 `62d22c53d0e0c7f077d477398fe899c311dd5cc3`. At the planning baseline the review
 recorded `pass`, Sprint 10 was `completed`, and Sprint 11 was the only sprint
-marked `next`. Tasks 1-5 are now implemented, so Sprint 11 is `active` pending
-Task 6 review.
+marked `next`. Tasks 1-5 were implemented in dependency order, and Task 6 now
+records `pass`; Sprint 11 is `completed` and Sprint 12 is `next`.
 
 The repository-owned
 [source investigation](architecture/event-subscription-source-investigation.md)
@@ -2684,8 +2687,8 @@ and 4 `NotApplicable`. The EDT registry remains 104 capabilities and now has 99
 metadata node, and Triggers edge transitions close the three planned High gaps.
 Both registries have zero Critical, High, or Medium gaps. Unsupported source
 families, public multi-target requests, Triggers dependency/Impact propagation,
-and runtime dispatch remain deferred. Sprint 11 remains `active` until Task 6
-records the integration-review decision.
+and runtime dispatch remain deferred. The Sprint 11 integration review records
+`pass`; Sprint 11 is `completed` and Sprint 12 is eligible as `next`.
 
 ##### Task 6 — Sprint 11 integration review
 
@@ -2716,6 +2719,14 @@ cargo test -p oneagent-edt --test semantic_index
 ```
 
 Run the complete workspace validation and record exact command results.
+
+**Review outcome:** The exact planning-through-Task-5 range
+`62d22c53d0e0c7f077d477398fe899c311dd5cc3..ea2294e12505f80dce0d55e43a30fab8f2b78756`
+passed the complete acceptance matrix and focused/full validation with no
+findings or missing evidence. The
+[Sprint 11 integration review](reviews/sprint-11-event-subscriptions.md)
+records the evidence and decision. Sprint 11 is `completed`; Sprint 12 SKD and
+Report Model is `next`.
 
 ##### Sprint 11 state gates and completion criteria
 

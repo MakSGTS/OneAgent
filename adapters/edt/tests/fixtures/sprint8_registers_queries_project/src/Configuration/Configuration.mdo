@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Configuration xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="80000000-0000-0000-0000-000000000000">
+  <name>Sprint8RegistersQueriesFixture</name>
+  <commonModules>CommonModule.Accounting</commonModules>
+  <commonModules>CommonModule.MonthEndTransactions</commonModules>
+  <accumulationRegisters>AccumulationRegister.InventoryCost</accumulationRegisters>
+  <accountingRegisters>AccountingRegister.FinancialAccounting</accountingRegisters>
+</mdclass:Configuration>

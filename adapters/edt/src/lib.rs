@@ -723,7 +723,7 @@ fn add_configuration_module_semantics(
     bsl_graph::add_configuration_module_symbols_with_diagnostics_in_scope(
         graph,
         modules,
-        query_source_resolution::WorkspaceResolutionScope::Complete,
+        workspace_scope,
         diagnostics,
         reference_statistics,
         reference_requests,
@@ -6152,6 +6152,57 @@ mod graph_tests {
         assert_eq!(result.reference_statistics().total(), 4);
         assert_eq!(result.reference_statistics().resolved(), 3);
         assert_eq!(result.reference_statistics().unresolved(), 1);
+        assert!(result.validate().is_valid());
+    }
+
+    #[test]
+    fn production_builder_propagates_explicit_partial_scope_to_query_requests() {
+        let root = create_edt_project();
+        replace_object_module(
+            &root,
+            concat!(
+                "Procedure BeforeWrite()\n",
+                "    Query = New Query;\n",
+                "    Query.Text = \"SELECT Ref FROM Catalog.MissingProducts\";\n",
+                "EndProcedure",
+            ),
+        );
+
+        let result = FileSystemEdtSemanticGraphBuilder::build_graph_with_metadata_reference_scope(
+            root.path(),
+            super::query_source_resolution::WorkspaceResolutionScope::Partial,
+        )
+        .expect("partial Query production build must succeed");
+        let requests = result
+            .reference_request_query()
+            .by_category(SemanticReferenceCategory::QuerySource);
+
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].outcome(),
+            SemanticReferenceRequestOutcome::PartialWorkspace
+        );
+        assert_eq!(requests[0].state(), ResolutionState::Partial);
+        assert!(requests[0].candidates().is_empty());
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(requests[0].source_node(), EdgeKind::Reads)
+                .is_empty()
+        );
+        assert!(
+            result
+                .graph()
+                .outgoing_by_kind(requests[0].source_node(), EdgeKind::DependsOn)
+                .is_empty()
+        );
+        let diagnostic = result
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.source_node() == Some(requests[0].source_node()))
+            .expect("partial Query request must retain its warning projection");
+        assert_eq!(diagnostic.severity(), SemanticDiagnosticSeverity::Warning);
+        assert_eq!(diagnostic.reference(), requests[0].reference());
         assert!(result.validate().is_valid());
     }
 

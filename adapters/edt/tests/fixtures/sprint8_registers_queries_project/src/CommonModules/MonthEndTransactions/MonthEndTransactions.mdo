@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:CommonModule xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="c865fe9e-33ff-4b77-9608-f95db84f24a2">
+  <name>MonthEndTransactions</name>
+  <server>true</server>
+</mdclass:CommonModule>

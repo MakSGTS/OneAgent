@@ -151,7 +151,8 @@ Sprint 7 is completed under
 [ADR-0029](adr/0029-form-command-navigation-semantics.md) with a `pass`
 decision in the
 [Sprint 7 integration review](reviews/sprint-7-forms-commands.md). Sprint 8 is
-the next planning target; v0.3 remains planned through Sprint 14.
+active: Tasks 1–5 are implemented and Task 6 integration review is pending;
+v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -736,7 +737,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | next |
+| Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | active |
 | Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
@@ -1415,8 +1416,8 @@ covers the committed range
 `77a52c6821e64f8fe7b9c71d2304a4ab77585cd7..c16e136eeff2df3296669f8ad682adbd9cdd3180`,
 reports no blocking or non-blocking findings, missing evidence, compatibility
 breaks, or scope violations, and records the successful focused and complete
-workspace validation. Sprint 8 is therefore eligible as the next planning
-target.
+workspace validation. Sprint 8 therefore became eligible for planning and is
+now active under the committed ADR-0030 baseline.
 
 ##### Planning validation and suggested commit
 
@@ -1481,18 +1482,18 @@ declaration sources, query-language data sources, register virtual tables,
 register metadata members, Reads, Writes, and DependsOn as interchangeable
 concepts.
 
-The live planning baseline is:
+The live implementation baseline after Tasks 1–5 is:
 
 - static named BSL Query declarations inside known Procedures or Functions
   already produce stable Query nodes with canonical ownership and provenance;
 - the minimum query-language parser completely accepts one `SELECT` with one
-  direct Catalog or Information Register source and rejects unsupported or
-  unconsumed source-producing grammar without partial Reads;
-- exact private EDT resolution emits canonical provenance-backed Reads and
-  typed missing, ambiguous, incompatible, and partial outcomes;
-- the public ADR-0024 request domain already contains
-  `SemanticReferenceCategory::QuerySource`, but current Query source processing
-  does not use its ledger;
+  direct Catalog, Information Register, Accumulation Register, or Accounting
+  Register source and rejects unsupported or unconsumed source-producing
+  grammar without partial Reads;
+- accepted parsed sources enter the public
+  `SemanticReferenceCategory::QuerySource` ledger, whose deterministic
+  terminal outcomes drive diagnostics, statistics, Reads, and Query-origin
+  DependsOn exactly once;
 - `Reads`, `DependsOn`, and ReferenceRequest capabilities are already Supported
   for their completed first slices, so this sprint expands evidence without a
   status or aggregate-count transition;
@@ -1502,6 +1503,18 @@ The live planning baseline is:
   Register Measure mapping, ownership, metadata type references, Query, Diff,
   Impact, reports, validation, complete/incremental indexes, and deterministic
   builds are compatibility constraints.
+
+Tasks 1–5 are implemented in dependency order. The representative real-format
+EDT fixture and `sprint8_full_builder_matrix_is_complete_deterministic_and_consumer_visible`
+test cover both new register families, the existing Catalog and Information
+Register compatibility matrix, public requests, Reads and DependsOn,
+diagnostics, statistics, validation, Query, Diff, Impact, reports, deterministic
+builds, and source-order independence. Existing focused index evidence proves
+that the expanded Query register edges remain equivalent to a clean rebuild.
+The EDT Coverage Registry remains exactly 101 capabilities: 96 `Supported` and
+5 `NotApplicable`; the graph registry remains exactly 85 capabilities: 82
+`Supported` and 3 `NotApplicable`. Both retain zero Critical, High, and Medium
+gaps. Task 6 integration review is the remaining completion gate.
 
 The repository-owned
 [Register and Query source investigation](architecture/register-query-source-investigation.md)
@@ -1789,9 +1802,9 @@ The message does not authorize staging or committing.
 
 ##### Sprint 8 state gates and completion criteria
 
-Sprint 8 remains `next` during planning. It becomes active only when the
-accepted planning baseline is committed and Task 1 begins under an explicit
-execution instruction.
+Sprint 8 remained `next` during planning and became `active` when the accepted
+planning baseline was committed and Task 1 began under the explicit execution
+instruction. Tasks 1–5 are now implemented; Task 6 remains the completion gate.
 
 A task is `already_complete` only when current committed evidence and successful
 required validation prove every acceptance criterion. Do not create empty
@@ -1882,9 +1895,10 @@ The v0.7 release integration review follows Sprint 41.
 
 The v1.0 release integration review and release decision are part of Sprint 46.
 
-Deferred Sprint 3 scope is not implicitly promoted by this schedule. Query-derived
-`DependsOn` and broader Query sources belong to Sprint 8 only after an accepted
-contract; deny, inheritance, and effective authorization belong to Sprint 9;
+Deferred Sprint 3 scope is not implicitly promoted by this schedule. The
+accepted direct Query-source-derived `DependsOn` slice belongs to Sprint 8 and
+is implemented; broader Query grammar and source families remain deferred.
+Deny, inheritance, and effective authorization belong to Sprint 9;
 Subsystem hierarchy and transitive membership belong to Sprint 10; other
 reference-request families migrate in the sprint that owns their source contract.
 
@@ -1903,7 +1917,7 @@ Ordered follow-up work:
 5. **High — completed:** classify fallback-only `metadata_entity.unknown` as not applicable to EDT without emitting synthetic entities.
 6. **High — completed:** map EDT accounting-register resources to stable, provenance-backed `Measure` nodes (`semantic_node.measure`).
 7. **High — completed:** classify fallback-only `semantic_node.metadata.unknown` as not applicable to EDT without emitting synthetic metadata nodes.
-8. **High — completed:** emit static BSL Query declarations as stable, provenance-backed `NodeKind::Query` nodes; the accepted first query-language parsing and `Reads` slice is completed separately in item 20, while query-derived `DependsOn` and broader query-language support remain deferred.
+8. **High — completed:** emit static BSL Query declarations as stable, provenance-backed `NodeKind::Query` nodes; the accepted query-language parsing, direct Reads, and Sprint 8 Query-origin `DependsOn` slices are complete, while broader query-language support remains deferred.
 9. **High — completed:** emit flat EDT role semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Role)` object nodes.
 10. **High — completed:** derive EDT document `StandardAttribute` nodes with stable identity, ownership, and provenance.
 11. **High — completed:** emit flat EDT `Subsystem` semantic nodes while preserving `NodeKind::Metadata(MetadataKind::Subsystem)` object nodes.
@@ -1915,7 +1929,7 @@ Ordered follow-up work:
 17. **High — completed:** implement the first production slice for declared `Extends` semantic edges using the accepted contract in `docs/adr/0018-extends-semantics.md`.
 18. **High — completed:** implement the first production slice for declared `Grants` semantic edges using the accepted contract in `docs/adr/0019-grants-semantics.md`; EDT role-right declarations now resolve to scoped `AccessRight` nodes and canonical Grants edges with deterministic provenance.
 19. **High — completed:** implement the direct top-level EDT Subsystem `<content>` slice for `Includes` using `docs/adr/0020-includes-semantics.md`; the production builder now normalizes the explicit allowlist, resolves exact metadata targets, emits deterministic provenance-backed Includes edges, reports typed negative outcomes, enforces the precise validator matrix, and verifies generic queries and Impact exclusion.
-20. **High — completed:** implement and transition the first `Reads` slice defined by `docs/adr/0021-reads-semantics.md`; parsing, multiline BSL decoding and private source mapping, typed positive and negative classification, exact resolution, validation, emission, provenance, raw fixtures, deterministic parser/full-builder tests, and `semantic_edge.reads` Coverage evidence are complete.
+20. **High — completed:** implement and transition the `Reads` slices defined by `docs/adr/0021-reads-semantics.md` and ADR-0030; parsing, multiline BSL decoding, public QuerySource requests, typed positive and negative classification, exact resolution, validation, emission for four direct persistent source families, provenance, raw fixtures, deterministic parser/full-builder tests, and `semantic_edge.reads` Coverage evidence are complete.
 21. **High — completed:** implement and transition the first `Writes` slice defined by `docs/adr/0022-writes-semantics.md`; typed Document register declarations, complete zero-argument `RegisterRecords.<Name>.Write()` candidate extraction in Document Object Module Procedures, exact declaration and metadata resolution, precise validation, deterministic provenance-backed production emission, typed diagnostics, Query and Impact behavior, negative, duplicate, and repeated-build evidence, and `semantic_edge.writes` Coverage evidence are complete. Writes and query-derived `DependsOn` are not inferred from Reads, Calls, Grants, declarations alone, or the bare method name.
 22. **Medium — completed:** the
     typed metadata payload contract from
@@ -1960,11 +1974,13 @@ contains 0 Critical gaps, 0 High gaps, and 0 Medium gaps. Sprint 3 Semantic
 Coverage Integration Review is complete with no blocking findings.
 
 Completion does not broaden the accepted first-slice contracts. Deferred work
-remains: query-derived `DependsOn` and broader query-language source forms;
+remains: broader query-language grammar and source forms beyond the four direct
+persistent namespaces;
 deny, inheritance, and effective authorization; Subsystem hierarchy, nested
 Subsystem discovery, and transitive membership; and reference-request migration
-for BSL calls, query sources, Writes targets, protected resources, Subsystem
-content, and extension targets.
+for BSL calls, Writes targets, protected resources, Subsystem content, and
+extension targets. Query sources have completed public request migration for
+the accepted direct-source boundary.
 
 The first production slice for `semantic_edge.depends_on` is implemented and
 the capability is supported. The first production slice for

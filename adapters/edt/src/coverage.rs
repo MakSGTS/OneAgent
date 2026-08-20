@@ -392,8 +392,11 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             }
             _ => "oneagent_edt::graph_tests",
         });
-    if kind == EdgeKind::Opens {
-        capability
+    match kind {
+        EdgeKind::Reads | EdgeKind::DependsOn => capability.with_representative_test(
+            "oneagent_edt::sprint8_registers_queries::sprint8_full_builder_matrix_is_complete_deterministic_and_consumer_visible",
+        ),
+        EdgeKind::Opens => capability
             .with_representative_test(
                 "oneagent_edt::form_navigation::changed_common_form_propagates_impact_through_opens",
             )
@@ -402,9 +405,8 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             )
             .with_representative_test(
                 "oneagent_edt::form_navigation::form_navigation_emits_only_unique_resolved_opens_with_stable_evidence",
-            )
-    } else {
-        capability
+            ),
+        _ => capability,
     }
 }
 
@@ -582,6 +584,21 @@ fn edt_provenance_capability(kind: SemanticProvenanceCapability) -> SemanticCove
             )
             .with_representative_test(
                 "oneagent_edt::graph_tests::request_identity_survives_missing_to_resolved_production_diff",
+            )
+            .with_representative_test(
+                "oneagent_edt::graph_tests::production_builder_propagates_explicit_partial_scope_to_query_requests",
+            )
+            .with_representative_test(
+                "oneagent_edt::reads::reads_parser_and_missing_failures_are_typed_counted_and_deterministic",
+            )
+            .with_representative_test(
+                "oneagent_edt::reads::reads_ambiguous_target_is_sorted_counted_and_emits_no_edge",
+            )
+            .with_representative_test(
+                "oneagent_edt::reads::reads_incompatible_target_is_typed_counted_and_emits_no_edge",
+            )
+            .with_representative_test(
+                "oneagent_edt::sprint8_registers_queries::sprint8_full_builder_matrix_is_complete_deterministic_and_consumer_visible",
             )
     } else {
         capability.with_representative_test(
@@ -1064,9 +1081,14 @@ mod tests {
                 "oneagent_edt::graph_tests::incompatible_metadata_reference_target_kind_is_reported",
                 "oneagent_edt::graph_tests::missing_metadata_reference_target_is_reported",
                 "oneagent_edt::graph_tests::production_builder_preserves_explicit_partial_workspace_request",
+                "oneagent_edt::graph_tests::production_builder_propagates_explicit_partial_scope_to_query_requests",
                 "oneagent_edt::graph_tests::request_identity_survives_missing_to_resolved_production_diff",
                 "oneagent_edt::graph_tests::resolves_all_mapped_metadata_reference_target_kinds_through_production_builder",
                 "oneagent_edt::graph_tests::resolves_metadata_reference_and_depends_on_edges",
+                "oneagent_edt::reads::reads_ambiguous_target_is_sorted_counted_and_emits_no_edge",
+                "oneagent_edt::reads::reads_incompatible_target_is_typed_counted_and_emits_no_edge",
+                "oneagent_edt::reads::reads_parser_and_missing_failures_are_typed_counted_and_deterministic",
+                "oneagent_edt::sprint8_registers_queries::sprint8_full_builder_matrix_is_complete_deterministic_and_consumer_visible",
             ]
         );
         assert!(
@@ -1075,6 +1097,54 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
+    }
+
+    #[test]
+    fn sprint8_query_evidence_preserves_supported_coverage_aggregates() {
+        let report = EdtSemanticCoverageRegistry::audit();
+        let representative = "oneagent_edt::sprint8_registers_queries::sprint8_full_builder_matrix_is_complete_deterministic_and_consumer_visible";
+        let requests = report
+            .capability(SemanticCoverageCapabilityId::ProvenanceSource(
+                SemanticProvenanceCapability::ReferenceRequest,
+            ))
+            .expect("ReferenceRequest coverage must exist");
+
+        for kind in [EdgeKind::Reads, EdgeKind::DependsOn] {
+            let capability = report
+                .capability(SemanticCoverageCapabilityId::SemanticEdge(kind))
+                .expect("Sprint 8 edge coverage must exist");
+            assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+            assert_eq!(capability.evidence(), capability.required_evidence());
+            assert!(
+                capability
+                    .representative_tests()
+                    .iter()
+                    .any(|test| test == representative)
+            );
+        }
+        assert_eq!(requests.status(), SemanticCoverageStatus::Supported);
+        assert!(
+            requests
+                .representative_tests()
+                .iter()
+                .any(|test| test == representative)
+        );
+        assert_eq!(report.summary().total(), 101);
+        assert_eq!(
+            report
+                .summary()
+                .by_status()
+                .get(&SemanticCoverageStatus::Supported),
+            Some(&96)
+        );
+        assert_eq!(
+            report
+                .summary()
+                .by_status()
+                .get(&SemanticCoverageStatus::NotApplicable),
+            Some(&5)
+        );
+        assert!(report.summary().by_gap_priority().is_empty());
     }
 
     #[test]

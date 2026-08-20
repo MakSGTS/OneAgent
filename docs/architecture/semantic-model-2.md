@@ -1743,13 +1743,15 @@ like any other node kind unless a concrete API gap is found later.
 
 Query node support is independent from `Reads`, `Writes`, and `DependsOn`.
 Current extraction creates the `NodeKind::Query` node and its ownership edge for
-the supported BSL slice. Production query-language analysis now emits Reads for
-the parser's completely accepted fixture-backed forms and uniquely resolved
-Catalog or Information Register targets. `Writes` has a separate accepted
+the supported BSL slice. Production query-language analysis now emits Reads and
+normalized DependsOn for the parser's completely accepted fixture-backed forms
+and uniquely resolved Catalog, Information Register, Accumulation Register, or
+Accounting Register targets. `Writes` has a separate accepted
 architecture contract in `docs/adr/0022-writes-semantics.md`; its first slice is
 a BSL Procedure mutation fact rather than a Query fact, and its implementation
-and registry transition are complete. Query-derived `DependsOn` remains
-separate. None of these edges is a prerequisite for creating the Query node,
+and registry transition are complete. Query-derived `DependsOn` remains a
+separate normalized relation derived from the retained Reads fact. None of
+these edges is a prerequisite for creating the Query node,
 and Query identity and ownership do not depend on query text.
 
 #### Determinism, errors, and first slice
@@ -1777,7 +1779,8 @@ and provenance source identifiers. The slice is restricted to declarations with
 a stable local binding and complete statically available text. The later Reads
 producer consumes this Query entity without changing its identity or ownership;
 the accepted first Writes slice uses existing Procedure nodes independently,
-and query-derived DependsOn remains unimplemented.
+and the accepted direct-source Query Reads and DependsOn producer consumes the
+Query without changing it.
 
 The ordered follow-up tasks are:
 
@@ -1800,8 +1803,9 @@ The ordered follow-up tasks are:
    complete Writes candidate extraction, exact resolution, precise validation,
    production emission, integration evidence, and the final registry-only
    transition to `Supported` as ordered independent tasks;
-8. derive query `DependsOn` only after data-access production evidence and the
-   dependency source contract exist;
+8. Completed: derive Query `DependsOn` from the terminal public QuerySource
+   request and retained Reads fact for the four accepted direct persistent
+   source families;
 9. add metadata-owned Query sources such as data-composition datasets or
    dynamic-list query settings after their EDT parser contracts are defined.
 
@@ -1879,10 +1883,13 @@ Current ADR-0024 evidence is mapped as follows:
 | Explicit partial production orchestration with no placeholder or failure projection | `oneagent_edt::graph_tests::production_builder_preserves_explicit_partial_workspace_request` |
 | Duplicate aggregation without ledger, edge, diagnostic, or statistics duplication | `oneagent_edt::graph_tests::duplicate_metadata_type_reference_creates_one_depends_on_edge` and `duplicate_identical_reference_diagnostic_is_deduplicated` |
 | Stable identity and modified-not-remove/add lifecycle diff | `oneagent_edt::graph_tests::request_identity_survives_missing_to_resolved_production_diff` |
+| Public QuerySource lifecycle, four direct source kinds, terminal outcomes, and production projections | focused `oneagent_edt::query_source_resolution` tests and `sprint8_full_builder_matrix_is_complete_deterministic_and_consumer_visible` |
 
-BSL calls, query sources, Writes targets, protected resources, Subsystem content,
-and extension targets remain private until each family defines source identity,
-category, completeness, projection, duplicate, and statistics contracts. The
+BSL calls, Writes targets, protected resources, Subsystem content, and extension
+targets remain private until each family defines source identity, category,
+completeness, projection, duplicate, and statistics contracts. Query sources
+use the public request lifecycle for the accepted four direct persistent source
+families. The
 graph-domain and EDT ReferenceRequest Coverage entries transitioned
 independently after their respective audits passed. Both entries are now
 `Supported`, and Roadmap item 24 is complete for the accepted metadata-reference
@@ -1946,7 +1953,9 @@ exact resolved top-level metadata object as the target:
 ```text
 NodeKind::Query
     --Reads-->
-NodeKind::Metadata(MetadataKind::Catalog | MetadataKind::InformationRegister)
+NodeKind::Metadata(MetadataKind::Catalog | MetadataKind::InformationRegister |
+                   MetadataKind::AccumulationRegister |
+                   MetadataKind::AccountingRegister)
 ```
 
 The first slice accepts only one completely parsed top-level `SELECT` statement
@@ -1961,9 +1970,11 @@ query because that would expose an incomplete read set as complete evidence.
 Repository evidence does not define a complete 1C query-language grammar. The
 committed parser therefore proves complete first-slice source classification
 only for its accepted fixture-backed forms and preserves deterministic source
-locations. The committed private EDT resolver uses the parsed metadata kind and
-normalized local name, requires exactly one compatible in-graph target, and
-does not invent placeholder, Unknown, or external nodes.
+locations. The public QuerySource request lifecycle uses the parsed metadata
+kind and normalized local name, requires exactly one compatible in-graph target,
+and does not invent placeholder, Unknown, or external nodes. Its terminal ledger
+preserves deterministic collection and resolver provenance and distinguishes
+missing, ambiguous, incompatible, and partial-workspace outcomes.
 
 Reads uses standard `(source, target, EdgeKind::Reads)` identity and resolved,
 exact provenance. Multiple source occurrences for one Query-target pair support
@@ -1973,10 +1984,11 @@ validator independently enforces the accepted
 Procedure-to-Accumulation-Register matrix.
 
 The existing Query API and Impact Analysis classification remain unchanged.
-Reads continues to participate in outgoing dependency, incoming usage, and
-reverse dependency-to-usage Impact traversal. No reverse impact edge,
-transitive closure, dedicated query method, References edge, query-derived
-DependsOn edge, or ownership projection is added by the first slice.
+Reads and its normalized Query-origin DependsOn participate in outgoing
+dependency, incoming usage, and reverse dependency-to-usage Impact traversal.
+Impact reports one affected Query with deterministic reasons for both edges.
+No reverse edge, transitive closure, dedicated query method, References edge,
+or ownership projection is added by this slice.
 
 `semantic_edge.reads` is `Supported`. Parser investigation, typed
 parsing and diagnostics, exact metadata resolution, precise validation,
@@ -1987,7 +1999,9 @@ the private copied/collapsed-quote/inserted-LF source map. Repository-owned raw
 fixtures and parser/full-builder tests cover unsupported structure, virtual
 tables, and temporary tables without partial source programs or Reads edges.
 The registry records the complete required evidence and the representative
-production integration test.
+production integration test. The Sprint 8 real-format fixture extends that
+evidence across all four accepted source families without changing the
+capability status or registry aggregate counts.
 
 `EdgeKind::Writes` is governed by
 `docs/adr/0022-writes-semantics.md`. It represents a direct resolved persistent
@@ -2051,19 +2065,20 @@ the first implementation slice for resolved metadata member type references:
 `Metadata(...)` target nodes. Primitive, built-in, unresolved, ambiguous, and
 incompatible type references do not emit `DependsOn`. The edge uses the
 standard `(source, target, EdgeKind::DependsOn)` identity and derived
-provenance identifying the metadata member type reference. Query/Data Access
-dependencies remain pending.
+provenance identifying the metadata member type reference. The implemented
+Sprint 8 slice also derives Query-origin dependencies from terminal resolved
+QuerySource requests and their retained Reads facts for Catalog, Information
+Register, Accumulation Register, and Accounting Register targets.
 
 ### Accepted Sprint 8 direct register Query boundary
 
 The Sprint 8 source investigation in
 `docs/architecture/register-query-source-investigation.md` distinguishes Query
 declaration sources, query-language persistent sources, register virtual
-tables, register metadata objects, and semantic relations. ADR-0030 accepts an
-additive implementation boundary; architecture acceptance alone does not make
-that boundary current production behavior.
+tables, register metadata objects, and semantic relations. ADR-0030 accepts the
+additive implementation boundary now present in production.
 
-The accepted parser expansion retains the existing static named BSL Query
+The implemented parser expansion retains the existing static named BSL Query
 entity and the all-or-nothing one-`SELECT`, one-direct-source contract. It adds
 only these exact persistent source categories:
 
@@ -2082,7 +2097,7 @@ temporary/external/parameter sources, general expression grammar, and register
 virtual tables remain deferred. A virtual-table occurrence continues to emit
 only its typed no-edge diagnostic; no base-register access is inferred.
 
-Accepted parsed source observations migrate to the existing public
+Accepted parsed source observations use the existing public
 `SemanticReferenceCategory::QuerySource` lifecycle. The canonical request
 source is the existing Query node, the request has exactly one expected
 metadata kind, collection and resolver provenance remain deterministic, and
@@ -2107,18 +2122,20 @@ observe both relations; reverse Impact keeps one affected Query node with
 deterministic per-edge reasons. No reverse relation or transitive closure is
 stored.
 
-The graph validator must enumerate the four target kinds for both Query-origin
+The graph validator enumerates the four target kinds for both Query-origin
 relations rather than accept a wildcard Metadata target. Existing Attribute,
 Dimension, Resource, and Command `DependsOn` matrices remain additive and
 unchanged. Writes remains an independent Procedure mutation fact and does not
 gain a companion dependency in this slice.
 
 The existing Query, Reads, DependsOn, and ReferenceRequest Coverage capabilities
-remain `Supported` for their current implemented slices. Sprint 8 production
-work expands representative evidence and limitations only after exact parser,
+remain `Supported` for their current implemented slices. The Sprint 8
+real-format EDT fixture and production-builder evidence cover exact parser,
 request, resolution, validation, emission, Query, Diff, Impact, report,
-diagnostic, repeated-build, and complete/incremental index-equivalence tests
-pass. Architecture planning changes no status or aggregate count.
+diagnostic, repeated-build, source-order, and clean/incremental-index-equivalence
+behavior. The EDT registry remains 101 capabilities (96 `Supported`, 5
+`NotApplicable`) and the graph registry remains 85 capabilities (82
+`Supported`, 3 `NotApplicable`), with no Critical, High, or Medium gaps.
 
 `EdgeKind::Extends` is governed by
 `docs/adr/0018-extends-semantics.md`. It represents an explicit, resolved,
@@ -2314,8 +2331,10 @@ extracts static Query declarations with stable local bindings inside known
 procedures or functions, emits `NodeKind::Query` nodes with `Contains`
 ownership, preserves source provenance with owner and binding context, and
 verifies repeated-build determinism. The accepted first query-language parsing
-and `Reads` slice is also complete. Query-derived `DependsOn`, broader grammar,
-and additional query source families remain deferred.
+and `Reads` slice is also complete. Sprint 8 adds public QuerySource requests
+and normalized Query-origin `DependsOn` for the four accepted direct persistent
+source families. Broader grammar and additional source families remain
+deferred.
 
 The former `semantic_node.role` High gap is closed. The EDT pipeline now emits
 flat `NodeKind::Role` nodes for every discovered role metadata object while
@@ -2363,12 +2382,14 @@ edges with provenance, and verifies deterministic Query API results. The
 capability is `Supported` with complete typed payload preservation evidence.
 
 Completion does not broaden the accepted first-slice contracts. Deferred work
-remains: query-derived `DependsOn` and broader query-language source forms;
+remains: broader query-language grammar and source forms beyond the four direct
+persistent namespaces;
 deny, inheritance, and effective authorization; Subsystem hierarchy, nested
 Subsystem discovery, and transitive membership; and reference-request migration
-for BSL calls, query sources, Writes targets, protected resources, Subsystem
-content, and extension targets. Serialization, CLI, runtime product work, and
-quality percentages also remain outside this completed Sprint 3 scope.
+for BSL calls, Writes targets, protected resources, Subsystem content, and
+extension targets. Query sources have completed public request migration for
+the accepted direct-source boundary. Serialization, CLI, runtime product work,
+and quality percentages also remain outside this completed Sprint 3 scope.
 
 ## Definition of done for Semantic Model 2.0 core
 

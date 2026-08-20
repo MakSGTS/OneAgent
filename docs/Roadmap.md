@@ -171,7 +171,11 @@ the [Sprint 11 integration review](reviews/sprint-11-event-subscriptions.md).
 Sprint 12 is completed under
 [ADR-0034](adr/0034-report-data-composition-semantics.md) with a `pass` decision
 in the [Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
-Sprint 13 is active; v0.3 remains planned through Sprint 14.
+Sprint 13 is completed under
+[ADR-0035](adr/0035-xdto-service-semantics.md) with a `pass` decision in the
+[Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md). Sprint
+14 is the next planning target; the v0.3 release review remains gated on Sprint
+14 completion and review.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -759,8 +763,8 @@ performance claims remain deferred.
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | completed |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | completed |
-| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | active |
-| Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
+| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | completed |
+| Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | next |
 
 #### Sprint 6 Attributes and Tabular Sections execution plan
 
@@ -3094,9 +3098,15 @@ Plan Sprint 12 data composition and reports
 
 #### Sprint 13 XDTO and Service Model execution plan
 
-Sprint 13 is planned from committed Sprint 12 review head
-`cf59854baebc6fe88add0de5a0e5b6858b755a19`. The review records `pass`, Sprint
-12 is `completed`, and Sprint 13 is the unique `next` target.
+Sprint 13 was planned from committed Sprint 12 review head
+`cf59854baebc6fe88add0de5a0e5b6858b755a19`. Sprint 12 is `completed`, and
+Sprint 13 subsequently completed its ordered implementation, recovery, and
+independent integration review. The
+[Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md) records
+`pass` against committed recovery head
+`5af338cd679a950c3ed262d1b777892186c92e22`. Sprint 14 Designer XML Adapter is
+the unique `next` target; the v0.3 release integration review remains ineligible
+until Sprint 14 completes.
 
 Repository-owned
 [source investigation](architecture/xdto-service-source-investigation.md)
@@ -3359,8 +3369,15 @@ incremental clean-rebuild transitions cover all five new node kinds, immediate
 ownership, payload/target/request/reference/dispatch changes, and deferred
 property stability. The executable Graph Domain registry has 96 capabilities:
 92 `Supported` and 4 `NotApplicable`; EDT has 120 capabilities: 115 `Supported`
-and 5 `NotApplicable`. Both registries have no gaps. Sprint 13 remains `active`
-until Task 6 records the independent integration-review decision.
+and 5 `NotApplicable`. Both registries have no gaps. Sprint 13 remained `active`
+until Task 6 recorded the independent integration-review decision.
+
+The
+[Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md)
+subsequently records `pass` against committed recovery head
+`5af338cd679a950c3ed262d1b777892186c92e22`. Sprint 13 is `completed`, Sprint 14
+Designer XML Adapter is `next`, and the v0.3 release integration review remains
+gated on Sprint 14 completion and review.
 
 Focused validation:
 

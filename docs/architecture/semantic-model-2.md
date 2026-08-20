@@ -2418,8 +2418,17 @@ ownership, payload and target changes, internal/external request projections,
 References, Triggers, and deferred-property stability. Executable registry
 state is Graph Domain 96 capabilities: 92 `Supported` and 4 `NotApplicable`;
 EDT 120 capabilities: 115 `Supported` and 5 `NotApplicable`. Both registries
-have zero gaps. Sprint 13 is `active` pending the independent Task 6 integration
-review.
+have zero gaps. Sprint 13 remained `active` until the independent Task 6
+integration review recorded its decision.
+
+The
+[Sprint 13 integration review](../reviews/sprint-13-xdto-service-model.md)
+records `pass` against committed recovery head
+`5af338cd679a950c3ed262d1b777892186c92e22`. Sprint 13 is completed without a
+review-time production, public API, Coverage, or deferred-scope change and makes
+Sprint 14 Designer XML Adapter the next planning target. The v0.3 release
+integration review remains ineligible until Sprint 14 completes and passes its
+own integration review.
 
 The first slice deliberately excludes 61,435 nested XDTO properties, imports,
 restrictions, inline types, external platform schema nodes, route matching,

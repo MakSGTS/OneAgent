@@ -124,6 +124,12 @@ Owns EDT-specific loading and conversion:
 * module discovery;
 * conversion from EDT artifacts into source-independent metadata and BSL input.
 
+Ignored repository-local EDT projects used as planning and fixture-derivation
+evidence are inventoried in
+[Local EDT Source Corpora](edt-source-corpora.md). Corpus presence does not by
+itself expand accepted parser or semantic contracts and is never a runtime or
+CI prerequisite.
+
 ### `oneagent-runtime`
 
 Owns orchestration:

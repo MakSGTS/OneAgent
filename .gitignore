@@ -1,5 +1,6 @@
 /target
 /OneAgent_EDTproject/
+/Retail_edt_project/
 .DS_Store
 .idea/
 .vscode/*.log

@@ -1,10 +1,11 @@
 use oneagent_common::EntityName;
 use oneagent_edt::{EdtGraphError, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
-    EdgeKind, NodeKind, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticReferenceCategory,
-    SemanticReferenceRequestOutcome, xdto_type_id,
+    EdgeKind, ImpactNodeStatus, NodeId, NodeKind, SemanticDiagnosticCode, SemanticDiagnosticKind,
+    SemanticImpactAnalyzer, SemanticImpactOptions, SemanticReferenceCategory,
+    SemanticReferenceRequestOutcome, WebServiceParameterDirection, xdto_type_id,
 };
-use oneagent_metadata::MetadataSpecificPayload;
+use oneagent_metadata::{MetadataSpecificPayload, WebServiceXdtoPackage};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
@@ -13,6 +14,40 @@ const PACKAGE_ID: &str = "package-id";
 const HTTP_ID: &str = "http-id";
 const WEB_ID: &str = "web-id";
 const INTERNAL_NAMESPACE: &str = "urn:repository:package";
+
+fn production_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint13_xdto_services_project")
+}
+
+fn copy_tree(source: &Path, target: &Path) {
+    fs::create_dir_all(target).expect("fixture target directory must be created");
+    for entry in fs::read_dir(source).expect("fixture directory must be readable") {
+        let entry = entry.expect("fixture entry must be readable");
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if entry
+            .file_type()
+            .expect("fixture entry type must be readable")
+            .is_dir()
+        {
+            copy_tree(&source_path, &target_path);
+        } else {
+            fs::copy(&source_path, &target_path).expect("fixture artifact must be copied");
+        }
+    }
+}
+
+fn copied_production_fixture() -> TempDir {
+    let target = tempdir().expect("temporary fixture project must be created");
+    copy_tree(&production_fixture(), target.path());
+    target
+}
+
+fn replace_fixture_fragment(path: &Path, old: &str, new: &str) {
+    let source = fs::read_to_string(path).expect("fixture artifact must be readable");
+    assert!(source.contains(old), "fixture fragment must exist: {old}");
+    fs::write(path, source.replacen(old, new, 1)).expect("fixture artifact must be updated");
+}
 
 fn project() -> TempDir {
     let project = tempdir().expect("temporary project must be created");
@@ -185,6 +220,248 @@ fn assert_metadata_payloads(result: &oneagent_edt::EdtSemanticGraphBuildResult) 
         Some(MetadataSpecificPayload::WebService(payload))
             if payload.namespace() == "urn:web" && payload.xdto_packages().len() == 1
     ));
+}
+
+fn web_packages(node: &oneagent_graph::GraphNode) -> &[WebServiceXdtoPackage] {
+    match node
+        .metadata_payload()
+        .and_then(oneagent_metadata::MetadataPayload::specific)
+    {
+        Some(MetadataSpecificPayload::WebService(payload)) => payload.xdto_packages(),
+        _ => panic!("Web Service metadata payload must exist"),
+    }
+}
+
+fn assert_live_metadata_payloads(graph: &oneagent_graph::SemanticGraph) {
+    let package = graph
+        .node(&oneagent_common::EntityId::new("a69525c7-27ff-48df-b26b-325ba580a53e").unwrap())
+        .expect("internal XDTO Package must exist");
+    assert!(matches!(
+        package
+            .metadata_payload()
+            .and_then(oneagent_metadata::MetadataPayload::specific),
+        Some(MetadataSpecificPayload::XdtoPackage(payload))
+            if payload.namespace() == "http://v8.1c.ru/SSL/Exchange/EnterpriseDataExchange"
+    ));
+    let http = graph
+        .node(&oneagent_common::EntityId::new("c913a3d3-5fa2-4919-b304-e65731508ab1").unwrap())
+        .expect("HTTP Service must exist");
+    assert!(matches!(
+        http.metadata_payload()
+            .and_then(oneagent_metadata::MetadataPayload::specific),
+        Some(MetadataSpecificPayload::HttpService(payload)) if payload.root_url() == "kiosk"
+    ));
+    let internal = graph
+        .node(&oneagent_common::EntityId::new("cb3a5c5b-7bdc-4e12-96f1-11b1213b6853").unwrap())
+        .expect("internal Web Service must exist");
+    let external = graph
+        .node(&oneagent_common::EntityId::new("a4ed8b24-bd23-45a7-9f34-61b25b91d0c6").unwrap())
+        .expect("external Web Service must exist");
+    let absent = graph
+        .node(&oneagent_common::EntityId::new("a4e56049-4de9-40a3-8197-a5c84a11f516").unwrap())
+        .expect("package-free Web Service must exist");
+    assert_eq!(
+        web_packages(internal),
+        [WebServiceXdtoPackage::Repository(
+            EntityName::new("EnterpriseDataExchange_1_0_1_1").unwrap()
+        )]
+    );
+    assert_eq!(
+        web_packages(external),
+        [WebServiceXdtoPackage::ExternalNamespace(
+            "http://v8.1c.ru/8.1/data/core".to_owned()
+        )]
+    );
+    assert!(web_packages(absent).is_empty());
+}
+
+#[test]
+fn live_derived_fixture_is_consumer_visible_and_deterministic() {
+    let fixture = production_fixture();
+    let first = build(&fixture);
+    let repeated = build(&fixture);
+    let graph = first.graph();
+    let query = graph.query();
+    assert_live_metadata_payloads(graph);
+
+    assert!(first.diagnostics().is_empty());
+    assert!(first.validate().is_valid());
+    assert!(first.diff(&repeated).is_empty());
+    assert_eq!(first.report(), repeated.report());
+    assert_eq!(first.reference_requests(), repeated.reference_requests());
+
+    for (kind, count) in [
+        (NodeKind::XdtoType, 8),
+        (NodeKind::HttpServiceUrlTemplate, 2),
+        (NodeKind::HttpServiceMethod, 2),
+        (NodeKind::WebServiceOperation, 3),
+        (NodeKind::WebServiceParameter, 5),
+    ] {
+        let nodes = query.nodes_by_kind(kind);
+        assert_eq!(nodes.len(), count, "unexpected fixture count for {kind:?}");
+        assert!(nodes.iter().all(|node| {
+            !node.provenance().is_empty() && query.owner(&NodeId::new(node.id().as_str())).is_some()
+        }));
+    }
+
+    let explicit_post = graph
+        .node(&oneagent_common::EntityId::new("78487ea6-9ec6-43ad-ac83-459cbd463f77").unwrap())
+        .and_then(oneagent_graph::GraphNode::http_service_method_payload)
+        .expect("explicit POST payload must exist");
+    let implicit_get = graph
+        .node(&oneagent_common::EntityId::new("fa155059-6d3c-4f2a-ba01-2820db6fcbf3").unwrap())
+        .and_then(oneagent_graph::GraphNode::http_service_method_payload)
+        .expect("implicit GET payload must exist");
+    assert_eq!(
+        explicit_post.http_method().map(EntityName::as_str),
+        Some("POST")
+    );
+    assert!(implicit_get.http_method().is_none());
+
+    let out = graph
+        .node(&oneagent_common::EntityId::new("1acf34e6-c428-4130-82f0-5160dfcc0858").unwrap())
+        .and_then(oneagent_graph::GraphNode::web_service_parameter_payload)
+        .expect("Out parameter payload must exist");
+    let in_out = graph
+        .node(&oneagent_common::EntityId::new("7ed6bd83-b61d-4db4-8549-acacbdda6ca2").unwrap())
+        .and_then(oneagent_graph::GraphNode::web_service_parameter_payload)
+        .expect("InOut parameter payload must exist");
+    assert_eq!(out.direction(), Some(WebServiceParameterDirection::Out));
+    assert_eq!(
+        in_out.direction(),
+        Some(WebServiceParameterDirection::InOut)
+    );
+
+    assert_eq!(first.reference_requests().len(), 7);
+    assert!(first.reference_requests().iter().all(|request| {
+        request.outcome() == SemanticReferenceRequestOutcome::Resolved
+            && !request.provenance().is_empty()
+    }));
+    assert_eq!(query.edges_by_kind(EdgeKind::References).len(), 7);
+    assert_eq!(query.edges_by_kind(EdgeKind::Triggers).len(), 5);
+    assert!(query.edges_by_kind(EdgeKind::Triggers).iter().all(|edge| {
+        graph
+            .node(edge.target())
+            .is_some_and(|target| target.kind() == NodeKind::Function)
+    }));
+}
+
+fn mutate_production_fixture(project: &Path) {
+    let currency = object_directory(project, "XDTOPackages", "CurrencyRates").join("Package.xdto");
+    replace_fixture_fragment(
+        &currency,
+        "objectType name=\"Rate\"",
+        "objectType name=\"Quote\"",
+    );
+
+    let http = object_directory(project, "HTTPServices", "Site").join("Site.mdo");
+    replace_fixture_fragment(&http, "/{version}/order/create/", "/{version}/order/new/");
+    replace_fixture_fragment(
+        &http,
+        "<httpMethod>POST</httpMethod>",
+        "<httpMethod>PATCH</httpMethod>",
+    );
+
+    let web = object_directory(project, "WebServices", "EnterpriseDataExchange_1_0_1_1")
+        .join("EnterpriseDataExchange_1_0_1_1.mdo");
+    replace_fixture_fragment(
+        &web,
+        "<value>XDTOPackage.EnterpriseDataExchange_1_0_1_1</value>",
+        "<value>http://v8.1c.ru/8.1/data/core</value>",
+    );
+    replace_fixture_fragment(&web, "core:ReferenceValue", "core:StringValue");
+    replace_fixture_fragment(
+        &web,
+        "http://v8.1c.ru/SSL/Exchange/EnterpriseDataExchange",
+        "http://www.w3.org/2001/XMLSchema",
+    );
+    replace_fixture_fragment(
+        &web,
+        "<name>PrepareDataOperationResult</name>",
+        "<name>string</name>",
+    );
+    replace_fixture_fragment(
+        &web,
+        "<transferDirection>Out</transferDirection>",
+        "<transferDirection>InOut</transferDirection>",
+    );
+    replace_fixture_fragment(
+        &web,
+        "<procedureName>GetPrepareDataToExportResult</procedureName>",
+        "<procedureName>AlternatePrepareResult</procedureName>",
+    );
+    let module = object_directory(project, "WebServices", "EnterpriseDataExchange_1_0_1_1")
+        .join("Module.bsl");
+    replace_fixture_fragment(
+        &module,
+        "EndFunction",
+        "EndFunction\n\nFunction AlternatePrepareResult()\n\tReturn Undefined;\nEndFunction",
+    );
+
+    fs::remove_dir_all(object_directory(project, "WebServices", "InterfaceVersion"))
+        .expect("external Web Service must be removable in the copied fixture");
+}
+
+#[test]
+fn live_derived_diff_reports_validation_and_impact_cover_boundary_transitions() {
+    let fixture = copied_production_fixture();
+    let before = build(fixture.path());
+    mutate_production_fixture(fixture.path());
+    let current = build(fixture.path());
+    let diff = before.diff(&current);
+
+    assert!(before.validate().is_valid());
+    assert!(current.validate().is_valid());
+    assert!(diff.graph().modified_nodes().len() >= 4);
+    assert!(diff.graph().added_nodes().iter().any(|change| {
+        change.new_state().is_some_and(|node| {
+            node.name().as_str() == "Quote" && node.kind() == NodeKind::XdtoType
+        })
+    }));
+    assert!(diff.graph().removed_nodes().iter().any(|change| {
+        change
+            .old()
+            .is_some_and(|node| node.name().as_str() == "Rate" && node.kind() == NodeKind::XdtoType)
+    }));
+    assert!(!diff.reference_requests().added().is_empty());
+    assert!(!diff.reference_requests().removed().is_empty());
+    assert!(!diff.graph().added_edges().is_empty());
+    assert!(!diff.graph().removed_edges().is_empty());
+    assert_ne!(before.report(), current.report());
+
+    let impact = SemanticImpactAnalyzer::analyze(
+        before.graph(),
+        current.graph(),
+        diff.graph(),
+        &SemanticImpactOptions::new(2),
+    )
+    .expect("fixture boundary impact must succeed");
+    assert!(impact.affected_nodes().iter().any(|node| {
+        node.status() == ImpactNodeStatus::Removed
+            && node.node_id().as_str() == "65efaa10-3239-4f0f-a08e-88c89d9d8d5a"
+    }));
+}
+
+#[test]
+fn deferred_xdto_property_changes_leave_complete_indexes_unchanged() {
+    let fixture = copied_production_fixture();
+    let before = build(fixture.path());
+    let currency =
+        object_directory(fixture.path(), "XDTOPackages", "CurrencyRates").join("Package.xdto");
+    replace_fixture_fragment(
+        &currency,
+        "</objectType>",
+        "  <property name=\"DeferredOnly\"/>\n  </objectType>",
+    );
+    let current = build(fixture.path());
+
+    assert!(before.graph().diff(current.graph()).is_empty());
+    assert_eq!(
+        before.graph().query().nodes().len(),
+        current.graph().query().nodes().len()
+    );
+    assert_eq!(before.reference_requests(), current.reference_requests());
+    assert!(current.validate().is_valid());
 }
 
 #[test]

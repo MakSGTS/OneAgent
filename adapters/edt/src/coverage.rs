@@ -462,6 +462,17 @@ fn ownership_capability(child: NodeKind) -> SemanticCoverageCapability {
         capability.with_representative_test(
             "oneagent_edt::report_data_composition::live_derived_fixture_is_typed_consumer_visible_and_deterministic",
         )
+    } else if matches!(
+        child,
+        NodeKind::XdtoType
+            | NodeKind::HttpServiceUrlTemplate
+            | NodeKind::HttpServiceMethod
+            | NodeKind::WebServiceOperation
+            | NodeKind::WebServiceParameter
+    ) {
+        capability.with_representative_test(
+            "oneagent_edt::xdto_services::live_derived_fixture_is_consumer_visible_and_deterministic",
+        )
     } else if child == NodeKind::Attribute {
         capability.with_representative_test(
             "oneagent_edt::ownership::tabular_section_ownership_fixture_builds_with_immediate_owners",
@@ -637,18 +648,6 @@ fn all_metadata_kinds() -> Vec<MetadataKind> {
 
 fn edt_coverage_node_kinds() -> Vec<NodeKind> {
     semantic_coverage_node_kinds()
-        .into_iter()
-        .filter(|kind| {
-            !matches!(
-                kind,
-                NodeKind::XdtoType
-                    | NodeKind::HttpServiceUrlTemplate
-                    | NodeKind::HttpServiceMethod
-                    | NodeKind::WebServiceOperation
-                    | NodeKind::WebServiceParameter
-            )
-        })
-        .collect()
 }
 
 fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
@@ -678,7 +677,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
     ])
 }
 
-const fn ownership_child_kinds() -> [NodeKind; 14] {
+const fn ownership_child_kinds() -> [NodeKind; 19] {
     [
         NodeKind::Module,
         NodeKind::Procedure,
@@ -694,6 +693,11 @@ const fn ownership_child_kinds() -> [NodeKind; 14] {
         NodeKind::DataCompositionSchema,
         NodeKind::DataSet,
         NodeKind::DataCompositionField,
+        NodeKind::XdtoType,
+        NodeKind::HttpServiceUrlTemplate,
+        NodeKind::HttpServiceMethod,
+        NodeKind::WebServiceOperation,
+        NodeKind::WebServiceParameter,
     ]
 }
 
@@ -792,13 +796,13 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::AccessRight
         | NodeKind::DataCompositionSchema
         | NodeKind::DataSet
-        | NodeKind::DataCompositionField => true,
-        NodeKind::XdtoType
+        | NodeKind::DataCompositionField
+        | NodeKind::XdtoType
         | NodeKind::HttpServiceUrlTemplate
         | NodeKind::HttpServiceMethod
         | NodeKind::WebServiceOperation
-        | NodeKind::WebServiceParameter
-        | NodeKind::Unknown => false,
+        | NodeKind::WebServiceParameter => true,
+        NodeKind::Unknown => false,
     }
 }
 
@@ -830,6 +834,13 @@ const fn representative_node_test(kind: NodeKind) -> &'static str {
         }
         NodeKind::DataCompositionSchema | NodeKind::DataSet | NodeKind::DataCompositionField => {
             "oneagent_edt::report_data_composition::live_derived_fixture_is_typed_consumer_visible_and_deterministic"
+        }
+        NodeKind::XdtoType
+        | NodeKind::HttpServiceUrlTemplate
+        | NodeKind::HttpServiceMethod
+        | NodeKind::WebServiceOperation
+        | NodeKind::WebServiceParameter => {
+            "oneagent_edt::xdto_services::live_derived_fixture_is_consumer_visible_and_deterministic"
         }
         _ => "oneagent_edt::graph_tests",
     }
@@ -1024,13 +1035,13 @@ mod tests {
         assert!(first.duplicate_ids().is_empty());
         assert!(!first.capabilities().is_empty());
         assert_eq!(first.summary().total(), first.capabilities().len());
-        assert_eq!(first.summary().total(), 110);
+        assert_eq!(first.summary().total(), 120);
         assert_eq!(
             first
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&105)
+            Some(&115)
         );
         assert_eq!(
             first
@@ -1206,13 +1217,13 @@ mod tests {
                 .iter()
                 .any(|test| test == representative)
         );
-        assert_eq!(report.summary().total(), 110);
+        assert_eq!(report.summary().total(), 120);
         assert_eq!(
             report
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&105)
+            Some(&115)
         );
         assert_eq!(
             report

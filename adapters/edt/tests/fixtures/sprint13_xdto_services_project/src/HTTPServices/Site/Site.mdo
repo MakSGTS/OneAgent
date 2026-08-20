@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:HTTPService xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="c913a3d3-5fa2-4919-b304-e65731508ab1">
+  <name>Site</name>
+  <rootURL>kiosk</rootURL>
+  <urlTemplates uuid="88ec9b97-7bc9-4d26-b68c-c165d3d2050d">
+    <name>CustomerOrder_Create</name>
+    <template>/{version}/order/create/</template>
+    <methods uuid="78487ea6-9ec6-43ad-ac83-459cbd463f77">
+      <name>POST</name>
+      <httpMethod>POST</httpMethod>
+      <handler>CustomerOrder_CreatePOST</handler>
+    </methods>
+  </urlTemplates>
+  <urlTemplates uuid="cf8b4ef6-74c0-4358-994a-84fe1b57b1c6">
+    <name>CustomerOrder_Status</name>
+    <template>/{version}/order/status/</template>
+    <methods uuid="fa155059-6d3c-4f2a-ba01-2820db6fcbf3">
+      <name>GET</name>
+      <handler>CustomerOrder_StatusGET</handler>
+    </methods>
+  </urlTemplates>
+</mdclass:HTTPService>

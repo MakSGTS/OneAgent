@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:WebService xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="a4e56049-4de9-40a3-8197-a5c84a11f516">
+  <name>Exchange</name>
+  <namespace>http://www.1c.ru/SSL/Exchange</namespace>
+  <operations uuid="110121eb-a0eb-4662-8911-3dcc3d341a73">
+    <name>UploadData</name>
+    <xdtoReturningValueType><name>string</name><nsUri>http://www.w3.org/2001/XMLSchema</nsUri></xdtoReturningValueType>
+    <nillable>true</nillable>
+    <procedureName>RunDataExport</procedureName>
+    <parameters uuid="f8980c18-6b9c-4e45-919a-22e976d2a846">
+      <name>ExchangePlanName</name>
+      <xdtoValueType><name>string</name><nsUri>http://www.w3.org/2001/XMLSchema</nsUri></xdtoValueType>
+    </parameters>
+    <parameters uuid="7ed6bd83-b61d-4db4-8549-acacbdda6ca2">
+      <name>FileID</name>
+      <xdtoValueType><name>string</name><nsUri>http://www.w3.org/2001/XMLSchema</nsUri></xdtoValueType>
+      <nillable>true</nillable>
+      <transferDirection>InOut</transferDirection>
+    </parameters>
+  </operations>
+</mdclass:WebService>

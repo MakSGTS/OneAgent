@@ -389,10 +389,12 @@ mod tests {
     use crate::{
         AccessRight, AccessRightRowRestriction, Confidence, DataCompositionFieldPayload,
         DataCompositionSchemaPayload, DataSetKind, DataSetPayload, EdgeId, EdgeKind, FactOrigin,
-        GraphEdge, GraphNode, NodeId, NodeKind, ProducerId, Provenance, ResolutionError,
-        ResolutionState, SemanticGraph, SemanticGraphDiff, SemanticGraphRelation,
-        SemanticGraphTraversalDirection, SemanticGraphTraversalOptions, data_composition_field_id,
-        data_set_id, data_set_query_id,
+        GraphEdge, GraphNode, HttpServiceMethodPayload, HttpServiceUrlTemplatePayload, NodeId,
+        NodeKind, ProducerId, Provenance, ResolutionError, ResolutionState, SemanticGraph,
+        SemanticGraphDiff, SemanticGraphRelation, SemanticGraphTraversalDirection,
+        SemanticGraphTraversalOptions, WebServiceOperationPayload, WebServiceParameterDirection,
+        WebServiceParameterPayload, XdtoTypeKind, XdtoTypePayload, XdtoTypeReference,
+        data_composition_field_id, data_set_id, data_set_query_id,
         node::GraphNodePayload,
         semantic_index::{
             AcceptedSemanticIndex, SemanticIndexLifecycleError, SemanticIndexState,
@@ -505,6 +507,162 @@ mod tests {
                 .insert_edge(edge)
                 .expect("test edge endpoints must exist");
         }
+    }
+
+    fn typed_node(
+        id_value: &str,
+        name_value: &str,
+        kind: NodeKind,
+        payload: GraphNodePayload,
+    ) -> GraphNode {
+        GraphNode::new_with_payload(id(id_value), name(name_value), kind, payload)
+            .expect("typed transition payload must match its node kind")
+    }
+
+    fn xdto_service_base_nodes(http_method: Option<&str>, handler: &str) -> [GraphNode; 8] {
+        let type_reference = XdtoTypeReference::new("urn:fixture", name("Result"));
+        [
+            node(
+                "package",
+                "Package",
+                NodeKind::Metadata(MetadataKind::XdtoPackage),
+            ),
+            node("http", "Api", NodeKind::Metadata(MetadataKind::HttpService)),
+            typed_node(
+                "url",
+                "Route",
+                NodeKind::HttpServiceUrlTemplate,
+                GraphNodePayload::HttpServiceUrlTemplate(HttpServiceUrlTemplatePayload::new(
+                    "/route",
+                )),
+            ),
+            typed_node(
+                "method",
+                "Method",
+                NodeKind::HttpServiceMethod,
+                GraphNodePayload::HttpServiceMethod(HttpServiceMethodPayload::new(
+                    http_method.map(name),
+                )),
+            ),
+            node("http.module", "Module", NodeKind::Module),
+            node(handler, "Handle", NodeKind::Function),
+            node("web", "Web", NodeKind::Metadata(MetadataKind::WebService)),
+            typed_node(
+                "operation",
+                "Operation",
+                NodeKind::WebServiceOperation,
+                GraphNodePayload::WebServiceOperation(WebServiceOperationPayload::new(
+                    type_reference,
+                    Some(true),
+                )),
+            ),
+        ]
+    }
+
+    fn xdto_service_transition_graph(
+        http_method: Option<&str>,
+        direction: Option<WebServiceParameterDirection>,
+        include_type: bool,
+        include_parameter: bool,
+        handler: &str,
+        internal_relations: bool,
+    ) -> SemanticGraph {
+        let mut graph = SemanticGraph::new();
+        let type_reference = XdtoTypeReference::new("urn:fixture", name("Result"));
+        insert_nodes(&mut graph, xdto_service_base_nodes(http_method, handler));
+        if include_type {
+            graph.insert_node(typed_node(
+                "type",
+                "Result",
+                NodeKind::XdtoType,
+                GraphNodePayload::XdtoType(XdtoTypePayload::new(XdtoTypeKind::Object)),
+            ));
+        }
+        if include_parameter {
+            graph.insert_node(typed_node(
+                "parameter",
+                "Parameter",
+                NodeKind::WebServiceParameter,
+                GraphNodePayload::WebServiceParameter(WebServiceParameterPayload::new(
+                    type_reference,
+                    Some(true),
+                    direction,
+                )),
+            ));
+        }
+        let mut edges = vec![
+            edge("http", "url", EdgeKind::Contains, FactOrigin::Declared),
+            edge("url", "method", EdgeKind::Contains, FactOrigin::Declared),
+            edge(
+                "http",
+                "http.module",
+                EdgeKind::Contains,
+                FactOrigin::Declared,
+            ),
+            edge(
+                "http.module",
+                handler,
+                EdgeKind::Contains,
+                FactOrigin::Parsed,
+            ),
+            edge("web", "operation", EdgeKind::Contains, FactOrigin::Declared),
+            edge(
+                "method",
+                handler,
+                EdgeKind::References,
+                FactOrigin::Resolved,
+            ),
+            edge("method", handler, EdgeKind::Triggers, FactOrigin::Resolved),
+        ];
+        if include_type {
+            edges.push(edge(
+                "package",
+                "type",
+                EdgeKind::Contains,
+                FactOrigin::Declared,
+            ));
+        }
+        if include_parameter {
+            edges.push(edge(
+                "operation",
+                "parameter",
+                EdgeKind::Contains,
+                FactOrigin::Declared,
+            ));
+        }
+        if internal_relations {
+            edges.extend([
+                edge("web", "package", EdgeKind::References, FactOrigin::Resolved),
+                edge(
+                    "operation",
+                    "type",
+                    EdgeKind::References,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "operation",
+                    handler,
+                    EdgeKind::References,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "operation",
+                    handler,
+                    EdgeKind::Triggers,
+                    FactOrigin::Resolved,
+                ),
+            ]);
+            if include_parameter {
+                edges.push(edge(
+                    "parameter",
+                    "type",
+                    EdgeKind::References,
+                    FactOrigin::Resolved,
+                ));
+            }
+        }
+        insert_edges(&mut graph, edges);
+        graph
     }
 
     fn conditional_access_right(condition: &str, origin: FactOrigin) -> AccessRight {
@@ -2789,6 +2947,54 @@ mod tests {
             "procedure.handler.b"
         );
         assert!(accepted_removed.query().node(&subscription).is_none());
+    }
+
+    #[test]
+    fn xdto_service_transitions_match_complete_clean_rebuilds() {
+        let external = xdto_service_transition_graph(None, None, false, false, "handler.a", false);
+        let internal = xdto_service_transition_graph(
+            Some("POST"),
+            Some(WebServiceParameterDirection::Out),
+            true,
+            true,
+            "handler.a",
+            true,
+        );
+        let modified = xdto_service_transition_graph(
+            Some("PUT"),
+            Some(WebServiceParameterDirection::InOut),
+            true,
+            true,
+            "handler.b",
+            true,
+        );
+        let removed = SemanticGraph::new();
+
+        let accepted_external = AcceptedSemanticIndex::rebuild(&external);
+        let accepted_internal = transition_and_assert(&accepted_external, &internal);
+        let accepted_modified = transition_and_assert(&accepted_internal, &modified);
+        let accepted_removed = transition_and_assert(&accepted_modified, &removed);
+
+        assert!(
+            accepted_internal
+                .query()
+                .node(&NodeId::new("type"))
+                .is_some()
+        );
+        assert_eq!(
+            accepted_internal
+                .query()
+                .outgoing_edges_by_kind(&NodeId::new("operation"), EdgeKind::References)
+                .len(),
+            2
+        );
+        assert!(
+            accepted_modified
+                .resolution_index()
+                .resolve_child_of_kind(&id("http.module"), &name("Handle"), NodeKind::Function)
+                .is_ok()
+        );
+        assert!(accepted_removed.query().nodes().is_empty());
     }
 
     #[test]

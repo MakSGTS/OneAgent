@@ -1,0 +1,5 @@
+<package xmlns="http://v8.1c.ru/8.1/xdto" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.1c.ru/SaaS/SuppliedData/CurrencyRates">
+  <objectType name="Rate">
+    <property name="Code" type="xs:string" lowerBound="1" form="Attribute"/>
+  </objectType>
+</package>

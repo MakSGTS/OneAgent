@@ -1,0 +1,6 @@
+<package xmlns="http://v8.1c.ru/8.1/xdto" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.1c.ru/1cFresh/ApplicationExtensions/Manifest/1.0.0.1">
+  <valueType name="ExtensionStartupType" base="xs:string"/>
+  <objectType name="ExtensionCommand">
+    <property name="Id" type="xs:string"/>
+  </objectType>
+</package>

@@ -2388,15 +2388,15 @@ The
 subsequently records `pass` against committed Task 4 head
 `ba9f8350bc78784052a56ab95680a019719a1792`. Sprint 12 is completed without a
 review-time production, public API, Coverage, or deferred-scope change, and
-Sprint 13 XDTO and Service Model is the next planning target.
+made Sprint 13 XDTO and Service Model the next planning target.
 
 Sprint 13 XDTO and Service Model is governed by the accepted planning contract
 in `docs/adr/0035-xdto-service-semantics.md` and the repository-owned evidence
 in `docs/architecture/xdto-service-source-investigation.md`. The bounded first
-slice will enrich existing XDTO Package, HTTP Service, and Web Service metadata
-payloads; add direct XDTO Type, HTTP URL Template/Method, and Web Service
-Operation/Parameter nodes with exact immediate ownership; migrate accepted
-package, type, and callable declarations to public reference requests; and emit
+slice now enriches existing XDTO Package, HTTP Service, and Web Service metadata
+payloads; adds direct XDTO Type, HTTP URL Template/Method, and Web Service
+Operation/Parameter nodes with exact immediate ownership; migrates accepted
+package, type, and callable declarations to public reference requests; and emits
 precise internal References plus declarative handler Triggers.
 
 The planning corpus contains 20 XDTO descriptor/schema pairs with 12,666
@@ -2405,9 +2405,21 @@ Templates and 35 Methods, and eight Web Services with 119 Operations and 360
 Parameters. All 154 handler declarations resolve uniquely to existing owned
 service-module callables: all 35 HTTP and 119 Web handlers are Functions, and
 zero are Procedures. EDT XML handler-field names do not define the BSL symbol
-kind. These counts are planning evidence rather than implemented
-Coverage claims. Sprint 13 remains `next` until its production-evidence and
-integration-review gates complete.
+kind. The tracked
+`adapters/edt/tests/fixtures/sprint13_xdto_services_project/` reduction records
+every selected live artifact path plus source and reduced SHA-256 values and
+proves small/mixed/large direct-type shapes, HTTP optional methods, Web package
+forms, types, directions, and exact Function dispatch without an ignored-file
+dependency.
+
+Generic Query, Diff, reports, Validation, Impact policy, complete indexes, and
+incremental clean-rebuild transitions cover all five new kinds, immediate
+ownership, payload and target changes, internal/external request projections,
+References, Triggers, and deferred-property stability. Executable registry
+state is Graph Domain 96 capabilities: 92 `Supported` and 4 `NotApplicable`;
+EDT 120 capabilities: 115 `Supported` and 5 `NotApplicable`. Both registries
+have zero gaps. Sprint 13 is `active` pending the independent Task 6 integration
+review.
 
 The first slice deliberately excludes 61,435 nested XDTO properties, imports,
 restrictions, inline types, external platform schema nodes, route matching,

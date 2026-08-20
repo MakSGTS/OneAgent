@@ -26,12 +26,82 @@ fn report_data_composition_fixture() -> PathBuf {
         .join("tests/fixtures/sprint12_report_data_composition_project")
 }
 
+fn xdto_services_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint13_xdto_services_project")
+}
+
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
 }
 
 fn name(value: &str) -> EntityName {
     EntityName::new(value).expect("name must be valid")
+}
+
+#[test]
+fn xdto_services_are_visible_through_complete_generic_indexes() {
+    let fixture = xdto_services_fixture();
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("live-derived XDTO/service fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("repeated XDTO/service fixture build must succeed");
+    let graph = first.graph();
+    let query = graph.query();
+    let package = id("a69525c7-27ff-48df-b26b-325ba580a53e");
+    let xdto_type = oneagent_graph::xdto_type_id(&package, &name("PrepareDataOperationResult"))
+        .expect("fixture XDTO Type identity must be valid");
+    let operation = id("db05d35b-5f53-4c27-ba80-b477b9a98299");
+    let parameter = id("1acf34e6-c428-4130-82f0-5160dfcc0858");
+    let method = id("78487ea6-9ec6-43ad-ac83-459cbd463f77");
+
+    for (entity_id, kind) in [
+        (&xdto_type, NodeKind::XdtoType),
+        (&operation, NodeKind::WebServiceOperation),
+        (&parameter, NodeKind::WebServiceParameter),
+        (&method, NodeKind::HttpServiceMethod),
+    ] {
+        assert_eq!(
+            graph
+                .resolution_index()
+                .resolve_entity_id_of_kind(entity_id, kind)
+                .expect("complete Resolution index must find the typed node")
+                .id(),
+            entity_id
+        );
+        assert_eq!(
+            query
+                .node(&NodeId::new(entity_id.as_str()))
+                .expect("complete Query index must find the typed node")
+                .kind(),
+            kind
+        );
+    }
+    assert_eq!(
+        query
+            .owner(&NodeId::new(xdto_type.as_str()))
+            .expect("XDTO Type owner must be indexed")
+            .id(),
+        &package
+    );
+    assert_eq!(
+        query
+            .owner(&NodeId::new(parameter.as_str()))
+            .expect("Web Parameter owner must be indexed")
+            .id(),
+        &operation
+    );
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&NodeId::new(operation.as_str()), EdgeKind::References)
+            .len(),
+        2
+    );
+    assert_eq!(first.report(), repeated.report());
+    assert!(graph.diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+    assert!(first.validate().is_valid());
 }
 
 #[test]

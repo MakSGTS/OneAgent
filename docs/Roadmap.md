@@ -171,7 +171,7 @@ the [Sprint 11 integration review](reviews/sprint-11-event-subscriptions.md).
 Sprint 12 is completed under
 [ADR-0034](adr/0034-report-data-composition-semantics.md) with a `pass` decision
 in the [Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
-Sprint 13 is the next planning target; v0.3 remains planned through Sprint 14.
+Sprint 13 is active; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -759,7 +759,7 @@ performance claims remain deferred.
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | completed |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | completed |
-| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | next |
+| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | active |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
 
 #### Sprint 6 Attributes and Tabular Sections execution plan
@@ -3348,6 +3348,19 @@ executable; fixture README records exact live paths, source hashes, reduction,
 and reduced hashes; add/remove/modify/ownership/request/reference/dispatch/
 external/deferred transitions equal clean rebuilds; Coverage and aggregate
 counts derive from live registries; full workspace validation succeeds.
+
+**Current state after Task 5:** the tracked
+`adapters/edt/tests/fixtures/sprint13_xdto_services_project/` reduction proves
+small/mixed/large direct XDTO shapes, explicit/absent HTTP method values,
+internal/external/absent Web package forms, internal/external types,
+absent/`Out`/`InOut` directions, and exact owned Function dispatch. Generic
+Query, Diff, reports, Validation, Impact policy, complete indexes, and
+incremental clean-rebuild transitions cover all five new node kinds, immediate
+ownership, payload/target/request/reference/dispatch changes, and deferred
+property stability. The executable Graph Domain registry has 96 capabilities:
+92 `Supported` and 4 `NotApplicable`; EDT has 120 capabilities: 115 `Supported`
+and 5 `NotApplicable`. Both registries have no gaps. Sprint 13 remains `active`
+until Task 6 records the independent integration-review decision.
 
 Focused validation:
 

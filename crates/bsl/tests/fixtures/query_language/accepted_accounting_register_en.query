@@ -1,0 +1,1 @@
+SELECT FinancialAccounting.Recorder FROM AccountingRegister.FinancialAccounting AS FinancialAccounting

@@ -47,6 +47,10 @@ pub enum QuerySourceCategory {
     Catalog,
     /// A direct Information Register source.
     InformationRegister,
+    /// A direct Accumulation Register source.
+    AccumulationRegister,
+    /// A direct Accounting Register source.
+    AccountingRegister,
 }
 
 /// One direct persistent source occurrence parsed from raw query text.
@@ -308,10 +312,8 @@ impl<'a> Parser<'a> {
 
     fn detect_unsupported_program(&self) -> Option<QueryLanguageDiagnostic> {
         for tokens in self.tokens.windows(6) {
-            if matches!(
-                tokens[0].kind,
-                TokenKind::Word("AccumulationRegister" | "InformationRegister")
-            ) && tokens[1].kind == TokenKind::Dot
+            if matches!(tokens[0].kind, TokenKind::Word(word) if is_virtual_table_register_namespace(word))
+                && tokens[1].kind == TokenKind::Dot
                 && matches!(tokens[2].kind, TokenKind::Word(_))
                 && tokens[3].kind == TokenKind::Dot
                 && matches!(tokens[4].kind, TokenKind::Word(_))
@@ -484,6 +486,8 @@ impl<'a> Parser<'a> {
         let category = match namespace {
             "Catalog" | "Справочник" => QuerySourceCategory::Catalog,
             "InformationRegister" => QuerySourceCategory::InformationRegister,
+            "AccumulationRegister" => QuerySourceCategory::AccumulationRegister,
+            "AccountingRegister" => QuerySourceCategory::AccountingRegister,
             _ => {
                 return Err(QueryLanguageDiagnostic::new(
                     QueryLanguageDiagnosticKind::UnsupportedPersistentNamespace,
@@ -597,6 +601,13 @@ impl<'a> Parser<'a> {
     }
 }
 
+fn is_virtual_table_register_namespace(namespace: &str) -> bool {
+    matches!(
+        namespace,
+        "InformationRegister" | "AccumulationRegister" | "AccountingRegister"
+    )
+}
+
 fn tokenize(source: &str) -> Vec<Token<'_>> {
     let mut tokens = Vec::new();
     let mut characters = source.char_indices().peekable();
@@ -678,6 +689,10 @@ mod tests {
         include_str!("../tests/fixtures/query_language/accepted_catalog_ru.query");
     const ACCEPTED_INFORMATION_REGISTER_EN: &str =
         include_str!("../tests/fixtures/query_language/accepted_information_register_en.query");
+    const ACCEPTED_ACCUMULATION_REGISTER_EN: &str =
+        include_str!("../tests/fixtures/query_language/accepted_accumulation_register_en.query");
+    const ACCEPTED_ACCOUNTING_REGISTER_EN: &str =
+        include_str!("../tests/fixtures/query_language/accepted_accounting_register_en.query");
     const UNSUPPORTED_PARAMETER_SOURCE_EN: &str =
         include_str!("../tests/fixtures/query_language/unsupported_parameter_source_en.query");
     const UNSUPPORTED_JOIN_EN: &str =
@@ -748,6 +763,83 @@ mod tests {
         assert_eq!(source.alias(), Some("Tab"));
         assert_eq!(source.location().start_byte(), 32);
         assert_eq!(source.location().end_byte(), 67);
+    }
+
+    #[test]
+    fn query_language_parses_direct_register_fixtures_with_exact_locations() {
+        for (fixture, category, raw_spelling, namespace, local_name, alias, start, end) in [
+            (
+                ACCEPTED_ACCUMULATION_REGISTER_EN,
+                QuerySourceCategory::AccumulationRegister,
+                "AccumulationRegister.InventoryCost",
+                "AccumulationRegister",
+                "InventoryCost",
+                "OldRecords",
+                30,
+                64,
+            ),
+            (
+                ACCEPTED_ACCOUNTING_REGISTER_EN,
+                QuerySourceCategory::AccountingRegister,
+                "AccountingRegister.FinancialAccounting",
+                "AccountingRegister",
+                "FinancialAccounting",
+                "FinancialAccounting",
+                41,
+                79,
+            ),
+        ] {
+            let first = QueryLanguageParser.parse(fixture);
+            let repeated = QueryLanguageParser.parse(fixture);
+
+            assert_eq!(first, repeated);
+            assert!(first.is_source_set_complete());
+            assert!(first.diagnostics().is_empty());
+            let program = first.program().expect("direct register fixture must parse");
+            assert_eq!(program.statement_kind(), QueryStatementKind::Select);
+            assert_eq!(program.sources().len(), 1);
+            let source = &program.sources()[0];
+            assert_eq!(source.raw_spelling(), raw_spelling);
+            assert_eq!(source.category(), category);
+            assert_eq!(source.namespace(), namespace);
+            assert_eq!(source.local_name(), local_name);
+            assert_eq!(source.alias(), Some(alias));
+            assert_eq!(source.location().start_byte(), start);
+            assert_eq!(source.location().end_byte(), end);
+            assert_eq!(&fixture[start..end], raw_spelling);
+        }
+    }
+
+    #[test]
+    fn query_language_register_categories_remain_exact_and_all_or_nothing() {
+        for source in [
+            "SELECT Ref FROM accumulationRegister.InventoryCost",
+            "SELECT Ref FROM Accountingregister.FinancialAccounting",
+            "SELECT Ref FROM CalculationRegister.Payroll",
+        ] {
+            let result = QueryLanguageParser.parse(source);
+
+            assert!(!result.is_source_set_complete());
+            assert!(result.program().is_none());
+            assert_eq!(
+                result.diagnostics()[0].kind(),
+                QueryLanguageDiagnosticKind::UnsupportedPersistentNamespace
+            );
+        }
+
+        for source in [
+            "SELECT Ref FROM AccumulationRegister.InventoryCost.Balance()",
+            "SELECT Ref FROM AccountingRegister.FinancialAccounting.Turnovers()",
+        ] {
+            let result = QueryLanguageParser.parse(source);
+
+            assert!(!result.is_source_set_complete());
+            assert!(result.program().is_none());
+            assert_eq!(
+                result.diagnostics()[0].kind(),
+                QueryLanguageDiagnosticKind::VirtualTableSource
+            );
+        }
     }
 
     #[test]

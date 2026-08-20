@@ -412,9 +412,9 @@ fn insert_query_reads(
             let program = parse_result
                 .program()
                 .expect("a complete query-language source set must expose a program");
-            let outcomes = resolution_index
-                .resolve(&parse_result, workspace_scope)
-                .expect("a complete query-language source set must enter resolution");
+            let Some(outcomes) = resolution_index.resolve(&parse_result, workspace_scope) else {
+                continue;
+            };
 
             for (source, outcome) in program.sources().iter().zip(outcomes) {
                 process_query_source_outcome(
@@ -646,6 +646,12 @@ fn expected_query_target_kind(category: QuerySourceCategory) -> NodeKind {
         QuerySourceCategory::InformationRegister => {
             NodeKind::Metadata(MetadataKind::InformationRegister)
         }
+        QuerySourceCategory::AccumulationRegister => {
+            NodeKind::Metadata(MetadataKind::AccumulationRegister)
+        }
+        QuerySourceCategory::AccountingRegister => {
+            NodeKind::Metadata(MetadataKind::AccountingRegister)
+        }
     }
 }
 
@@ -749,6 +755,8 @@ const fn query_source_category_name(category: QuerySourceCategory) -> &'static s
     match category {
         QuerySourceCategory::Catalog => "catalog",
         QuerySourceCategory::InformationRegister => "information_register",
+        QuerySourceCategory::AccumulationRegister => "accumulation_register",
+        QuerySourceCategory::AccountingRegister => "accounting_register",
     }
 }
 
@@ -756,6 +764,8 @@ fn query_target_kind_name(kind: NodeKind) -> &'static str {
     match kind {
         NodeKind::Metadata(MetadataKind::Catalog) => "metadata.catalog",
         NodeKind::Metadata(MetadataKind::InformationRegister) => "metadata.information_register",
+        NodeKind::Metadata(MetadataKind::AccumulationRegister) => "metadata.accumulation_register",
+        NodeKind::Metadata(MetadataKind::AccountingRegister) => "metadata.accounting_register",
         _ => "unsupported",
     }
 }
@@ -1476,6 +1486,66 @@ mod tests {
         assert_eq!(provenance.origin(), FactOrigin::Resolved);
         assert_eq!(provenance.confidence(), Confidence::Exact);
         assert_eq!(provenance.resolution(), ResolutionState::Resolved);
+    }
+
+    #[test]
+    fn parsed_register_categories_do_not_enter_production_resolution_yet() {
+        let root = tempdir().expect("temporary directory must be created");
+        let module_path = root.path().join("ObjectModule.bsl");
+        fs::write(
+            &module_path,
+            concat!(
+                "Procedure ReadAccumulationRegister()\n",
+                "    Query = New Query;\n",
+                "    Query.Text = \"SELECT Ref FROM AccumulationRegister.InventoryCost\";\n",
+                "EndProcedure\n",
+                "Procedure ReadAccountingRegister()\n",
+                "    Query = New Query;\n",
+                "    Query.Text = \"SELECT Ref FROM AccountingRegister.FinancialAccounting\";\n",
+                "EndProcedure\n",
+            ),
+        )
+        .expect("module file must be created");
+
+        let module_id = id("document.query_host:object_module");
+        let module = EdtModuleDescriptor::new(
+            module_id.clone(),
+            name("ObjectModule"),
+            EdtModuleKind::Object,
+            module_path,
+        );
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            module_id,
+            name("ObjectModule"),
+            NodeKind::Module,
+        ));
+        graph.insert_node(GraphNode::new(
+            id("accumulation-register.inventory-cost"),
+            name("InventoryCost"),
+            NodeKind::Metadata(MetadataKind::AccumulationRegister),
+        ));
+        graph.insert_node(GraphNode::new(
+            id("accounting-register.financial-accounting"),
+            name("FinancialAccounting"),
+            NodeKind::Metadata(MetadataKind::AccountingRegister),
+        ));
+        let mut diagnostics = BTreeSet::new();
+        let mut statistics = SemanticReferenceStatistics::new();
+
+        add_configuration_module_symbols_with_diagnostics_in_scope(
+            &mut graph,
+            &[module],
+            WorkspaceResolutionScope::Complete,
+            &mut diagnostics,
+            &mut statistics,
+        )
+        .expect("parser-only categories must not fail graph construction");
+
+        assert_eq!(graph.query().nodes_by_kind(NodeKind::Query).len(), 2);
+        assert!(graph.query().edges_by_kind(EdgeKind::Reads).is_empty());
+        assert!(diagnostics.is_empty());
+        assert!(statistics.is_empty());
     }
 
     #[test]

@@ -69,6 +69,13 @@ impl QuerySourceResolutionIndex {
         }
 
         let program = parse_result.program()?;
+        if program
+            .sources()
+            .iter()
+            .any(|source| !is_private_resolution_category(source.category()))
+        {
+            return None;
+        }
 
         Some(
             program
@@ -123,11 +130,24 @@ fn query_source_lookup_key(value: &str) -> String {
     value.to_lowercase()
 }
 
+const fn is_private_resolution_category(category: QuerySourceCategory) -> bool {
+    matches!(
+        category,
+        QuerySourceCategory::Catalog | QuerySourceCategory::InformationRegister
+    )
+}
+
 const fn expected_metadata_kind(category: QuerySourceCategory) -> NodeKind {
     match category {
         QuerySourceCategory::Catalog => NodeKind::Metadata(MetadataKind::Catalog),
         QuerySourceCategory::InformationRegister => {
             NodeKind::Metadata(MetadataKind::InformationRegister)
+        }
+        QuerySourceCategory::AccumulationRegister => {
+            NodeKind::Metadata(MetadataKind::AccumulationRegister)
+        }
+        QuerySourceCategory::AccountingRegister => {
+            NodeKind::Metadata(MetadataKind::AccountingRegister)
         }
     }
 }
@@ -240,6 +260,21 @@ mod tests {
                 target_id: id("information-register.objects-to-delete"),
             }])
         );
+    }
+
+    #[test]
+    fn parsed_register_categories_wait_for_the_public_request_task() {
+        let graph = SemanticGraph::new();
+
+        for source in [
+            "SELECT Ref FROM AccumulationRegister.InventoryCost",
+            "SELECT Ref FROM AccountingRegister.FinancialAccounting",
+        ] {
+            assert_eq!(
+                resolve(&graph, source, WorkspaceResolutionScope::Complete),
+                None
+            );
+        }
     }
 
     #[test]

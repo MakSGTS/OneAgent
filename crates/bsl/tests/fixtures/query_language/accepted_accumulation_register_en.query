@@ -1,0 +1,1 @@
+SELECT OldRecords.Period FROM AccumulationRegister.InventoryCost AS OldRecords

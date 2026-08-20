@@ -11,6 +11,8 @@ or multiline BSL continuation markers. Fixture order has no semantic meaning.
 | `accepted_catalog_en.query` | Copied from an existing repository test | `crates/bsl/src/queries.rs:455-474` | Accepted: one English `SELECT`, one direct `Catalog.Products` source | None |
 | `accepted_catalog_ru.query` | Copied from an existing repository test | `crates/bsl/src/queries.rs:477-496` | Accepted: one Russian `ВЫБРАТЬ`, one direct `Справочник.Номенклатура` source | None |
 | `accepted_information_register_en.query` | Verbatim decoded query text from a real one-line BSL string | `OneAgent_EDTproject/src/CommonModules/MarkedObjectsDeletionInternal/Module.bsl:764-771` | Accepted: one direct `InformationRegister.ObjectsToDelete` source with alias `Tab` | None |
+| `accepted_accumulation_register_en.query` | Generated reduced scaffolding preserving the qualified source and alias from a real static Query | `OneAgent_EDTproject/src/CommonModules/Accounting/Module.bsl:936-970`, source at line 961; target `OneAgent_EDTproject/src/AccumulationRegisters/InventoryCost/InventoryCost.mdo`; Configuration declaration `AccumulationRegister.InventoryCost` | Accepted: one direct `AccumulationRegister.InventoryCost` source with alias `OldRecords` | None |
+| `accepted_accounting_register_en.query` | Generated reduced scaffolding preserving the qualified source and alias from a real static Query | `OneAgent_EDTproject/src/CommonModules/MonthEndTransactions/Module.bsl:1514-1541`, source at line 1522; target `OneAgent_EDTproject/src/AccountingRegisters/FinancialAccounting/FinancialAccounting.mdo`; Configuration declaration `AccountingRegister.FinancialAccounting` | Accepted: one direct `AccountingRegister.FinancialAccounting` source with alias `FinancialAccounting` | None |
 | `unsupported_parameter_source_en.query` | Verbatim decoded query text from a real one-line BSL string | `OneAgent_EDTproject/src/DataProcessors/ExportImportEnterpriseData/ObjectModule.bsl:871-877` | Unsupported: `&MetadataTableName` is a parameter-supplied source | External or parameter data source |
 | `unsupported_join_en.query` | Decoded contiguous statement excerpt | `OneAgent_EDTproject/src/Reports/SalesAnalytics/ObjectModule.bsl:145-150` | Unsupported: `INNER JOIN` adds another top-level source | Unsupported query structure |
 | `unsupported_union_all_en.query` | Decoded complete first statement | `OneAgent_EDTproject/src/Reports/TransferOfProduct/Forms/ReportForm/Module.bsl:173-189` | Unsupported: two branches use `UNION ALL` | Unsupported query structure |
@@ -24,6 +26,14 @@ behavior: their enclosing BSL quotes are excluded and their contents are kept
 unchanged. The parameter-source fixture is evidence of query-template syntax; it
 is not evidence that the current `BslQuery` extractor creates a Query node for
 that template.
+
+The two direct register fixtures are deliberately reduced rather than verbatim
+complete programs. Their repository sources contain projection lists, `WHERE`,
+`ORDER BY`, and other syntax outside the minimum parser grammar. Each fixture
+keeps one real projection path, the exact qualified persistent source, and the
+real alias while removing unsupported tails. This treatment proves only source
+classification and byte locations; it does not claim support for the complete
+production query text.
 
 ## Multiline fixture decoding
 

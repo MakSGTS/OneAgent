@@ -174,8 +174,98 @@ in the [Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
 Sprint 13 is completed under
 [ADR-0035](adr/0035-xdto-service-semantics.md) with a `pass` decision in the
 [Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md). Sprint
-14 is the next planning target; the v0.3 release review remains gated on Sprint
+14 is the next planning target, subject to the corrective Web Service XDTO
+package cardinality gate below; the v0.3 release review remains gated on Sprint
 14 completion and review.
+
+#### Post-Sprint 13 correction — multiple Web Service XDTO packages
+
+The registered Retail EDT corpus adds corrective source evidence after the
+completed Sprint 13 review. Its 18 Web Services contain direct `xdtoPackages`
+cardinalities zero, one, two, and four. `EquipmentService` declares four
+repository packages, `MobileService` mixes one repository package with one
+external namespace, and `SiteExchange2` proves that repository XDTO type
+resolution cannot be scoped to the service's package declaration list. The
+corpus-separated evidence and representative source hashes are recorded in the
+[Web Service XDTO package investigation](architecture/web-service-xdto-packages-source-investigation.md).
+
+The amended [ADR-0035](adr/0035-xdto-service-semantics.md) accepts direct
+cardinality zero-or-more. Declarations form a deterministic typed collection
+sorted by variant and exact value and deduplicated within one service. Every
+unique repository declaration creates one unscoped exact-name `XdtoPackage`
+request; external declarations remain payload-only. Package requests may
+resolve or terminate missing, ambiguous, or incompatible. Invalid-owner is not
+applicable to top-level package requests and remains limited to owner-scoped
+`XdtoType` and `Callable` requests. Exact XDTO type resolution continues over
+the complete repository namespace index, independent of declaration or source
+order. Existing node kinds, payload fields, request categories, identity,
+References/Triggers endpoint matrices, Function handler targets, and Coverage
+status remain unchanged.
+
+This correction is not a new sprint and does not reopen the historical Sprint
+13 `pass`. Sprint 14 remains the unique `next` sprint, but its planning and
+implementation may begin only after this ordered prerequisite completes:
+
+```text
+Committed multiple-package architecture correction
+    -> bounded EDT parser/emission implementation
+    -> focused and complete workspace validation
+    -> Sprint 14 planning eligibility
+```
+
+The implementation task must:
+
+- replace singular `EdtWebServiceDescriptor` package storage/access with a
+  deterministic collection and parse every direct valid declaration;
+- preserve fatal descriptor/build failure when any declaration is malformed,
+  unsupported, or wrongly nested;
+- project the complete canonical collection into the existing
+  `WebServiceMetadataPayload`;
+- collect one canonical package request per unique repository declaration,
+  preserve external declarations without local resolution, and project each
+  package request independently to its terminal diagnostic or precise
+  `References` edge;
+- preserve complete-snapshot XDTO namespace/type candidate collection and the
+  deterministic ambiguous resolution committed in
+  `Fix ambiguous XDTO namespace resolution`;
+- add generated parser and production evidence for zero, one, multiple
+  repository, mixed repository/external, equivalent duplicate, reordered,
+  malformed-member, and repeated-build cases;
+- cover resolved, missing, ambiguous, and incompatible package requests, while
+  retaining invalid-owner tests only for owner-scoped XDTO type and callable
+  requests;
+- derive the smallest tracked provenance-backed reduction from the documented
+  Retail `EquipmentService`, `MobileService`, and, where required for the
+  complete-snapshot resolution contract, `SiteExchange2` artifacts, recording
+  exact source paths, source hashes, reduction treatment, and reduced hashes;
+- prove exact payloads, requests, candidate order, References, provenance,
+  diagnostics, statistics, Query, Diff, Validation, complete/incremental index
+  equivalence, source reordering, and repeated-build equality;
+- leave Coverage statuses and aggregate counts unchanged unless executable
+  registry evidence independently proves a necessary transition;
+- when the ignored Retail corpus is installed, run a local whole-project
+  builder probe and prove that repeated `xdtoPackages` no longer produces
+  `DuplicateField`. A later unrelated corpus failure is reported separately;
+  neither the corpus nor that optional probe becomes a CI prerequisite.
+
+Focused implementation validation is:
+
+```bash
+cargo test -p oneagent-edt --lib service_descriptor::tests
+cargo test -p oneagent-edt --lib xdto_service_emission::tests
+cargo test -p oneagent-edt --test xdto_services
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test reference_request_build
+```
+
+Run the complete workspace implementation gate afterward. The suggested
+implementation commit message is:
+
+```text
+Support multiple Web Service XDTO packages
+```
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -3105,8 +3195,9 @@ independent integration review. The
 [Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md) records
 `pass` against committed recovery head
 `5af338cd679a950c3ed262d1b777892186c92e22`. Sprint 14 Designer XML Adapter is
-the unique `next` target; the v0.3 release integration review remains ineligible
-until Sprint 14 completes.
+the unique `next` target after the post-Sprint 13 multiple-package correction
+and its full validation gate complete; the v0.3 release integration review
+remains ineligible until Sprint 14 completes.
 
 Repository-owned
 [source investigation](architecture/xdto-service-source-investigation.md)

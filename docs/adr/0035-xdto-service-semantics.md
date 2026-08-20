@@ -4,12 +4,25 @@
 
 Accepted
 
+The zero-or-more Web Service XDTO package declaration amendment was accepted
+on 2026-08-20 from the corrective evidence in
+`docs/architecture/web-service-xdto-packages-source-investigation.md`. Sprint
+13 remains historically completed; the amendment defines a corrective
+implementation prerequisite before Sprint 14 begins.
+
 ## Context
 
 Sprint 13 must expand XDTO Package, HTTP Service, and Web Service semantics
 beyond the existing top-level metadata-node coverage. The repository-owned EDT
 corpus and exact inventory are recorded in
 `docs/architecture/xdto-service-source-investigation.md`.
+
+The later Retail corpus proves that direct Web Service `xdtoPackages`
+cardinality is not limited to the zero-or-one shape observed during Sprint 13.
+Its 18 Web Services include one service with four repository declarations and
+one with a mixed repository/external pair. The corpus-separated inventory and
+representative hashes are recorded in
+`docs/architecture/web-service-xdto-packages-source-investigation.md`.
 
 The current graph already preserves stable UUID identity, canonical name,
 optional synonym, provenance, configuration ownership, service `Module.bsl`
@@ -100,11 +113,16 @@ A Web Service package declaration is one of:
 - a repository reference parsed from exact `XDTOPackage.<name>` syntax;
 - an external namespace URI from a String value.
 
-Declarations are deterministically ordered and deduplicated if the source
-allows repeated equivalent values. Metadata UUID, name, kind, parent,
-provenance, and module relations remain outside payload. Handler/procedure
-bindings remain reference requests and edges rather than copied resolved IDs in
-payload.
+Declarations are deterministically ordered by typed declaration variant and
+exact value and deduplicated within one Web Service. Repository declarations
+sort before external namespace declarations, matching the existing public
+typed-value order. The inspected corpora contain no equivalent duplicate
+within one service; deduplication is the canonical payload and request-
+aggregation policy rather than a source-frequency claim. Equivalent values in
+different services remain distinct observations because their source nodes
+differ. Metadata UUID, name, kind, parent, provenance, and module relations
+remain outside payload. Handler/procedure bindings remain reference requests
+and edges rather than copied resolved IDs in payload.
 
 Payload changes preserve node identity and appear as
 `NodeModifiedAspect::SemanticContent`. No payload field participates in graph
@@ -182,11 +200,30 @@ Canonical requests are:
 | HTTP Method | `Callable` | exact child Function under the owning service Module | `Function` |
 | Web Operation | `Callable` | exact child Function under the owning service Module | `Function` |
 
-The adapter may first map an XDTO namespace to exactly one repository package,
-then create the child request against that package. A missing namespace/package,
-ambiguous package, missing child, ambiguous child, incompatible kind, or wrong
-owner uses the typed ADR-0024 terminal lifecycle and deterministic candidate
-order.
+Every unique repository package declaration creates one unscoped exact-name
+`XdtoPackage` request. Its reachable terminal outcomes are `Resolved`,
+`MissingTarget`, `AmbiguousTarget`, and `IncompatibleTargetKind`.
+`InvalidOwnerReference` is not applicable because a top-level package request
+has no declared owner. Each request terminates independently: a failed package
+request does not erase valid sibling requests or their projections.
+Identity remains the ADR-0024 tuple of source Web Service node, `XdtoPackage`
+category, exact `SemanticReference::Name`, and expected
+`Metadata(XdtoPackage)` kind. Distinct package names under one service are
+distinct requests; equivalent declarations aggregate into one request with
+canonical provenance. Compatible and incompatible candidates are sorted and
+deduplicated, and every terminal request contributes to diagnostics and
+statistics exactly once.
+
+An XDTO type declaration is resolved independently of the Web Service package
+declaration list. The adapter maps its namespace through the complete
+repository XDTO Package namespace index, retains every sorted unique package
+owner for that namespace, and creates the owner-scoped child request against
+that candidate set. Missing child, ambiguous child, incompatible kind, or
+wrong owner uses the typed ADR-0024 terminal lifecycle and deterministic
+candidate order. `InvalidOwnerReference` remains valid only for owner-scoped
+`XdtoType` and `Callable` requests. A package declaration, source order,
+filesystem order, first match, or last match cannot filter the namespace index
+or suppress an ambiguous outcome.
 
 An external package namespace or external XDTO type namespace is a valid typed
 external source observation, not a repository reference request. It emits no
@@ -274,16 +311,22 @@ The HTTP parser accepts service root URL, UUID-backed direct URL Templates,
 UUID-backed nested Methods, template text, optional explicit HTTP method, and
 required handler name.
 
-The Web parser accepts service namespace, optional typed XDTO package
-declaration, UUID-backed direct Operations, UUID-backed nested Parameters,
-required return/value type declarations, optional Boolean nillability, optional
-accepted transfer direction, and required Procedure binding.
+The Web parser accepts service namespace, zero-or-more direct typed XDTO
+package declarations, UUID-backed direct Operations, UUID-backed nested
+Parameters, required return/value type declarations, optional Boolean
+nillability, optional accepted transfer direction, and required Procedure
+binding. It parses every direct `xdtoPackages` child independently, accepts
+mixed repository and external variants, sorts by typed variant and exact
+value, and deduplicates equivalent declarations. Source position is not
+preserved as semantic identity or priority.
 
 Duplicate UUID/name conflicts inside their semantic owner, missing required
-values, invalid reference grammar, invalid Boolean, unsupported explicit
-direction, wrong hierarchy, unreadable/malformed XML, and exact source
-cardinality violations are typed deterministic errors. Parsing is separate
-from graph emission and handler/XDTO resolution.
+values, invalid reference grammar, unsupported package wrapper, invalid
+Boolean, unsupported explicit direction, wrong hierarchy, unreadable/malformed
+XML, and singleton-field cardinality violations are typed deterministic errors.
+A malformed package declaration makes the complete service descriptor invalid;
+valid package siblings do not create a successful partial descriptor or build.
+Parsing is separate from graph emission and handler/XDTO resolution.
 
 ## Production emission
 
@@ -293,7 +336,8 @@ After generic metadata and BSL module/symbol insertion, the EDT builder:
 1. joins and parses XDTO package artifacts and both service descriptor families;
 2. enriches existing metadata payloads without changing identity/name/kind;
 3. emits accepted child nodes and immediate Contains ownership;
-4. collects package, type, and callable requests with provenance;
+4. collects one package request per unique repository declaration plus the
+   accepted type and callable requests with provenance;
 5. resolves against the complete graph snapshot;
 6. projects terminal requests to References/Triggers or typed diagnostics;
 7. derives legacy reference statistics exactly once from terminal requests.
@@ -301,9 +345,10 @@ After generic metadata and BSL module/symbol insertion, the EDT builder:
 Fatal structural parser/join failures fail the complete build and return no
 successful partial graph result. Valid external declarations and explicitly
 deferred XDTO constructs preserve accepted siblings and do not emit synthetic
-facts. Equivalent observations aggregate deterministically. Reordered source
-files/elements and repeated builds produce equal graph, requests, provenance,
-diagnostics, statistics, report, and validation results.
+facts. Package requests terminate and project independently. Equivalent
+observations aggregate deterministically. Reordered source files/elements and
+repeated builds produce equal graph, requests, provenance, diagnostics,
+statistics, report, validation, and complete/incremental index results.
 
 ## Validation, Query, Diff, report, and index contracts
 
@@ -342,6 +387,14 @@ enrichment, child emission, ownership, internal/external resolution policy,
 requests, References, Triggers, provenance, diagnostics, statistics,
 determinism, generic consumers, and both index lifecycles. Aggregate counts are
 derived from executable registries rather than copied from planning estimates.
+
+The zero-or-more amendment does not transition Coverage or change aggregate
+counts. Existing `Supported` entries require refreshed production evidence only
+after implementation proves zero, one, multiple repository, mixed repository/
+external, equivalent duplicate, reordered, malformed sibling, and repeated-
+build cases. Package requests must cover resolved, missing, ambiguous, and
+incompatible outcomes; invalid-owner evidence remains with owner-scoped XDTO
+type and callable requests.
 
 Existing top-level metadata capabilities remain compatible; their status alone
 does not prove the new subordinate slice.
@@ -395,6 +448,38 @@ evidence.
 Rejected because canonical Graph Query and Semantic Index dimensions already
 cover typed nodes, ownership, adjacency, and exact name/kind lookup.
 
+### Retain the singular zero-or-one Web package parser
+
+Rejected because the Retail corpus contains valid direct cardinalities two and
+four, including both multiple repository packages and a mixed repository/
+external declaration collection.
+
+### Select the first or last package declaration
+
+Rejected because source order is neither a stable identity nor a resolution
+priority. `EquipmentService` source order is not lexical or semantic-version
+order, and discarding declarations would lose explicit source facts.
+
+### Treat every repeated `xdtoPackages` field as an error
+
+Rejected because repetition is the EDT collection encoding. Only an invalid
+individual declaration remains a fatal typed parser error. Equivalent valid
+declarations canonicalize and deduplicate without multiplying payload values,
+requests, diagnostics, edges, or statistics.
+
+### Scope XDTO type resolution to the declared package list
+
+Rejected because Retail `SiteExchange2` declares `CommerceML210` while four
+type occurrences use the repository-owned `CommerceML205a` namespace. Package
+declarations therefore cannot filter or prioritize the complete repository
+namespace index, and they cannot suppress its deterministic ambiguous outcome.
+
+### Combine the correction with Designer XML ingestion
+
+Rejected because EDT Web Service collection cardinality is an existing adapter
+correction with its own source evidence and validation boundary. Sprint 14
+Designer XML and cross-adapter identity equivalence remain separate work.
+
 ## Deferred scope
 
 - XDTO imports, properties, enum values, patterns, inline definitions, bases,
@@ -419,3 +504,15 @@ and declarative handler dispatch while preserving existing top-level metadata
 and BSL behavior. The bounded first slice is testable from repository-owned
 evidence and leaves the large unresolved schema/property surface explicit
 rather than silently partial.
+
+The accepted model can represent zero-or-more Web Service package declarations
+without new graph kinds, edge kinds, request categories, endpoint pairs, or
+public metadata payload fields. Production remains singular until a bounded
+follow-up replaces the EDT parser storage/accessor, projects the complete
+collection, collects every unique repository package request, adds generated
+terminal and determinism tests, derives a minimal provenance-backed Retail
+fixture, and passes focused plus full workspace validation. When the ignored
+Retail corpus is installed, that task also runs a local builder probe and must
+show that repeated `xdtoPackages` no longer produces `DuplicateField`; a later
+unrelated corpus failure is reported separately and does not become a CI
+dependency.

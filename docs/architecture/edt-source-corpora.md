@@ -84,14 +84,17 @@ Retail project is malformed. Its 18 Web Service descriptors have this direct
 | 4 | 1 |
 
 `EquipmentService` declares four repository XDTO packages. `MobileService`
-declares one repository package and one external namespace. The current Sprint
-13 parser accepts the zero-or-one shape proven by the original corpus and
-classifies a repeated field as fatal. Supporting multiple package declarations
-requires a separate architecture and implementation task covering payload
-cardinality, request generation, namespace/type resolution, diagnostics,
-determinism, and generated tests.
+declares one repository package and one external namespace. The accepted
+[corrective source investigation](web-service-xdto-packages-source-investigation.md)
+and amended [ADR-0035](../adr/0035-xdto-service-semantics.md) confirm direct
+`xdtoPackages` cardinality as zero-or-more, define canonical collection and
+request semantics, and preserve complete-snapshot namespace/type resolution.
+The current production parser still accepts only the zero-or-one shape proven
+by the original corpus and classifies a repeated field as fatal. A bounded
+implementation task remains required before Sprint 14 begins.
 
-Until that work is accepted and completed, the Retail project is suitable for:
+Until that corrective implementation and its validation gate complete, the
+Retail project is suitable for:
 
 - source-shape investigation;
 - Unicode and Russian-identifier audits;

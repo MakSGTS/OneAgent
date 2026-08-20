@@ -2432,9 +2432,22 @@ The
 records `pass` against committed recovery head
 `5af338cd679a950c3ed262d1b777892186c92e22`. Sprint 13 is completed without a
 review-time production, public API, Coverage, or deferred-scope change and makes
-Sprint 14 Designer XML Adapter the next planning target. The v0.3 release
-integration review remains ineligible until Sprint 14 completes and passes its
-own integration review.
+Sprint 14 Designer XML Adapter the next planning target.
+
+Later corpus-separated
+[Web Service XDTO package evidence](web-service-xdto-packages-source-investigation.md)
+proves valid direct declaration cardinalities two and four in Retail, including
+four repository packages in `EquipmentService` and a mixed repository/external
+pair in `MobileService`. The accepted ADR-0035 amendment keeps the existing
+zero-or-more source-independent payload, exact request categories, endpoint
+matrices, global namespace/type resolution, Function handler targets, and
+Coverage state. It requires the EDT parser and production projection to consume
+a canonical declaration collection and emit one package request per unique
+repository declaration. Production remains singular until that corrective
+implementation and its full validation gate complete. Sprint 13 stays
+historically completed; Sprint 14 remains the unique next sprint but cannot
+begin before the correction passes. The v0.3 release integration review remains
+ineligible until Sprint 14 completes and passes its own integration review.
 
 The first slice deliberately excludes 61,435 nested XDTO properties, imports,
 restrictions, inline types, external platform schema nodes, route matching,

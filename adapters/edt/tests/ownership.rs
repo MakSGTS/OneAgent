@@ -213,7 +213,7 @@ fn assert_supported_coverage(result: &EdtSemanticGraphBuildResult) {
             .edt_pipeline()
             .gaps_by_priority(SemanticCoverageGapPriority::High)
             .len(),
-        3
+        0
     );
     assert_eq!(
         coverage
@@ -224,7 +224,7 @@ fn assert_supported_coverage(result: &EdtSemanticGraphBuildResult) {
     );
     for (priority, expected) in [
         (SemanticCoverageGapPriority::Critical, 0),
-        (SemanticCoverageGapPriority::High, 3),
+        (SemanticCoverageGapPriority::High, 0),
         (SemanticCoverageGapPriority::Medium, 0),
     ] {
         let combined = coverage.graph_domain().gaps_by_priority(priority).len()

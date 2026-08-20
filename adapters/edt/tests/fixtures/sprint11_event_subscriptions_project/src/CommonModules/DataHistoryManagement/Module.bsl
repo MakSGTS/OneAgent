@@ -1,0 +1,5 @@
+Procedure AfterWriteDataHistoryVersionsProcessing(Source, WriteVersionsInformation) Export
+EndProcedure
+
+Procedure DeleteOldDataHistoryVersions()
+EndProcedure

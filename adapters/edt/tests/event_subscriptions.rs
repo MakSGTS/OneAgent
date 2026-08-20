@@ -1,15 +1,15 @@
-use oneagent_common::EntityId;
+use oneagent_common::{EntityId, EntityName};
 use oneagent_edt::{
     EdtEventSubscriptionError, EdtEventSubscriptionHandlerReason, EdtGraphError,
     EdtSemanticGraphBuildResult, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder,
 };
 use oneagent_graph::{
-    EdgeKind, GraphNode, NodeId, NodeKind, SemanticDiagnosticCode, SemanticDiagnosticKind,
-    SemanticGraph,
+    EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, NodeModifiedAspect, SemanticDiagnosticCode,
+    SemanticDiagnosticKind, SemanticGraph, SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use oneagent_metadata::{MetadataKind, MetadataSpecificPayload};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
 
 const CONFIGURATION_ID: &str = "10000000-0000-0000-0000-000000000001";
@@ -19,9 +19,63 @@ const SALES_ID: &str = "30000000-0000-0000-0000-000000000001";
 const EVENTS_ID: &str = "40000000-0000-0000-0000-000000000001";
 const PRIMARY_SUBSCRIPTION_ID: &str = "50000000-0000-0000-0000-000000000001";
 const SECONDARY_SUBSCRIPTION_ID: &str = "50000000-0000-0000-0000-000000000002";
+const LIVE_CONFIGURATION_ID: &str = "408a41e7-907a-4fb3-8999-83d1e8b6e093";
+const LIVE_PRODUCTS_ID: &str = "92bcb692-56c4-4199-bf7e-e33cdd76a310";
+const LIVE_JOB_ID: &str = "dad11c2e-08fc-4a6b-8829-8be6c64c15fc";
+const LIVE_AFTER_WRITE_ID: &str = "84774a24-9794-4005-a6c2-b69c42abd13f";
+const LIVE_PRESENTATION_FIELDS_ID: &str = "16773cdb-b979-42d5-a2a5-d4b79e8737bd";
+const LIVE_UNSUPPORTED_ID: &str = "350a7b29-4ba3-43c4-b77d-47085f53d760";
 
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
+}
+
+fn live_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sprint11_event_subscriptions_project")
+}
+
+fn copy_tree(source: &Path, target: &Path) {
+    fs::create_dir_all(target).expect("fixture target directory must be created");
+    for entry in fs::read_dir(source).expect("fixture directory must be readable") {
+        let entry = entry.expect("fixture entry must be readable");
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if entry
+            .file_type()
+            .expect("fixture entry type must be readable")
+            .is_dir()
+        {
+            copy_tree(&source_path, &target_path);
+        } else {
+            fs::copy(&source_path, &target_path).expect("fixture artifact must be copied");
+        }
+    }
+}
+
+fn copied_live_fixture() -> TempDir {
+    let target = tempdir().expect("temporary fixture project must be created");
+    copy_tree(&live_fixture(), target.path());
+    target
+}
+
+fn replace_fixture_fragment(path: &Path, old: &str, new: &str) {
+    let source = fs::read_to_string(path).expect("fixture artifact must be readable");
+    assert!(source.contains(old), "fixture fragment must exist: {old}");
+    fs::write(path, source.replacen(old, new, 1)).expect("fixture artifact must be updated");
+}
+
+fn named_procedure(graph: &SemanticGraph, value: &str) -> GraphNode {
+    graph
+        .query()
+        .nodes_by_name_and_kind(
+            &EntityName::new(value).expect("procedure name must be valid"),
+            NodeKind::Procedure,
+        )
+        .into_iter()
+        .next()
+        .cloned()
+        .expect("fixture procedure must exist")
 }
 
 fn project() -> TempDir {
@@ -562,4 +616,327 @@ fn project_without_event_subscriptions_preserves_existing_metadata_behavior() {
     assert!(result.reference_requests().is_empty());
     assert!(result.diagnostics().is_empty());
     assert!(result.validate().is_valid());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn live_derived_fixture_is_consumer_visible_and_deterministic() {
+    let first = build(&live_fixture());
+    let repeated = build(&live_fixture());
+    let graph = first.graph();
+    let query = graph.query();
+    let after_write = node(graph, LIVE_AFTER_WRITE_ID);
+    let metadata_payload = after_write
+        .metadata_payload()
+        .expect("live Event Subscription payload must exist");
+    let Some(MetadataSpecificPayload::EventSubscription(payload)) = metadata_payload.specific()
+    else {
+        panic!("live Event Subscription specific payload must exist");
+    };
+
+    assert_eq!(
+        payload.event().as_str(),
+        "AfterWriteDataHistoryVersionsProcessing"
+    );
+    assert_eq!(
+        metadata_payload.common().synonym(),
+        Some("After write data history versions processing")
+    );
+    assert_eq!(
+        query
+            .owner(&NodeId::new(LIVE_AFTER_WRITE_ID))
+            .expect("Configuration ownership must be queryable")
+            .id(),
+        &id(LIVE_CONFIGURATION_ID)
+    );
+    assert_eq!(
+        query
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::EventSubscription))
+            .len(),
+        3
+    );
+
+    let exported = named_procedure(graph, "AfterWriteDataHistoryVersionsProcessing");
+    let exact_handler = named_procedure(graph, "BusinessProcessPresentationFieldsGetProcessing");
+    let non_exported = named_procedure(graph, "DeleteOldDataHistoryVersions");
+    let after_references =
+        query.outgoing_edges_by_kind(&NodeId::new(LIVE_AFTER_WRITE_ID), EdgeKind::References);
+    assert_eq!(after_references.len(), 2);
+    let products = after_references
+        .iter()
+        .find(|edge| edge.target() == &id(LIVE_PRODUCTS_ID))
+        .expect("equivalent manager/object selectors must resolve Products");
+    assert_eq!(products.provenance().len(), 2);
+    assert!(
+        after_references
+            .iter()
+            .any(|edge| edge.target() == exported.id())
+    );
+
+    let exact_references = query.outgoing_edges_by_kind(
+        &NodeId::new(LIVE_PRESENTATION_FIELDS_ID),
+        EdgeKind::References,
+    );
+    assert!(
+        exact_references
+            .iter()
+            .any(|edge| edge.target() == &id(LIVE_JOB_ID))
+    );
+    assert!(
+        exact_references
+            .iter()
+            .any(|edge| edge.target() == exact_handler.id())
+    );
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&NodeId::new(LIVE_UNSUPPORTED_ID), EdgeKind::References,)
+            .into_iter()
+            .map(GraphEdge::target)
+            .collect::<Vec<_>>(),
+        vec![non_exported.id()]
+    );
+
+    for (subscription, handler) in [
+        (LIVE_AFTER_WRITE_ID, exported.id()),
+        (LIVE_PRESENTATION_FIELDS_ID, exact_handler.id()),
+        (LIVE_UNSUPPORTED_ID, non_exported.id()),
+    ] {
+        let subscription = NodeId::new(subscription);
+        assert_eq!(
+            query
+                .outgoing_edges_by_kind(&subscription, EdgeKind::Triggers)
+                .into_iter()
+                .map(GraphEdge::target)
+                .collect::<Vec<_>>(),
+            vec![handler]
+        );
+        assert!(
+            query
+                .direct_dependencies_by_kind(&subscription, EdgeKind::Triggers)
+                .is_empty()
+        );
+    }
+    assert_eq!(
+        query
+            .direct_dependencies(&NodeId::new(LIVE_AFTER_WRITE_ID))
+            .len(),
+        2
+    );
+
+    assert_eq!(first.diagnostics().len(), 1);
+    assert_eq!(
+        first.diagnostics()[0].code(),
+        SemanticDiagnosticCode::ReferenceUnsupportedPrefix
+    );
+    assert_eq!(first.reference_requests().len(), 0);
+    assert_eq!(first.reference_statistics().total(), 7);
+    assert_eq!(first.reference_statistics().resolved(), 6);
+    assert_eq!(first.reference_statistics().unsupported_prefix(), 1);
+    assert_eq!(
+        first
+            .report()
+            .nodes()
+            .by_kind()
+            .get(&NodeKind::Metadata(MetadataKind::EventSubscription)),
+        Some(&3)
+    );
+    assert_eq!(
+        first.report().edges().by_kind().get(&EdgeKind::References),
+        Some(&5)
+    );
+    assert_eq!(
+        first.report().edges().by_kind().get(&EdgeKind::Triggers),
+        Some(&3)
+    );
+    assert!(first.validate().is_valid());
+    assert_eq!(graph_snapshot(graph), graph_snapshot(repeated.graph()));
+    assert!(graph.diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+    assert_eq!(first.report(), repeated.report());
+
+    let trigger_edge = query
+        .outgoing_edges_by_kind(&NodeId::new(LIVE_AFTER_WRITE_ID), EdgeKind::Triggers)[0]
+        .clone();
+    let mut trigger_only_previous = SemanticGraph::new();
+    trigger_only_previous.insert_node(after_write.clone());
+    trigger_only_previous.insert_node(exported.clone());
+    trigger_only_previous
+        .insert_edge(trigger_edge.clone())
+        .expect("fixture Triggers edge must be valid");
+    let mut trigger_only_current = SemanticGraph::new();
+    trigger_only_current.insert_node(after_write);
+    trigger_only_current.insert_node(GraphNode::new(
+        exported.id().clone(),
+        EntityName::new("AfterWriteDataHistoryVersionsProcessingChanged")
+            .expect("changed handler name must be valid"),
+        NodeKind::Procedure,
+    ));
+    trigger_only_current
+        .insert_edge(trigger_edge)
+        .expect("fixture-derived Triggers edge must be valid");
+    let trigger_only_diff = trigger_only_previous.diff(&trigger_only_current);
+    let impact = SemanticImpactAnalyzer::analyze(
+        &trigger_only_previous,
+        &trigger_only_current,
+        &trigger_only_diff,
+        &SemanticImpactOptions::new(1),
+    )
+    .expect("Triggers-only impact analysis must succeed");
+    assert_eq!(impact.affected_nodes().len(), 1);
+    assert_eq!(
+        impact.affected_nodes()[0].node_id().as_str(),
+        exported.id().as_str()
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn production_diffs_cover_subscription_payload_source_handler_and_relation_transitions() {
+    let event_project = copied_live_fixture();
+    let event_baseline = build(event_project.path());
+    let after_path = event_project.path().join(
+        "src/EventSubscriptions/AfterWriteDataHistoryVersionsProcessing/AfterWriteDataHistoryVersionsProcessing.mdo",
+    );
+    replace_fixture_fragment(
+        &after_path,
+        "<event>AfterWriteDataHistoryVersionsProcessing</event>",
+        "<event>BeforeWrite</event>",
+    );
+    let event_changed = build(event_project.path());
+    let event_diff = event_baseline.graph().diff(event_changed.graph());
+    assert_eq!(event_diff.modified_nodes().len(), 1);
+    assert_eq!(
+        event_diff.modified_nodes()[0].modified_aspects(),
+        &[
+            NodeModifiedAspect::SemanticContent,
+            NodeModifiedAspect::Provenance,
+        ]
+    );
+    assert!(event_diff.added_edges().is_empty());
+    assert!(event_diff.removed_edges().is_empty());
+
+    let overlap_project = copied_live_fixture();
+    let overlap_baseline = build(overlap_project.path());
+    let overlap_path = overlap_project.path().join(
+        "src/EventSubscriptions/AfterWriteDataHistoryVersionsProcessing/AfterWriteDataHistoryVersionsProcessing.mdo",
+    );
+    replace_fixture_fragment(&overlap_path, "    <types>CatalogObject</types>\n", "");
+    let overlap_removed = build(overlap_project.path());
+    let overlap_diff = overlap_baseline.graph().diff(overlap_removed.graph());
+    assert_eq!(overlap_diff.modified_edges().len(), 1);
+    assert_eq!(
+        overlap_diff.modified_edges()[0].edge_kind(),
+        EdgeKind::References
+    );
+
+    let added_project = copied_live_fixture();
+    let added_baseline = build(added_project.path());
+    let exact_path = added_project.path().join(
+        "src/EventSubscriptions/GetBusinessProcessPresentationFields/GetBusinessProcessPresentationFields.mdo",
+    );
+    replace_fixture_fragment(
+        &exact_path,
+        "    <types>BusinessProcessManager.Job</types>",
+        "    <types>BusinessProcessManager.Job</types>\n    <types>CatalogObject.Products</types>",
+    );
+    let source_added = build(added_project.path());
+    let added_diff = added_baseline.graph().diff(source_added.graph());
+    assert_eq!(added_diff.added_edges().len(), 1);
+    assert_eq!(
+        added_diff.added_edges()[0].edge_kind(),
+        EdgeKind::References
+    );
+    let removed_diff = source_added.graph().diff(added_baseline.graph());
+    assert_eq!(removed_diff.removed_edges().len(), 1);
+    assert_eq!(
+        removed_diff.removed_edges()[0].edge_kind(),
+        EdgeKind::References
+    );
+
+    let retarget_project = copied_live_fixture();
+    let retarget_baseline = build(retarget_project.path());
+    let retarget_path = retarget_project.path().join(
+        "src/EventSubscriptions/GetBusinessProcessPresentationFields/GetBusinessProcessPresentationFields.mdo",
+    );
+    replace_fixture_fragment(
+        &retarget_path,
+        "<types>BusinessProcessManager.Job</types>",
+        "<types>CatalogObject.Products</types>",
+    );
+    let source_retargeted = build(retarget_project.path());
+    let retarget_diff = retarget_baseline.graph().diff(source_retargeted.graph());
+    assert_eq!(retarget_diff.added_edges().len(), 1);
+    assert_eq!(retarget_diff.removed_edges().len(), 1);
+    assert!(
+        retarget_diff
+            .added_edges()
+            .iter()
+            .chain(retarget_diff.removed_edges())
+            .all(|change| change.edge_kind() == EdgeKind::References)
+    );
+
+    let handler_project = copied_live_fixture();
+    let handler_baseline = build(handler_project.path());
+    let handler_path = handler_project.path().join(
+        "src/EventSubscriptions/AfterWriteDataHistoryVersionsProcessing/AfterWriteDataHistoryVersionsProcessing.mdo",
+    );
+    replace_fixture_fragment(
+        &handler_path,
+        "CommonModule.DataHistoryManagement.AfterWriteDataHistoryVersionsProcessing",
+        "CommonModule.DataHistoryManagement.DeleteOldDataHistoryVersions",
+    );
+    let handler_retargeted = build(handler_project.path());
+    let handler_diff = handler_baseline.graph().diff(handler_retargeted.graph());
+    assert_eq!(handler_diff.added_edges().len(), 2);
+    assert_eq!(handler_diff.removed_edges().len(), 2);
+    for kind in [EdgeKind::References, EdgeKind::Triggers] {
+        assert_eq!(
+            handler_diff
+                .added_edges()
+                .iter()
+                .filter(|change| change.edge_kind() == kind)
+                .count(),
+            1
+        );
+        assert_eq!(
+            handler_diff
+                .removed_edges()
+                .iter()
+                .filter(|change| change.edge_kind() == kind)
+                .count(),
+            1
+        );
+    }
+
+    let removed_project = copied_live_fixture();
+    let removed_baseline = build(removed_project.path());
+    fs::remove_dir_all(
+        removed_project
+            .path()
+            .join("src/EventSubscriptions/AfterWriteDataHistoryVersionsProcessing"),
+    )
+    .expect("fixture subscription directory must be removable");
+    let subscription_removed = build(removed_project.path());
+    let subscription_remove_diff = removed_baseline.graph().diff(subscription_removed.graph());
+    assert_eq!(subscription_remove_diff.removed_nodes().len(), 1);
+    assert_eq!(
+        subscription_remove_diff.removed_nodes()[0].id().as_str(),
+        LIVE_AFTER_WRITE_ID
+    );
+    assert_eq!(subscription_remove_diff.removed_edges().len(), 4);
+    let subscription_add_diff = subscription_removed.graph().diff(removed_baseline.graph());
+    assert_eq!(subscription_add_diff.added_nodes().len(), 1);
+    assert_eq!(subscription_add_diff.added_edges().len(), 4);
+
+    for result in [
+        &event_changed,
+        &overlap_removed,
+        &source_added,
+        &source_retargeted,
+        &handler_retargeted,
+        &subscription_removed,
+    ] {
+        assert!(result.validate().is_valid());
+        assert!(result.reference_requests().is_empty());
+    }
 }

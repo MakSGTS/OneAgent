@@ -1,0 +1,2 @@
+Procedure BusinessProcessPresentationFieldsGetProcessing(ObjectManager, Fields, StandardProcessing) Export
+EndProcedure

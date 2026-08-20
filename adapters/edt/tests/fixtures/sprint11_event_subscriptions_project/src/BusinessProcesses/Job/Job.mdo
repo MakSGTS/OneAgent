@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:BusinessProcess xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="dad11c2e-08fc-4a6b-8829-8be6c64c15fc">
+  <name>Job</name>
+</mdclass:BusinessProcess>

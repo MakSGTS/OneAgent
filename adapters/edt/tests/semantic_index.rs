@@ -15,6 +15,11 @@ fn subsystem_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint10_subsystems_project")
 }
 
+fn event_subscriptions_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sprint11_event_subscriptions_project")
+}
+
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
 }
@@ -223,4 +228,61 @@ fn conditional_grants_are_visible_to_generic_indexes_diff_impact_and_reports() {
             .iter()
             .all(|node| node.access_right_payload().is_some())
     );
+}
+
+#[test]
+fn event_subscriptions_are_visible_through_complete_generic_indexes() {
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&event_subscriptions_fixture())
+        .expect("live-derived Event Subscription fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&event_subscriptions_fixture())
+        .expect("repeated Event Subscription fixture build must succeed");
+    let graph = first.graph();
+    let query = graph.query();
+    let subscription = id("84774a24-9794-4005-a6c2-b69c42abd13f");
+    let subscription_node = NodeId::new(subscription.as_str());
+
+    assert_eq!(
+        graph
+            .resolution_index()
+            .resolve_entity_id_of_kind(
+                &subscription,
+                NodeKind::Metadata(oneagent_metadata::MetadataKind::EventSubscription),
+            )
+            .expect("complete Resolution index must resolve the subscription")
+            .id(),
+        &subscription
+    );
+    assert_eq!(
+        query
+            .nodes_by_kind(NodeKind::Metadata(
+                oneagent_metadata::MetadataKind::EventSubscription,
+            ))
+            .len(),
+        3
+    );
+    assert_eq!(query.owner_edges(&subscription_node).len(), 1);
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&subscription_node, EdgeKind::References)
+            .len(),
+        2
+    );
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&subscription_node, EdgeKind::Triggers)
+            .len(),
+        1
+    );
+    assert_eq!(
+        query
+            .direct_dependencies_by_kind(&subscription_node, EdgeKind::Triggers)
+            .len(),
+        0
+    );
+    assert_eq!(first.report(), repeated.report());
+    assert!(graph.diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+    assert!(first.validate().is_valid());
 }

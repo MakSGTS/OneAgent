@@ -163,7 +163,8 @@ is completed under [ADR-0031](adr/0031-conditional-grants-semantics.md) with a
 10 is completed under
 [ADR-0032](adr/0032-subsystem-hierarchy-semantics.md) with a `pass` decision in
 the [Sprint 10 integration review](reviews/sprint-10-subsystems-composition.md).
-Sprint 11 is the next planning target; v0.3 remains planned through Sprint 14.
+Sprint 11 is active with Tasks 1-5 implemented and awaiting its integration
+review; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -749,7 +750,7 @@ performance claims remain deferred.
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
-| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | next |
+| Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | active |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
@@ -2395,17 +2396,22 @@ Plan Sprint 10 subsystems and composition
 
 #### Sprint 11 Event Subscriptions execution plan
 
-Sprint 11 is planned from committed Sprint 10 review head
-`62d22c53d0e0c7f077d477398fe899c311dd5cc3`. The review records `pass`, Sprint
-10 is `completed`, and Sprint 11 is the only sprint marked `next`.
+Sprint 11 was planned from committed Sprint 10 review head
+`62d22c53d0e0c7f077d477398fe899c311dd5cc3`. At the planning baseline the review
+recorded `pass`, Sprint 10 was `completed`, and Sprint 11 was the only sprint
+marked `next`. Tasks 1-5 are now implemented, so Sprint 11 is `active` pending
+Task 6 review.
 
 The repository-owned
 [source investigation](architecture/event-subscription-source-investigation.md)
 proves 99 real EDT descriptors, 314 source-selector occurrences, 18 event
 values, and 93 unique handler paths. Every handler resolves to an existing
-Common Module Procedure, including four non-exported procedures, and every
-qualified selector belonging to a currently modeled metadata family has a real
-target. [ADR-0033](adr/0033-event-subscription-semantics.md) accepts the bounded
+exported Common Module Procedure, and every qualified selector belonging to a
+currently modeled metadata family has a real target. Four multiline Procedure
+declarations were initially misclassified by a line-oriented export audit; the
+tracked reduced fixture documents the correction and recomposes an exact live
+non-exported owned Procedure to test the accepted export-agnostic binding rule.
+[ADR-0033](adr/0033-event-subscription-semantics.md) accepts the bounded
 metadata, payload, source-selection, handler-resolution, References, and
 Triggers contracts. Unsupported source families remain observable diagnostics
 and do not authorize speculative metadata entities.
@@ -2660,6 +2666,26 @@ cargo test -p oneagent-edt --test semantic_index
 ```
 
 Run the complete workspace implementation gate afterward.
+
+**Current state:** Tasks 1-5 are implemented in dependency order. The tracked
+Sprint 11 fixture records exact live paths, source hashes, reduction treatment,
+and reduced-artifact SHA-256 values; it proves exact, family, equivalent
+manager/object, unsupported, exported, and recomposed live non-exported
+handler cases. Production-builder tests cover typed payload and ownership,
+References/Triggers, provenance, diagnostics/statistics, unchanged public
+request ledger, generic Query, Diff, report, Validation, dependency/Impact
+policy, repeated builds, and source/handler/subscription transitions. Complete
+and incremental Semantic Index evidence matches clean rebuilds for add, remove,
+event change, source add/remove/retarget, and handler retarget.
+
+The executable Graph Domain registry remains 88 capabilities: 84 `Supported`
+and 4 `NotApplicable`. The EDT registry remains 104 capabilities and now has 99
+`Supported` and 5 `NotApplicable`; the Event Subscription metadata entity,
+metadata node, and Triggers edge transitions close the three planned High gaps.
+Both registries have zero Critical, High, or Medium gaps. Unsupported source
+families, public multi-target requests, Triggers dependency/Impact propagation,
+and runtime dispatch remain deferred. Sprint 11 remains `active` until Task 6
+records the integration-review decision.
 
 ##### Task 6 — Sprint 11 integration review
 

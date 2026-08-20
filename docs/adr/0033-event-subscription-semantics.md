@@ -27,10 +27,14 @@ Register, Calculation Register, Business Process, and Task metadata. The live
 corpus also contains Constants, Defined Types, Exchange Plans, and Chart
 families that OneAgent does not yet model.
 
-All 93 unique live handlers resolve to one Procedure owned by the named Common
-Module's Module node. Four of those procedures are not exported, so Event
-Subscription handler resolution cannot reuse the exported-only cross-module
-call policy from ADR-0016.
+All 93 unique live handlers resolve to one exported Procedure owned by the
+named Common Module's Module node. Four multiline declarations were initially
+misclassified by a line-oriented audit because `Export` appears on their final
+declaration line. Event Subscription handler binding is nevertheless an
+ownership relation rather than a BSL cross-module call, so it does not reuse
+the exported-only call policy from ADR-0016. The reduced production fixture
+exercises this boundary by recomposing an exact live non-exported owned
+Procedure as a handler target.
 
 ADR-0023 requires new intrinsic metadata content to use a closed typed payload.
 ADR-0025 requires every new References family to have an explicit endpoint
@@ -344,8 +348,11 @@ enums and graph behavior are public.
 8. Add every observed unsupported metadata family now. Rejected because those
    entities lack source-independent identity, production, and Coverage
    contracts in OneAgent.
-9. Require handlers to be exported. Rejected because four real accepted EDT
-   handlers are non-exported.
+9. Require handlers to be exported. Rejected because export visibility governs
+   BSL cross-module calls, while the accepted Event Subscription contract is an
+   exact platform-owned Procedure binding. The reduced fixture proves the
+   export-agnostic ownership rule without misrepresenting the live descriptor
+   inventory.
 10. Add Triggers to dependency and Impact policy immediately. Rejected because
     the companion References relation already provides the first-slice
     dependency path and duplicate propagation is unjustified.

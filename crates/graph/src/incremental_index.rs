@@ -378,7 +378,8 @@ mod tests {
 
     use oneagent_common::{EntityId, EntityName};
     use oneagent_metadata::{
-        CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
+        CommonMetadataPayload, EventSubscriptionMetadataPayload, MetadataKind,
+        MetadataMemberPayload, MetadataPayload, MetadataSpecificPayload,
     };
 
     use super::{
@@ -450,6 +451,25 @@ mod tests {
             vec![provenance(id_value, origin)],
         )
         .expect("metadata payload must match the node kind")
+    }
+
+    fn event_subscription_node(event: &str) -> GraphNode {
+        GraphNode::new_with_payload_and_provenance(
+            id("metadata.event_subscription.fixture"),
+            name("FixtureSubscription"),
+            NodeKind::Metadata(MetadataKind::EventSubscription),
+            GraphNodePayload::Metadata(MetadataPayload::new(
+                CommonMetadataPayload::new(Some("Fixture subscription".to_owned())),
+                Some(MetadataSpecificPayload::EventSubscription(
+                    EventSubscriptionMetadataPayload::new(name(event)),
+                )),
+            )),
+            vec![provenance(
+                "metadata.event_subscription.fixture",
+                FactOrigin::Declared,
+            )],
+        )
+        .expect("Event Subscription payload must match the metadata node kind")
     }
 
     fn member_node_with_payload(id_value: &str, synonym: &str) -> GraphNode {
@@ -2466,6 +2486,160 @@ mod tests {
             .into_iter()
             .map(|member| member.id().clone())
             .collect()
+    }
+
+    fn event_subscription_transition_graph(
+        event: &str,
+        sources: &[&str],
+        handler: &str,
+        include_subscription: bool,
+    ) -> SemanticGraph {
+        let mut graph = SemanticGraph::new();
+        insert_nodes(
+            &mut graph,
+            [
+                node(
+                    "metadata.configuration.fixture",
+                    "FixtureConfiguration",
+                    NodeKind::Metadata(MetadataKind::Configuration),
+                ),
+                node(
+                    "metadata.catalog.a",
+                    "CatalogA",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+                node(
+                    "metadata.catalog.b",
+                    "CatalogB",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+                node("procedure.handler.a", "HandlerA", NodeKind::Procedure),
+                node("procedure.handler.b", "HandlerB", NodeKind::Procedure),
+            ],
+        );
+        if !include_subscription {
+            return graph;
+        }
+
+        graph.insert_node(event_subscription_node(event));
+        graph
+            .insert_edge(edge(
+                "metadata.configuration.fixture",
+                "metadata.event_subscription.fixture",
+                EdgeKind::Contains,
+                FactOrigin::Declared,
+            ))
+            .expect("Event Subscription ownership must be valid");
+        for source in sources {
+            graph
+                .insert_edge(edge(
+                    "metadata.event_subscription.fixture",
+                    source,
+                    EdgeKind::References,
+                    FactOrigin::Resolved,
+                ))
+                .expect("Event Subscription source reference must be valid");
+        }
+        for kind in [EdgeKind::References, EdgeKind::Triggers] {
+            graph
+                .insert_edge(edge(
+                    "metadata.event_subscription.fixture",
+                    handler,
+                    kind,
+                    FactOrigin::Resolved,
+                ))
+                .expect("Event Subscription handler relation must be valid");
+        }
+        graph
+    }
+
+    #[test]
+    fn event_subscription_transitions_match_complete_clean_rebuilds() {
+        let initial =
+            event_subscription_transition_graph("BeforeWrite", &[], "procedure.handler.a", false);
+        let added = event_subscription_transition_graph(
+            "BeforeWrite",
+            &["metadata.catalog.a"],
+            "procedure.handler.a",
+            true,
+        );
+        let event_changed = event_subscription_transition_graph(
+            "OnWrite",
+            &["metadata.catalog.a"],
+            "procedure.handler.a",
+            true,
+        );
+        let source_added = event_subscription_transition_graph(
+            "OnWrite",
+            &["metadata.catalog.a", "metadata.catalog.b"],
+            "procedure.handler.a",
+            true,
+        );
+        let source_removed = event_subscription_transition_graph(
+            "OnWrite",
+            &["metadata.catalog.a"],
+            "procedure.handler.a",
+            true,
+        );
+        let source_retargeted = event_subscription_transition_graph(
+            "OnWrite",
+            &["metadata.catalog.b"],
+            "procedure.handler.a",
+            true,
+        );
+        let handler_retargeted = event_subscription_transition_graph(
+            "OnWrite",
+            &["metadata.catalog.b"],
+            "procedure.handler.b",
+            true,
+        );
+        let removed =
+            event_subscription_transition_graph("OnWrite", &[], "procedure.handler.b", false);
+
+        let accepted_initial = AcceptedSemanticIndex::rebuild(&initial);
+        let accepted_added = transition_and_assert(&accepted_initial, &added);
+        let accepted_event = transition_and_assert(&accepted_added, &event_changed);
+        let accepted_source_added = transition_and_assert(&accepted_event, &source_added);
+        let accepted_source_removed =
+            transition_and_assert(&accepted_source_added, &source_removed);
+        let accepted_source_retargeted =
+            transition_and_assert(&accepted_source_removed, &source_retargeted);
+        let accepted_handler_retargeted =
+            transition_and_assert(&accepted_source_retargeted, &handler_retargeted);
+        let accepted_removed = transition_and_assert(&accepted_handler_retargeted, &removed);
+
+        let subscription = NodeId::new("metadata.event_subscription.fixture");
+        assert_eq!(
+            accepted_event
+                .query()
+                .node(&subscription)
+                .and_then(GraphNode::metadata_payload)
+                .and_then(MetadataPayload::specific)
+                .and_then(|specific| match specific {
+                    MetadataSpecificPayload::EventSubscription(payload) => Some(payload),
+                    MetadataSpecificPayload::Document(_) => None,
+                })
+                .expect("incremental Event Subscription payload must remain typed")
+                .event()
+                .as_str(),
+            "OnWrite"
+        );
+        assert_eq!(
+            accepted_source_added
+                .query()
+                .outgoing_edges_by_kind(&subscription, EdgeKind::References)
+                .len(),
+            3
+        );
+        assert_eq!(
+            accepted_handler_retargeted
+                .query()
+                .outgoing_edges_by_kind(&subscription, EdgeKind::Triggers)[0]
+                .target()
+                .as_str(),
+            "procedure.handler.b"
+        );
+        assert!(accepted_removed.query().node(&subscription).is_none());
     }
 
     #[test]

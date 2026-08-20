@@ -635,7 +635,7 @@ impl FileSystemEdtSemanticGraphBuilder {
             return Ok(EdtSemanticGraphBuildResult::new(graph, Vec::new()));
         }
 
-        let kind_by_directory = production_metadata_directories();
+        let kind_by_directory = supported_metadata_directories();
 
         for entry in fs::read_dir(&source_root).map_err(|source| EdtGraphError::ReadDirectory {
             path: source_root.clone(),
@@ -853,13 +853,8 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
         ("WebServices", MetadataKind::WebService),
         ("XDTOPackages", MetadataKind::XdtoPackage),
         ("Subsystems", MetadataKind::Subsystem),
+        ("EventSubscriptions", MetadataKind::EventSubscription),
     ])
-}
-
-fn production_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
-    let mut directories = supported_metadata_directories();
-    directories.insert("EventSubscriptions", MetadataKind::EventSubscription);
-    directories
 }
 
 #[derive(Debug, Default)]

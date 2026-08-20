@@ -185,6 +185,10 @@ fn metadata_capability(kind: MetadataKind) -> SemanticCoverageCapability {
     .with_node_kind(NodeKind::Metadata(kind));
 
     match status {
+        SemanticCoverageStatus::Supported if kind == MetadataKind::EventSubscription => capability
+            .with_representative_test(
+                "oneagent_edt::event_subscriptions::live_derived_fixture_is_consumer_visible_and_deterministic",
+            ),
         SemanticCoverageStatus::Supported => capability.with_representative_test(
             "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind",
         ),
@@ -330,6 +334,7 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             | EdgeKind::Extends
             | EdgeKind::DependsOn
             | EdgeKind::Opens
+            | EdgeKind::Triggers
     );
     let required = [
         Evidence::EdgeKindDeclared,
@@ -389,6 +394,9 @@ fn edt_edge_capability(kind: EdgeKind) -> SemanticCoverageCapability {
             }
             EdgeKind::Opens => {
                 "oneagent_edt::sprint7_evidence::sprint7_repository_fixture_proves_modules_references_and_navigation_end_to_end"
+            }
+            EdgeKind::Triggers => {
+                "oneagent_edt::event_subscriptions::live_derived_fixture_is_consumer_visible_and_deterministic"
             }
             _ => "oneagent_edt::graph_tests",
         });
@@ -640,6 +648,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
         MetadataKind::HttpService,
         MetadataKind::WebService,
         MetadataKind::XdtoPackage,
+        MetadataKind::EventSubscription,
     ])
 }
 
@@ -757,6 +766,9 @@ fn representative_node_kind(kind: NodeKind) -> bool {
 
 const fn representative_node_test(kind: NodeKind) -> &'static str {
     match kind {
+        NodeKind::Metadata(MetadataKind::EventSubscription) => {
+            "oneagent_edt::event_subscriptions::live_derived_fixture_is_consumer_visible_and_deterministic"
+        }
         NodeKind::Metadata(_) => {
             "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind"
         }
@@ -819,16 +831,8 @@ mod tests {
             .into_iter()
             .map(|gap| gap.capability_id().as_str())
             .collect::<BTreeSet<_>>();
-        let expected = [
-            "metadata_entity.event_subscription",
-            "semantic_edge.triggers",
-            "semantic_node.metadata.event_subscription",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<BTreeSet<_>>();
 
-        assert_eq!(actual, expected);
+        assert!(actual.is_empty());
     }
 
     fn assert_metadata_node_has_complete_production_evidence(kind: MetadataKind) {
@@ -978,7 +982,7 @@ mod tests {
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&96)
+            Some(&99)
         );
         assert_eq!(
             first
@@ -992,14 +996,14 @@ mod tests {
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Unsupported),
-            Some(&2)
+            None
         );
         assert_eq!(
             first
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::DeclaredOnly),
-            Some(&1)
+            None
         );
         assert_no_unplanned_high_gap(&first);
 
@@ -1160,7 +1164,7 @@ mod tests {
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&96)
+            Some(&99)
         );
         assert_eq!(
             report
@@ -1174,14 +1178,14 @@ mod tests {
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Unsupported),
-            Some(&2)
+            None
         );
         assert_eq!(
             report
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::DeclaredOnly),
-            Some(&1)
+            None
         );
         assert_no_unplanned_high_gap(&report);
     }
@@ -1320,7 +1324,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::High)
                     .len(),
-            3
+            0
         );
         assert_eq!(
             graph_domain
@@ -1597,7 +1601,7 @@ mod tests {
         assert!(!flat_unknown.notes().is_empty());
 
         let high_gaps = first.gaps_by_priority(SemanticCoverageGapPriority::High);
-        assert_eq!(high_gaps.len(), 3);
+        assert!(high_gaps.is_empty());
         assert!(
             high_gaps
                 .iter()
@@ -1675,7 +1679,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::High),
-            Some(&3)
+            None
         );
         assert_eq!(
             first
@@ -1730,7 +1734,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::High),
-            Some(&3)
+            None
         );
         assert_eq!(
             first

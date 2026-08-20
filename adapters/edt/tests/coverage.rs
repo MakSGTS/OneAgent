@@ -17,6 +17,70 @@ fn subsystem_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint10_subsystems_project")
 }
 
+fn event_subscriptions_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sprint11_event_subscriptions_project")
+}
+
+#[test]
+fn event_subscription_fixture_closes_metadata_node_and_triggers_coverage() {
+    let build = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&event_subscriptions_fixture())
+        .expect("live-derived Event Subscription fixture must build");
+    let report = EdtSemanticCoverageReport::for_build_result(&build);
+    let edt = report.edt_pipeline();
+
+    for capability_id in [
+        SemanticCoverageCapabilityId::MetadataEntity(MetadataKind::EventSubscription),
+        SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(
+            MetadataKind::EventSubscription,
+        )),
+        SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Triggers),
+    ] {
+        let capability = edt
+            .capability(capability_id)
+            .expect("Event Subscription capability must be registered");
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
+        assert_eq!(
+            capability.representative_tests(),
+            [
+                "oneagent_edt::event_subscriptions::live_derived_fixture_is_consumer_visible_and_deterministic"
+            ]
+        );
+    }
+
+    assert_eq!(edt.summary().total(), 104);
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Supported),
+        Some(&99)
+    );
+    assert!(edt.gaps().is_empty());
+    assert_eq!(
+        report
+            .observed()
+            .nodes()
+            .get(&NodeKind::Metadata(MetadataKind::EventSubscription))
+            .expect("fixture must observe Event Subscription metadata")
+            .total(),
+        3
+    );
+    assert_eq!(
+        report
+            .observed()
+            .edges()
+            .get(&EdgeKind::Triggers)
+            .expect("fixture must observe Triggers")
+            .total(),
+        3
+    );
+    assert!(report.validation().is_valid());
+}
+
 #[test]
 fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
     let build = FileSystemEdtSemanticGraphBuilder
@@ -33,7 +97,7 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&96)
+        Some(&99)
     );
     assert_eq!(
         edt.summary()
@@ -45,13 +109,13 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Unsupported),
-        Some(&2)
+        None
     );
     assert_eq!(
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::DeclaredOnly),
-        Some(&1)
+        None
     );
     assert_eq!(graph.summary().total(), 88);
     assert_eq!(
@@ -124,7 +188,7 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&96)
+        Some(&99)
     );
     assert_eq!(
         edt.summary()
@@ -136,13 +200,13 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Unsupported),
-        Some(&2)
+        None
     );
     assert_eq!(
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::DeclaredOnly),
-        Some(&1)
+        None
     );
     assert_eq!(graph.summary().total(), 88);
     assert_eq!(

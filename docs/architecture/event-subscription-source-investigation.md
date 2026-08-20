@@ -86,10 +86,14 @@ CommonModule.ModuleName.ProcedureName
 ```
 
 All 93 unique module directories and procedure declarations exist in the real
-corpus. Eighty-nine handler procedures are exported and four are not exported.
-No handler resolves to a Function. Event Subscription handler resolution must
-therefore use declared Common Module procedure ownership and must not reuse the
-cross-module call rule that rejects non-exported targets.
+corpus, all 93 referenced handler procedures are exported, and no handler
+resolves to a Function. Four unique handler declarations continue across
+multiple lines; the original line-oriented audit incorrectly classified those
+declarations as non-exported because `Export` appears on the final declaration
+line. Event Subscription handler resolution still uses declared Common Module
+procedure ownership rather than the cross-module-call export predicate. The
+accepted export-agnostic rule is exercised with a reduced fixture that
+recomposes an exact live non-exported owned Procedure as a handler target.
 
 ## Event vocabulary
 
@@ -176,10 +180,11 @@ Metadata(CommonModule)
 
 Resolution is exact and source-declared. Missing module, missing procedure,
 wrong target kind, duplicate candidates, and malformed path must emit no
-resolved handler edge and must produce deterministic typed diagnostics. A
-non-exported Procedure remains valid because the real corpus proves that Event
-Subscription handlers are not governed by the exported cross-module call
-restriction.
+resolved handler edge and must produce deterministic typed diagnostics. Export
+status is intentionally not part of the ownership contract; the tracked
+reduced fixture proves that an exact live non-exported owned Procedure remains
+a valid target without claiming that the recomposed path occurs in a live Event
+Subscription descriptor.
 
 ## Testability gate
 
@@ -199,9 +204,10 @@ The repository evidence is sufficient to plan and test the first slice:
 
 A tracked reduced fixture must include at least one exact selector, one bare
 family selector, two prefixes selecting the same metadata target, one
-unsupported selector, one exported handler, and one non-exported handler. Its
-README must identify live paths and source/derived hashes so the ignored corpus
-is not treated as hidden test input.
+unsupported selector, one exported handler, and one explicitly documented
+recomposition targeting a live non-exported owned Procedure. Its README must
+identify live paths and source/derived hashes so the ignored corpus is not
+treated as hidden test input.
 
 ## Architecture questions resolved by ADR-0033
 

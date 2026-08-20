@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:EventSubscription xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="84774a24-9794-4005-a6c2-b69c42abd13f">
+  <name>AfterWriteDataHistoryVersionsProcessing</name>
+  <synonym>
+    <key>en</key>
+    <value>After write data history versions processing</value>
+  </synonym>
+  <source>
+    <types>CatalogManager</types>
+    <types>CatalogObject</types>
+  </source>
+  <event>AfterWriteDataHistoryVersionsProcessing</event>
+  <handler>CommonModule.DataHistoryManagement.AfterWriteDataHistoryVersionsProcessing</handler>
+</mdclass:EventSubscription>

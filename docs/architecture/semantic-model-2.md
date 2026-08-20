@@ -2304,14 +2304,35 @@ Exchange Plans, and Chart families remain typed diagnostics without Unknown or
 placeholder targets.
 
 Handlers resolve through exact declared Common Module ownership to one
-Procedure. Export status is not required because the repository-owned EDT
-corpus contains valid non-exported handler procedures. `Triggers` has only the
+Procedure. Export status is not part of this ownership contract. A multiline
+declaration audit corrected the planning observation: all 93 unique live
+handler paths are exported, while the tracked reduced fixture recomposes an
+exact live non-exported owned Procedure as a handler target to exercise the
+accepted export-agnostic rule. `Triggers` has only the
 EventSubscription-to-Procedure endpoint and is not independently added to the
 dependency or Impact policy; the companion References fact supplies the
 existing dependency navigation. Multi-target source selectors remain outside
 the ADR-0024 public single-target request ledger until a compatible request
-lifecycle is accepted. Production and Coverage remain unchanged during Sprint
-11 planning.
+lifecycle is accepted.
+
+Sprint 11 Tasks 1-5 now provide production and executable evidence. EDT
+discovers `EventSubscriptions`, preserves typed payload and configuration
+ownership, resolves exact/family sources and owned handlers after BSL symbol
+insertion, emits aggregated source and handler `References` plus handler
+`Triggers`, and projects deterministic diagnostics and statistics without
+adding public reference requests. The tracked
+`adapters/edt/tests/fixtures/sprint11_event_subscriptions_project/` fixture
+records live paths, source hashes, reduction treatment, and fixture SHA-256
+values. Generic Query, Diff, report, Validation, dependency/Impact policy,
+complete index, and incremental clean-rebuild transitions cover subscription,
+event, source, handler, and relation changes.
+
+Executable registry state is Graph Domain 88 capabilities: 84 `Supported` and
+4 `NotApplicable`; EDT 104 capabilities: 99 `Supported` and 5
+`NotApplicable`. Both registries have zero Critical, High, or Medium gaps.
+`MetadataKind::EventSubscription`, its EDT metadata node, and
+`EdgeKind::Triggers` have complete production evidence. Sprint 11 remains
+active until the integration review records its decision.
 
 ### Provenance inventory
 

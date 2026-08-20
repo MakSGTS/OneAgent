@@ -219,6 +219,9 @@ fn kind_specific_xml(kind: MetadataKind) -> &'static str {
 "#
         }
         MetadataKind::Subsystem => "    <content>Catalog.PayloadCatalog</content>\n",
+        MetadataKind::HttpService => "    <rootURL>payload</rootURL>\n",
+        MetadataKind::WebService => "    <namespace>urn:payload:web</namespace>\n",
+        MetadataKind::XdtoPackage => "    <namespace>urn:payload:xdto</namespace>\n",
         _ => "",
     }
 }
@@ -299,6 +302,14 @@ fn write_fixture(root: &Path, include_synonyms: bool) {
     for case in PAYLOAD_CASES {
         write_descriptor(root, case, include_synonyms);
     }
+    fs::write(
+        descriptor_path(root, case(MetadataKind::XdtoPackage))
+            .parent()
+            .expect("XDTO Package parent must exist")
+            .join("Package.xdto"),
+        r#"<package xmlns="http://v8.1c.ru/8.1/xdto" targetNamespace="urn:payload:xdto"><objectType name="PayloadType"/></package>"#,
+    )
+    .expect("XDTO Package artifact must be written");
     write_separate_semantic_facts(root, include_synonyms);
 }
 
@@ -368,6 +379,16 @@ fn assert_case_payload(
                 .map(|record| (record.target_kind(), record.target_name().as_str()))
                 .collect::<Vec<_>>();
             assert_eq!(records, expected_document_records());
+        }
+        (MetadataKind::HttpService, Some(MetadataSpecificPayload::HttpService(service))) => {
+            assert_eq!(service.root_url(), "payload");
+        }
+        (MetadataKind::WebService, Some(MetadataSpecificPayload::WebService(service))) => {
+            assert_eq!(service.namespace(), "urn:payload:web");
+            assert!(service.xdto_packages().is_empty());
+        }
+        (MetadataKind::XdtoPackage, Some(MetadataSpecificPayload::XdtoPackage(package))) => {
+            assert_eq!(package.namespace(), "urn:payload:xdto");
         }
         (_, None) => {}
         (kind, specific) => panic!("unexpected {kind:?} payload: {specific:?}"),

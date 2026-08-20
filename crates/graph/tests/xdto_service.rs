@@ -94,6 +94,7 @@ fn metadata_payload(kind: MetadataKind) -> MetadataPayload {
     MetadataPayload::new(CommonMetadataPayload::empty(), Some(specific))
 }
 
+#[allow(clippy::too_many_lines)]
 fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
     let ids = FixtureIds::new();
     let type_reference = XdtoTypeReference::new("urn:exchange", name("Result"));

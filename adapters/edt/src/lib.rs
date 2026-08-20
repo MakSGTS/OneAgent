@@ -26,6 +26,7 @@ mod writes;
 mod writes_emission;
 mod writes_resolution;
 mod xdto_package;
+mod xdto_service_emission;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
@@ -736,9 +737,9 @@ impl FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
-        add_configuration_module_semantics(
+        add_module_and_xdto_semantics(
             &mut graph,
-            &collected_metadata.modules,
+            &collected_metadata,
             metadata_reference_scope,
             &mut diagnostics,
             &mut reference_statistics,
@@ -754,6 +755,30 @@ impl FileSystemEdtSemanticGraphBuilder {
             reference_requests,
         )
     }
+}
+
+fn add_module_and_xdto_semantics(
+    graph: &mut SemanticGraph,
+    collected: &CollectedTopLevelMetadata,
+    metadata_reference_scope: query_source_resolution::WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
+) -> Result<(), EdtGraphError> {
+    add_configuration_module_semantics(
+        graph,
+        &collected.modules,
+        metadata_reference_scope,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+    )?;
+    xdto_service_emission::resolve_and_emit(
+        graph,
+        &collected.xdto_service_sources,
+        diagnostics,
+        reference_requests,
+    )
 }
 
 fn collect_supported_metadata_directory(
@@ -899,6 +924,7 @@ struct CollectedTopLevelMetadata {
     subsystem_hierarchy: BTreeSet<PendingSubsystemHierarchyObservation>,
     role_rights: Vec<EdtRoleRightsDescriptor>,
     report_data_composition: Vec<EdtReportDataCompositionDescriptor>,
+    xdto_service_sources: Vec<xdto_service_emission::EdtXdtoServiceSource>,
 }
 
 impl CollectedTopLevelMetadata {
@@ -913,6 +939,7 @@ impl CollectedTopLevelMetadata {
         self.role_rights.extend(other.role_rights);
         self.report_data_composition
             .extend(other.report_data_composition);
+        self.xdto_service_sources.extend(other.xdto_service_sources);
         Ok(())
     }
 }
@@ -1185,6 +1212,32 @@ fn collect_metadata_object(
     )
 }
 
+fn insert_metadata_with_xdto_service_semantics(
+    graph: &mut SemanticGraph,
+    descriptor: &EdtMetadataObjectDescriptor,
+    collected: &mut CollectedTopLevelMetadata,
+) -> Result<(), EdtGraphError> {
+    let descriptor_source = metadata_object_source_id(descriptor)?;
+    let xdto_service_source = xdto_service_emission::collect_source(descriptor)?;
+    let payload = xdto_service_source.as_ref().map_or_else(
+        || metadata_payload(descriptor),
+        xdto_service_emission::metadata_payload,
+    );
+    insert_metadata_node(
+        graph,
+        descriptor.id().clone(),
+        descriptor.name().clone(),
+        descriptor.kind(),
+        payload,
+        declared_provenance(descriptor_source),
+    )?;
+    if let Some(source) = xdto_service_source {
+        xdto_service_emission::emit_declarations(graph, &source)?;
+        collected.xdto_service_sources.push(source);
+    }
+    Ok(())
+}
+
 fn collect_metadata_descriptor(
     project_root: &Path,
     object_directory: &Path,
@@ -1195,17 +1248,7 @@ fn collect_metadata_descriptor(
     let module_reader = FileSystemEdtModuleReader;
     let structure_reader = FileSystemEdtMetadataStructureReader;
     let mut collected = CollectedTopLevelMetadata::default();
-    let descriptor_source = metadata_object_source_id(&descriptor)?;
-
-    let payload = metadata_payload(&descriptor);
-    insert_metadata_node(
-        graph,
-        descriptor.id().clone(),
-        descriptor.name().clone(),
-        descriptor.kind(),
-        payload,
-        declared_provenance(descriptor_source),
-    )?;
+    insert_metadata_with_xdto_service_semantics(graph, &descriptor, &mut collected)?;
 
     if descriptor.kind() == MetadataKind::Role {
         insert_role_node(graph, &descriptor)?;
@@ -3078,6 +3121,15 @@ pub enum EdtGraphError {
     /// An Event Subscription descriptor could not be read.
     EventSubscription(EdtEventSubscriptionError),
 
+    /// An XDTO Package descriptor/artifact join could not be read.
+    XdtoPackage(EdtXdtoPackageError),
+
+    /// An HTTP or Web Service descriptor could not be read.
+    ServiceDescriptor(EdtServiceDescriptorError),
+
+    /// An internal XDTO/service request shape is incompatible with its projection phase.
+    InvalidXdtoServiceRequest,
+
     /// The internal structure of a metadata object could not be read.
     MetadataStructure(EdtMetadataStructureError),
 
@@ -3216,6 +3268,15 @@ impl Display for EdtGraphError {
             }
             Self::EventSubscription(error) => {
                 write!(formatter, "failed to read EDT Event Subscription: {error}")
+            }
+            Self::XdtoPackage(error) => {
+                write!(formatter, "failed to read EDT XDTO Package: {error}")
+            }
+            Self::ServiceDescriptor(error) => {
+                write!(formatter, "failed to read EDT service descriptor: {error}")
+            }
+            Self::InvalidXdtoServiceRequest => {
+                formatter.write_str("invalid internal EDT XDTO/service reference request")
             }
             Self::MetadataStructure(error) => {
                 write!(
@@ -3390,6 +3451,8 @@ impl std::error::Error for EdtGraphError {
             Self::MetadataObject(error) => Some(error),
             Self::ReportDataComposition(error) => Some(error),
             Self::EventSubscription(error) => Some(error),
+            Self::XdtoPackage(error) => Some(error),
+            Self::ServiceDescriptor(error) => Some(error),
             Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
             Self::SubsystemContent(error) => Some(error),
@@ -3401,6 +3464,7 @@ impl std::error::Error for EdtGraphError {
             Self::DataSetPayload(error) => Some(error),
             Self::InvalidIdentifier
             | Self::InvalidName
+            | Self::InvalidXdtoServiceRequest
             | Self::InvalidMetadataReferenceRequest { .. }
             | Self::InvalidSubsystemDescriptorDirectory { .. }
             | Self::InvalidSubsystemHierarchyRelation { .. }

@@ -1,5 +1,13 @@
 //! Adapter for hierarchical `1C:Enterprise Designer` XML sources.
 
+mod metadata_object;
+
+pub use metadata_object::{
+    DesignerXmlMetadataObjectDescriptor, DesignerXmlMetadataObjectError,
+    DesignerXmlMetadataObjectReader, DesignerXmlSourceEvidence,
+    FileSystemDesignerXmlMetadataObjectReader,
+};
+
 use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::{CommonMetadataPayload, MetadataPayload};
 use oneagent_workspace::{Configuration, WorkspaceFormat};

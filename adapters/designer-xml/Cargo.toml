@@ -11,6 +11,7 @@ oneagent-workspace = { path = "../../crates/workspace" }
 quick-xml = "0.38"
 
 [dev-dependencies]
+oneagent-bsl = { path = "../../crates/bsl" }
 tempfile = "3"
 
 [lints]

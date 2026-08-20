@@ -18,13 +18,13 @@ const CORE_NAMESPACE: &str = "http://v8.1c.ru/8.1/data/core";
 const SUPPORTED_VERSION: &str = "2.20";
 
 #[derive(Debug, Clone, Copy)]
-struct FamilySpec {
-    directory: &'static str,
-    root: &'static str,
-    kind: MetadataKind,
+pub(crate) struct FamilySpec {
+    pub(crate) directory: &'static str,
+    pub(crate) root: &'static str,
+    pub(crate) kind: MetadataKind,
 }
 
-const ACCEPTED_FAMILIES: [FamilySpec; 20] = [
+pub(crate) const ACCEPTED_FAMILIES: [FamilySpec; 20] = [
     FamilySpec {
         directory: "Catalogs",
         root: "Catalog",

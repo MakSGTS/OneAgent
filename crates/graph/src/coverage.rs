@@ -929,7 +929,14 @@ fn graph_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
         Evidence::QuerySupportExists,
         Evidence::PositiveTestExists,
     ];
-    if matches!(kind, NodeKind::Attribute | NodeKind::TabularSection) {
+    if matches!(
+        kind,
+        NodeKind::Attribute
+            | NodeKind::TabularSection
+            | NodeKind::DataCompositionSchema
+            | NodeKind::DataSet
+            | NodeKind::DataCompositionField
+    ) {
         required.push(Evidence::SemanticPayloadPreserved);
     }
     SemanticCoverageCapability::new(
@@ -947,6 +954,9 @@ const fn graph_node_representative_test(kind: NodeKind) -> &'static str {
     match kind {
         NodeKind::Attribute | NodeKind::TabularSection => {
             "oneagent_graph::node::tests::accepts_member_payload_for_attribute_and_tabular_section"
+        }
+        NodeKind::DataCompositionSchema | NodeKind::DataSet | NodeKind::DataCompositionField => {
+            "oneagent_graph::data_composition::tests::typed_payloads_preserve_accepted_semantic_content"
         }
         _ => "oneagent_graph::coverage",
     }
@@ -1226,6 +1236,9 @@ fn all_node_kinds() -> Vec<NodeKind> {
         NodeKind::Procedure,
         NodeKind::Function,
         NodeKind::Query,
+        NodeKind::DataCompositionSchema,
+        NodeKind::DataSet,
+        NodeKind::DataCompositionField,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,
@@ -1347,6 +1360,9 @@ const fn node_kind_code(kind: NodeKind) -> &'static str {
         NodeKind::Procedure => "procedure",
         NodeKind::Function => "function",
         NodeKind::Query => "query",
+        NodeKind::DataCompositionSchema => "data_composition_schema",
+        NodeKind::DataSet => "data_set",
+        NodeKind::DataCompositionField => "data_composition_field",
         NodeKind::Form => "form",
         NodeKind::Command => "command",
         NodeKind::Attribute => "attribute",

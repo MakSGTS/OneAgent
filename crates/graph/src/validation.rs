@@ -1223,7 +1223,15 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
         ),
         NodeKind::Attribute => matches!(source, NodeKind::Metadata(_) | NodeKind::TabularSection),
         NodeKind::Procedure | NodeKind::Function => matches!(source, NodeKind::Module),
-        NodeKind::Query => matches!(source, NodeKind::Procedure | NodeKind::Function),
+        NodeKind::Query => matches!(
+            source,
+            NodeKind::Procedure | NodeKind::Function | NodeKind::DataSet
+        ),
+        NodeKind::DataCompositionSchema => {
+            matches!(source, NodeKind::Metadata(MetadataKind::Report))
+        }
+        NodeKind::DataSet => matches!(source, NodeKind::DataCompositionSchema),
+        NodeKind::DataCompositionField => matches!(source, NodeKind::DataSet),
         _ => false,
     }
 }
@@ -1353,6 +1361,10 @@ const fn requires_owner(kind: NodeKind) -> bool {
             | NodeKind::Measure
             | NodeKind::Form
             | NodeKind::Command
+            | NodeKind::Query
+            | NodeKind::DataCompositionSchema
+            | NodeKind::DataSet
+            | NodeKind::DataCompositionField
     )
 }
 

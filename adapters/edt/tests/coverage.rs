@@ -117,13 +117,13 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
             .get(&SemanticCoverageStatus::DeclaredOnly),
         None
     );
-    assert_eq!(graph.summary().total(), 88);
+    assert_eq!(graph.summary().total(), 91);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&84)
+        Some(&87)
     );
     assert_eq!(
         graph
@@ -208,13 +208,13 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
             .get(&SemanticCoverageStatus::DeclaredOnly),
         None
     );
-    assert_eq!(graph.summary().total(), 88);
+    assert_eq!(graph.summary().total(), 91);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&84)
+        Some(&87)
     );
     assert_eq!(
         graph

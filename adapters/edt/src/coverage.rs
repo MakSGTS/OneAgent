@@ -90,7 +90,7 @@ fn edt_capabilities() -> Vec<SemanticCoverageCapability> {
     let mut capabilities = Vec::new();
     capabilities.extend(all_metadata_kinds().into_iter().map(metadata_capability));
     capabilities.extend(
-        semantic_coverage_node_kinds()
+        edt_coverage_node_kinds()
             .into_iter()
             .map(edt_node_capability),
     );
@@ -616,11 +616,25 @@ fn edt_provenance_capability(kind: SemanticProvenanceCapability) -> SemanticCove
 }
 
 fn all_metadata_kinds() -> Vec<MetadataKind> {
-    semantic_coverage_node_kinds()
+    edt_coverage_node_kinds()
         .into_iter()
         .filter_map(|kind| match kind {
             NodeKind::Metadata(kind) => Some(kind),
             _ => None,
+        })
+        .collect()
+}
+
+fn edt_coverage_node_kinds() -> Vec<NodeKind> {
+    semantic_coverage_node_kinds()
+        .into_iter()
+        .filter(|kind| {
+            !matches!(
+                kind,
+                NodeKind::DataCompositionSchema
+                    | NodeKind::DataSet
+                    | NodeKind::DataCompositionField
+            )
         })
         .collect()
 }
@@ -702,6 +716,9 @@ const fn node_title(kind: NodeKind) -> &'static str {
         NodeKind::Procedure => "procedure",
         NodeKind::Function => "function",
         NodeKind::Query => "query",
+        NodeKind::DataCompositionSchema => "data composition schema",
+        NodeKind::DataSet => "data set",
+        NodeKind::DataCompositionField => "data composition field",
         NodeKind::Form => "form",
         NodeKind::Command => "command",
         NodeKind::Attribute => "attribute",
@@ -753,7 +770,10 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::StandardAttribute
         | NodeKind::Subsystem
         | NodeKind::AccessRight => true,
-        NodeKind::Unknown => false,
+        NodeKind::DataCompositionSchema
+        | NodeKind::DataSet
+        | NodeKind::DataCompositionField
+        | NodeKind::Unknown => false,
     }
 }
 
@@ -1008,13 +1028,13 @@ mod tests {
         assert_no_unplanned_high_gap(&first);
 
         let graph_domain = SemanticCoverageRegistry::audit();
-        assert_eq!(graph_domain.summary().total(), 88);
+        assert_eq!(graph_domain.summary().total(), 91);
         assert_eq!(
             graph_domain
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&84)
+            Some(&87)
         );
         assert_eq!(
             graph_domain

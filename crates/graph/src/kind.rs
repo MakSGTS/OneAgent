@@ -12,6 +12,12 @@ pub enum NodeKind {
     Function,
     /// Query node.
     Query,
+    /// Report-owned Data Composition Schema node.
+    DataCompositionSchema,
+    /// Direct Data Set node owned by a Data Composition Schema.
+    DataSet,
+    /// Direct named Data Composition Field node owned by a Data Set.
+    DataCompositionField,
     /// Form node.
     Form,
     /// Command node.

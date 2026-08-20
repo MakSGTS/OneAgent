@@ -218,6 +218,52 @@ fn member_nodes_have_complete_graph_payload_evidence() {
 }
 
 #[test]
+fn data_composition_nodes_have_complete_graph_payload_evidence() {
+    let report = SemanticCoverageRegistry::audit();
+
+    assert_eq!(report.summary().total(), 91);
+    assert_eq!(
+        report
+            .summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Supported),
+        Some(&87)
+    );
+    assert_eq!(
+        report
+            .summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::NotApplicable),
+        Some(&4)
+    );
+    for kind in [
+        NodeKind::DataCompositionSchema,
+        NodeKind::DataSet,
+        NodeKind::DataCompositionField,
+    ] {
+        let capability = report
+            .capability(SemanticCoverageCapabilityId::SemanticNode(kind))
+            .expect("Data Composition node coverage must exist");
+
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::SemanticPayloadPreserved)
+        );
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
+        assert_eq!(
+            capability.representative_tests(),
+            [
+                "oneagent_graph::data_composition::tests::typed_payloads_preserve_accepted_semantic_content"
+            ]
+        );
+    }
+}
+
+#[test]
 fn reference_request_provenance_has_complete_graph_domain_evidence() {
     let report = SemanticCoverageRegistry::audit();
     let capability = report

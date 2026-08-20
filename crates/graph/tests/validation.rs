@@ -62,6 +62,9 @@ fn node_kinds() -> Vec<NodeKind> {
         NodeKind::Procedure,
         NodeKind::Function,
         NodeKind::Query,
+        NodeKind::DataCompositionSchema,
+        NodeKind::DataSet,
+        NodeKind::DataCompositionField,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,
@@ -437,6 +440,103 @@ fn procedure_can_own_query_node() {
 
     assert!(result.is_valid());
     assert!(result.issues().is_empty());
+}
+
+#[test]
+fn data_composition_contains_schema_accepts_only_the_declared_direct_pairs() {
+    let schema = SemanticGraphSchema;
+    let kinds = node_kinds();
+    let accepted = [
+        (
+            NodeKind::Metadata(MetadataKind::Report),
+            NodeKind::DataCompositionSchema,
+        ),
+        (NodeKind::DataCompositionSchema, NodeKind::DataSet),
+        (NodeKind::DataSet, NodeKind::DataCompositionField),
+        (NodeKind::DataSet, NodeKind::Query),
+    ];
+
+    for (owner, child) in accepted {
+        assert!(schema.allows(owner, EdgeKind::Contains, child));
+    }
+
+    for owner in &kinds {
+        for child in [
+            NodeKind::DataCompositionSchema,
+            NodeKind::DataSet,
+            NodeKind::DataCompositionField,
+        ] {
+            let expected = accepted.contains(&(*owner, child));
+            assert_eq!(
+                schema.allows(*owner, EdgeKind::Contains, child),
+                expected,
+                "Contains endpoint decision differs for {owner:?} -> {child:?}",
+            );
+        }
+    }
+    for child in &kinds {
+        let expected = matches!(child, NodeKind::DataCompositionField | NodeKind::Query);
+        assert_eq!(
+            schema.allows(NodeKind::DataSet, EdgeKind::Contains, *child),
+            expected,
+            "Data Set ownership decision differs for child {child:?}",
+        );
+    }
+}
+
+#[test]
+fn data_composition_nodes_and_queries_require_exactly_one_immediate_owner() {
+    for (child_kind, owner_kind) in [
+        (
+            NodeKind::DataCompositionSchema,
+            NodeKind::Metadata(MetadataKind::Report),
+        ),
+        (NodeKind::DataSet, NodeKind::DataCompositionSchema),
+        (NodeKind::DataCompositionField, NodeKind::DataSet),
+        (NodeKind::Query, NodeKind::DataSet),
+    ] {
+        let child_id = id(&format!("child.{child_kind:?}"));
+        let mut missing = SemanticGraph::new();
+        missing.insert_node(GraphNode::new_with_provenance(
+            child_id.clone(),
+            name("Child"),
+            child_kind,
+            vec![provenance("data_composition.ownership")],
+        ));
+        assert!(missing.validate().issues().iter().any(|issue| {
+            issue.code() == SemanticGraphValidationCode::InvalidOwner
+                && issue.nodes() == [child_id.clone()]
+                && issue.invariant() == "mandatory owner edge"
+        }));
+
+        let mut multiple = SemanticGraph::new();
+        for (owner_id, owner_name) in [(id("owner.a"), "OwnerA"), (id("owner.b"), "OwnerB")] {
+            multiple.insert_node(GraphNode::new_with_provenance(
+                owner_id.clone(),
+                name(owner_name),
+                owner_kind,
+                vec![provenance("data_composition.ownership")],
+            ));
+            multiple.insert_node(GraphNode::new_with_provenance(
+                child_id.clone(),
+                name("Child"),
+                child_kind,
+                vec![provenance("data_composition.ownership")],
+            ));
+            multiple
+                .insert_edge(GraphEdge::new_with_provenance(
+                    owner_id,
+                    child_id.clone(),
+                    EdgeKind::Contains,
+                    vec![provenance("data_composition.ownership")],
+                ))
+                .expect("ownership edge must be stored");
+        }
+        assert!(multiple.validate().issues().iter().any(|issue| {
+            issue.code() == SemanticGraphValidationCode::MultipleOwners
+                && issue.nodes().contains(&child_id)
+        }));
+    }
 }
 
 #[test]
@@ -874,7 +974,7 @@ fn references_schema_rejects_every_pair_outside_current_production_matrix() {
     let mut rejected_count = 0;
 
     assert_eq!(metadata_kinds().len(), 24);
-    assert_eq!(kinds.len(), 40);
+    assert_eq!(kinds.len(), 43);
     for source_kind in &kinds {
         for target_kind in &kinds {
             let expected = accepted.contains(&(*source_kind, *target_kind));
@@ -1114,6 +1214,9 @@ fn reads_schema_rejects_flat_semantic_targets() {
         NodeKind::Procedure,
         NodeKind::Function,
         NodeKind::Query,
+        NodeKind::DataCompositionSchema,
+        NodeKind::DataSet,
+        NodeKind::DataCompositionField,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Role,
@@ -1135,6 +1238,9 @@ fn reads_schema_rejects_unknown_targets() {
 
 #[test]
 fn query_data_source_graph_validation_accepts_both_edge_kinds_for_all_targets() {
+    let metadata_id = id("metadata.document.reads");
+    let module_id = id("module.reads");
+    let procedure_id = id("procedure.reads");
     let query_id = id("query.reads");
     let catalog_id = id("metadata.catalog.products");
     let information_register_id = id("metadata.information_register.objects");
@@ -1143,6 +1249,13 @@ fn query_data_source_graph_validation_accepts_both_edge_kinds_for_all_targets() 
     let mut graph = SemanticGraph::new();
 
     for (node_id, node_name, node_kind) in [
+        (
+            metadata_id.clone(),
+            "ReadsDocument",
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (module_id.clone(), "ReadsModule", NodeKind::Module),
+        (procedure_id.clone(), "ReadsProcedure", NodeKind::Procedure),
         (query_id.clone(), "ReadsQuery", NodeKind::Query),
         (
             catalog_id.clone(),
@@ -1172,6 +1285,20 @@ fn query_data_source_graph_validation_accepts_both_edge_kinds_for_all_targets() 
             vec![provenance("query.reads")],
         ));
     }
+    for (owner, child) in [
+        (metadata_id, module_id.clone()),
+        (module_id, procedure_id.clone()),
+        (procedure_id, query_id.clone()),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                owner,
+                child,
+                EdgeKind::Contains,
+                vec![provenance("query.reads")],
+            ))
+            .expect("ownership edge must be stored");
+    }
     for target_id in [
         catalog_id,
         information_register_id,
@@ -1200,6 +1327,9 @@ fn query_data_source_graph_validation_accepts_both_edge_kinds_for_all_targets() 
 
 #[test]
 fn reads_graph_validation_reports_invalid_endpoint_contract() {
+    let metadata_id = id("metadata.document.invalid_reads_owner");
+    let module_id = id("module.invalid_reads");
+    let procedure_id = id("procedure.invalid_reads");
     let query_id = id("query.invalid_reads");
     let source_document_id = id("metadata.document.source");
     let target_document_id = id("metadata.document.target");
@@ -1207,6 +1337,17 @@ fn reads_graph_validation_reports_invalid_endpoint_contract() {
     let mut graph = SemanticGraph::new();
 
     for (node_id, node_name, node_kind) in [
+        (
+            metadata_id.clone(),
+            "InvalidReadsOwner",
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        (module_id.clone(), "InvalidReadsModule", NodeKind::Module),
+        (
+            procedure_id.clone(),
+            "InvalidReadsProcedure",
+            NodeKind::Procedure,
+        ),
         (query_id.clone(), "InvalidReadsQuery", NodeKind::Query),
         (
             source_document_id.clone(),
@@ -1230,6 +1371,20 @@ fn reads_graph_validation_reports_invalid_endpoint_contract() {
             node_kind,
             vec![provenance("query.invalid_reads")],
         ));
+    }
+    for (owner, child) in [
+        (metadata_id, module_id.clone()),
+        (module_id, procedure_id.clone()),
+        (procedure_id, query_id.clone()),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                owner,
+                child,
+                EdgeKind::Contains,
+                vec![provenance("query.invalid_reads")],
+            ))
+            .expect("ownership edge must be stored");
     }
     for (source_id, target_id) in [
         (query_id, target_document_id),

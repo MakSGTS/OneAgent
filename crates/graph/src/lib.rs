@@ -5,6 +5,7 @@
 pub mod access_right;
 pub mod build_diff;
 pub mod coverage;
+pub mod data_composition;
 pub mod diagnostic;
 pub mod diff;
 pub mod edge;
@@ -45,6 +46,11 @@ pub use coverage::{
     SemanticCoverageSummary, SemanticObservedCoverage, SemanticObservedKindCoverage,
     SemanticProvenanceCapability, SemanticQueryCapability, SemanticReferenceCapability,
     semantic_coverage_edge_kinds, semantic_coverage_node_kinds,
+};
+pub use data_composition::{
+    DataCompositionFieldPayload, DataCompositionIdentityError, DataCompositionSchemaPayload,
+    DataSetKind, DataSetPayload, DataSetPayloadError, data_composition_field_id, data_set_id,
+    data_set_query_id,
 };
 pub use diagnostic::{
     SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,

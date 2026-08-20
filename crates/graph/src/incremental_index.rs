@@ -554,12 +554,15 @@ mod tests {
         graph
     }
 
-    const NODE_KINDS: [NodeKind; 17] = [
+    const NODE_KINDS: [NodeKind; 20] = [
         NodeKind::Metadata(MetadataKind::Catalog),
         NodeKind::Module,
         NodeKind::Procedure,
         NodeKind::Function,
         NodeKind::Query,
+        NodeKind::DataCompositionSchema,
+        NodeKind::DataSet,
+        NodeKind::DataCompositionField,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,

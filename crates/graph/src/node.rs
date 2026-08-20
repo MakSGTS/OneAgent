@@ -4,7 +4,10 @@ use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::{MetadataMemberPayload, MetadataPayload};
 use std::fmt::{Display, Formatter};
 
-use crate::{AccessRight, AccessRightPayload, NodeKind, Provenance};
+use crate::{
+    AccessRight, AccessRightPayload, DataCompositionFieldPayload, DataCompositionSchemaPayload,
+    DataSetPayload, NodeKind, Provenance,
+};
 
 /// Closed typed content stored by a semantic graph node.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -18,6 +21,12 @@ pub enum GraphNodePayload {
     MetadataMember(MetadataMemberPayload),
     /// Source-independent content of an access-right node.
     AccessRight(AccessRightPayload),
+    /// Source-independent content of a Report-owned Data Composition Schema.
+    DataCompositionSchema(DataCompositionSchemaPayload),
+    /// Source-independent content of a direct Data Set.
+    DataSet(DataSetPayload),
+    /// Source-independent content of a direct named Data Composition Field.
+    DataCompositionField(DataCompositionFieldPayload),
 }
 
 impl GraphNodePayload {
@@ -27,11 +36,22 @@ impl GraphNodePayload {
         match (self, kind) {
             (Self::None, _)
             | (Self::MetadataMember(_), NodeKind::Attribute | NodeKind::TabularSection)
-            | (Self::AccessRight(_), NodeKind::AccessRight) => true,
+            | (Self::AccessRight(_), NodeKind::AccessRight)
+            | (Self::DataCompositionSchema(_), NodeKind::DataCompositionSchema)
+            | (Self::DataSet(_), NodeKind::DataSet)
+            | (Self::DataCompositionField(_), NodeKind::DataCompositionField) => true,
             (Self::Metadata(payload), NodeKind::Metadata(metadata_kind)) => {
                 payload.is_compatible_with(metadata_kind)
             }
-            (Self::Metadata(_) | Self::MetadataMember(_) | Self::AccessRight(_), _) => false,
+            (
+                Self::Metadata(_)
+                | Self::MetadataMember(_)
+                | Self::AccessRight(_)
+                | Self::DataCompositionSchema(_)
+                | Self::DataSet(_)
+                | Self::DataCompositionField(_),
+                _,
+            ) => false,
         }
     }
 
@@ -40,7 +60,12 @@ impl GraphNodePayload {
     pub const fn metadata(&self) -> Option<&MetadataPayload> {
         match self {
             Self::Metadata(payload) => Some(payload),
-            Self::None | Self::MetadataMember(_) | Self::AccessRight(_) => None,
+            Self::None
+            | Self::MetadataMember(_)
+            | Self::AccessRight(_)
+            | Self::DataCompositionSchema(_)
+            | Self::DataSet(_)
+            | Self::DataCompositionField(_) => None,
         }
     }
 
@@ -48,7 +73,12 @@ impl GraphNodePayload {
     #[must_use]
     pub const fn metadata_member(&self) -> Option<&MetadataMemberPayload> {
         match self {
-            Self::None | Self::Metadata(_) | Self::AccessRight(_) => None,
+            Self::None
+            | Self::Metadata(_)
+            | Self::AccessRight(_)
+            | Self::DataCompositionSchema(_)
+            | Self::DataSet(_)
+            | Self::DataCompositionField(_) => None,
             Self::MetadataMember(payload) => Some(payload),
         }
     }
@@ -58,7 +88,39 @@ impl GraphNodePayload {
     pub const fn access_right(&self) -> Option<&AccessRightPayload> {
         match self {
             Self::AccessRight(payload) => Some(payload),
-            Self::None | Self::Metadata(_) | Self::MetadataMember(_) => None,
+            Self::None
+            | Self::Metadata(_)
+            | Self::MetadataMember(_)
+            | Self::DataCompositionSchema(_)
+            | Self::DataSet(_)
+            | Self::DataCompositionField(_) => None,
+        }
+    }
+
+    /// Returns Data Composition Schema content when present.
+    #[must_use]
+    pub const fn data_composition_schema(&self) -> Option<&DataCompositionSchemaPayload> {
+        match self {
+            Self::DataCompositionSchema(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns direct Data Set content when present.
+    #[must_use]
+    pub const fn data_set(&self) -> Option<&DataSetPayload> {
+        match self {
+            Self::DataSet(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns direct Data Composition Field content when present.
+    #[must_use]
+    pub const fn data_composition_field(&self) -> Option<&DataCompositionFieldPayload> {
+        match self {
+            Self::DataCompositionField(payload) => Some(payload),
+            _ => None,
         }
     }
 }
@@ -217,6 +279,24 @@ impl GraphNode {
         self.payload.access_right()
     }
 
+    /// Returns source-independent Data Composition Schema content.
+    #[must_use]
+    pub const fn data_composition_schema_payload(&self) -> Option<&DataCompositionSchemaPayload> {
+        self.payload.data_composition_schema()
+    }
+
+    /// Returns source-independent direct Data Set content.
+    #[must_use]
+    pub const fn data_set_payload(&self) -> Option<&DataSetPayload> {
+        self.payload.data_set()
+    }
+
+    /// Returns source-independent direct Data Composition Field content.
+    #[must_use]
+    pub const fn data_composition_field_payload(&self) -> Option<&DataCompositionFieldPayload> {
+        self.payload.data_composition_field()
+    }
+
     /// Returns provenance records attached to the node.
     #[must_use]
     pub fn provenance(&self) -> &[Provenance] {
@@ -238,7 +318,10 @@ mod tests {
     };
 
     use super::{GraphNode, GraphNodePayload};
-    use crate::{AccessRightPayload, AccessRightRowRestriction, NodeKind};
+    use crate::{
+        AccessRightPayload, AccessRightRowRestriction, DataCompositionFieldPayload,
+        DataCompositionSchemaPayload, DataSetKind, DataSetPayload, NodeKind,
+    };
 
     fn id(value: &str) -> EntityId {
         EntityId::new(value).expect("identifier must be valid")
@@ -374,6 +457,9 @@ mod tests {
             NodeKind::Procedure,
             NodeKind::Function,
             NodeKind::Query,
+            NodeKind::DataCompositionSchema,
+            NodeKind::DataSet,
+            NodeKind::DataCompositionField,
             NodeKind::Form,
             NodeKind::Command,
             NodeKind::StandardAttribute,
@@ -423,6 +509,9 @@ mod tests {
             NodeKind::Procedure,
             NodeKind::Function,
             NodeKind::Query,
+            NodeKind::DataCompositionSchema,
+            NodeKind::DataSet,
+            NodeKind::DataCompositionField,
             NodeKind::Form,
             NodeKind::Command,
             NodeKind::Attribute,
@@ -444,6 +533,61 @@ mod tests {
             .expect_err("AccessRight payload must reject unrelated kinds");
 
             assert_eq!(error.node_kind(), kind);
+        }
+    }
+
+    #[test]
+    fn data_composition_payloads_require_their_exact_node_kinds() {
+        let payloads = [
+            (
+                NodeKind::DataCompositionSchema,
+                GraphNodePayload::DataCompositionSchema(DataCompositionSchemaPayload::new(true)),
+            ),
+            (
+                NodeKind::DataSet,
+                GraphNodePayload::DataSet(
+                    DataSetPayload::new(DataSetKind::Query, Some(name("DataSource1")))
+                        .expect("Query Data Set payload must be valid"),
+                ),
+            ),
+            (
+                NodeKind::DataCompositionField,
+                GraphNodePayload::DataCompositionField(DataCompositionFieldPayload::new(name(
+                    "Products.Ref",
+                ))),
+            ),
+        ];
+
+        for (expected_kind, payload) in payloads {
+            let node = GraphNode::new_with_payload(
+                id("data-composition-node"),
+                name("DataCompositionNode"),
+                expected_kind,
+                payload.clone(),
+            )
+            .expect("payload must be accepted by its exact node kind");
+            assert_eq!(node.payload(), &payload);
+
+            for wrong_kind in [
+                NodeKind::Metadata(MetadataKind::Report),
+                NodeKind::Query,
+                NodeKind::DataCompositionSchema,
+                NodeKind::DataSet,
+                NodeKind::DataCompositionField,
+                NodeKind::Unknown,
+            ]
+            .into_iter()
+            .filter(|kind| *kind != expected_kind)
+            {
+                let error = GraphNode::new_with_payload(
+                    id("wrong-kind"),
+                    name("WrongKind"),
+                    wrong_kind,
+                    payload.clone(),
+                )
+                .expect_err("payload must reject every unrelated node kind");
+                assert_eq!(error.node_kind(), wrong_kind);
+            }
         }
     }
 }

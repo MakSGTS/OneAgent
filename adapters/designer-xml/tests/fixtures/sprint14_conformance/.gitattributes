@@ -1,0 +1,4 @@
+**/*.xml binary
+**/*.mdo binary
+**/*.bsl binary
+.project binary

@@ -2474,9 +2474,24 @@ compares stable UUID/owner-role identities, kinds, exact names, accepted common
 payload, ownership, BSL declarations, terminal scope outcome, and generic
 consumer/index results. Source paths, producer identifiers, XML vocabulary,
 serialization, BOM/line endings, raw provenance, and deferred artifacts remain
-adapter-specific. A paired production fixture must be non-empty and include a
-controlled semantic change. Architecture acceptance alone does not mark
-Designer support complete or change Graph Domain or EDT Coverage.
+adapter-specific. The Task 7 evidence exercises the public EDT and Designer
+production builders over an official-tool Designer reduction and a
+provenance-backed EDT reduction. Their non-empty canonical partial projections
+contain one configuration, one Common Module, its Common module role, one
+Procedure, and three immediate `Contains` facts; exact identities, names,
+common payload, ownership, declarations, terminal success, Query, Diff, report,
+Validation, complete-index, and incremental clean-rebuild results agree. A
+controlled Designer synonym change produces exactly one `SemanticContent` node
+change.
+
+The dedicated Designer registry contains 58 deterministic capabilities: 55
+`supported`, one `unsupported` Calculation Register capability, and two
+`not_applicable` capabilities for nested Form and Unknown placeholder facts.
+Its only gap is the evidence-backed Calculation Register deferral. This is
+adapter-specific Coverage; Graph Domain and EDT Coverage remain unchanged.
+Tasks 1–7 are implemented and validated in the current Sprint 14 baseline, but
+the sprint and v0.3 release review remain incomplete until Task 8 records a
+non-blocking integration decision.
 
 Metadata members, specialized Role/Subsystem/Event/DCS/XDTO/service semantics,
 Form/Command/configuration/register module roles, semantic references and other

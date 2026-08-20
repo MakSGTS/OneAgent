@@ -3587,6 +3587,21 @@ post-review Web Service XDTO correction is committed and validated, and Sprint
 14 is the unique `next` target. The v0.3 release review remains ineligible until
 Sprint 14 completes with a non-blocking integration-review decision.
 
+**Implemented current state:** Tasks 1–7 are complete in the current Sprint 14
+baseline. The dedicated adapter now detects hierarchical Designer XML 2.20,
+loads explicit complete or partial scopes, parses the accepted configuration,
+20 top-level metadata families and generic Object/Manager/Common modules, and
+emits canonical configuration, metadata, Module, Procedure, Function, and
+immediate `Contains` facts with exact provenance. The tracked official-tool
+Designer and provenance-backed EDT reduction proves a non-empty equal canonical
+projection, an exact one-node controlled synonym difference, negative and
+partial outcomes, public consumers, complete indexes, and incremental
+clean-rebuild equivalence. Designer-specific Coverage reports 58 capabilities:
+55 `supported`, one `unsupported`, two `not_applicable`, and the single
+Calculation Register evidence gap. Task 8 integration review is still pending;
+Sprint 14 is not completed, the Sprint 13 prompt suite remains present, and the
+v0.3 release review remains ineligible.
+
 The ignored paired `OneAgent_DesignerXML/` and `OneAgent_EDTproject/` corpora,
 the tracked [Designer XML corpus registration](architecture/designer-xml-source-corpus.md),
 accepted graph contracts, current EDT builder, and filesystem/workspace tests

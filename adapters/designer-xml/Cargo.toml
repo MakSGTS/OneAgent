@@ -13,6 +13,7 @@ oneagent-workspace = { path = "../../crates/workspace" }
 quick-xml = "0.38"
 
 [dev-dependencies]
+oneagent-edt = { path = "../edt" }
 tempfile = "3"
 
 [lints]

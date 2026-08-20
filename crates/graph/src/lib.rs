@@ -6,6 +6,8 @@ pub mod access_right;
 pub mod build_diff;
 pub mod coverage;
 pub mod data_composition;
+#[cfg(test)]
+mod designer_conformance_tests;
 pub mod diagnostic;
 pub mod diff;
 pub mod edge;

@@ -1,10 +1,12 @@
 //! Adapter for hierarchical `1C:Enterprise Designer` XML sources.
 
+mod coverage;
 mod metadata_object;
 mod module_reader;
 mod semantic_graph;
 mod source_hash;
 
+pub use coverage::{DesignerXmlSemanticCoverageRegistry, DesignerXmlSemanticCoverageReport};
 pub use metadata_object::{
     DesignerXmlMetadataObjectDescriptor, DesignerXmlMetadataObjectError,
     DesignerXmlMetadataObjectReader, DesignerXmlSourceEvidence,

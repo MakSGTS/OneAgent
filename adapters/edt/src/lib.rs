@@ -13,6 +13,7 @@ mod module_reader;
 mod query_source_resolution;
 mod role_rights;
 mod subsystem_content;
+mod subsystem_hierarchy;
 mod writes;
 mod writes_emission;
 mod writes_resolution;
@@ -47,6 +48,12 @@ pub use role_rights::{
 pub use subsystem_content::{
     EdtSubsystemContentDescriptor, EdtSubsystemContentError, EdtSubsystemContentReader,
     FileSystemEdtSubsystemContentReader,
+};
+
+pub use subsystem_hierarchy::{
+    EdtSubsystemHierarchy, EdtSubsystemHierarchyDescriptor, EdtSubsystemHierarchyError,
+    EdtSubsystemHierarchyReader, EdtSubsystemHierarchyRelation,
+    FileSystemEdtSubsystemHierarchyReader,
 };
 
 pub use bsl_graph::{

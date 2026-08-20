@@ -61,8 +61,8 @@ reviewing behavior.
   deferred behavior, and no nested property/import speculation.
 - Exact HTTP URL Template/Method and Web Operation/Parameter fields, optional
   values, hierarchy, malformed/unsupported outcomes, and ordering.
-- Existing metadata/module/symbol compatibility and exact internal XDTO package,
-  type, and owned Procedure resolution.
+- Existing metadata/module/symbol compatibility and exact internal XDTO
+  package/type, owned HTTP Procedure, and owned Web Function resolution.
 - Public requests, internal/external policy, References, Triggers, provenance,
   diagnostics, statistics, determinism, and no placeholders.
 - Generic Query, Diff, reports, Validation, Impact policy, complete and

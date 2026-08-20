@@ -160,10 +160,12 @@ Observed values and cardinalities are:
 | `dataLockControlMode` | `Managed` for all 119 operations |
 | explicit `nillable` | `true` in 180 declarations; otherwise absent |
 | explicit `transferDirection` | `Out` in 41, `InOut` in 49, otherwise absent |
-| procedure binding | one non-empty procedure name per operation |
+| handler binding | one non-empty `procedureName` value per operation |
 
-All 119 procedure names resolve case-insensitively to exactly one Procedure in
-the owning Web Service module. No missing or ambiguous live binding was found.
+All 119 handler names resolve case-insensitively to exactly one Function in the
+owning Web Service module. Zero resolve to Procedure, and no missing or
+ambiguous live binding was found. The EDT XML field name `procedureName` does
+not determine the BSL declaration kind.
 
 Operation and Parameter identities must use their declared UUIDs. Return/value
 type, nillability, transfer direction, and procedure binding are content or

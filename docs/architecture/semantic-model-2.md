@@ -2402,10 +2402,12 @@ precise internal References plus declarative handler Triggers.
 The planning corpus contains 20 XDTO descriptor/schema pairs with 12,666
 uniquely named direct Value/Object types, two HTTP Services with 35 URL
 Templates and 35 Methods, and eight Web Services with 119 Operations and 360
-Parameters. All 154 handler declarations resolve uniquely to the existing
-owned service-module Procedures. These counts are planning evidence rather than
-implemented Coverage claims. Sprint 13 remains `next` until its committed
-planning baseline exists and Task 1 begins.
+Parameters. All 154 handler declarations resolve uniquely to existing owned
+service-module callables: 35 HTTP handlers are Procedures and 119 Web handlers
+are Functions. The EDT XML field name `procedureName` does not define the BSL
+symbol kind. These counts are planning evidence rather than implemented
+Coverage claims. Sprint 13 remains `next` until its production-evidence and
+integration-review gates complete.
 
 The first slice deliberately excludes 61,435 nested XDTO properties, imports,
 restrictions, inline types, external platform schema nodes, route matching,

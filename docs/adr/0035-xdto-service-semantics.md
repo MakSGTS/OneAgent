@@ -26,9 +26,10 @@ bags or ordinal nodes would create unstable and source-specific semantics.
 
 The service corpus provides a smaller exact contract: stable UUIDs for every
 HTTP URL Template/Method and Web Operation/Parameter; owner-local handler names
-that resolve to existing service-module Procedures; exact XDTO package
-references; exact `(namespace, type name)` declarations; and deterministic
-negative or external outcomes.
+that resolve to existing service-module Procedures for HTTP and Functions for
+Web; exact XDTO package references; exact `(namespace, type name)`
+declarations; and deterministic negative or external outcomes. The XML field
+name `procedureName` does not define the BSL declaration kind.
 
 ## Decision
 
@@ -39,7 +40,8 @@ Accept one additive source-independent first slice for:
 - HTTP URL Templates and Methods;
 - Web Service Operations and Parameters;
 - exact internal XDTO package/type references;
-- exact handler dispatch to existing service-module Procedures.
+- exact handler dispatch to existing service-module callables with
+  source-proven family-specific kinds.
 
 The semantic graph remains the only authority for nodes, ownership, references,
 dispatch, provenance, validation, and generic query/index behavior. The EDT
@@ -178,7 +180,7 @@ Canonical requests are:
 | Web Service metadata node | `XdtoPackage` | exact package name | `Metadata(XdtoPackage)` |
 | Web Operation or Parameter | `XdtoType` | exact child under package resolved by namespace | `XdtoType` |
 | HTTP Method | `Callable` | exact child Procedure under the owning service Module | `Procedure` |
-| Web Operation | `Callable` | exact child Procedure under the owning service Module | `Procedure` |
+| Web Operation | `Callable` | exact child Function under the owning service Module | `Function` |
 
 The adapter may first map an XDTO namespace to exactly one repository package,
 then create the child request against that package. A missing namespace/package,
@@ -209,7 +211,7 @@ Metadata(WebService) --References--> Metadata(XdtoPackage)
 WebServiceOperation --References--> XdtoType
 WebServiceParameter --References--> XdtoType
 HttpServiceMethod --References--> Procedure
-WebServiceOperation --References--> Procedure
+WebServiceOperation --References--> Function
 ```
 
 Direction is always referencing declaration to resolved target. No external,
@@ -226,22 +228,22 @@ AccessRight, command, or Event Subscription reference family.
 Reuse `EdgeKind::Triggers` for the generic declarative-dispatch statement:
 
 ```text
-declarative dispatch source --Triggers--> resolved Procedure
+declarative dispatch source --Triggers--> resolved callable
 ```
 
 Extend its accepted endpoints with:
 
 ```text
 HttpServiceMethod --Triggers--> Procedure
-WebServiceOperation --Triggers--> Procedure
+WebServiceOperation --Triggers--> Function
 ```
 
 The existing Event Subscription endpoint remains valid. `Triggers` states that
-the declaration dispatches to the handler Procedure; it does not assert a BSL
-body `Calls`, transport execution, authorization, dependency propagation, or
-runtime availability. A resolved handler emits both `References` and
-`Triggers`, each with deterministic relation-specific provenance. An unresolved
-handler emits neither.
+the declaration dispatches to the exact handler callable; it does not assert a
+BSL body `Calls`, transport execution, authorization, dependency propagation,
+or runtime availability. A resolved handler emits both `References` and
+`Triggers`, each with deterministic relation-specific provenance. An
+unresolved handler emits neither.
 
 The current non-propagating Impact policy for `Triggers` remains unchanged.
 
@@ -374,6 +376,19 @@ Rejected because descriptor dispatch is not a BSL call-site fact. References
 plus Triggers preserve navigation and invocation intent without inventing code
 execution.
 
+### Infer Procedure from the Web XML field name
+
+Rejected because all 119 live Web handler names resolve to owned BSL Functions
+and zero resolve to Procedures. The serialized field name `procedureName` is a
+source-format label, not a semantic declaration-kind contract.
+
+### Accept both Procedure and Function for every service family
+
+Rejected because the complete live corpus proves a narrower exact matrix: all
+35 HTTP handlers are Procedures and all 119 Web handlers are Functions.
+Accepting both kinds would hide incompatible declarations and broaden endpoint
+validation without source evidence.
+
 ### Add a service-specific query or index
 
 Rejected because canonical Graph Query and Semantic Index dimensions already
@@ -389,7 +404,8 @@ cover typed nodes, ownership, adjacency, and exact name/kind lookup.
   runtime invocation;
 - Web descriptor/WSDL generation, SOAP, data-lock behavior, publication,
   runtime execution, and external type resolution;
-- dynamic handler names or BSL body semantics beyond existing Procedure nodes;
+- dynamic handler names or BSL body semantics beyond existing Procedure and
+  Function nodes;
 - Designer XML and cross-adapter identity equivalence, which remain Sprint 14;
 - persistence, Runtime services, HTTP API, CLI, MCP, LSP, IDE, serialization,
   benchmarks, and performance claims.

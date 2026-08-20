@@ -144,7 +144,7 @@ fn write_web(project: &Path) {
     .expect("Web descriptor must be written");
     fs::write(
         directory.join("Module.bsl"),
-        "Procedure HandleWeb()\nEndProcedure\n",
+        "Function HandleWeb()\nEndFunction\n\nProcedure ForeignHttpHandler()\nEndProcedure\n",
     )
     .expect("Web module must be written");
 }
@@ -236,6 +236,16 @@ fn production_builder_emits_payloads_children_requests_and_resolved_relations() 
             .count(),
         2
     );
+    assert!(first.reference_requests().iter().all(|request| {
+        if request.category() != SemanticReferenceCategory::Callable {
+            return true;
+        }
+        match request.source_node().as_str() {
+            "method-id" => request.expected_kinds() == [NodeKind::Procedure],
+            "operation-id" => request.expected_kinds() == [NodeKind::Function],
+            _ => false,
+        }
+    }));
     assert_eq!(
         first
             .reference_requests()
@@ -399,7 +409,11 @@ fn package_and_handler_failures_use_every_terminal_request_outcome() {
     }));
 
     let invalid_owner_project = project();
-    write_http(invalid_owner_project.path(), "HandleWeb", Some("POST"));
+    write_http(
+        invalid_owner_project.path(),
+        "ForeignHttpHandler",
+        Some("POST"),
+    );
     let invalid_owner = build(invalid_owner_project.path());
     let invalid_owner_request = invalid_owner
         .reference_requests()

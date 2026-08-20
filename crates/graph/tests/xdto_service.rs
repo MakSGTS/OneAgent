@@ -51,7 +51,7 @@ struct FixtureIds {
     operation: EntityId,
     parameter: EntityId,
     web_module: EntityId,
-    web_procedure: EntityId,
+    web_function: EntityId,
 }
 
 impl FixtureIds {
@@ -70,7 +70,7 @@ impl FixtureIds {
             operation: id("uuid.web.operation"),
             parameter: id("uuid.web.parameter"),
             web_module: id("metadata.web.exchange:common_module"),
-            web_procedure: id("metadata.web.exchange:common_module:procedure:Exchange"),
+            web_function: id("metadata.web.exchange:common_module:function:Exchange"),
         }
     }
 }
@@ -191,10 +191,10 @@ fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
             node_provenance("source.web-module"),
         ),
         GraphNode::new_with_provenance(
-            ids.web_procedure.clone(),
+            ids.web_function.clone(),
             name("Exchange"),
-            NodeKind::Procedure,
-            node_provenance("source.web-procedure"),
+            NodeKind::Function,
+            node_provenance("source.web-function"),
         ),
     ];
     let edges = vec![
@@ -248,9 +248,9 @@ fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
         ),
         (
             ids.web_module,
-            ids.web_procedure.clone(),
+            ids.web_function.clone(),
             EdgeKind::Contains,
-            "edge.web-procedure",
+            "edge.web-function",
         ),
         (
             ids.web_service,
@@ -286,13 +286,13 @@ fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
         ),
         (
             ids.operation.clone(),
-            ids.web_procedure.clone(),
+            ids.web_function.clone(),
             EdgeKind::References,
             "edge.web-handler-reference",
         ),
         (
             ids.operation,
-            ids.web_procedure,
+            ids.web_function,
             EdgeKind::Triggers,
             "edge.web-trigger",
         ),
@@ -426,7 +426,7 @@ fn schema_accepts_only_adr_0035_additive_pairs() {
         (NodeKind::WebServiceOperation, NodeKind::XdtoType),
         (NodeKind::WebServiceParameter, NodeKind::XdtoType),
         (NodeKind::HttpServiceMethod, NodeKind::Procedure),
-        (NodeKind::WebServiceOperation, NodeKind::Procedure),
+        (NodeKind::WebServiceOperation, NodeKind::Function),
     ];
 
     for (source, target) in contains {
@@ -437,10 +437,39 @@ fn schema_accepts_only_adr_0035_additive_pairs() {
         assert!(schema.allows(source, EdgeKind::References, target));
         assert!(!schema.allows(target, EdgeKind::References, source));
     }
-    for source in [NodeKind::HttpServiceMethod, NodeKind::WebServiceOperation] {
-        assert!(schema.allows(source, EdgeKind::Triggers, NodeKind::Procedure));
-        assert!(!schema.allows(NodeKind::Procedure, EdgeKind::Triggers, source));
+    for (source, target) in [
+        (NodeKind::HttpServiceMethod, NodeKind::Procedure),
+        (NodeKind::WebServiceOperation, NodeKind::Function),
+    ] {
+        assert!(schema.allows(source, EdgeKind::Triggers, target));
+        assert!(!schema.allows(target, EdgeKind::Triggers, source));
     }
+}
+
+fn resolved_web_handler_request(ids: &FixtureIds) -> SemanticReferenceRequest {
+    SemanticReferenceRequest::collected(
+        ids.operation.clone(),
+        SemanticReferenceCategory::Callable,
+        SemanticReference::Child {
+            owner: ids.web_module.clone(),
+            name: name("Exchange"),
+        },
+        [NodeKind::Function],
+        [provenance(
+            "request.web-handler.collection",
+            ResolutionState::Unresolved,
+        )],
+    )
+    .expect("Web handler request must be valid")
+    .into_resolved(
+        ids.web_function.clone(),
+        NodeKind::Function,
+        [provenance(
+            "request.web-handler.resolution",
+            ResolutionState::Resolved,
+        )],
+    )
+    .expect("Web handler resolution must be valid")
 }
 
 #[test]
@@ -495,7 +524,7 @@ fn xdto_and_service_requests_use_stable_categories_and_reference_projections() {
             ids.http_method.clone(),
             SemanticReferenceCategory::Callable,
             SemanticReference::Child {
-                owner: ids.http_module,
+                owner: ids.http_module.clone(),
                 name: name("Handle"),
             },
             [NodeKind::Procedure],
@@ -506,7 +535,7 @@ fn xdto_and_service_requests_use_stable_categories_and_reference_projections() {
         )
         .expect("handler request must be valid")
         .into_resolved(
-            ids.http_procedure,
+            ids.http_procedure.clone(),
             NodeKind::Procedure,
             [provenance(
                 "request.handler.resolution",
@@ -514,6 +543,7 @@ fn xdto_and_service_requests_use_stable_categories_and_reference_projections() {
             )],
         )
         .expect("handler resolution must be valid"),
+        resolved_web_handler_request(&ids),
     ];
     assert!(
         requests[0]

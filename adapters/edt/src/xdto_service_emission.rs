@@ -395,6 +395,7 @@ fn collect_intents<'a>(
                         method.id().clone(),
                         method.handler().clone(),
                         module.clone(),
+                        NodeKind::Procedure,
                         service.metadata().descriptor_path(),
                     )?);
                 }
@@ -424,6 +425,7 @@ fn collect_intents<'a>(
                         operation.id().clone(),
                         operation.procedure_name().clone(),
                         module.clone(),
+                        NodeKind::Function,
                         service.metadata().descriptor_path(),
                     )?);
                     for parameter in operation.parameters() {
@@ -477,6 +479,7 @@ fn callable_intent(
     source: EntityId,
     name: EntityName,
     module: EntityId,
+    expected: NodeKind,
     path: &Path,
 ) -> Result<PendingIntent<'_>, EdtGraphError> {
     request_intent(
@@ -486,7 +489,7 @@ fn callable_intent(
             owner: module.clone(),
             name,
         },
-        NodeKind::Procedure,
+        expected,
         Some(module),
         path,
     )

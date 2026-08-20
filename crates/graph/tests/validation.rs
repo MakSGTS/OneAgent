@@ -146,7 +146,7 @@ fn accepted_reference_pairs() -> Vec<(NodeKind, NodeKind)> {
         (NodeKind::WebServiceOperation, NodeKind::XdtoType),
         (NodeKind::WebServiceParameter, NodeKind::XdtoType),
         (NodeKind::HttpServiceMethod, NodeKind::Procedure),
-        (NodeKind::WebServiceOperation, NodeKind::Procedure),
+        (NodeKind::WebServiceOperation, NodeKind::Function),
     ]);
     pairs
 }
@@ -818,19 +818,19 @@ fn opens_schema_accepts_only_procedure_to_form_targets() {
 }
 
 #[test]
-fn triggers_schema_accepts_only_declared_dispatch_sources_to_procedure() {
+fn triggers_schema_accepts_only_declared_dispatch_source_and_callable_pairs() {
     let schema = SemanticGraphSchema;
     let kinds = node_kinds();
     let mut accepted_count = 0;
 
     for source_kind in &kinds {
         for target_kind in &kinds {
-            let expected = matches!(
+            let expected = (matches!(
                 source_kind,
-                NodeKind::Metadata(MetadataKind::EventSubscription)
-                    | NodeKind::HttpServiceMethod
-                    | NodeKind::WebServiceOperation
-            ) && *target_kind == NodeKind::Procedure;
+                NodeKind::Metadata(MetadataKind::EventSubscription) | NodeKind::HttpServiceMethod
+            ) && *target_kind == NodeKind::Procedure)
+                || (*source_kind == NodeKind::WebServiceOperation
+                    && *target_kind == NodeKind::Function);
             let actual = schema.allows(*source_kind, EdgeKind::Triggers, *target_kind);
             assert_eq!(
                 actual, expected,

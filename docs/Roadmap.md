@@ -3103,12 +3103,12 @@ Repository-owned
 proves 20 descriptor/schema XDTO Package pairs, 12,666 uniquely named direct
 Value/Object types, two HTTP Services with 35 URL Templates and 35 Methods, and
 eight Web Services with 119 Operations and 360 Parameters. All 154 service
-handler declarations resolve uniquely to existing owned BSL Procedures. The
-accepted [ADR-0035](adr/0035-xdto-service-semantics.md) limits the first slice
-to direct types, service declaration structure, internal package/type
-references, and declarative handler dispatch. XDTO properties, imports,
-restrictions, external namespace nodes, transport/runtime behavior, and
-Designer XML remain deferred.
+handler declarations resolve uniquely to existing owned BSL callables: 35 HTTP
+handlers are Procedures and 119 Web handlers are Functions. The accepted
+[ADR-0035](adr/0035-xdto-service-semantics.md) limits the first slice to direct
+types, service declaration structure, internal package/type references, and
+declarative handler dispatch. XDTO properties, imports, restrictions, external
+namespace nodes, transport/runtime behavior, and Designer XML remain deferred.
 
 The current graph implementation, parser implementation, graph emission,
 review, sprint-planning, and sequential-execution framework contracts express
@@ -3140,8 +3140,9 @@ Triggers without inventing external schema nodes or runtime transport behavior.
   malformed, and unsupported-value behavior;
 - public XDTO package/type and callable request lifecycle with deterministic
   provenance, diagnostics, and statistics;
-- internal References plus HTTP/Web declarative Triggers to existing Procedure
-  nodes, with external namespaces preserved but not materialized;
+- internal References plus HTTP declarative Triggers to existing Procedure
+  nodes and Web declarative Triggers to existing Function nodes, with external
+  namespaces preserved but not materialized;
 - generated positive/negative/reordered/repeated production evidence;
 - one tracked provenance-backed reduced production fixture;
 - generic Query, Diff, reports, Validation, Impact policy, complete and
@@ -3309,13 +3310,13 @@ repeated-build tests.
 index/Coverage evidence, current-state documentation completion, and deferred
 XDTO or runtime behavior.
 
-**Acceptance evidence:** internal package/type and all valid handlers resolve;
-external namespaces emit no requests, placeholders, edges, or false missing
-diagnostics; missing/ambiguous/incompatible/wrong-owner internal declarations
-have exact request outcomes and diagnostics; fatal source errors yield no
-successful partial build; accepted siblings survive deferred inputs; Query and
-Validation observe exact facts; reordered/repeated builds are equal; unrelated
-behavior passes.
+**Acceptance evidence:** internal package/type, all HTTP Procedure handlers,
+and all Web Function handlers resolve; external namespaces emit no requests,
+placeholders, edges, or false missing diagnostics; missing/ambiguous/
+incompatible/wrong-owner internal declarations have exact request outcomes and
+diagnostics; fatal source errors yield no successful partial build; accepted
+siblings survive deferred inputs; Query and Validation observe exact facts;
+reordered/repeated builds are equal; unrelated behavior passes.
 
 Focused validation:
 

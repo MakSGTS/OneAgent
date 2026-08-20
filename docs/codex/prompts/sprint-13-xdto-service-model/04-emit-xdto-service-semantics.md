@@ -68,8 +68,8 @@ request, provenance, diagnostic, and statistics contracts.
 - Collect public XDTO Package, XDTO Type, and Callable requests with collection
   provenance before resolution; distinguish internal from external declarations.
 - Resolve package by exact metadata name, type by exact namespace/package and
-  owned child name, and handler by exact Procedure under the owning service
-  Module after BSL symbols exist.
+  owned child name, HTTP handler by exact Procedure, and Web handler by exact
+  Function under the owning service Module after BSL symbols exist.
 - Project resolved requests to exact ADR-0035 References; project resolved
   handlers additionally to Triggers with relation-specific provenance.
 - Project missing, ambiguous, incompatible, and invalid-owner internal outcomes
@@ -97,8 +97,9 @@ request, provenance, diagnostic, and statistics contracts.
 - Existing top-level metadata, configuration ownership, payload synonyms,
   service modules, symbols, Calls, and unrelated facts remain unchanged.
 - Valid internal package declarations resolve to metadata XDTO Packages; valid
-  internal type declarations resolve to exact owned XDTO Types; all live valid
-  service handlers resolve to exact owned Procedures.
+  internal type declarations resolve to exact owned XDTO Types; all live HTTP
+  handlers resolve to exact owned Procedures and all live Web handlers resolve
+  to exact owned Functions.
 - Each accepted child has one immediate owner and non-empty deterministic
   declaration/ownership provenance; no reverse/transitive/placeholder fact is
   emitted.

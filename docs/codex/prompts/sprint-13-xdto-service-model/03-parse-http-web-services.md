@@ -63,7 +63,7 @@ declaration parsing where justified.
 - Parse Web namespace, optional typed `xdtoPackages` Reference/String value,
   UUID-backed direct Operations, UUID-backed nested Parameters, return/value
   `(nsUri, name)` declarations, optional Boolean nillability, optional accepted
-  `Out`/`InOut` transfer direction, and required Procedure name.
+  `Out`/`InOut` transfer direction, and required `procedureName` handler value.
 - Preserve internal package grammar, external namespaces, internal/external
   type declarations, and handler names as typed unresolved parser output.
 - Canonicalize children by stable UUID and reject duplicate/conflicting UUIDs
@@ -87,8 +87,8 @@ declaration parsing where justified.
 
 - The live corpus parses exactly 2/35/35 HTTP Service/URL Template/Method and
   8/119/360 Web Service/Operation/Parameter declarations with stable UUIDs.
-- All 154 handler/procedure expressions are retained exactly without parser-
-  time symbol resolution.
+- All 154 handler expressions are retained exactly without parser-time symbol
+  resolution or BSL kind inference from the XML field name.
 - Two internal package references, five external package namespaces, one absent
   package declaration, 478 external type occurrences, and one internal type
   occurrence have exact typed classifications.

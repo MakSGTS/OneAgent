@@ -360,11 +360,11 @@ mod tests {
 }
 
 use oneagent_graph::{
-    AccessRight, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload,
-    GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionError, ResolutionState,
-    SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
-    SemanticGraph, SemanticGraphBuildDiff, SemanticGraphBuildSnapshot, SemanticGraphReport,
-    SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
+    AccessRight, AccessRightRowRestriction, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode,
+    GraphNodePayload, GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionError,
+    ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
+    SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphBuildDiff, SemanticGraphBuildSnapshot,
+    SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
     SemanticReferenceCategory, SemanticReferenceOutcome, SemanticReferenceRequest,
     SemanticReferenceRequestError, SemanticReferenceRequestId, SemanticReferenceRequestLedger,
     SemanticReferenceRequestOutcome, SemanticReferenceRequestQuery, SemanticReferenceStatistics,
@@ -1951,6 +1951,7 @@ struct ResolvedRoleGrantObservation {
     declared_resource_name: EntityName,
     resource_id: EntityId,
     right_id: EntityId,
+    row_restriction: Option<AccessRightRowRestriction>,
 }
 
 fn emit_role_grants(
@@ -1987,6 +1988,11 @@ fn resolve_role_grant_observations(
             for right in object.rights().iter().filter(|right| right.value()) {
                 let right_id = EntityId::new(right.name().as_str())
                     .map_err(|_| EdtGraphError::InvalidIdentifier)?;
+                let row_restriction = right
+                    .row_restriction()
+                    .map(|restriction| AccessRightRowRestriction::new(restriction.condition()))
+                    .transpose()
+                    .map_err(|_| EdtGraphError::InvalidIdentifier)?;
                 let reference_context = SemanticReference::Name(object.resource_name().clone());
 
                 match index.resolve_name_of_kind(&target_name, NodeKind::Metadata(target_kind)) {
@@ -1999,6 +2005,7 @@ fn resolve_role_grant_observations(
                             declared_resource_name: object.resource_name().clone(),
                             resource_id: target.id().clone(),
                             right_id,
+                            row_restriction,
                         });
                     }
                     Err(error) => {
@@ -2028,14 +2035,29 @@ fn insert_resolved_role_grants(
     graph: &mut SemanticGraph,
     observations: &BTreeSet<ResolvedRoleGrantObservation>,
 ) -> Result<(), EdtGraphError> {
-    let mut access_right_sources = BTreeMap::<(EntityId, EntityId), BTreeSet<EntityId>>::new();
-    let mut reference_sources = BTreeMap::<(EntityId, EntityId), BTreeSet<EntityId>>::new();
-    let mut grant_sources = BTreeMap::<(EntityId, EntityId, EntityId), BTreeSet<EntityId>>::new();
+    let mut access_right_sources = BTreeMap::<
+        (EntityId, EntityId, Option<AccessRightRowRestriction>),
+        BTreeSet<EntityId>,
+    >::new();
+    let mut reference_sources = BTreeMap::<
+        (EntityId, EntityId, Option<AccessRightRowRestriction>),
+        BTreeSet<EntityId>,
+    >::new();
+    let mut grant_sources = BTreeMap::<
+        (
+            EntityId,
+            EntityId,
+            EntityId,
+            Option<AccessRightRowRestriction>,
+        ),
+        BTreeSet<EntityId>,
+    >::new();
 
     for observation in observations {
         let access_key = (
             observation.resource_id.clone(),
             observation.right_id.clone(),
+            observation.row_restriction.clone(),
         );
         access_right_sources
             .entry(access_key.clone())
@@ -2046,25 +2068,36 @@ fn insert_resolved_role_grants(
             .or_default()
             .insert(role_grant_source_id(observation, "edge=references")?);
         grant_sources
-            .entry((observation.role_node_id.clone(), access_key.0, access_key.1))
+            .entry((
+                observation.role_node_id.clone(),
+                access_key.0,
+                access_key.1,
+                access_key.2,
+            ))
             .or_default()
             .insert(role_grant_source_id(observation, "edge=grants")?);
     }
 
-    let mut access_right_ids = BTreeMap::<(EntityId, EntityId), EntityId>::new();
+    let mut access_right_ids =
+        BTreeMap::<(EntityId, EntityId, Option<AccessRightRowRestriction>), EntityId>::new();
 
-    for ((resource_id, right_id), sources) in access_right_sources {
+    for ((resource_id, right_id, row_restriction), sources) in access_right_sources {
         let provenance = sources.into_iter().map(resolved_provenance).collect();
-        let access_right = AccessRight::new(resource_id.clone(), right_id.clone(), provenance)
-            .map_err(|_| EdtGraphError::InvalidIdentifier)?;
+        let access_right = AccessRight::new_with_row_restriction(
+            resource_id.clone(),
+            right_id.clone(),
+            row_restriction.clone(),
+            provenance,
+        )
+        .map_err(|_| EdtGraphError::InvalidIdentifier)?;
         let access_right_id = access_right.id().clone();
         graph.insert_access_right(&access_right);
-        access_right_ids.insert((resource_id, right_id), access_right_id);
+        access_right_ids.insert((resource_id, right_id, row_restriction), access_right_id);
     }
 
-    for ((resource_id, right_id), sources) in reference_sources {
+    for ((resource_id, right_id, row_restriction), sources) in reference_sources {
         let access_right_id = access_right_ids
-            .get(&(resource_id.clone(), right_id))
+            .get(&(resource_id.clone(), right_id, row_restriction))
             .expect("aggregated access right must exist")
             .clone();
         let provenance = sources.into_iter().map(resolved_provenance).collect();
@@ -2078,9 +2111,9 @@ fn insert_resolved_role_grants(
             .map_err(EdtGraphError::Graph)?;
     }
 
-    for ((role_node_id, resource_id, right_id), sources) in grant_sources {
+    for ((role_node_id, resource_id, right_id, row_restriction), sources) in grant_sources {
         let access_right_id = access_right_ids
-            .get(&(resource_id, right_id))
+            .get(&(resource_id, right_id, row_restriction))
             .expect("aggregated access right must exist")
             .clone();
         let provenance = sources.into_iter().map(resolved_provenance).collect();
@@ -2138,6 +2171,7 @@ fn role_grant_diagnostic(
             resource_id: EntityId::new("unresolved")
                 .map_err(|_| EdtGraphError::InvalidIdentifier)?,
             right_id: right_id.clone(),
+            row_restriction: None,
         },
         "fact=grant_resolution",
     )?;
@@ -2154,15 +2188,26 @@ fn role_grant_source_id(
     observation: &ResolvedRoleGrantObservation,
     fact_kind: &str,
 ) -> Result<EntityId, EdtGraphError> {
+    let row_restriction = observation.row_restriction.as_ref().map_or_else(
+        || "row_restriction=absent".to_owned(),
+        |restriction| {
+            format!(
+                "row_restriction#{}:{}",
+                restriction.condition().len(),
+                restriction.condition()
+            )
+        },
+    );
     source_id_from_path_fragment(
         &observation.rights_path,
         format!(
-            "role_metadata={};role={};protected_resource={};resolved_resource={};right={};value=true;accepted_explicit_allow=true;{}",
+            "role_metadata={};role={};protected_resource={};resolved_resource={};right={};value=true;accepted_explicit_allow=true;{};{}",
             observation.role_id.as_str(),
             observation.role_node_id.as_str(),
             observation.declared_resource_name.as_str(),
             observation.resource_id.as_str(),
             observation.right_id.as_str(),
+            row_restriction,
             fact_kind,
         ),
         EdtGraphError::InvalidIdentifier,

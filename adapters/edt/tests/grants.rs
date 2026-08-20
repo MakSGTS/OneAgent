@@ -3,7 +3,8 @@ use oneagent_edt::{
     EdtGraphError, EdtRoleRightsError, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder,
 };
 use oneagent_graph::{
-    AccessRight, EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticDiagnosticCode, SemanticGraph,
+    AccessRight, AccessRightRowRestriction, EdgeKind, GraphEdge, GraphNode, NodeKind,
+    SemanticDiagnosticCode, SemanticGraph,
 };
 use oneagent_metadata::MetadataKind;
 use std::fs;
@@ -22,6 +23,21 @@ fn access_right_id(resource_id: &str, right_id: &str) -> EntityId {
         .expect("access-right identity must be valid")
         .id()
         .clone()
+}
+
+fn conditional_access_right_id(resource_id: &str, right_id: &str, condition: &str) -> EntityId {
+    AccessRight::new_with_row_restriction(
+        id(resource_id),
+        id(right_id),
+        Some(
+            AccessRightRowRestriction::new(condition)
+                .expect("access-right row restriction must be valid"),
+        ),
+        Vec::new(),
+    )
+    .expect("conditional access-right identity must be valid")
+    .id()
+    .clone()
 }
 
 fn write_metadata_descriptor(
@@ -185,6 +201,45 @@ fn assert_supported_resource_kinds(graph: &SemanticGraph, references: &[&GraphEd
     }
 }
 
+fn assert_real_conditional_product_rights(graph: &SemanticGraph, grants: &[&GraphEdge]) {
+    let product_read_id = conditional_access_right_id(
+        "bb9ecb4f-1ae1-4cfd-b2d1-badd172736e9",
+        "Read",
+        "WHERE NOT DeletionMark",
+    );
+    let product_update_id = conditional_access_right_id(
+        "bb9ecb4f-1ae1-4cfd-b2d1-badd172736e9",
+        "Update",
+        "WHERE NOT DeletionMark",
+    );
+    let base_user_id = id("872b31fd-6bc2-44fa-8fbc-1995d6237ed7:role");
+    for conditional_id in [&product_read_id, &product_update_id] {
+        assert!(
+            grants
+                .iter()
+                .any(|edge| edge.source() == &base_user_id && edge.target() == conditional_id)
+        );
+        let conditional = graph
+            .node(conditional_id)
+            .expect("conditional access right must exist");
+        assert_eq!(
+            conditional
+                .access_right_payload()
+                .and_then(|payload| payload.row_restriction())
+                .expect("row restriction must exist")
+                .condition(),
+            "WHERE NOT DeletionMark"
+        );
+        assert!(conditional.provenance().iter().all(|provenance| {
+            provenance.source().is_some_and(|source| {
+                source
+                    .as_str()
+                    .contains(";row_restriction#22:WHERE NOT DeletionMark;")
+            })
+        }));
+    }
+}
+
 #[test]
 fn grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance() {
     let first = FileSystemEdtSemanticGraphBuilder
@@ -235,19 +290,7 @@ fn grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance() {
         );
     }
 
-    let product_read_id = access_right_id("bb9ecb4f-1ae1-4cfd-b2d1-badd172736e9", "Read");
-    let product_update_id = access_right_id("bb9ecb4f-1ae1-4cfd-b2d1-badd172736e9", "Update");
-    let base_user_id = id("872b31fd-6bc2-44fa-8fbc-1995d6237ed7:role");
-    assert!(
-        grants
-            .iter()
-            .any(|edge| edge.source() == &base_user_id && edge.target() == &product_read_id)
-    );
-    assert!(
-        grants
-            .iter()
-            .any(|edge| edge.source() == &base_user_id && edge.target() == &product_update_id)
-    );
+    assert_real_conditional_product_rights(graph, &grants);
 
     let shared_right_id = access_right_id("da781fc5-b62e-4741-b148-8860c0bc0895", "ThinClient");
     let shared_right = graph
@@ -269,6 +312,7 @@ fn grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance() {
         assert!(source.contains(";protected_resource=Configuration.OneAgentEDTproject"));
         assert!(source.contains(";resolved_resource=da781fc5-b62e-4741-b148-8860c0bc0895"));
         assert!(source.contains(";right=ThinClient;value=true;accepted_explicit_allow=true"));
+        assert!(source.contains(";row_restriction=absent;"));
         assert!(source.ends_with(";fact=access_right"));
     }
 
@@ -390,6 +434,77 @@ fn grants_duplicate_declarations_deduplicate_semantics_and_provenance() {
     assert_eq!(reference.provenance().len(), 1);
     assert_eq!(first.reference_statistics().resolved(), 3);
     assert!(first.diff(&repeated).is_empty());
+}
+
+#[test]
+fn grants_keep_unconditional_and_distinct_conditional_declarations_separate() {
+    let declaration = |condition: Option<&str>| match condition {
+        Some(condition) => format!(
+            "<right><name>Read</name><value>true</value><restrictionByCondition><condition>{condition}</condition></restrictionByCondition></right>"
+        ),
+        None => "<right><name>Read</name><value>true</value></right>".to_owned(),
+    };
+    let unconditional = declaration(None);
+    let deletion_mark = declaration(Some("WHERE NOT DeletionMark"));
+    let current_user = declaration(Some("WHERE Owner = CurrentUser"));
+    let objects = format!(
+        "<object><name>Catalog.Product</name>{unconditional}{deletion_mark}{deletion_mark}{current_user}</object>"
+    );
+    let root = create_grants_project(&rights_xml(&objects), false);
+
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(root.path())
+        .expect("mixed conditional grants must build");
+
+    let reordered = format!(
+        "<object><name>Catalog.Product</name>{current_user}{deletion_mark}{unconditional}{deletion_mark}</object>"
+    );
+    fs::write(
+        root.path().join("src/Roles/TestRole/Rights.rights"),
+        rights_xml(&reordered),
+    )
+    .expect("reordered role rights must be written");
+    let second = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(root.path())
+        .expect("reordered conditional grants must build");
+
+    let graph = first.graph();
+    let access_rights = graph.nodes_by_kind(NodeKind::AccessRight);
+    let grants = graph
+        .edges()
+        .filter(|edge| edge.kind() == EdgeKind::Grants)
+        .collect::<Vec<_>>();
+    let references = graph
+        .edges()
+        .filter(|edge| edge.kind() == EdgeKind::References)
+        .collect::<Vec<_>>();
+
+    assert_eq!(access_rights.len(), 3);
+    assert_eq!(grants.len(), 3);
+    assert_eq!(references.len(), 3);
+    assert_eq!(first.reference_statistics().resolved(), 4);
+    assert_eq!(second.reference_statistics().resolved(), 4);
+    assert!(access_rights.iter().any(|node| {
+        node.access_right_payload()
+            .is_some_and(|payload| payload.row_restriction().is_none())
+    }));
+    for condition in ["WHERE NOT DeletionMark", "WHERE Owner = CurrentUser"] {
+        let expected_id =
+            conditional_access_right_id("20000000-0000-0000-0000-000000000000", "Read", condition);
+        let node = graph
+            .node(&expected_id)
+            .expect("conditional access right must exist");
+        assert_eq!(
+            node.access_right_payload()
+                .and_then(|payload| payload.row_restriction())
+                .expect("condition must exist")
+                .condition(),
+            condition
+        );
+    }
+    assert!(first.validate().is_valid());
+    assert!(second.validate().is_valid());
+    assert!(first.diff(&second).is_empty());
 }
 
 #[test]

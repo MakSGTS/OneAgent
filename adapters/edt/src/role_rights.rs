@@ -494,11 +494,13 @@ fn finish_right(right: PendingRight) -> Result<EdtRoleRightDeclaration, EdtRoleR
     let name = EntityName::new(name).map_err(|_| EdtRoleRightsError::InvalidRightName)?;
     let value = right.value.ok_or(EdtRoleRightsError::MissingRightValue)?;
     let row_restriction = if right.restriction_present {
-        Some(EdtRoleRowRestriction {
-            condition: right
-                .condition
-                .ok_or(EdtRoleRightsError::MissingRestrictionCondition)?,
-        })
+        let condition = right
+            .condition
+            .ok_or(EdtRoleRightsError::MissingRestrictionCondition)?;
+        if condition.trim().is_empty() {
+            return Err(EdtRoleRightsError::MissingRestrictionCondition);
+        }
+        Some(EdtRoleRowRestriction { condition })
     } else {
         None
     };
@@ -790,6 +792,19 @@ mod tests {
         </Rights>"#;
         assert!(matches!(
             parse(missing_condition),
+            Err(EdtRoleRightsError::MissingRestrictionCondition)
+        ));
+
+        let whitespace_condition = r#"<Rights xmlns="http://v8.1c.ru/8.2/roles">
+            <setForNewObjects>false</setForNewObjects>
+            <setForAttributesByDefault>true</setForAttributesByDefault>
+            <independentRightsOfChildObjects>false</independentRightsOfChildObjects>
+            <object><name>Catalog.Product</name><right><name>Read</name><value>true</value>
+                <restrictionByCondition><condition>   </condition></restrictionByCondition>
+            </right></object>
+        </Rights>"#;
+        assert!(matches!(
+            parse(whitespace_condition),
             Err(EdtRoleRightsError::MissingRestrictionCondition)
         ));
     }

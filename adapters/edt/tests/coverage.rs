@@ -66,13 +66,13 @@ fn report_data_composition_fixture_closes_nodes_and_ownership_coverage() {
             .get(&SemanticCoverageStatus::Supported),
         Some(&105)
     );
-    assert_eq!(graph.summary().total(), 91);
+    assert_eq!(graph.summary().total(), 96);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&87)
+        Some(&92)
     );
     assert!(edt.gaps().is_empty());
     assert_eq!(
@@ -200,13 +200,13 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
             .get(&SemanticCoverageStatus::DeclaredOnly),
         None
     );
-    assert_eq!(graph.summary().total(), 91);
+    assert_eq!(graph.summary().total(), 96);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&87)
+        Some(&92)
     );
     assert_eq!(
         graph
@@ -291,13 +291,13 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
             .get(&SemanticCoverageStatus::DeclaredOnly),
         None
     );
-    assert_eq!(graph.summary().total(), 91);
+    assert_eq!(graph.summary().total(), 96);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&87)
+        Some(&92)
     );
     assert_eq!(
         graph

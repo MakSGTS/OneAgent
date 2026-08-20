@@ -18,6 +18,16 @@ pub enum NodeKind {
     DataSet,
     /// Direct named Data Composition Field node owned by a Data Set.
     DataCompositionField,
+    /// Direct Value or Object type declared by an XDTO Package.
+    XdtoType,
+    /// URL Template declared by an HTTP Service.
+    HttpServiceUrlTemplate,
+    /// Method declared by an HTTP Service URL Template.
+    HttpServiceMethod,
+    /// Operation declared by a Web Service.
+    WebServiceOperation,
+    /// Parameter declared by a Web Service Operation.
+    WebServiceParameter,
     /// Form node.
     Form,
     /// Command node.

@@ -71,6 +71,10 @@ pub enum SemanticReferenceCategory {
     SubsystemMember,
     /// Metadata extension target reference.
     ExtensionTarget,
+    /// Repository XDTO Package reference.
+    XdtoPackage,
+    /// Direct XDTO type reference.
+    XdtoType,
 }
 
 impl SemanticReferenceCategory {
@@ -85,6 +89,8 @@ impl SemanticReferenceCategory {
             Self::ProtectedResource => "protected_resource",
             Self::SubsystemMember => "subsystem_member",
             Self::ExtensionTarget => "extension_target",
+            Self::XdtoPackage => "xdto_package",
+            Self::XdtoType => "xdto_type",
         }
     }
 }
@@ -911,6 +917,11 @@ fn node_kind_encoding(kind: NodeKind) -> String {
         NodeKind::DataCompositionSchema => "data_composition_schema".to_owned(),
         NodeKind::DataSet => "data_set".to_owned(),
         NodeKind::DataCompositionField => "data_composition_field".to_owned(),
+        NodeKind::XdtoType => "xdto_type".to_owned(),
+        NodeKind::HttpServiceUrlTemplate => "http_service_url_template".to_owned(),
+        NodeKind::HttpServiceMethod => "http_service_method".to_owned(),
+        NodeKind::WebServiceOperation => "web_service_operation".to_owned(),
+        NodeKind::WebServiceParameter => "web_service_parameter".to_owned(),
         NodeKind::Form => "form".to_owned(),
         NodeKind::Command => "command".to_owned(),
         NodeKind::Attribute => "attribute".to_owned(),

@@ -692,7 +692,7 @@ mod tests {
         graph
     }
 
-    const NODE_KINDS: [NodeKind; 20] = [
+    const NODE_KINDS: [NodeKind; 25] = [
         NodeKind::Metadata(MetadataKind::Catalog),
         NodeKind::Module,
         NodeKind::Procedure,
@@ -701,6 +701,11 @@ mod tests {
         NodeKind::DataCompositionSchema,
         NodeKind::DataSet,
         NodeKind::DataCompositionField,
+        NodeKind::XdtoType,
+        NodeKind::HttpServiceUrlTemplate,
+        NodeKind::HttpServiceMethod,
+        NodeKind::WebServiceOperation,
+        NodeKind::WebServiceParameter,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,
@@ -2758,7 +2763,10 @@ mod tests {
                 .and_then(MetadataPayload::specific)
                 .and_then(|specific| match specific {
                     MetadataSpecificPayload::EventSubscription(payload) => Some(payload),
-                    MetadataSpecificPayload::Document(_) => None,
+                    MetadataSpecificPayload::Document(_)
+                    | MetadataSpecificPayload::HttpService(_)
+                    | MetadataSpecificPayload::WebService(_)
+                    | MetadataSpecificPayload::XdtoPackage(_) => None,
                 })
                 .expect("incremental Event Subscription payload must remain typed")
                 .event()

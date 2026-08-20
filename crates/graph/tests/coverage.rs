@@ -221,13 +221,13 @@ fn member_nodes_have_complete_graph_payload_evidence() {
 fn data_composition_nodes_have_complete_graph_payload_evidence() {
     let report = SemanticCoverageRegistry::audit();
 
-    assert_eq!(report.summary().total(), 91);
+    assert_eq!(report.summary().total(), 96);
     assert_eq!(
         report
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&87)
+        Some(&92)
     );
     assert_eq!(
         report
@@ -259,6 +259,35 @@ fn data_composition_nodes_have_complete_graph_payload_evidence() {
             [
                 "oneagent_graph::data_composition::tests::typed_payloads_preserve_accepted_semantic_content"
             ]
+        );
+    }
+}
+
+#[test]
+fn xdto_and_service_nodes_have_complete_graph_payload_evidence() {
+    let report = SemanticCoverageRegistry::audit();
+
+    for kind in [
+        NodeKind::XdtoType,
+        NodeKind::HttpServiceUrlTemplate,
+        NodeKind::HttpServiceMethod,
+        NodeKind::WebServiceOperation,
+        NodeKind::WebServiceParameter,
+    ] {
+        let capability = report
+            .capability(SemanticCoverageCapabilityId::SemanticNode(kind))
+            .expect("XDTO/service node coverage must exist");
+
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(
+            capability
+                .evidence()
+                .contains(&SemanticCoverageEvidence::SemanticPayloadPreserved)
+        );
+        assert_eq!(
+            capability.representative_tests(),
+            ["oneagent_graph::xdto_service::tests::typed_payloads_preserve_exact_optional_content"]
         );
     }
 }

@@ -140,6 +140,15 @@ impl MetadataPayload {
             Some(MetadataSpecificPayload::EventSubscription(_)) => {
                 matches!(kind, MetadataKind::EventSubscription)
             }
+            Some(MetadataSpecificPayload::HttpService(_)) => {
+                matches!(kind, MetadataKind::HttpService)
+            }
+            Some(MetadataSpecificPayload::WebService(_)) => {
+                matches!(kind, MetadataKind::WebService)
+            }
+            Some(MetadataSpecificPayload::XdtoPackage(_)) => {
+                matches!(kind, MetadataKind::XdtoPackage)
+            }
         }
     }
 }
@@ -207,6 +216,12 @@ pub enum MetadataSpecificPayload {
     Document(DocumentMetadataPayload),
     /// Content intrinsic to an Event Subscription metadata object.
     EventSubscription(EventSubscriptionMetadataPayload),
+    /// Content intrinsic to an HTTP Service metadata object.
+    HttpService(HttpServiceMetadataPayload),
+    /// Content intrinsic to a Web Service metadata object.
+    WebService(WebServiceMetadataPayload),
+    /// Content intrinsic to an XDTO Package metadata object.
+    XdtoPackage(XdtoPackageMetadataPayload),
 }
 
 /// Source-independent Event Subscription content.
@@ -226,6 +241,95 @@ impl EventSubscriptionMetadataPayload {
     #[must_use]
     pub const fn event(&self) -> &EntityName {
         &self.event
+    }
+}
+
+/// Source-independent HTTP Service content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpServiceMetadataPayload {
+    root_url: String,
+}
+
+impl HttpServiceMetadataPayload {
+    /// Creates HTTP Service content from its exact declared root URL.
+    #[must_use]
+    pub fn new(root_url: impl Into<String>) -> Self {
+        Self {
+            root_url: root_url.into(),
+        }
+    }
+
+    /// Returns the exact declared root URL.
+    #[must_use]
+    pub fn root_url(&self) -> &str {
+        &self.root_url
+    }
+}
+
+/// Source-independent XDTO package declaration used by a Web Service.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum WebServiceXdtoPackage {
+    /// Reference to a repository metadata XDTO Package by canonical name.
+    Repository(EntityName),
+    /// External package identified only by its namespace URI.
+    ExternalNamespace(String),
+}
+
+/// Source-independent Web Service content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebServiceMetadataPayload {
+    namespace: String,
+    xdto_packages: Vec<WebServiceXdtoPackage>,
+}
+
+impl WebServiceMetadataPayload {
+    /// Creates canonical Web Service content.
+    #[must_use]
+    pub fn new(
+        namespace: impl Into<String>,
+        xdto_packages: impl IntoIterator<Item = WebServiceXdtoPackage>,
+    ) -> Self {
+        let mut xdto_packages = xdto_packages.into_iter().collect::<Vec<_>>();
+        xdto_packages.sort();
+        xdto_packages.dedup();
+        Self {
+            namespace: namespace.into(),
+            xdto_packages,
+        }
+    }
+
+    /// Returns the exact declared Web Service namespace.
+    #[must_use]
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    /// Returns canonical XDTO package declarations.
+    #[must_use]
+    pub fn xdto_packages(&self) -> &[WebServiceXdtoPackage] {
+        &self.xdto_packages
+    }
+}
+
+/// Source-independent XDTO Package content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct XdtoPackageMetadataPayload {
+    namespace: String,
+}
+
+impl XdtoPackageMetadataPayload {
+    /// Creates XDTO Package content from its exact declared namespace.
+    #[must_use]
+    pub fn new(namespace: impl Into<String>) -> Self {
+        Self {
+            namespace: namespace.into(),
+        }
+    }
+
+    /// Returns the exact declared XDTO Package namespace.
+    #[must_use]
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 }
 
@@ -458,8 +562,9 @@ mod tests {
 
     use super::{
         CommonMetadataPayload, DocumentMetadataPayload, EventSubscriptionMetadataPayload,
-        MetadataKind, MetadataMemberPayload, MetadataObject, MetadataPayload,
-        MetadataRegisterRecord, MetadataSpecificPayload, MetadataTree,
+        HttpServiceMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataObject,
+        MetadataPayload, MetadataRegisterRecord, MetadataSpecificPayload, MetadataTree,
+        WebServiceMetadataPayload, WebServiceXdtoPackage, XdtoPackageMetadataPayload,
     };
 
     fn id(value: &str) -> EntityId {
@@ -661,5 +766,72 @@ mod tests {
             error.to_string(),
             "metadata payload is incompatible with document metadata kind"
         );
+    }
+
+    #[test]
+    fn xdto_and_service_payloads_are_canonical_and_kind_compatible() {
+        let cases = [
+            (
+                MetadataKind::HttpService,
+                MetadataSpecificPayload::HttpService(HttpServiceMetadataPayload::new("api")),
+            ),
+            (
+                MetadataKind::WebService,
+                MetadataSpecificPayload::WebService(WebServiceMetadataPayload::new(
+                    "urn:service",
+                    [
+                        WebServiceXdtoPackage::ExternalNamespace("urn:external".to_owned()),
+                        WebServiceXdtoPackage::Repository(name("Exchange")),
+                        WebServiceXdtoPackage::Repository(name("Exchange")),
+                    ],
+                )),
+            ),
+            (
+                MetadataKind::XdtoPackage,
+                MetadataSpecificPayload::XdtoPackage(XdtoPackageMetadataPayload::new(
+                    "urn:package",
+                )),
+            ),
+        ];
+
+        for (kind, specific) in cases {
+            let payload = MetadataPayload::new(CommonMetadataPayload::empty(), Some(specific));
+            let object = MetadataObject::new_with_payload(
+                id(&format!("metadata.{}", kind.as_str())),
+                name("Object"),
+                kind,
+                None,
+                payload.clone(),
+            )
+            .expect("payload must be compatible with its exact metadata kind");
+            assert_eq!(object.payload(), &payload);
+
+            let wrong_kind = if kind == MetadataKind::Document {
+                MetadataKind::Catalog
+            } else {
+                MetadataKind::Document
+            };
+            assert!(
+                MetadataObject::new_with_payload(
+                    id("metadata.wrong"),
+                    name("Wrong"),
+                    wrong_kind,
+                    None,
+                    payload,
+                )
+                .is_err()
+            );
+        }
+
+        let web = WebServiceMetadataPayload::new(
+            "urn:service",
+            [
+                WebServiceXdtoPackage::Repository(name("Exchange")),
+                WebServiceXdtoPackage::ExternalNamespace("urn:external".to_owned()),
+                WebServiceXdtoPackage::Repository(name("Exchange")),
+            ],
+        );
+        assert_eq!(web.namespace(), "urn:service");
+        assert_eq!(web.xdto_packages().len(), 2);
     }
 }

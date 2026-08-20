@@ -936,6 +936,11 @@ fn graph_node_capability(kind: NodeKind) -> SemanticCoverageCapability {
             | NodeKind::DataCompositionSchema
             | NodeKind::DataSet
             | NodeKind::DataCompositionField
+            | NodeKind::XdtoType
+            | NodeKind::HttpServiceUrlTemplate
+            | NodeKind::HttpServiceMethod
+            | NodeKind::WebServiceOperation
+            | NodeKind::WebServiceParameter
     ) {
         required.push(Evidence::SemanticPayloadPreserved);
     }
@@ -957,6 +962,13 @@ const fn graph_node_representative_test(kind: NodeKind) -> &'static str {
         }
         NodeKind::DataCompositionSchema | NodeKind::DataSet | NodeKind::DataCompositionField => {
             "oneagent_graph::data_composition::tests::typed_payloads_preserve_accepted_semantic_content"
+        }
+        NodeKind::XdtoType
+        | NodeKind::HttpServiceUrlTemplate
+        | NodeKind::HttpServiceMethod
+        | NodeKind::WebServiceOperation
+        | NodeKind::WebServiceParameter => {
+            "oneagent_graph::xdto_service::tests::typed_payloads_preserve_exact_optional_content"
         }
         _ => "oneagent_graph::coverage",
     }
@@ -1239,6 +1251,11 @@ fn all_node_kinds() -> Vec<NodeKind> {
         NodeKind::DataCompositionSchema,
         NodeKind::DataSet,
         NodeKind::DataCompositionField,
+        NodeKind::XdtoType,
+        NodeKind::HttpServiceUrlTemplate,
+        NodeKind::HttpServiceMethod,
+        NodeKind::WebServiceOperation,
+        NodeKind::WebServiceParameter,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,
@@ -1363,6 +1380,11 @@ const fn node_kind_code(kind: NodeKind) -> &'static str {
         NodeKind::DataCompositionSchema => "data_composition_schema",
         NodeKind::DataSet => "data_set",
         NodeKind::DataCompositionField => "data_composition_field",
+        NodeKind::XdtoType => "xdto_type",
+        NodeKind::HttpServiceUrlTemplate => "http_service_url_template",
+        NodeKind::HttpServiceMethod => "http_service_method",
+        NodeKind::WebServiceOperation => "web_service_operation",
+        NodeKind::WebServiceParameter => "web_service_parameter",
         NodeKind::Form => "form",
         NodeKind::Command => "command",
         NodeKind::Attribute => "attribute",

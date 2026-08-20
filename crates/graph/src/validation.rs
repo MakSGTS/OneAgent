@@ -703,7 +703,7 @@ impl SemanticGraphValidator {
         request: &SemanticReferenceRequest,
         issues: &mut Vec<SemanticGraphValidationIssue>,
     ) {
-        let edge_kind = reference_request_edge_kind(request.category());
+        let edge_kind = reference_request_edge_kind(graph, request);
         let has_projection = request.candidates().iter().any(|candidate| {
             graph.edges().any(|edge| {
                 edge.source() == request.source_node()
@@ -1155,12 +1155,26 @@ fn reference_request_issue(
     .with_reference_request_id(request.id().clone())
 }
 
-const fn reference_request_edge_kind(category: SemanticReferenceCategory) -> EdgeKind {
-    match category {
-        SemanticReferenceCategory::MetadataType | SemanticReferenceCategory::ProtectedResource => {
-            EdgeKind::References
-        }
-        SemanticReferenceCategory::Callable => EdgeKind::Calls,
+fn reference_request_edge_kind(
+    graph: &SemanticGraph,
+    request: &SemanticReferenceRequest,
+) -> EdgeKind {
+    match request.category() {
+        SemanticReferenceCategory::MetadataType
+        | SemanticReferenceCategory::ProtectedResource
+        | SemanticReferenceCategory::XdtoPackage
+        | SemanticReferenceCategory::XdtoType => EdgeKind::References,
+        SemanticReferenceCategory::Callable => match graph.node(request.source_node()) {
+            Some(source)
+                if matches!(
+                    source.kind(),
+                    NodeKind::HttpServiceMethod | NodeKind::WebServiceOperation
+                ) =>
+            {
+                EdgeKind::References
+            }
+            _ => EdgeKind::Calls,
+        },
         SemanticReferenceCategory::QuerySource => EdgeKind::Reads,
         SemanticReferenceCategory::WriteTarget => EdgeKind::Writes,
         SemanticReferenceCategory::SubsystemMember => EdgeKind::Includes,
@@ -1232,6 +1246,17 @@ const fn allows_contains(source: NodeKind, target: NodeKind) -> bool {
         }
         NodeKind::DataSet => matches!(source, NodeKind::DataCompositionSchema),
         NodeKind::DataCompositionField => matches!(source, NodeKind::DataSet),
+        NodeKind::XdtoType => {
+            matches!(source, NodeKind::Metadata(MetadataKind::XdtoPackage))
+        }
+        NodeKind::HttpServiceUrlTemplate => {
+            matches!(source, NodeKind::Metadata(MetadataKind::HttpService))
+        }
+        NodeKind::HttpServiceMethod => matches!(source, NodeKind::HttpServiceUrlTemplate),
+        NodeKind::WebServiceOperation => {
+            matches!(source, NodeKind::Metadata(MetadataKind::WebService))
+        }
+        NodeKind::WebServiceParameter => matches!(source, NodeKind::WebServiceOperation),
         _ => false,
     }
 }
@@ -1259,6 +1284,16 @@ const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
         || (matches!(source, NodeKind::Metadata(MetadataKind::EventSubscription))
             && (is_event_subscription_source_target(target)
                 || matches!(target, NodeKind::Procedure)))
+        || (matches!(source, NodeKind::Metadata(MetadataKind::WebService))
+            && matches!(target, NodeKind::Metadata(MetadataKind::XdtoPackage)))
+        || (matches!(
+            source,
+            NodeKind::WebServiceOperation | NodeKind::WebServiceParameter
+        ) && matches!(target, NodeKind::XdtoType))
+        || (matches!(
+            source,
+            NodeKind::HttpServiceMethod | NodeKind::WebServiceOperation
+        ) && matches!(target, NodeKind::Procedure))
 }
 
 const fn is_event_subscription_source_target(kind: NodeKind) -> bool {
@@ -1315,8 +1350,12 @@ const fn allows_opens(source: NodeKind, target: NodeKind) -> bool {
 }
 
 const fn allows_triggers(source: NodeKind, target: NodeKind) -> bool {
-    matches!(source, NodeKind::Metadata(MetadataKind::EventSubscription))
-        && matches!(target, NodeKind::Procedure)
+    matches!(
+        source,
+        NodeKind::Metadata(MetadataKind::EventSubscription)
+            | NodeKind::HttpServiceMethod
+            | NodeKind::WebServiceOperation
+    ) && matches!(target, NodeKind::Procedure)
 }
 
 const fn allows_reads(source: NodeKind, target: NodeKind) -> bool {
@@ -1365,6 +1404,11 @@ const fn requires_owner(kind: NodeKind) -> bool {
             | NodeKind::DataCompositionSchema
             | NodeKind::DataSet
             | NodeKind::DataCompositionField
+            | NodeKind::XdtoType
+            | NodeKind::HttpServiceUrlTemplate
+            | NodeKind::HttpServiceMethod
+            | NodeKind::WebServiceOperation
+            | NodeKind::WebServiceParameter
     )
 }
 

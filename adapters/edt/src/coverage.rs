@@ -637,6 +637,18 @@ fn all_metadata_kinds() -> Vec<MetadataKind> {
 
 fn edt_coverage_node_kinds() -> Vec<NodeKind> {
     semantic_coverage_node_kinds()
+        .into_iter()
+        .filter(|kind| {
+            !matches!(
+                kind,
+                NodeKind::XdtoType
+                    | NodeKind::HttpServiceUrlTemplate
+                    | NodeKind::HttpServiceMethod
+                    | NodeKind::WebServiceOperation
+                    | NodeKind::WebServiceParameter
+            )
+        })
+        .collect()
 }
 
 fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
@@ -722,6 +734,11 @@ const fn node_title(kind: NodeKind) -> &'static str {
         NodeKind::DataCompositionSchema => "data composition schema",
         NodeKind::DataSet => "data set",
         NodeKind::DataCompositionField => "data composition field",
+        NodeKind::XdtoType => "XDTO type",
+        NodeKind::HttpServiceUrlTemplate => "HTTP service URL template",
+        NodeKind::HttpServiceMethod => "HTTP service method",
+        NodeKind::WebServiceOperation => "Web service operation",
+        NodeKind::WebServiceParameter => "Web service parameter",
         NodeKind::Form => "form",
         NodeKind::Command => "command",
         NodeKind::Attribute => "attribute",
@@ -776,7 +793,12 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::DataCompositionSchema
         | NodeKind::DataSet
         | NodeKind::DataCompositionField => true,
-        NodeKind::Unknown => false,
+        NodeKind::XdtoType
+        | NodeKind::HttpServiceUrlTemplate
+        | NodeKind::HttpServiceMethod
+        | NodeKind::WebServiceOperation
+        | NodeKind::WebServiceParameter
+        | NodeKind::Unknown => false,
     }
 }
 
@@ -1034,13 +1056,13 @@ mod tests {
         assert_no_unplanned_high_gap(&first);
 
         let graph_domain = SemanticCoverageRegistry::audit();
-        assert_eq!(graph_domain.summary().total(), 91);
+        assert_eq!(graph_domain.summary().total(), 96);
         assert_eq!(
             graph_domain
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&87)
+            Some(&92)
         );
         assert_eq!(
             graph_domain

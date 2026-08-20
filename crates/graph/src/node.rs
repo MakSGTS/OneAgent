@@ -6,7 +6,8 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     AccessRight, AccessRightPayload, DataCompositionFieldPayload, DataCompositionSchemaPayload,
-    DataSetPayload, NodeKind, Provenance,
+    DataSetPayload, HttpServiceMethodPayload, HttpServiceUrlTemplatePayload, NodeKind, Provenance,
+    WebServiceOperationPayload, WebServiceParameterPayload, XdtoTypePayload,
 };
 
 /// Closed typed content stored by a semantic graph node.
@@ -27,6 +28,16 @@ pub enum GraphNodePayload {
     DataSet(DataSetPayload),
     /// Source-independent content of a direct named Data Composition Field.
     DataCompositionField(DataCompositionFieldPayload),
+    /// Source-independent content of a direct XDTO type.
+    XdtoType(XdtoTypePayload),
+    /// Source-independent content of an HTTP Service URL Template.
+    HttpServiceUrlTemplate(HttpServiceUrlTemplatePayload),
+    /// Source-independent content of an HTTP Service Method.
+    HttpServiceMethod(HttpServiceMethodPayload),
+    /// Source-independent content of a Web Service Operation.
+    WebServiceOperation(WebServiceOperationPayload),
+    /// Source-independent content of a Web Service Parameter.
+    WebServiceParameter(WebServiceParameterPayload),
 }
 
 impl GraphNodePayload {
@@ -39,7 +50,12 @@ impl GraphNodePayload {
             | (Self::AccessRight(_), NodeKind::AccessRight)
             | (Self::DataCompositionSchema(_), NodeKind::DataCompositionSchema)
             | (Self::DataSet(_), NodeKind::DataSet)
-            | (Self::DataCompositionField(_), NodeKind::DataCompositionField) => true,
+            | (Self::DataCompositionField(_), NodeKind::DataCompositionField)
+            | (Self::XdtoType(_), NodeKind::XdtoType)
+            | (Self::HttpServiceUrlTemplate(_), NodeKind::HttpServiceUrlTemplate)
+            | (Self::HttpServiceMethod(_), NodeKind::HttpServiceMethod)
+            | (Self::WebServiceOperation(_), NodeKind::WebServiceOperation)
+            | (Self::WebServiceParameter(_), NodeKind::WebServiceParameter) => true,
             (Self::Metadata(payload), NodeKind::Metadata(metadata_kind)) => {
                 payload.is_compatible_with(metadata_kind)
             }
@@ -49,7 +65,12 @@ impl GraphNodePayload {
                 | Self::AccessRight(_)
                 | Self::DataCompositionSchema(_)
                 | Self::DataSet(_)
-                | Self::DataCompositionField(_),
+                | Self::DataCompositionField(_)
+                | Self::XdtoType(_)
+                | Self::HttpServiceUrlTemplate(_)
+                | Self::HttpServiceMethod(_)
+                | Self::WebServiceOperation(_)
+                | Self::WebServiceParameter(_),
                 _,
             ) => false,
         }
@@ -60,12 +81,7 @@ impl GraphNodePayload {
     pub const fn metadata(&self) -> Option<&MetadataPayload> {
         match self {
             Self::Metadata(payload) => Some(payload),
-            Self::None
-            | Self::MetadataMember(_)
-            | Self::AccessRight(_)
-            | Self::DataCompositionSchema(_)
-            | Self::DataSet(_)
-            | Self::DataCompositionField(_) => None,
+            _ => None,
         }
     }
 
@@ -73,13 +89,8 @@ impl GraphNodePayload {
     #[must_use]
     pub const fn metadata_member(&self) -> Option<&MetadataMemberPayload> {
         match self {
-            Self::None
-            | Self::Metadata(_)
-            | Self::AccessRight(_)
-            | Self::DataCompositionSchema(_)
-            | Self::DataSet(_)
-            | Self::DataCompositionField(_) => None,
             Self::MetadataMember(payload) => Some(payload),
+            _ => None,
         }
     }
 
@@ -88,12 +99,7 @@ impl GraphNodePayload {
     pub const fn access_right(&self) -> Option<&AccessRightPayload> {
         match self {
             Self::AccessRight(payload) => Some(payload),
-            Self::None
-            | Self::Metadata(_)
-            | Self::MetadataMember(_)
-            | Self::DataCompositionSchema(_)
-            | Self::DataSet(_)
-            | Self::DataCompositionField(_) => None,
+            _ => None,
         }
     }
 
@@ -120,6 +126,51 @@ impl GraphNodePayload {
     pub const fn data_composition_field(&self) -> Option<&DataCompositionFieldPayload> {
         match self {
             Self::DataCompositionField(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns direct XDTO type content when present.
+    #[must_use]
+    pub const fn xdto_type(&self) -> Option<&XdtoTypePayload> {
+        match self {
+            Self::XdtoType(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns HTTP Service URL Template content when present.
+    #[must_use]
+    pub const fn http_service_url_template(&self) -> Option<&HttpServiceUrlTemplatePayload> {
+        match self {
+            Self::HttpServiceUrlTemplate(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns HTTP Service Method content when present.
+    #[must_use]
+    pub const fn http_service_method(&self) -> Option<&HttpServiceMethodPayload> {
+        match self {
+            Self::HttpServiceMethod(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns Web Service Operation content when present.
+    #[must_use]
+    pub const fn web_service_operation(&self) -> Option<&WebServiceOperationPayload> {
+        match self {
+            Self::WebServiceOperation(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns Web Service Parameter content when present.
+    #[must_use]
+    pub const fn web_service_parameter(&self) -> Option<&WebServiceParameterPayload> {
+        match self {
+            Self::WebServiceParameter(payload) => Some(payload),
             _ => None,
         }
     }
@@ -295,6 +346,38 @@ impl GraphNode {
     #[must_use]
     pub const fn data_composition_field_payload(&self) -> Option<&DataCompositionFieldPayload> {
         self.payload.data_composition_field()
+    }
+
+    /// Returns source-independent direct XDTO type content.
+    #[must_use]
+    pub const fn xdto_type_payload(&self) -> Option<&XdtoTypePayload> {
+        self.payload.xdto_type()
+    }
+
+    /// Returns source-independent HTTP Service URL Template content.
+    #[must_use]
+    pub const fn http_service_url_template_payload(
+        &self,
+    ) -> Option<&HttpServiceUrlTemplatePayload> {
+        self.payload.http_service_url_template()
+    }
+
+    /// Returns source-independent HTTP Service Method content.
+    #[must_use]
+    pub const fn http_service_method_payload(&self) -> Option<&HttpServiceMethodPayload> {
+        self.payload.http_service_method()
+    }
+
+    /// Returns source-independent Web Service Operation content.
+    #[must_use]
+    pub const fn web_service_operation_payload(&self) -> Option<&WebServiceOperationPayload> {
+        self.payload.web_service_operation()
+    }
+
+    /// Returns source-independent Web Service Parameter content.
+    #[must_use]
+    pub const fn web_service_parameter_payload(&self) -> Option<&WebServiceParameterPayload> {
+        self.payload.web_service_parameter()
     }
 
     /// Returns provenance records attached to the node.

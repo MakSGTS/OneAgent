@@ -65,6 +65,11 @@ fn node_kinds() -> Vec<NodeKind> {
         NodeKind::DataCompositionSchema,
         NodeKind::DataSet,
         NodeKind::DataCompositionField,
+        NodeKind::XdtoType,
+        NodeKind::HttpServiceUrlTemplate,
+        NodeKind::HttpServiceMethod,
+        NodeKind::WebServiceOperation,
+        NodeKind::WebServiceParameter,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,
@@ -133,6 +138,16 @@ fn accepted_reference_pairs() -> Vec<(NodeKind, NodeKind)> {
         NodeKind::Metadata(MetadataKind::EventSubscription),
         NodeKind::Procedure,
     ));
+    pairs.extend([
+        (
+            NodeKind::Metadata(MetadataKind::WebService),
+            NodeKind::Metadata(MetadataKind::XdtoPackage),
+        ),
+        (NodeKind::WebServiceOperation, NodeKind::XdtoType),
+        (NodeKind::WebServiceParameter, NodeKind::XdtoType),
+        (NodeKind::HttpServiceMethod, NodeKind::Procedure),
+        (NodeKind::WebServiceOperation, NodeKind::Procedure),
+    ]);
     pairs
 }
 
@@ -803,15 +818,19 @@ fn opens_schema_accepts_only_procedure_to_form_targets() {
 }
 
 #[test]
-fn triggers_schema_accepts_only_event_subscription_to_procedure() {
+fn triggers_schema_accepts_only_declared_dispatch_sources_to_procedure() {
     let schema = SemanticGraphSchema;
     let kinds = node_kinds();
     let mut accepted_count = 0;
 
     for source_kind in &kinds {
         for target_kind in &kinds {
-            let expected = *source_kind == NodeKind::Metadata(MetadataKind::EventSubscription)
-                && *target_kind == NodeKind::Procedure;
+            let expected = matches!(
+                source_kind,
+                NodeKind::Metadata(MetadataKind::EventSubscription)
+                    | NodeKind::HttpServiceMethod
+                    | NodeKind::WebServiceOperation
+            ) && *target_kind == NodeKind::Procedure;
             let actual = schema.allows(*source_kind, EdgeKind::Triggers, *target_kind);
             assert_eq!(
                 actual, expected,
@@ -821,7 +840,7 @@ fn triggers_schema_accepts_only_event_subscription_to_procedure() {
         }
     }
 
-    assert_eq!(accepted_count, 1);
+    assert_eq!(accepted_count, 3);
 }
 
 #[test]
@@ -956,7 +975,7 @@ fn references_schema_accepts_exact_current_production_matrix() {
     let schema = SemanticGraphSchema;
     let accepted = accepted_reference_pairs();
 
-    assert_eq!(accepted.len(), 59);
+    assert_eq!(accepted.len(), 64);
     for (source_kind, target_kind) in accepted {
         assert!(
             schema.allows(source_kind, EdgeKind::References, target_kind),
@@ -974,7 +993,7 @@ fn references_schema_rejects_every_pair_outside_current_production_matrix() {
     let mut rejected_count = 0;
 
     assert_eq!(metadata_kinds().len(), 24);
-    assert_eq!(kinds.len(), 43);
+    assert_eq!(kinds.len(), 48);
     for source_kind in &kinds {
         for target_kind in &kinds {
             let expected = accepted.contains(&(*source_kind, *target_kind));
@@ -991,8 +1010,8 @@ fn references_schema_rejects_every_pair_outside_current_production_matrix() {
         }
     }
 
-    assert_eq!(accepted_count, 59);
-    assert_eq!(rejected_count, kinds.len() * kinds.len() - 59);
+    assert_eq!(accepted_count, 64);
+    assert_eq!(rejected_count, kinds.len() * kinds.len() - 64);
     for unknown_kind in [NodeKind::Unknown, NodeKind::Metadata(MetadataKind::Unknown)] {
         assert!(!schema.allows(unknown_kind, EdgeKind::References, NodeKind::Attribute));
         assert!(!schema.allows(NodeKind::Attribute, EdgeKind::References, unknown_kind));

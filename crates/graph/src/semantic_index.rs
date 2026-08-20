@@ -1058,7 +1058,7 @@ mod tests {
         SemanticGraphQuery, data_composition_field_id, data_set_id, data_set_query_id,
     };
 
-    const NODE_KINDS: [NodeKind; 20] = [
+    const NODE_KINDS: [NodeKind; 25] = [
         NodeKind::Metadata(MetadataKind::Catalog),
         NodeKind::Module,
         NodeKind::Procedure,
@@ -1067,6 +1067,11 @@ mod tests {
         NodeKind::DataCompositionSchema,
         NodeKind::DataSet,
         NodeKind::DataCompositionField,
+        NodeKind::XdtoType,
+        NodeKind::HttpServiceUrlTemplate,
+        NodeKind::HttpServiceMethod,
+        NodeKind::WebServiceOperation,
+        NodeKind::WebServiceParameter,
         NodeKind::Form,
         NodeKind::Command,
         NodeKind::Attribute,

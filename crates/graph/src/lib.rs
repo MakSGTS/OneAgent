@@ -25,6 +25,7 @@ pub mod resolution;
 mod semantic_index;
 pub mod standard_attribute;
 pub mod validation;
+pub mod xdto_service;
 
 pub use access_right::{
     AccessRight, AccessRightError, AccessRightPayload, AccessRightRowRestriction,
@@ -90,6 +91,11 @@ pub use validation::{
     SemanticGraphSchema, SemanticGraphValidationCode, SemanticGraphValidationIssue,
     SemanticGraphValidationIssueKind, SemanticGraphValidationResult,
     SemanticGraphValidationSeverity, SemanticGraphValidationSummary, SemanticGraphValidator,
+};
+pub use xdto_service::{
+    HttpServiceMethodPayload, HttpServiceUrlTemplatePayload, WebServiceOperationPayload,
+    WebServiceParameterDirection, WebServiceParameterPayload, XdtoTypeIdentityError, XdtoTypeKind,
+    XdtoTypePayload, XdtoTypeReference, xdto_type_id,
 };
 
 use oneagent_common::{EntityId, EntityName};

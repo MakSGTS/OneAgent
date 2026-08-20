@@ -2054,6 +2054,72 @@ standard `(source, target, EdgeKind::DependsOn)` identity and derived
 provenance identifying the metadata member type reference. Query/Data Access
 dependencies remain pending.
 
+### Accepted Sprint 8 direct register Query boundary
+
+The Sprint 8 source investigation in
+`docs/architecture/register-query-source-investigation.md` distinguishes Query
+declaration sources, query-language persistent sources, register virtual
+tables, register metadata objects, and semantic relations. ADR-0030 accepts an
+additive implementation boundary; architecture acceptance alone does not make
+that boundary current production behavior.
+
+The accepted parser expansion retains the existing static named BSL Query
+entity and the all-or-nothing one-`SELECT`, one-direct-source contract. It adds
+only these exact persistent source categories:
+
+```text
+AccumulationRegister.<Name>
+AccountingRegister.<Name>
+```
+
+They map to existing top-level
+`NodeKind::Metadata(MetadataKind::AccumulationRegister)` and
+`NodeKind::Metadata(MetadataKind::AccountingRegister)` targets. Catalog and
+Information Register remain the implemented compatibility baseline.
+Calculation Register, other metadata namespaces, Russian register namespace
+spellings without repository evidence, JOIN, UNION, nesting, batches,
+temporary/external/parameter sources, general expression grammar, and register
+virtual tables remain deferred. A virtual-table occurrence continues to emit
+only its typed no-edge diagnostic; no base-register access is inferred.
+
+Accepted parsed source observations migrate to the existing public
+`SemanticReferenceCategory::QuerySource` lifecycle. The canonical request
+source is the existing Query node, the request has exactly one expected
+metadata kind, collection and resolver provenance remain deterministic, and
+missing, ambiguous, incompatible, partial, malformed, unsupported, dynamic, or
+incomplete outcomes create no placeholder or resolved edge. Statistics are
+derived once from terminal requests rather than independently from projections.
+
+Unique resolution retains the direct fact and adds one normalized fact:
+
+```text
+Query --Reads-----> Metadata(Catalog | InformationRegister
+                              | AccumulationRegister | AccountingRegister)
+Query --DependsOn-> Metadata(Catalog | InformationRegister
+                              | AccumulationRegister | AccountingRegister)
+```
+
+`Reads` remains resolved, direct data-access evidence. `DependsOn` is a derived
+normalized direct dependency proven by the same terminal resolved request and
+retains the Reads fact. Both use standard `(source, target, edge kind)` identity
+and sorted, deduplicated provenance. Generic dependency queries intentionally
+observe both relations; reverse Impact keeps one affected Query node with
+deterministic per-edge reasons. No reverse relation or transitive closure is
+stored.
+
+The graph validator must enumerate the four target kinds for both Query-origin
+relations rather than accept a wildcard Metadata target. Existing Attribute,
+Dimension, Resource, and Command `DependsOn` matrices remain additive and
+unchanged. Writes remains an independent Procedure mutation fact and does not
+gain a companion dependency in this slice.
+
+The existing Query, Reads, DependsOn, and ReferenceRequest Coverage capabilities
+remain `Supported` for their current implemented slices. Sprint 8 production
+work expands representative evidence and limitations only after exact parser,
+request, resolution, validation, emission, Query, Diff, Impact, report,
+diagnostic, repeated-build, and complete/incremental index-equivalence tests
+pass. Architecture planning changes no status or aggregate count.
+
 `EdgeKind::Extends` is governed by
 `docs/adr/0018-extends-semantics.md`. It represents an explicit, resolved,
 direct extension relation stored as `extending entity --Extends--> directly

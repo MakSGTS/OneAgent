@@ -1472,6 +1472,349 @@ does not change sprint status, capability status, or Coverage counts.
 
 The v0.3 release integration review follows Sprint 14.
 
+#### Sprint 8 Registers and Queries execution plan
+
+Sprint 8 implements only the direct register Query and normalized dependency
+boundary accepted by
+[ADR-0030](adr/0030-register-query-semantics.md). It does not treat Query
+declaration sources, query-language data sources, register virtual tables,
+register metadata members, Reads, Writes, and DependsOn as interchangeable
+concepts.
+
+The live planning baseline is:
+
+- static named BSL Query declarations inside known Procedures or Functions
+  already produce stable Query nodes with canonical ownership and provenance;
+- the minimum query-language parser completely accepts one `SELECT` with one
+  direct Catalog or Information Register source and rejects unsupported or
+  unconsumed source-producing grammar without partial Reads;
+- exact private EDT resolution emits canonical provenance-backed Reads and
+  typed missing, ambiguous, incompatible, and partial outcomes;
+- the public ADR-0024 request domain already contains
+  `SemanticReferenceCategory::QuerySource`, but current Query source processing
+  does not use its ledger;
+- `Reads`, `DependsOn`, and ReferenceRequest capabilities are already Supported
+  for their completed first slices, so this sprint expands evidence without a
+  status or aggregate-count transition;
+- Writes is independently Supported for one Document Procedure to Accumulation
+  Register contract and remains unchanged;
+- existing register metadata nodes, Dimension/Resource members, Accounting
+  Register Measure mapping, ownership, metadata type references, Query, Diff,
+  Impact, reports, validation, complete/incremental indexes, and deterministic
+  builds are compatibility constraints.
+
+The repository-owned
+[Register and Query source investigation](architecture/register-query-source-investigation.md)
+confirms static direct sources for
+`AccumulationRegister.InventoryCost` and
+`AccountingRegister.FinancialAccounting`, their known Common Module owners,
+Configuration declarations, and top-level target descriptors. It also records
+that the complete real programs contain grammar beyond the current minimum.
+Sprint 8 therefore accepts provenance-backed reduced fixtures for the existing
+complete one-source grammar rather than claiming general projection, `WHERE`,
+or `ORDER BY` support.
+
+The selected delta is:
+
+1. exact direct Accumulation and Accounting Register Query source categories;
+2. public QuerySource collection and terminal request lifecycle;
+3. retained `Query --Reads--> Metadata` plus derived
+   `Query --DependsOn--> Metadata` for every uniquely resolved accepted source,
+   including existing Catalog and Information Register sources;
+4. end-to-end evidence through the filesystem EDT builder and existing graph
+   consumers.
+
+Calculation Registers, virtual tables, JOIN, UNION, nesting, batches,
+temporary/external/parameter tables, broader expression grammar, new Query
+declaration families, Query mutation, write-derived dependencies, register
+payload/member expansion, and placeholders remain deferred.
+
+##### Sprint 8 prerequisite gate
+
+Sprint 7 and its integration review are complete. Before Task 1 begins, the
+Sprint 8 planning change containing the source investigation, accepted
+ADR-0030, this execution plan, synchronized Semantic Model boundary, and the
+prompt suite must be committed or otherwise proven as one immutable planning
+baseline.
+
+Every later task begins only from the committed result of its predecessor or a
+current `already_complete` proof satisfying every acceptance criterion. Stored
+prompt text and uncommitted changes are not prerequisites.
+
+##### Readiness and template decision
+
+The readiness audit covered Query extraction, query-language parsing,
+multiline decoding and locations, Query source resolution, public reference
+requests, graph validation, Query, Diff, Impact, reports, complete/incremental
+indexes, Coverage, current Reads and Writes production paths, fixture
+conventions, and real Accumulation, Accounting, Calculation, and virtual-table
+source evidence.
+
+The existing [graph implementation profile](codex/profiles/graph-implementation.md),
+[parser implementation profile](codex/profiles/parser-implementation.md),
+[implementation profile](codex/profiles/implementation.md),
+[review profile](codex/profiles/review.md), [graph model
+template](codex/templates/graph-model-task.md), [parser
+template](codex/templates/parser-task.md), [implementation
+template](codex/templates/implementation-task.md), [graph emission
+template](codex/templates/graph-emission-task.md), and [review
+template](codex/templates/review-task.md) cover every accepted task boundary.
+No reusable Codex Framework change or post-sprint Framework audit task is
+planned.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / Template | Owned outcome | Prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Define the source-independent register Query graph rules. | Graph implementation / graph model | Exact additive Reads and Query-origin DependsOn endpoint matrices plus consumer compatibility. | Accepted Sprint 8 planning baseline. | `Define Sprint 8 register query graph rules` |
+| 2 | Parse direct Accumulation and Accounting Register Query sources. | Parser implementation / parser | Two typed persistent categories with provenance-backed reduced fixtures and unchanged completeness policy. | Task 1. | `Parse Sprint 8 direct register query sources` |
+| 3 | Resolve Query source observations through public requests. | Implementation / implementation | Collected and terminal QuerySource requests with deterministic identity, provenance, outcomes, and no production projection change. | Task 2. | `Resolve Sprint 8 query source requests` |
+| 4 | Integrate Query data access and normalized dependencies. | Graph implementation / graph emission | Terminal request projections, diagnostics, statistics, retained Reads, and derived DependsOn. | Task 3. | `Emit Sprint 8 query data dependencies` |
+| 5 | Complete production evidence, Coverage evidence, and current-state documentation. | Graph implementation / graph emission | Representative full-builder matrix, index equivalence, live evidence synchronization, and unchanged statuses/counts. | Tasks 1–4. | `Complete Sprint 8 production evidence` |
+| 6 | Review the integrated Sprint 8 baseline. | Review / review | Findings, complete register/query evidence, sprint decision, and Sprint 9 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 8 registers and queries review` |
+
+The dependency graph is strictly sequential:
+
+```text
+Accepted Sprint 8 planning baseline
+    -> Task 1 graph rules
+    -> Task 2 direct register source parser
+    -> Task 3 public QuerySource requests and resolution
+    -> Task 4 Reads and DependsOn production projections
+    -> Task 5 production and Coverage evidence
+    -> Task 6 integration review
+    -> Sprint 9 planning eligibility
+```
+
+##### Task 1 — Define register Query graph rules
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph model task template](codex/templates/graph-model-task.md). Extend
+only the source-independent endpoint contract:
+
+- `Query --Reads--> Metadata(AccumulationRegister | AccountingRegister)` is
+  additive to the existing Catalog and Information Register targets;
+- `Query --DependsOn--> Metadata(Catalog | InformationRegister |
+  AccumulationRegister | AccountingRegister)` is additive to the existing
+  member and Command dependency matrices;
+- every unrelated source, target, direction, Unknown, wildcard Metadata,
+  member, flat semantic, placeholder, and missing endpoint remains invalid.
+
+No new NodeKind, EdgeKind, identity, serialization, parser, resolver, producer,
+or Coverage status belongs to this task. Existing generic Query filtering,
+direct dependency and usage navigation, Diff, Impact reason aggregation,
+reports, Semantic Index, and incremental-index behavior already enumerate both
+edge kinds and must gain focused compatibility evidence rather than new public
+APIs.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test query
+cargo test -p oneagent-graph --test impact
+cargo test -p oneagent-graph --test coverage
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 2 — Parse direct register Query sources
+
+Use the [parser implementation profile](codex/profiles/parser-implementation.md)
+and [parser task template](codex/templates/parser-task.md). Add exactly
+`QuerySourceCategory::AccumulationRegister` and
+`QuerySourceCategory::AccountingRegister` with the accepted English namespace
+spellings and deterministic raw source locations.
+
+Create raw query-language fixtures and a provenance manifest derived from the
+two real Common Module examples. Reduction to the already accepted
+single-projection, single-source grammar must be explicit and must preserve the
+real qualified source, alias, source path/range, and target descriptor mapping.
+
+Keep the current complete-source proof unchanged. Do not accept real program
+tails, general projections, JOIN, UNION, nesting, batches, temporary tables,
+virtual tables, Calculation Registers, Russian spellings, metadata resolution,
+requests, graph emission, or Coverage changes. Existing Catalog and Information
+Register parser behavior and every typed rejection must remain green.
+
+Focused validation addition:
+
+```bash
+cargo test -p oneagent-bsl query_language
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 3 — Resolve public QuerySource requests
+
+Use the [implementation profile](codex/profiles/implementation.md) and
+[implementation task template](codex/templates/implementation-task.md). Convert
+accepted parsed occurrences into the existing public
+`SemanticReferenceCategory::QuerySource` lifecycle and adapt the private
+resolver to return deterministic terminal requests.
+
+Collection must use the canonical Query source node, target reference, one
+exact expected kind, raw occurrence/location evidence, and collection
+provenance. Resolution must preserve current case normalization, exact-kind
+partitioning, ambiguity precedence, ordered candidates, complete/partial
+workspace policy, and no-placeholder behavior. Request identity excludes state,
+candidates, occurrence order, and provenance. Equivalent observations aggregate
+deterministically; conflicting terminal content remains an invariant error.
+
+This task must not change production `Reads`, emit `DependsOn`, replace legacy
+statistics in the builder, alter diagnostics, or change Coverage. Focused tests
+prove collected-to-terminal transitions for all four accepted target kinds,
+missing, ambiguous, incompatible, partial, duplicate, reordered, and repeated
+resolution.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph reference_request
+cargo test -p oneagent-edt query_source_resolution
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 4 — Emit Query data dependencies
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md).
+Replace the production Query source outcome path with Task 3 terminal requests.
+Derive diagnostics, statistics, and projections exactly once from the request
+ledger.
+
+Unique resolution retains one resolved exact `Reads` edge and adds one derived
+exact `DependsOn` edge for the same Query-target pair. Both aggregate sorted,
+deduplicated provenance before insertion. The dependency provenance identifies
+the terminal request and retained Reads fact. Failures and parser rejections
+emit neither edge and never create placeholders.
+
+Acceptance evidence covers all four targets, public request Query/report/build
+Diff visibility, statistics compatibility, Query dependency and usage
+relations, reverse Impact with unique affected nodes and deterministic
+per-edge reasons, graph/build Diff, validation, diagnostics, duplicates,
+source-order independence, and repeated builds. Existing Writes, metadata
+references, Commands, Calls, Opens, and ownership remain unchanged.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-graph --test reference_request_build
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test impact
+cargo test -p oneagent-edt reads
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 5 — Complete production and Coverage evidence
+
+Use the [graph implementation profile](codex/profiles/graph-implementation.md)
+and [graph emission task template](codex/templates/graph-emission-task.md). Add
+the smallest representative real-format EDT fixture project and full-builder
+test proving the complete Sprint 8 boundary.
+
+The fixture manifest must map reduced static Query declarations to the exact
+real Common Module sources, Configuration declarations, and Accumulation and
+Accounting Register descriptors. The matrix must cover both new families and
+existing Catalog/Information Register compatibility; parser rejections; missing,
+ambiguous, incompatible, and partial resolution; request identity and
+provenance; Reads and DependsOn; diagnostics; statistics; validation; Query;
+Diff; Impact; reports; source-order independence; repeated builds; and
+complete/incremental index equivalence with a clean rebuild.
+
+After all evidence passes, update representative Coverage evidence and current
+limitations for Reads, DependsOn, and ReferenceRequest as applicable. Their
+Supported statuses and registry aggregate counts must remain unchanged. Sync
+Semantic Model 2.0 and this Roadmap to the implemented boundary without claiming
+virtual tables, broader grammar, Calculation Registers, new Query sources,
+write-derived dependencies, or register payload.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-bsl query_language
+cargo test -p oneagent-graph coverage
+cargo test -p oneagent-edt reads
+cargo test -p oneagent-edt coverage
+```
+
+Run the complete repository implementation gate after focused checks.
+
+##### Task 6 — Review the integrated Sprint 8 baseline
+
+Use the [review profile](codex/profiles/review.md) and [review task
+template](codex/templates/review-task.md). Audit Tasks 1–5 against ADR-0030,
+the source investigation, live implementation, prompt suite, and this Roadmap.
+Resolve the exact committed planning and Task 5 hashes from live history.
+
+Re-run the full focused parser, resolver, request, graph validation, Query,
+Diff, Impact, report, Coverage, production-builder, determinism, and
+complete/incremental index-equivalence matrix plus the complete repository
+Definition of Done. Verify that existing Query identity, ownership, Catalog and
+Information Register Reads, Writes, metadata and Command references,
+DependsOn origins, Calls, Opens, diagnostics, reports, and Coverage aggregates
+remain compatible.
+
+Create `docs/reviews/sprint-8-registers-queries.md` and update Roadmap state only
+for a `pass` or `pass with non-blocking follow-ups` decision with successful
+validation. A blocked decision leaves Sprint 8 incomplete and Sprint 9
+ineligible. The review must not silently fix findings.
+
+Focused validation additions:
+
+```bash
+cargo test -p oneagent-bsl
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt
+```
+
+Run the complete repository implementation gate and record exact test counts.
+
+##### Planning validation and suggested commit
+
+The Sprint 8 kickoff is documentation-only. Validate Markdown consistency,
+relative links, prompt numbering, manifest order, dependency gates, suggested
+commit messages, accepted-versus-deferred scope, and unchanged `next` status.
+No production test is required for the planning change.
+
+Suggested planning commit message, as a recommendation only:
+
+```text
+Plan Sprint 8 registers and queries
+```
+
+The message does not authorize staging or committing.
+
+##### Sprint 8 state gates and completion criteria
+
+Sprint 8 remains `next` during planning. It becomes active only when the
+accepted planning baseline is committed and Task 1 begins under an explicit
+execution instruction.
+
+A task is `already_complete` only when current committed evidence and successful
+required validation prove every acceptance criterion. Do not create empty
+commits. Stop after the first prerequisite, implementation, validation,
+staging, commit, or review failure; do not skip a blocked task.
+
+Sprint 8 may transition to `completed` only when:
+
+- Tasks 1–5 are committed in dependency order or proven `already_complete`;
+- every ADR-0030 parser, request, resolution, endpoint, projection, provenance,
+  diagnostic, statistics, Query, Diff, Impact, report, determinism, Coverage
+  evidence, and complete/incremental index-equivalence criterion is proven
+  through the production builder;
+- existing compatibility behavior and exact registry aggregates remain green;
+- current-state architecture and Roadmap match live implementation;
+- the complete repository Definition of Done passes;
+- Task 6 records `pass` or `pass with non-blocking follow-ups`.
+
+A blocked Task 6 leaves Sprint 8 incomplete. Only a non-blocking review and
+successful required validation make Sprint 9 Roles and Access Rights eligible
+as the next planning target. The v0.3 release remains planned through Sprint
+14.
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

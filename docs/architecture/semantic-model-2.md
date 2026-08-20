@@ -2457,6 +2457,33 @@ namespace declarations remain typed source content without placeholder nodes or
 false local-resolution failures. Sprint 14 continues to own Designer XML and
 cross-adapter identity equivalence.
 
+Sprint 14 Designer XML Adapter is governed by
+[ADR-0036](../adr/0036-designer-xml-adapter.md) and the repository-owned
+[source investigation](designer-xml-source-investigation.md). The accepted
+first slice adds no graph kind, edge kind, public semantic identity, or EDT
+behavior. A dedicated adapter detects hierarchical Designer XML version 2.20,
+loads an explicit complete or partial scope, maps the 20 top-level families
+with direct paired Designer evidence, reads the existing generic Object,
+Manager, and Common module roles, and contributes existing configuration,
+metadata, Module, Procedure, Function, and immediate ownership/declaration
+semantics. Designer Calculation Registers remain deferred because the paired
+corpus contains no direct artifact proving their root and path shape.
+
+Canonical equality is deliberately narrower than the current EDT builder. It
+compares stable UUID/owner-role identities, kinds, exact names, accepted common
+payload, ownership, BSL declarations, terminal scope outcome, and generic
+consumer/index results. Source paths, producer identifiers, XML vocabulary,
+serialization, BOM/line endings, raw provenance, and deferred artifacts remain
+adapter-specific. A paired production fixture must be non-empty and include a
+controlled semantic change. Architecture acceptance alone does not mark
+Designer support complete or change Graph Domain or EDT Coverage.
+
+Metadata members, specialized Role/Subsystem/Event/DCS/XDTO/service semantics,
+Form/Command/configuration/register module roles, semantic references and other
+non-ownership relations, flat dumps, extensions, parent configurations, binary
+artifacts, and whole-graph equivalence remain deferred. The documented
+EDT-to-Designer form-event loss boundary is outside the first-slice oracle.
+
 ### Provenance inventory
 
 EDT attaches provenance while creating metadata object nodes, child nodes,

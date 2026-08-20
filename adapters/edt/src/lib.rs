@@ -24,6 +24,7 @@ mod subsystem_hierarchy;
 mod writes;
 mod writes_emission;
 mod writes_resolution;
+mod xdto_package;
 
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
@@ -77,6 +78,11 @@ pub use subsystem_hierarchy::{
     EdtSubsystemHierarchy, EdtSubsystemHierarchyDescriptor, EdtSubsystemHierarchyError,
     EdtSubsystemHierarchyReader, EdtSubsystemHierarchyRelation,
     FileSystemEdtSubsystemHierarchyReader,
+};
+
+pub use xdto_package::{
+    EdtXdtoDeferredKind, EdtXdtoDeferredObservation, EdtXdtoPackageDescriptor, EdtXdtoPackageError,
+    EdtXdtoPackageReader, EdtXdtoTypeDeclaration, FileSystemEdtXdtoPackageReader,
 };
 
 pub use bsl_graph::{

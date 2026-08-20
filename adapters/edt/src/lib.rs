@@ -4,6 +4,9 @@ mod bsl_graph;
 mod command_parameter;
 mod coverage;
 mod event_subscription;
+// The resolver is a production prerequisite for later Event Subscription emission.
+#[allow(dead_code)]
+mod event_subscription_resolution;
 mod form_navigation;
 mod form_navigation_emission;
 mod metadata_object;

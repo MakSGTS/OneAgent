@@ -89,19 +89,37 @@ fn write_xdto(project: &Path) {
 }
 
 fn write_additional_xdto(project: &Path, directory_name: &str, id: &str, name: &str) {
+    write_xdto_package(
+        project,
+        directory_name,
+        id,
+        name,
+        &format!("urn:repository:{directory_name}"),
+        "Other",
+    );
+}
+
+fn write_xdto_package(
+    project: &Path,
+    directory_name: &str,
+    id: &str,
+    name: &str,
+    namespace: &str,
+    type_name: &str,
+) {
     let directory = object_directory(project, "XDTOPackages", directory_name);
     fs::create_dir_all(&directory).expect("additional XDTO directory must be created");
     fs::write(
         directory.join(format!("{directory_name}.mdo")),
         format!(
-            r#"<mdclass:XDTOPackage xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="{id}"><name>{name}</name><namespace>urn:repository:{directory_name}</namespace></mdclass:XDTOPackage>"#
+            r#"<mdclass:XDTOPackage xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="{id}"><name>{name}</name><namespace>{namespace}</namespace></mdclass:XDTOPackage>"#
         ),
     )
     .expect("additional XDTO descriptor must be written");
     fs::write(
         directory.join("Package.xdto"),
         format!(
-            r#"<package xmlns="http://v8.1c.ru/8.1/xdto" targetNamespace="urn:repository:{directory_name}"><objectType name="Other"/></package>"#
+            r#"<package xmlns="http://v8.1c.ru/8.1/xdto" targetNamespace="{namespace}"><objectType name="{type_name}"/></package>"#
         ),
     )
     .expect("additional XDTO artifact must be written");
@@ -188,6 +206,43 @@ fn build(project: &Path) -> oneagent_edt::EdtSemanticGraphBuildResult {
     FileSystemEdtSemanticGraphBuilder
         .build_graph_with_diagnostics(project)
         .expect("generated XDTO/service project must build")
+}
+
+fn assert_failed_xdto_type_request(
+    result: &oneagent_edt::EdtSemanticGraphBuildResult,
+    outcome: SemanticReferenceRequestOutcome,
+    code: SemanticDiagnosticCode,
+    kind: SemanticDiagnosticKind,
+) {
+    let request = result
+        .reference_requests()
+        .iter()
+        .find(|request| {
+            request.source_node().as_str() == "operation-id"
+                && request.category() == SemanticReferenceCategory::XdtoType
+        })
+        .expect("XDTO type request must exist");
+    assert_eq!(request.outcome(), outcome);
+    assert_eq!(request.provenance().len(), 2);
+    assert!(result.diagnostics().iter().any(|diagnostic| {
+        diagnostic.code() == code
+            && diagnostic.kind() == kind
+            && diagnostic.source_node() == Some(request.source_node())
+            && diagnostic.candidates() == request.candidates()
+    }));
+    assert!(!result.graph().edges().any(|edge| {
+        edge.source() == request.source_node()
+            && edge.kind() == EdgeKind::References
+            && result
+                .graph()
+                .node(edge.target())
+                .is_some_and(|target| target.kind() == NodeKind::XdtoType)
+    }));
+    assert!(
+        result.validate().is_valid(),
+        "issues: {:?}",
+        result.validate().issues()
+    );
 }
 
 fn assert_metadata_payloads(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
@@ -725,6 +780,90 @@ fn package_and_handler_failures_use_every_terminal_request_outcome() {
                 && matches!(edge.kind(), EdgeKind::References | EdgeKind::Triggers)
         }));
     }
+}
+
+#[test]
+fn xdto_type_namespace_and_owner_failures_are_terminal_and_relation_free() {
+    let missing_project = project();
+    let missing_descriptor =
+        object_directory(missing_project.path(), "WebServices", "ExchangeService")
+            .join("ExchangeService.mdo");
+    replace_fixture_fragment(
+        &missing_descriptor,
+        "<xdtoReturningValueType><name>Result</name>",
+        "<xdtoReturningValueType><name>MissingResult</name>",
+    );
+    let missing = build(missing_project.path());
+    assert_failed_xdto_type_request(
+        &missing,
+        SemanticReferenceRequestOutcome::MissingTarget,
+        SemanticDiagnosticCode::ReferenceUnresolved,
+        SemanticDiagnosticKind::UnresolvedTarget,
+    );
+    assert_eq!(missing.reference_statistics().unresolved(), 1);
+
+    let ambiguous_project = project();
+    write_xdto_package(
+        ambiguous_project.path(),
+        "DuplicateNamespacePackage",
+        "duplicate-package-id",
+        "DuplicateNamespacePackage",
+        INTERNAL_NAMESPACE,
+        "Result",
+    );
+    let ambiguous = build(ambiguous_project.path());
+    assert_failed_xdto_type_request(
+        &ambiguous,
+        SemanticReferenceRequestOutcome::AmbiguousTarget,
+        SemanticDiagnosticCode::ReferenceAmbiguous,
+        SemanticDiagnosticKind::AmbiguousTarget,
+    );
+    let ambiguous_request = ambiguous
+        .reference_requests()
+        .iter()
+        .find(|request| {
+            request.source_node().as_str() == "operation-id"
+                && request.category() == SemanticReferenceCategory::XdtoType
+        })
+        .expect("ambiguous XDTO type request must exist");
+    assert_eq!(ambiguous_request.candidates().len(), 2);
+    assert!(
+        ambiguous_request
+            .candidates()
+            .windows(2)
+            .all(|pair| pair[0] < pair[1])
+    );
+    assert_eq!(ambiguous.reference_statistics().ambiguous(), 1);
+
+    let invalid_owner_project = project();
+    let package = object_directory(
+        invalid_owner_project.path(),
+        "XDTOPackages",
+        "ExchangePackage",
+    )
+    .join("Package.xdto");
+    replace_fixture_fragment(&package, "name=\"Result\"", "name=\"OwnedResult\"");
+    write_xdto_package(
+        invalid_owner_project.path(),
+        "ForeignPackage",
+        "foreign-package-id",
+        "ForeignPackage",
+        "urn:repository:foreign",
+        "Result",
+    );
+    let invalid_owner = build(invalid_owner_project.path());
+    assert_failed_xdto_type_request(
+        &invalid_owner,
+        SemanticReferenceRequestOutcome::InvalidOwnerReference,
+        SemanticDiagnosticCode::ReferenceInvalidOwner,
+        SemanticDiagnosticKind::InvalidOwnerReference,
+    );
+    assert_eq!(
+        invalid_owner
+            .reference_statistics()
+            .invalid_owner_reference(),
+        1
+    );
 }
 
 #[test]

@@ -368,7 +368,7 @@ fn repository_namespaces(sources: &[EdtXdtoServiceSource]) -> BTreeMap<String, V
 struct PendingIntent<'a> {
     request: SemanticReferenceRequest,
     path: &'a Path,
-    owner: Option<EntityId>,
+    owners: Vec<EntityId>,
 }
 
 struct TerminalIntent<'a> {
@@ -407,7 +407,7 @@ fn collect_intents<'a>(
                         SemanticReferenceCategory::XdtoPackage,
                         SemanticReference::Name(name.clone()),
                         NodeKind::Metadata(MetadataKind::XdtoPackage),
-                        None,
+                        Vec::new(),
                         service.metadata().descriptor_path(),
                     )?);
                 }
@@ -450,7 +450,7 @@ fn request_intent(
     category: SemanticReferenceCategory,
     reference: SemanticReference,
     expected: NodeKind,
-    owner: Option<EntityId>,
+    owners: Vec<EntityId>,
     path: &Path,
 ) -> Result<PendingIntent<'_>, EdtGraphError> {
     let provenance = request_provenance(
@@ -471,7 +471,7 @@ fn request_intent(
         )
         .map_err(EdtGraphError::ReferenceRequest)?,
         path,
-        owner,
+        owners,
     })
 }
 
@@ -490,7 +490,7 @@ fn callable_intent(
             name,
         },
         expected,
-        Some(module),
+        vec![module],
         path,
     )
 }
@@ -513,7 +513,7 @@ fn type_intent<'a>(
             name,
         },
         NodeKind::XdtoType,
-        Some(owner),
+        packages.to_vec(),
         path,
     )
 }
@@ -529,12 +529,28 @@ fn resolve_intent<'a>(
     else {
         return Err(EdtGraphError::InvalidXdtoServiceRequest);
     };
-    let (compatible, incompatible, invalid_owner) = if let Some(owner) = intent.owner.as_ref() {
-        let direct = query
-            .children(&NodeId::new(owner.as_str()))
-            .into_iter()
+    let (compatible, incompatible, invalid_owner) = if intent.owners.is_empty() {
+        let named = query.nodes_by_name(name);
+        let compatible = named
+            .iter()
+            .filter(|node| node.kind() == expected)
+            .map(|node| node.id().clone())
+            .collect();
+        let incompatible = named
+            .iter()
+            .filter(|node| node.kind() != expected)
+            .map(|node| node.id().clone())
+            .collect();
+        (compatible, incompatible, Vec::new())
+    } else {
+        let mut direct = intent
+            .owners
+            .iter()
+            .flat_map(|owner| query.children(&NodeId::new(owner.as_str())))
             .filter(|node| node.name() == name)
             .collect::<Vec<_>>();
+        direct.sort_by(|left, right| left.id().cmp(right.id()));
+        direct.dedup_by(|left, right| left.id() == right.id());
         let compatible = direct
             .iter()
             .filter(|node| node.kind() == expected)
@@ -550,10 +566,11 @@ fn resolve_intent<'a>(
                 .nodes_by_name_and_kind(name, expected)
                 .into_iter()
                 .filter(|node| {
-                    !query
-                        .owners(&NodeId::new(node.id().as_str()))
+                    let node_owners = query.owners(&NodeId::new(node.id().as_str()));
+                    !intent
+                        .owners
                         .iter()
-                        .any(|candidate| candidate.id() == owner)
+                        .any(|owner| node_owners.iter().any(|candidate| candidate.id() == owner))
                 })
                 .map(|node| node.id().clone())
                 .collect()
@@ -561,19 +578,6 @@ fn resolve_intent<'a>(
             Vec::new()
         };
         (compatible, incompatible, invalid_owner)
-    } else {
-        let named = query.nodes_by_name(name);
-        let compatible = named
-            .iter()
-            .filter(|node| node.kind() == expected)
-            .map(|node| node.id().clone())
-            .collect();
-        let incompatible = named
-            .iter()
-            .filter(|node| node.kind() != expected)
-            .map(|node| node.id().clone())
-            .collect();
-        (compatible, incompatible, Vec::new())
     };
 
     let state = match compatible.len() {
@@ -761,4 +765,146 @@ fn provenance(
         Confidence::Exact,
         resolution,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn id(value: &str) -> EntityId {
+        EntityId::new(value).expect("test identifier must be valid")
+    }
+
+    fn name(value: &str) -> EntityName {
+        EntityName::new(value).expect("test name must be valid")
+    }
+
+    fn graph_with_owners(owners: &[EntityId]) -> SemanticGraph {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            id("source"),
+            name("Source"),
+            NodeKind::WebServiceOperation,
+        ));
+        for owner in owners {
+            graph.insert_node(GraphNode::new(
+                owner.clone(),
+                name(owner.as_str()),
+                NodeKind::Metadata(MetadataKind::XdtoPackage),
+            ));
+        }
+        graph
+    }
+
+    fn insert_child(graph: &mut SemanticGraph, owner: &EntityId, child: &str, kind: NodeKind) {
+        graph.insert_node(GraphNode::new(id(child), name("Result"), kind));
+        graph
+            .insert_edge(GraphEdge::new(owner.clone(), id(child), EdgeKind::Contains))
+            .expect("test ownership must be insertable");
+    }
+
+    fn assert_terminal_outcome(
+        graph: &SemanticGraph,
+        owners: &[EntityId],
+        outcome: SemanticReferenceRequestOutcome,
+        candidates: &[&str],
+        code: SemanticDiagnosticCode,
+        kind: SemanticDiagnosticKind,
+    ) {
+        let intent = type_intent(
+            id("source"),
+            name("Result"),
+            owners,
+            Path::new("fixture/Service.mdo"),
+        )
+        .expect("XDTO type intent must be collected");
+        let terminal = resolve_intent(graph, intent).expect("XDTO type intent must terminate");
+        assert_eq!(terminal.request.outcome(), outcome);
+        assert_eq!(
+            terminal
+                .request
+                .candidates()
+                .iter()
+                .map(EntityId::as_str)
+                .collect::<Vec<_>>(),
+            candidates
+        );
+        assert_eq!(terminal.request.provenance().len(), 2);
+        let diagnostic = request_diagnostic(graph, &terminal.request);
+        assert_eq!(diagnostic.code(), code);
+        assert_eq!(diagnostic.kind(), kind);
+        assert_eq!(diagnostic.candidates(), terminal.request.candidates());
+    }
+
+    #[test]
+    fn xdto_type_resolution_covers_every_failed_terminal_outcome() {
+        let owner = id("owner");
+        let missing = graph_with_owners(std::slice::from_ref(&owner));
+        assert_terminal_outcome(
+            &missing,
+            std::slice::from_ref(&owner),
+            SemanticReferenceRequestOutcome::MissingTarget,
+            &[],
+            SemanticDiagnosticCode::ReferenceUnresolved,
+            SemanticDiagnosticKind::UnresolvedTarget,
+        );
+
+        let mut incompatible = graph_with_owners(std::slice::from_ref(&owner));
+        insert_child(
+            &mut incompatible,
+            &owner,
+            "incompatible",
+            NodeKind::Function,
+        );
+        assert_terminal_outcome(
+            &incompatible,
+            std::slice::from_ref(&owner),
+            SemanticReferenceRequestOutcome::IncompatibleTargetKind,
+            &["incompatible"],
+            SemanticDiagnosticCode::ReferenceIncompatibleKind,
+            SemanticDiagnosticKind::IncompatibleTargetKind,
+        );
+
+        let foreign_owner = id("foreign-owner");
+        let mut invalid_owner = graph_with_owners(&[owner.clone(), foreign_owner.clone()]);
+        insert_child(
+            &mut invalid_owner,
+            &foreign_owner,
+            "invalid-owner",
+            NodeKind::XdtoType,
+        );
+        assert_terminal_outcome(
+            &invalid_owner,
+            std::slice::from_ref(&owner),
+            SemanticReferenceRequestOutcome::InvalidOwnerReference,
+            &["invalid-owner"],
+            SemanticDiagnosticCode::ReferenceInvalidOwner,
+            SemanticDiagnosticKind::InvalidOwnerReference,
+        );
+
+        let first_owner = id("first-owner");
+        let second_owner = id("second-owner");
+        let owners = [first_owner.clone(), second_owner.clone()];
+        let mut ambiguous = graph_with_owners(&owners);
+        insert_child(
+            &mut ambiguous,
+            &first_owner,
+            "first-candidate",
+            NodeKind::XdtoType,
+        );
+        insert_child(
+            &mut ambiguous,
+            &second_owner,
+            "second-candidate",
+            NodeKind::XdtoType,
+        );
+        assert_terminal_outcome(
+            &ambiguous,
+            &owners,
+            SemanticReferenceRequestOutcome::AmbiguousTarget,
+            &["first-candidate", "second-candidate"],
+            SemanticDiagnosticCode::ReferenceAmbiguous,
+            SemanticDiagnosticKind::AmbiguousTarget,
+        );
+    }
 }

@@ -120,7 +120,7 @@ impl EdtHttpMethod {
 pub struct EdtWebServiceDescriptor {
     metadata: EdtMetadataObjectDescriptor,
     namespace: String,
-    xdto_package: Option<EdtWebServiceXdtoPackage>,
+    xdto_packages: Vec<EdtWebServiceXdtoPackage>,
     operations: Vec<EdtWebServiceOperation>,
 }
 
@@ -137,10 +137,10 @@ impl EdtWebServiceDescriptor {
         &self.namespace
     }
 
-    /// Returns the optional unresolved XDTO package declaration.
+    /// Returns unresolved XDTO package declarations in canonical order.
     #[must_use]
-    pub const fn xdto_package(&self) -> Option<&EdtWebServiceXdtoPackage> {
-        self.xdto_package.as_ref()
+    pub fn xdto_packages(&self) -> &[EdtWebServiceXdtoPackage] {
+        &self.xdto_packages
     }
 
     /// Returns Operations ordered by stable UUID.
@@ -572,9 +572,12 @@ fn parse_web(
     validate_root(&root, WEB_ROOT, metadata)?;
     validate_web_hierarchy(&root, None)?;
     let namespace = required_text(&root, "namespace", WEB_ROOT)?;
-    let xdto_package = optional_element(&root, "xdtoPackages", WEB_ROOT)?
+    let mut xdto_packages = direct_children(&root, "xdtoPackages")
+        .into_iter()
         .map(parse_xdto_package)
-        .transpose()?;
+        .collect::<Result<Vec<_>, _>>()?;
+    xdto_packages.sort();
+    xdto_packages.dedup();
     let mut operations = root
         .children
         .iter()
@@ -586,7 +589,7 @@ fn parse_web(
     Ok(EdtWebServiceDescriptor {
         metadata: metadata.clone(),
         namespace,
-        xdto_package,
+        xdto_packages,
         operations,
     })
 }
@@ -1313,7 +1316,7 @@ mod tests {
 
     #[test]
     fn parses_web_package_types_optionals_directions_and_handlers_canonically() {
-        let package = r#"<xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.Exchange</value></xdtoPackages>"#;
+        let package = r#"<xdtoPackages xsi:type="core:StringValue"><value>urn:external:z</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.Exchange</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.Exchange</value></xdtoPackages><xdtoPackages xsi:type="core:StringValue"><value>urn:external:a</value></xdtoPackages>"#;
         let parameters = format!(
             r#"<parameters uuid="parameter-z"><name>Zulu</name>{}<nillable>true</nillable><transferDirection>Out</transferDirection></parameters><parameters uuid="parameter-a"><name>Alpha</name>{}<transferDirection>InOut</transferDirection></parameters>"#,
             type_xml("xdtoValueType", "string", "urn:external"),
@@ -1327,10 +1330,19 @@ mod tests {
 
         assert_eq!(service.metadata(), &descriptor);
         assert_eq!(service.namespace(), "urn:web");
+        assert_eq!(service.xdto_packages().len(), 3);
         assert!(matches!(
-            service.xdto_package(),
-            Some(EdtWebServiceXdtoPackage::Repository(name)) if name.as_str() == "Exchange"
+            &service.xdto_packages()[0],
+            EdtWebServiceXdtoPackage::Repository(name) if name.as_str() == "Exchange"
         ));
+        assert_eq!(
+            &service.xdto_packages()[1],
+            &EdtWebServiceXdtoPackage::ExternalNamespace("urn:external:a".to_owned())
+        );
+        assert_eq!(
+            &service.xdto_packages()[2],
+            &EdtWebServiceXdtoPackage::ExternalNamespace("urn:external:z".to_owned())
+        );
         assert_eq!(service.operations().len(), 2);
         assert_eq!(service.operations()[0].id().as_str(), "operation-a");
         assert_eq!(service.operations()[0].nillable(), Some(false));
@@ -1644,16 +1656,20 @@ mod tests {
                 .read_web(&metadata)
                 .expect("repeated live Web Service read must parse");
             assert_eq!(first, repeated);
-            match first.xdto_package() {
-                Some(EdtWebServiceXdtoPackage::Repository(name)) => {
-                    repository_packages += 1;
-                    assert_eq!(name.as_str(), "EnterpriseDataExchange_1_0_1_1");
+            if first.xdto_packages().is_empty() {
+                absent_packages += 1;
+            }
+            for package in first.xdto_packages() {
+                match package {
+                    EdtWebServiceXdtoPackage::Repository(name) => {
+                        repository_packages += 1;
+                        assert_eq!(name.as_str(), "EnterpriseDataExchange_1_0_1_1");
+                    }
+                    EdtWebServiceXdtoPackage::ExternalNamespace(namespace) => {
+                        external_packages += 1;
+                        assert_eq!(namespace, "http://v8.1c.ru/8.1/data/core");
+                    }
                 }
-                Some(EdtWebServiceXdtoPackage::ExternalNamespace(namespace)) => {
-                    external_packages += 1;
-                    assert_eq!(namespace, "http://v8.1c.ru/8.1/data/core");
-                }
-                None => absent_packages += 1,
             }
             operations += first.operations().len();
             for operation in first.operations() {

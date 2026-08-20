@@ -37,12 +37,11 @@ The source-independent `WebServiceMetadataPayload` already owns a
 typed declarations. The public payload therefore represents zero-or-more
 repository or external declarations without using source position as identity.
 
-The EDT parser is narrower: `EdtWebServiceDescriptor` stores
-`Option<EdtWebServiceXdtoPackage>`, exposes `xdto_package()`, and calls the
-singleton `optional_element` helper. A second direct declaration therefore
-produces `ServiceDescriptor(DuplicateField)` before graph projection. Metadata
-projection and package-request collection likewise consume only that optional
-singular value.
+The EDT parser now stores a canonical `Vec<EdtWebServiceXdtoPackage>`, exposes
+`xdto_packages()`, parses every direct declaration independently, and sorts and
+deduplicates the typed values. Metadata projection consumes the complete
+collection, and package-request collection emits one request for every unique
+repository declaration while leaving external namespaces payload-only.
 
 Repository XDTO type resolution is independent of the declared package list.
 Production builds a complete namespace-to-package-owner index from all parsed
@@ -219,7 +218,11 @@ contracts:
   candidates, provenance, diagnostics, statistics, reports, validation, and
   index results.
 
-Architecture acceptance changes no production behavior, Coverage status, or
-registry count. The current builder remains unable to consume the two Retail
-multi-declaration services until the bounded implementation prerequisite in
-ADR-0035 and the Roadmap is completed.
+The bounded implementation is complete without a Coverage or registry-count
+change. Generated tests and the tracked
+`adapters/edt/tests/fixtures/multiple_xdto_packages_project/` reduction prove
+canonical parsing, independent requests, terminal outcomes, exact References,
+global namespace/type resolution, index visibility, source reordering, and
+repeated builds. The optional whole-Retail probe passes both
+multi-declaration services and reaches the later unrelated Role Rights parser
+boundary.

@@ -7,8 +7,8 @@ Accepted
 The zero-or-more Web Service XDTO package declaration amendment was accepted
 on 2026-08-20 from the corrective evidence in
 `docs/architecture/web-service-xdto-packages-source-investigation.md`. Sprint
-13 remains historically completed; the amendment defines a corrective
-implementation prerequisite before Sprint 14 begins.
+13 remains historically completed; the corrective implementation prerequisite
+and its validation gate are complete, so Sprint 14 is eligible to begin.
 
 ## Context
 
@@ -507,12 +507,11 @@ rather than silently partial.
 
 The accepted model can represent zero-or-more Web Service package declarations
 without new graph kinds, edge kinds, request categories, endpoint pairs, or
-public metadata payload fields. Production remains singular until a bounded
-follow-up replaces the EDT parser storage/accessor, projects the complete
-collection, collects every unique repository package request, adds generated
-terminal and determinism tests, derives a minimal provenance-backed Retail
-fixture, and passes focused plus full workspace validation. When the ignored
-Retail corpus is installed, that task also runs a local builder probe and must
-show that repeated `xdtoPackages` no longer produces `DuplicateField`; a later
-unrelated corpus failure is reported separately and does not become a CI
-dependency.
+public metadata payload fields. The corrective EDT implementation now stores,
+parses, projects, and resolves the complete canonical declaration collection.
+Generated terminal and determinism tests and the tracked provenance-backed
+Retail reduction cover the accepted boundary without a graph-domain or
+Coverage change. The optional whole-Retail builder probe passes repeated
+`xdtoPackages` and reaches the later unrelated
+`RoleRights(DuplicateField("restrictionByCondition.condition"))` boundary;
+the ignored corpus remains outside CI.

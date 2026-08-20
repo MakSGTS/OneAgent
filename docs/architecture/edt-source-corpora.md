@@ -89,24 +89,29 @@ declares one repository package and one external namespace. The accepted
 and amended [ADR-0035](../adr/0035-xdto-service-semantics.md) confirm direct
 `xdtoPackages` cardinality as zero-or-more, define canonical collection and
 request semantics, and preserve complete-snapshot namespace/type resolution.
-The current production parser still accepts only the zero-or-one shape proven
-by the original corpus and classifies a repeated field as fatal. A bounded
-implementation task remains required before Sprint 14 begins.
+The production parser now accepts the zero-or-more shape, canonicalizes the
+typed collection, and resolves every unique repository declaration
+independently. The tracked
+`adapters/edt/tests/fixtures/multiple_xdto_packages_project/` reduction keeps
+the accepted Retail evidence available without an ignored-corpus dependency.
 
-Until that corrective implementation and its validation gate complete, the
-Retail project is suitable for:
+The Retail project is suitable for:
 
 - source-shape investigation;
 - Unicode and Russian-identifier audits;
 - identifying representative future fixtures;
 - checking whether accepted contracts generalize to a broader configuration.
 
-It is not yet suitable for:
+It remains unsuitable for:
 
-- a successful whole-project EDT builder gate;
 - a required local or CI test dependency;
 - direct Coverage promotion;
 - copying large source subtrees into tracked fixtures.
+
+The optional whole-project probe now passes repeated `xdtoPackages` and reaches
+the later unrelated
+`RoleRights(DuplicateField("restrictionByCondition.condition"))` parser
+boundary, so Retail is not yet a successful complete builder gate.
 
 Historical investigation documents retain their original explicitly named
 corpus and baseline. Future investigations must state whether they inspect

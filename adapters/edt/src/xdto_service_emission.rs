@@ -77,17 +77,14 @@ pub(crate) fn metadata_payload(source: &EdtXdtoServiceSource) -> MetadataPayload
             MetadataSpecificPayload::HttpService(HttpServiceMetadataPayload::new(source.root_url()))
         }
         EdtXdtoServiceSource::WebService(source) => {
-            let packages = source
-                .xdto_package()
-                .into_iter()
-                .map(|package| match package {
-                    EdtWebServiceXdtoPackage::Repository(name) => {
-                        WebServiceXdtoPackage::Repository(name.clone())
-                    }
-                    EdtWebServiceXdtoPackage::ExternalNamespace(namespace) => {
-                        WebServiceXdtoPackage::ExternalNamespace(namespace.clone())
-                    }
-                });
+            let packages = source.xdto_packages().iter().map(|package| match package {
+                EdtWebServiceXdtoPackage::Repository(name) => {
+                    WebServiceXdtoPackage::Repository(name.clone())
+                }
+                EdtWebServiceXdtoPackage::ExternalNamespace(namespace) => {
+                    WebServiceXdtoPackage::ExternalNamespace(namespace.clone())
+                }
+            });
             MetadataSpecificPayload::WebService(WebServiceMetadataPayload::new(
                 source.namespace(),
                 packages,
@@ -401,15 +398,17 @@ fn collect_intents<'a>(
                 }
             }
             EdtXdtoServiceSource::WebService(service) => {
-                if let Some(EdtWebServiceXdtoPackage::Repository(name)) = service.xdto_package() {
-                    intents.push(request_intent(
-                        service.metadata().id().clone(),
-                        SemanticReferenceCategory::XdtoPackage,
-                        SemanticReference::Name(name.clone()),
-                        NodeKind::Metadata(MetadataKind::XdtoPackage),
-                        Vec::new(),
-                        service.metadata().descriptor_path(),
-                    )?);
+                for package in service.xdto_packages() {
+                    if let EdtWebServiceXdtoPackage::Repository(name) = package {
+                        intents.push(request_intent(
+                            service.metadata().id().clone(),
+                            SemanticReferenceCategory::XdtoPackage,
+                            SemanticReference::Name(name.clone()),
+                            NodeKind::Metadata(MetadataKind::XdtoPackage),
+                            Vec::new(),
+                            service.metadata().descriptor_path(),
+                        )?);
+                    }
                 }
                 let module = common_module_id(service.metadata().id())?;
                 for operation in service.operations() {

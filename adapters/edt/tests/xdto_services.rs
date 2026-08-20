@@ -2,7 +2,7 @@ use oneagent_common::EntityName;
 use oneagent_edt::{EdtGraphError, EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
     EdgeKind, ImpactNodeStatus, NodeId, NodeKind, SemanticDiagnosticCode, SemanticDiagnosticKind,
-    SemanticImpactAnalyzer, SemanticImpactOptions, SemanticReferenceCategory,
+    SemanticImpactAnalyzer, SemanticImpactOptions, SemanticReference, SemanticReferenceCategory,
     SemanticReferenceRequestOutcome, WebServiceParameterDirection, xdto_type_id,
 };
 use oneagent_metadata::{MetadataSpecificPayload, WebServiceXdtoPackage};
@@ -17,6 +17,10 @@ const INTERNAL_NAMESPACE: &str = "urn:repository:package";
 
 fn production_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint13_xdto_services_project")
+}
+
+fn multiple_packages_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multiple_xdto_packages_project")
 }
 
 fn copy_tree(source: &Path, target: &Path) {
@@ -401,6 +405,104 @@ fn live_derived_fixture_is_consumer_visible_and_deterministic() {
     }));
 }
 
+#[test]
+fn retail_derived_multiple_packages_are_complete_canonical_and_deterministic() {
+    let fixture = multiple_packages_fixture();
+    let first = build(&fixture);
+    let repeated = build(&fixture);
+    let graph = first.graph();
+    let query = graph.query();
+    let equipment = graph
+        .node(&oneagent_common::EntityId::new("c1568f1c-25ab-4328-8e77-e0e84788f10f").unwrap())
+        .expect("EquipmentService must exist");
+    let mobile = graph
+        .node(&oneagent_common::EntityId::new("e8f6bb7f-d65d-4a9d-8fe8-ab0ab80664bf").unwrap())
+        .expect("MobileService must exist");
+
+    assert_eq!(
+        web_packages(equipment),
+        [
+            WebServiceXdtoPackage::Repository(EntityName::new("EquipmentService").unwrap()),
+            WebServiceXdtoPackage::Repository(EntityName::new("EquipmentService_1_0_0_6").unwrap()),
+            WebServiceXdtoPackage::Repository(EntityName::new("EquipmentService_1_0_0_7").unwrap()),
+            WebServiceXdtoPackage::Repository(EntityName::new("EquipmentService_2_0_0_3").unwrap()),
+        ]
+    );
+    assert_eq!(
+        web_packages(mobile),
+        [
+            WebServiceXdtoPackage::Repository(EntityName::new("MobileClientIntegration").unwrap()),
+            WebServiceXdtoPackage::ExternalNamespace("http://v8.1c.ru/8.1/data/core".to_owned()),
+        ]
+    );
+
+    let package_requests = first
+        .reference_requests()
+        .iter()
+        .filter(|request| request.category() == SemanticReferenceCategory::XdtoPackage)
+        .collect::<Vec<_>>();
+    assert_eq!(package_requests.len(), 6);
+    assert!(package_requests.iter().all(|request| {
+        request.outcome() == SemanticReferenceRequestOutcome::Resolved
+            && request.expected_kinds()
+                == [NodeKind::Metadata(
+                    oneagent_metadata::MetadataKind::XdtoPackage,
+                )]
+            && request.candidates().len() == 1
+    }));
+    let equipment_package_names = package_requests
+        .iter()
+        .filter(|request| request.source_node() == equipment.id())
+        .map(|request| match request.reference() {
+            SemanticReference::Name(name) => name.as_str(),
+            other => panic!("unexpected package reference: {other:?}"),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        equipment_package_names,
+        [
+            "EquipmentService",
+            "EquipmentService_1_0_0_6",
+            "EquipmentService_1_0_0_7",
+            "EquipmentService_2_0_0_3",
+        ]
+    );
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&NodeId::new(equipment.id().as_str()), EdgeKind::References,)
+            .len(),
+        4
+    );
+
+    let type_request = first
+        .reference_requests()
+        .iter()
+        .find(|request| {
+            request.source_node().as_str() == "027aff36-61b0-4934-a707-8431b83f5898"
+                && request.category() == SemanticReferenceCategory::XdtoType
+        })
+        .expect("SiteExchange2 return type request must exist");
+    let commerce_205_type = xdto_type_id(
+        &oneagent_common::EntityId::new("188a3368-9a46-49f6-81b3-c5b50a91f36b").unwrap(),
+        &EntityName::new("КоммерческаяИнформация").unwrap(),
+    )
+    .expect("CommerceML205a type ID must be valid");
+    assert_eq!(type_request.candidates(), [commerce_205_type]);
+    assert_eq!(
+        type_request.outcome(),
+        SemanticReferenceRequestOutcome::Resolved
+    );
+
+    assert!(first.diagnostics().is_empty());
+    assert_eq!(first.reference_statistics().resolved(), 10);
+    assert_eq!(query.edges_by_kind(EdgeKind::References).len(), 10);
+    assert_eq!(query.edges_by_kind(EdgeKind::Triggers).len(), 3);
+    assert!(first.validate().is_valid());
+    assert!(first.diff(&repeated).is_empty());
+    assert_eq!(first.reference_requests(), repeated.reference_requests());
+    assert_eq!(first.report(), repeated.report());
+}
+
 fn mutate_production_fixture(project: &Path) {
     let currency = object_directory(project, "XDTOPackages", "CurrencyRates").join("Package.xdto");
     replace_fixture_fragment(
@@ -678,6 +780,67 @@ fn malformed_xdto_artifact_is_a_fatal_build_error() {
     assert!(matches!(
         FileSystemEdtSemanticGraphBuilder.build_graph_with_diagnostics(project.path()),
         Err(EdtGraphError::XdtoPackage(_))
+    ));
+}
+
+#[test]
+fn multiple_package_siblings_resolve_independently_and_malformed_members_are_fatal() {
+    const ORIGINAL: &str = r#"<xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.ExchangePackage</value></xdtoPackages>"#;
+    const FIRST_ORDER: &str = r#"<xdtoPackages xsi:type="core:StringValue"><value>urn:external:z</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.MissingPackage</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.ExchangePackage</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.ExchangePackage</value></xdtoPackages>"#;
+    const SECOND_ORDER: &str = r#"<xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.ExchangePackage</value></xdtoPackages><xdtoPackages xsi:type="core:StringValue"><value>urn:external:z</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.ExchangePackage</value></xdtoPackages><xdtoPackages xsi:type="core:ReferenceValue"><value>XDTOPackage.MissingPackage</value></xdtoPackages>"#;
+
+    let project = project();
+    let descriptor = object_directory(project.path(), "WebServices", "ExchangeService")
+        .join("ExchangeService.mdo");
+    replace_fixture_fragment(&descriptor, ORIGINAL, FIRST_ORDER);
+    let first = build(project.path());
+    let web = first
+        .graph()
+        .node(&oneagent_common::EntityId::new(WEB_ID).unwrap())
+        .expect("Web Service must exist");
+    assert_eq!(
+        web_packages(web),
+        [
+            WebServiceXdtoPackage::Repository(EntityName::new("ExchangePackage").unwrap()),
+            WebServiceXdtoPackage::Repository(EntityName::new("MissingPackage").unwrap()),
+            WebServiceXdtoPackage::ExternalNamespace("urn:external:z".to_owned()),
+        ]
+    );
+    let package_requests = first
+        .reference_requests()
+        .iter()
+        .filter(|request| request.category() == SemanticReferenceCategory::XdtoPackage)
+        .collect::<Vec<_>>();
+    assert_eq!(package_requests.len(), 2);
+    assert_eq!(
+        package_requests
+            .iter()
+            .filter(|request| request.outcome() == SemanticReferenceRequestOutcome::Resolved)
+            .count(),
+        1
+    );
+    assert_eq!(
+        package_requests
+            .iter()
+            .filter(|request| request.outcome() == SemanticReferenceRequestOutcome::MissingTarget)
+            .count(),
+        1
+    );
+    assert_eq!(first.reference_statistics().unresolved(), 1);
+    assert_eq!(first.diagnostics().len(), 1);
+    assert!(first.validate().is_valid());
+
+    replace_fixture_fragment(&descriptor, FIRST_ORDER, SECOND_ORDER);
+    let reordered = build(project.path());
+    assert!(first.diff(&reordered).is_empty());
+    assert_eq!(first.reference_requests(), reordered.reference_requests());
+    assert_eq!(first.diagnostics(), reordered.diagnostics());
+    assert_eq!(first.report(), reordered.report());
+
+    replace_fixture_fragment(&descriptor, "core:StringValue", "core:UnsupportedValue");
+    assert!(matches!(
+        FileSystemEdtSemanticGraphBuilder.build_graph_with_diagnostics(project.path()),
+        Err(EdtGraphError::ServiceDescriptor(_))
     ));
 }
 

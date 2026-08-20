@@ -2441,13 +2441,14 @@ four repository packages in `EquipmentService` and a mixed repository/external
 pair in `MobileService`. The accepted ADR-0035 amendment keeps the existing
 zero-or-more source-independent payload, exact request categories, endpoint
 matrices, global namespace/type resolution, Function handler targets, and
-Coverage state. It requires the EDT parser and production projection to consume
-a canonical declaration collection and emit one package request per unique
-repository declaration. Production remains singular until that corrective
-implementation and its full validation gate complete. Sprint 13 stays
-historically completed; Sprint 14 remains the unique next sprint but cannot
-begin before the correction passes. The v0.3 release integration review remains
-ineligible until Sprint 14 completes and passes its own integration review.
+Coverage state. The corrective gate is now complete: the EDT parser and
+production builder consume the canonical declaration collection and emit one
+package request per unique repository declaration. The tracked Retail
+reduction covers multiple and mixed declarations plus global namespace/type
+resolution, and Coverage remains unchanged. Sprint 13 stays historically
+completed; Sprint 14 remains the unique next sprint and is now eligible to
+begin. The v0.3 release integration review remains ineligible until Sprint 14
+completes and passes its own integration review.
 
 The first slice deliberately excludes 61,435 nested XDTO properties, imports,
 restrictions, inline types, external platform schema nodes, route matching,

@@ -30,6 +30,10 @@ fn xdto_services_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint13_xdto_services_project")
 }
 
+fn multiple_packages_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multiple_xdto_packages_project")
+}
+
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
 }
@@ -102,6 +106,61 @@ fn xdto_services_are_visible_through_complete_generic_indexes() {
     assert!(graph.diff(repeated.graph()).is_empty());
     assert!(first.diff(&repeated).is_empty());
     assert!(first.validate().is_valid());
+}
+
+#[test]
+fn multiple_xdto_packages_and_global_types_are_visible_through_generic_indexes() {
+    let fixture = multiple_packages_fixture();
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("Retail-derived multiple-package fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("repeated multiple-package fixture build must succeed");
+    let graph = first.graph();
+    let query = graph.query();
+    let equipment = id("c1568f1c-25ab-4328-8e77-e0e84788f10f");
+    let commerce_205 = id("188a3368-9a46-49f6-81b3-c5b50a91f36b");
+    let commerce_type =
+        oneagent_graph::xdto_type_id(&commerce_205, &name("КоммерческаяИнформация"))
+            .expect("CommerceML205a type identity must be valid");
+
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&NodeId::new(equipment.as_str()), EdgeKind::References)
+            .len(),
+        4
+    );
+    assert_eq!(
+        query
+            .owner(&NodeId::new(commerce_type.as_str()))
+            .expect("global namespace type owner must be indexed")
+            .id(),
+        &commerce_205
+    );
+    for package in [
+        "EquipmentService",
+        "EquipmentService_1_0_0_6",
+        "EquipmentService_1_0_0_7",
+        "EquipmentService_2_0_0_3",
+    ] {
+        let package_kind = NodeKind::Metadata(oneagent_metadata::MetadataKind::XdtoPackage);
+        let nodes = query.nodes_by_name_and_kind(&name(package), package_kind);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].kind(), package_kind);
+        assert_eq!(
+            graph
+                .resolution_index()
+                .resolve_entity_id_of_kind(nodes[0].id(), package_kind)
+                .expect("complete Resolution index must find the package")
+                .id(),
+            nodes[0].id()
+        );
+    }
+    assert!(first.validate().is_valid());
+    assert!(graph.diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+    assert_eq!(first.report(), repeated.report());
 }
 
 #[test]

@@ -174,9 +174,9 @@ in the [Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
 Sprint 13 is completed under
 [ADR-0035](adr/0035-xdto-service-semantics.md) with a `pass` decision in the
 [Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md). Sprint
-14 is the next planning target, subject to the corrective Web Service XDTO
-package cardinality gate below; the v0.3 release review remains gated on Sprint
-14 completion and review.
+14 is the next planning target. The corrective Web Service XDTO package
+cardinality gate below is complete; the v0.3 release review remains gated on
+Sprint 14 completion and review.
 
 #### Post-Sprint 13 correction — multiple Web Service XDTO packages
 
@@ -203,17 +203,17 @@ References/Triggers endpoint matrices, Function handler targets, and Coverage
 status remain unchanged.
 
 This correction is not a new sprint and does not reopen the historical Sprint
-13 `pass`. Sprint 14 remains the unique `next` sprint, but its planning and
-implementation may begin only after this ordered prerequisite completes:
+13 `pass`. The ordered prerequisite is complete, so Sprint 14 remains the
+unique `next` sprint and is eligible to begin:
 
 ```text
 Committed multiple-package architecture correction
-    -> bounded EDT parser/emission implementation
-    -> focused and complete workspace validation
+    -> completed bounded EDT parser/emission implementation
+    -> passed focused and complete workspace validation
     -> Sprint 14 planning eligibility
 ```
 
-The implementation task must:
+The completed implementation satisfies these requirements:
 
 - replace singular `EdtWebServiceDescriptor` package storage/access with a
   deterministic collection and parse every direct valid declaration;
@@ -266,6 +266,15 @@ implementation commit message is:
 ```text
 Support multiple Web Service XDTO packages
 ```
+
+The tracked `multiple_xdto_packages_project` reduction preserves exact Retail
+source and reduced hashes and proves the four-package, mixed-package, and
+global namespace/type cases without an ignored-corpus CI dependency. Generated
+tests cover duplicates, reordering, malformed members, independent package
+terminals, exact projections, and repeated builds. Coverage statuses and
+aggregate counts remain unchanged. The optional whole-Retail probe passes
+repeated `xdtoPackages` and reaches the later unrelated
+`RoleRights(DuplicateField("restrictionByCondition.condition"))` boundary.
 
 #### Sprint 4 Semantic Index execution plan
 

@@ -45,6 +45,7 @@ technical workflows:
 - graph emission;
 - semantic index;
 - parser;
+- source adapter;
 - review.
 
 Workflow modules describe how a task is executed. They must not depend on
@@ -100,6 +101,7 @@ docs/codex/
     review.md
     semantic-index.md
     sequential-sprint-execution.md
+    source-adapter.md
   profiles/
     architecture.md
     graph-implementation.md
@@ -108,6 +110,7 @@ docs/codex/
     parser-implementation.md
     review.md
     semantic-index-implementation.md
+    source-adapter-implementation.md
   templates/
     architecture-task.md
     graph-emission-task.md
@@ -119,6 +122,7 @@ docs/codex/
     semantic-index-task.md
     sprint-execution-loop.md
     sprint-planning-task.md
+    source-adapter-task.md
 ```
 
 ## Dependency model
@@ -202,6 +206,8 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
   complete-snapshot or incremental Semantic Index implementation tasks.
 - Use `docs/codex/profiles/parser-implementation.md` for real source parser
   tasks.
+- Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
+  discovery, assembly, mapping, or cross-adapter conformance implementation.
 - Use `docs/codex/profiles/architecture.md` for architecture-only work and ADRs.
 - Use `docs/codex/profiles/investigation.md` for read-only evidence gathering.
 - Use `docs/codex/profiles/review.md` for review-only tasks.
@@ -222,6 +228,8 @@ module composition.
 - Use `docs/codex/templates/semantic-index-task.md` for complete-snapshot or
   incremental Semantic Index work.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
+- Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
+  adapter ingestion or cross-adapter conformance.
 - Use `docs/codex/templates/architecture-task.md` for architecture output.
 - Use `docs/codex/templates/review-task.md` for review output.
 - Use `docs/codex/templates/sprint-planning-task.md` for a sprint kickoff,
@@ -244,6 +252,11 @@ must not reselect architecture during implementation.
 
 Parser tasks require real source evidence and define source-format behavior.
 They do not emit graph facts unless graph emission is explicitly included.
+
+Source adapter tasks orchestrate deterministic project discovery, artifact
+assembly, parsing, source-independent mapping, and cross-adapter conformance.
+They preserve parser separation and do not create an adapter-specific semantic
+authority.
 
 Graph model tasks change public graph representation or graph APIs. They must
 preserve deterministic identity and define validation/query impact.
@@ -356,6 +369,7 @@ A task should usually produce one coherent outcome such as:
 - one graph-model prerequisite;
 - one snapshot-index or incremental-index implementation slice;
 - one parser for one source artifact family;
+- one source-adapter discovery, assembly, mapping, or conformance slice;
 - one resolver/emitter production slice;
 - one review of one completed implementation;
 - one documentation synchronization task.

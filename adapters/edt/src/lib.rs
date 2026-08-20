@@ -16,6 +16,7 @@ mod module_reader;
 // The resolver is a production prerequisite for the later Reads emission task.
 #[allow(dead_code)]
 mod query_source_resolution;
+mod report_data_composition;
 mod role_rights;
 mod subsystem_content;
 mod subsystem_hierarchy;
@@ -26,6 +27,14 @@ mod writes_resolution;
 pub use metadata_object::{
     EdtMetadataObjectDescriptor, EdtMetadataObjectError, EdtMetadataObjectReader,
     FileSystemEdtMetadataObjectReader,
+};
+
+pub use report_data_composition::{
+    EdtDataCompositionDataSet, EdtDataCompositionDataSource, EdtDataCompositionField,
+    EdtDataCompositionObservation, EdtDataCompositionObservationKind,
+    EdtDataCompositionSchemaDescriptor, EdtDataCompositionSourceReason,
+    EdtReportDataCompositionDescriptor, EdtReportDataCompositionError,
+    EdtReportDataCompositionReader, FileSystemEdtReportDataCompositionReader,
 };
 
 pub use event_subscription::{

@@ -3092,6 +3092,340 @@ planning commit message:
 Plan Sprint 12 data composition and reports
 ```
 
+#### Sprint 13 XDTO and Service Model execution plan
+
+Sprint 13 is planned from committed Sprint 12 review head
+`cf59854baebc6fe88add0de5a0e5b6858b755a19`. The review records `pass`, Sprint
+12 is `completed`, and Sprint 13 is the unique `next` target.
+
+Repository-owned
+[source investigation](architecture/xdto-service-source-investigation.md)
+proves 20 descriptor/schema XDTO Package pairs, 12,666 uniquely named direct
+Value/Object types, two HTTP Services with 35 URL Templates and 35 Methods, and
+eight Web Services with 119 Operations and 360 Parameters. All 154 service
+handler declarations resolve uniquely to existing owned BSL Procedures. The
+accepted [ADR-0035](adr/0035-xdto-service-semantics.md) limits the first slice
+to direct types, service declaration structure, internal package/type
+references, and declarative handler dispatch. XDTO properties, imports,
+restrictions, external namespace nodes, transport/runtime behavior, and
+Designer XML remain deferred.
+
+The current graph implementation, parser implementation, graph emission,
+review, sprint-planning, and sequential-execution framework contracts express
+the required identity, payload, parsing, resolution, validation, provenance,
+Coverage, and reporting boundaries. The Task prompt template readiness forecast
+requires no framework update until Sprint 14, and the live audit found no
+concrete Sprint 13 framework gap. No Codex Framework change or post-sprint
+framework audit is justified.
+
+##### Sprint 13 objective
+
+Preserve repository-proven direct XDTO Value/Object types, HTTP URL Templates
+and Methods, and Web Service Operations and Parameters as deterministic typed
+graph entities with exact immediate ownership; enrich the existing service and
+package metadata payloads; resolve repository-owned XDTO package/type and
+handler declarations through public requests; and emit precise References and
+Triggers without inventing external schema nodes or runtime transport behavior.
+
+##### Included scope
+
+- closed typed HTTP Service, Web Service, and XDTO Package metadata payloads;
+- additive XDTO Type, HTTP URL Template/Method, and Web Operation/Parameter
+  node kinds and compatible typed payloads;
+- UUID child identities plus collision-safe owner/name XDTO Type identity;
+- precise immediate Contains ownership;
+- exact XDTO descriptor/`Package.xdto` joins and deterministic direct-type
+  parsing;
+- exact HTTP/Web descriptor structure, optional/required value, duplicate,
+  malformed, and unsupported-value behavior;
+- public XDTO package/type and callable request lifecycle with deterministic
+  provenance, diagnostics, and statistics;
+- internal References plus HTTP/Web declarative Triggers to existing Procedure
+  nodes, with external namespaces preserved but not materialized;
+- generated positive/negative/reordered/repeated production evidence;
+- one tracked provenance-backed reduced production fixture;
+- generic Query, Diff, reports, Validation, Impact policy, complete and
+  incremental indexes, Coverage, aggregate counts, and current-state docs;
+- integration review and conditional Sprint 12 prompt-suite retirement.
+
+##### Excluded scope
+
+- XDTO imports, properties, enum values, patterns, inline definitions, bases,
+  restrictions, bounds, inheritance, ordering, property/type dependency edges,
+  and external platform schema/type nodes;
+- HTTP route grammar or matching, inferred verbs, URL parameter entities,
+  sessions, authentication, publication, transport, request/response schemas,
+  and runtime invocation;
+- WSDL/descriptors, SOAP, data-lock behavior, runtime Web Service execution,
+  and external type resolution;
+- BSL body behavior beyond existing module/symbol extraction and exact declared
+  handler binding;
+- Designer XML, cross-adapter conformance, partial workspaces, persistence,
+  Runtime/API/CLI, MCP/LSP/IDE, serialization, benchmarks, or performance claims;
+- unrelated graph/EDT capabilities, dependencies, refactors, or speculative
+  Coverage transitions.
+
+##### Sprint 13 prerequisite gate
+
+Task 01 may begin only from one committed Sprint 13 planning baseline containing
+the source investigation, accepted ADR-0035, this Roadmap plan, Semantic Model
+planning synchronization, and the complete prompt suite under
+`docs/codex/prompts/sprint-13-xdto-service-model/`. Every dependent task
+requires the preceding task's committed outcome. Stored prompt text never
+authorizes staging or committing; authorization comes only from the current
+execution instruction.
+
+The immediately preceding prompt suite is exactly
+`docs/codex/prompts/sprint-12-skd-report-model/`, containing these six tracked
+files:
+
+- `00-sprint-12-execution-loop.md`;
+- `01-implement-data-composition-graph-model.md`;
+- `02-parse-report-data-composition-schemas.md`;
+- `03-emit-report-data-composition-semantics.md`;
+- `04-complete-sprint-12-production-evidence.md`;
+- `05-sprint-12-integration-review.md`.
+
+It remains untouched during planning and implementation. Only the final Sprint
+13 review may retire those exact tracked files after a non-blocking decision
+and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Implement the XDTO and service graph model. | Graph implementation / graph model | Public node/payload/request contracts, identities, precise Contains/References/Triggers validation, exhaustive consumers, indexes, and graph Coverage evidence. | Accepted Sprint 13 planning baseline. | `Implement Sprint 13 XDTO and service graph model` |
+| 2 | Parse XDTO Package schemas. | Parser implementation / parser | Deterministic descriptor/artifact join and typed direct XDTO Value/Object model with fatal and deferred outcomes, without graph emission. | Task 1. | `Parse Sprint 13 XDTO package schemas` |
+| 3 | Parse HTTP and Web Service descriptors. | Parser implementation / parser | Deterministic typed HTTP/Web service structure, package/type/callable declarations, and malformed/unsupported outcomes, without graph emission. | Tasks 1–2. | `Parse Sprint 13 HTTP and Web service descriptors` |
+| 4 | Emit XDTO and service semantics. | Graph implementation / graph emission | Production metadata enrichment, child nodes/ownership, public requests, resolution, References/Triggers, provenance, diagnostics, statistics, and generated determinism evidence. | Tasks 1–3. | `Emit Sprint 13 XDTO and service semantics` |
+| 5 | Complete Sprint 13 production evidence. | Graph implementation / graph emission | Provenance fixture, generic consumers, complete/incremental indexes, EDT Coverage, aggregate counts, and current-state documentation. | Tasks 1–4. | `Complete Sprint 13 production evidence` |
+| 6 | Review the integrated Sprint 13 baseline. | Review / review | Findings, full validation evidence, sprint decision, Sprint 12 suite retirement, Sprint 14 hand-off, and v0.3 release-review eligibility. | Task 5 and all implementation validation. | `Complete Sprint 13 XDTO and service model review` |
+
+Dependency graph:
+
+```text
+Committed Sprint 13 planning baseline
+    -> Task 1 graph model
+    -> Task 2 XDTO parser
+    -> Task 3 service parsers
+    -> Task 4 production emission and resolution
+    -> Task 5 production, Coverage, and documentation evidence
+    -> Task 6 integration review and conditional Sprint 12 suite retirement
+    -> Sprint 14 framework readiness and planning eligibility
+```
+
+##### Task 1 — XDTO and service graph model
+
+**Included:** add the five ADR-0035 node kinds; closed XDTO Type, HTTP URL
+Template/Method, and Web Operation/Parameter payloads; compatible HTTP/Web/XDTO
+metadata payloads; stable codes and collision-safe XDTO identity; public XDTO
+package/type request categories; exact Contains, additive References, and
+additive Triggers endpoint rules; exhaustive public consumer, Query, Diff,
+report, Validation, complete/incremental index, Impact-policy, and graph Coverage
+evidence.
+
+**Excluded:** EDT parsing, production insertion/resolution, diagnostics or
+statistics, fixtures, and EDT Coverage transitions.
+
+**Acceptance evidence:** existing codes/identities remain unchanged; wrong
+payloads are rejected; content-only changes preserve IDs; delimiter-containing
+identity inputs cannot collide; only the five new ownership pairs and exact
+reference/dispatch matrices validate; every child requires one owner; public
+requests preserve deterministic identity/lifecycle; generic consumers and both
+index modes are deterministic; Contains/Triggers remain non-propagating.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 2 — XDTO Package parser
+
+**Included:** add one focused parser joining an existing XDTO Package descriptor
+to exactly one `Package.xdto`; validate exact roots/namespaces and matching
+descriptor/schema namespace; parse direct named Value/Object types; canonicalize
+by exact name; retain imports and nested constructs as typed deferred evidence;
+return typed deterministic errors without graph emission.
+
+**Excluded:** HTTP/Web parsing, graph insertion, XDTO properties/import
+resolution, diagnostics/statistics, fixtures, and Coverage changes.
+
+**Acceptance evidence:** all 20 live pairs join and their 12,666 direct names are
+unique; small and large real shapes parse without source-order dependence;
+missing/extra/ambiguous/unreadable/malformed artifacts, wrong roots/namespaces,
+namespace mismatch, missing/empty/duplicate direct names, and repeated reads are
+typed and deterministic; nested/import content creates no speculative entity.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-edt --lib xdto_package::tests
+cargo test -p oneagent-edt --lib metadata_object::tests
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 3 — HTTP and Web Service parsers
+
+**Included:** add focused parsers for UUID-backed HTTP URL Templates/Methods and
+Web Operations/Parameters; preserve accepted service metadata content, route/
+method and XDTO type payload input, package/type/callable declarations, optional
+Boolean/direction values, exact hierarchy, and canonical ordering.
+
+**Excluded:** graph emission/resolution, XDTO schema parsing changes,
+diagnostics/statistics, fixtures, and Coverage changes.
+
+**Acceptance evidence:** all live 35/35 HTTP and 119/360 Web children parse;
+all 154 live handler declarations are retained; two internal package refs, five
+external package namespaces, one missing package declaration, 478 external type
+occurrences, and one internal type occurrence are classified exactly; missing,
+duplicate, malformed, invalid Boolean/reference/direction, reordered, and
+repeated inputs have deterministic typed outcomes.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-edt --lib service_descriptor::tests
+cargo test -p oneagent-edt --lib metadata_object::tests
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 4 — XDTO and service semantic emission
+
+**Included:** integrate committed parsers with existing XDTO/HTTP/Web discovery;
+enrich existing metadata payloads; retain existing modules/symbols; insert
+direct XDTO Type and service child nodes plus exact ownership; collect and
+resolve public package/type/callable requests after symbol insertion; emit exact
+References and Triggers; attach deterministic provenance; project terminal
+diagnostics/statistics; add generated positive/failure/external/reordering/
+repeated-build tests.
+
+**Excluded:** new graph/parser semantics, final tracked fixture, broad consumer/
+index/Coverage evidence, current-state documentation completion, and deferred
+XDTO or runtime behavior.
+
+**Acceptance evidence:** internal package/type and all valid handlers resolve;
+external namespaces emit no requests, placeholders, edges, or false missing
+diagnostics; missing/ambiguous/incompatible/wrong-owner internal declarations
+have exact request outcomes and diagnostics; fatal source errors yield no
+successful partial build; accepted siblings survive deferred inputs; Query and
+Validation observe exact facts; reordered/repeated builds are equal; unrelated
+behavior passes.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-edt --test xdto_services
+cargo test -p oneagent-graph --test validation
+cargo test -p oneagent-graph --test reference_request_build
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 5 — Complete production evidence
+
+**Included:** add a tracked provenance-documented reduced fixture covering
+small/large XDTO packages, HTTP GET-implicit/POST-explicit methods, internal and
+external Web package/type declarations, operations/parameters/directions, and
+handler dispatch; prove generic Query, Diff, reports, Validation, Impact policy,
+reordered/repeated builds, complete index, and incremental clean-rebuild
+transitions; transition only justified graph/EDT Coverage evidence; recompute
+aggregate counts; synchronize Semantic Model and Roadmap current-state text
+without completing the sprint.
+
+**Excluded:** new semantic/parser/resolution behavior, deferred XDTO properties
+or runtime transport, Sprint 14 planning/framework updates, previous-suite
+retirement, and unrelated Coverage changes.
+
+**Acceptance evidence:** every applicable ADR-0035 completion criterion is
+executable; fixture README records exact live paths, source hashes, reduction,
+and reduced hashes; add/remove/modify/ownership/request/reference/dispatch/
+external/deferred transitions equal clean rebuilds; Coverage and aggregate
+counts derive from live registries; full workspace validation succeeds.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --test xdto_services
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 6 — Sprint 13 integration review
+
+Review the exact planning-through-Task-5 commit range against ADR-0035, source
+investigation, prompt suite, and live repository. Verify public model, identity,
+payload, parser joins and outcomes, production emission, ownership, public
+requests, external/internal policy, References/Triggers, provenance,
+diagnostics/statistics, determinism, generic consumers, complete/incremental
+indexes, Coverage, documentation, compatibility, and deferred scope. Do not
+silently fix findings.
+
+Create `docs/reviews/sprint-13-xdto-service-model.md` and transition Sprint 13
+to `completed` with Sprint 14 as `next` only after `pass` or `pass with
+non-blocking follow-ups` and successful focused/full validation. The transition
+also makes the v0.3 release integration review eligible after Sprint 14, not
+before. A blocked decision creates no completion transition or review commit.
+
+After a non-blocking decision and successful complete validation, atomically
+retire every tracked prompt file under the verified immediately preceding suite
+`docs/codex/prompts/sprint-12-skd-report-model/` in the same review commit. Any
+inventory mismatch, endangered untracked file, or retained link dependency
+blocks retirement and the final commit.
+
+Focused review additions:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --lib xdto_package::tests
+cargo test -p oneagent-edt --lib service_descriptor::tests
+cargo test -p oneagent-edt --test xdto_services
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace validation and record exact command results.
+
+##### Sprint 13 state gates and completion criteria
+
+Sprint 13 remains `next` during planning. It becomes `active` only after the
+planning baseline is committed and Task 1 begins. A task is `already_complete`
+only when current committed evidence and successful required validation prove
+every criterion; no empty commit is created.
+
+Stop after the first prerequisite, implementation, validation, staging, commit,
+or review failure. Do not skip, reorder, combine, or partially commit dependent
+tasks. A blocked Task 6 leaves Sprint 13 incomplete, keeps the Sprint 12 prompt
+suite intact, and leaves Sprint 14 ineligible.
+
+Sprint 13 may transition to `completed` only when Tasks 1–5 are committed or
+proven already complete, complete ADR-0035 graph/parser/production/provenance/
+determinism evidence passes, external and deferred scope remains explicit,
+unrelated compatibility and truthful Coverage state are preserved, the full
+repository Definition of Done passes, and Task 6 records a non-blocking review
+decision. Only then may Sprint 14 Designer XML Adapter become `next` and the
+exact Sprint 12 prompt suite be retired in the final review commit.
+
+Planning is documentation-only. Validate Markdown structure, links, prompt
+numbering, manifest order, prerequisite graph, commit-message agreement,
+accepted-versus-deferred scope, unchanged `next` state, verified previous-suite
+inventory, `git diff --check`, and absence of unrelated changes. Suggested
+planning commit message:
+
+```text
+Plan Sprint 13 XDTO and service model
+```
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

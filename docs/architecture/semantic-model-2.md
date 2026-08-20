@@ -2390,6 +2390,30 @@ subsequently records `pass` against committed Task 4 head
 review-time production, public API, Coverage, or deferred-scope change, and
 Sprint 13 XDTO and Service Model is the next planning target.
 
+Sprint 13 XDTO and Service Model is governed by the accepted planning contract
+in `docs/adr/0035-xdto-service-semantics.md` and the repository-owned evidence
+in `docs/architecture/xdto-service-source-investigation.md`. The bounded first
+slice will enrich existing XDTO Package, HTTP Service, and Web Service metadata
+payloads; add direct XDTO Type, HTTP URL Template/Method, and Web Service
+Operation/Parameter nodes with exact immediate ownership; migrate accepted
+package, type, and callable declarations to public reference requests; and emit
+precise internal References plus declarative handler Triggers.
+
+The planning corpus contains 20 XDTO descriptor/schema pairs with 12,666
+uniquely named direct Value/Object types, two HTTP Services with 35 URL
+Templates and 35 Methods, and eight Web Services with 119 Operations and 360
+Parameters. All 154 handler declarations resolve uniquely to the existing
+owned service-module Procedures. These counts are planning evidence rather than
+implemented Coverage claims. Sprint 13 remains `next` until its committed
+planning baseline exists and Task 1 begins.
+
+The first slice deliberately excludes 61,435 nested XDTO properties, imports,
+restrictions, inline types, external platform schema nodes, route matching,
+transport/publication/runtime behavior, and Designer XML. External XDTO
+namespace declarations remain typed source content without placeholder nodes or
+false local-resolution failures. Sprint 14 continues to own Designer XML and
+cross-adapter identity equivalence.
+
 ### Provenance inventory
 
 EDT attaches provenance while creating metadata object nodes, child nodes,

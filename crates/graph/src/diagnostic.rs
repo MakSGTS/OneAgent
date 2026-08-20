@@ -23,6 +23,14 @@ pub enum SemanticDiagnosticCode {
     QueryLanguageTemporaryTableSource,
     /// A query source is supplied by a parameter or another external source.
     QueryLanguageExternalOrParameterDataSource,
+    /// A nested Data Composition Data Set is deferred without a stable identity.
+    DataCompositionNestedDataSetDeferred,
+    /// A Data Composition field folder is deferred outside the named Field model.
+    DataCompositionFieldFolderDeferred,
+    /// A Data Composition Data Set uses an unsupported serialized type.
+    DataCompositionUnsupportedDataSetType,
+    /// A Data Composition field uses an unsupported serialized type.
+    DataCompositionUnsupportedFieldType,
     /// A raw semantic reference does not have the required source format.
     ReferenceMalformedFormat,
     /// A raw semantic reference uses a source prefix unsupported by the producer.
@@ -54,6 +62,14 @@ impl SemanticDiagnosticCode {
             Self::QueryLanguageExternalOrParameterDataSource => {
                 "query_language.external_or_parameter_data_source"
             }
+            Self::DataCompositionNestedDataSetDeferred => {
+                "data_composition.nested_data_set_deferred"
+            }
+            Self::DataCompositionFieldFolderDeferred => "data_composition.field_folder_deferred",
+            Self::DataCompositionUnsupportedDataSetType => {
+                "data_composition.unsupported_data_set_type"
+            }
+            Self::DataCompositionUnsupportedFieldType => "data_composition.unsupported_field_type",
             Self::ReferenceMalformedFormat => "semantic.reference.malformed_format",
             Self::ReferenceUnsupportedPrefix => "semantic.reference.unsupported_prefix",
             Self::ReferenceUnresolved => "semantic.reference.unresolved",
@@ -93,6 +109,14 @@ pub enum SemanticDiagnosticKind {
     QueryLanguageTemporaryTableSource,
     /// A query data source is supplied externally or through a parameter.
     QueryLanguageExternalOrParameterDataSource,
+    /// A nested Data Composition Data Set is deferred without a stable identity.
+    DataCompositionNestedDataSetDeferred,
+    /// A Data Composition field folder is deferred outside the named Field model.
+    DataCompositionFieldFolderDeferred,
+    /// A Data Composition Data Set type is unsupported.
+    DataCompositionUnsupportedDataSetType,
+    /// A Data Composition field type is unsupported.
+    DataCompositionUnsupportedFieldType,
     /// A raw semantic reference does not have the required source format.
     MalformedReferenceFormat,
     /// A raw semantic reference uses a source prefix unsupported by the producer.
@@ -411,6 +435,22 @@ mod tests {
         assert_eq!(
             SemanticDiagnosticCode::QueryLanguageExternalOrParameterDataSource.as_str(),
             "query_language.external_or_parameter_data_source"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::DataCompositionNestedDataSetDeferred.as_str(),
+            "data_composition.nested_data_set_deferred"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::DataCompositionFieldFolderDeferred.as_str(),
+            "data_composition.field_folder_deferred"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::DataCompositionUnsupportedDataSetType.as_str(),
+            "data_composition.unsupported_data_set_type"
+        );
+        assert_eq!(
+            SemanticDiagnosticCode::DataCompositionUnsupportedFieldType.as_str(),
+            "data_composition.unsupported_field_type"
         );
         assert_eq!(
             SemanticDiagnosticCode::ReferenceMalformedFormat.as_str(),

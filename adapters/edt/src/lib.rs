@@ -17,6 +17,7 @@ mod module_reader;
 #[allow(dead_code)]
 mod query_source_resolution;
 mod report_data_composition;
+mod report_data_composition_emission;
 mod role_rights;
 mod subsystem_content;
 mod subsystem_hierarchy;
@@ -389,15 +390,15 @@ mod tests {
 }
 
 use oneagent_graph::{
-    AccessRight, AccessRightRowRestriction, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode,
-    GraphNodePayload, GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionError,
-    ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
-    SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphBuildDiff, SemanticGraphBuildSnapshot,
-    SemanticGraphReport, SemanticGraphValidationResult, SemanticGraphValidator, SemanticReference,
-    SemanticReferenceCategory, SemanticReferenceOutcome, SemanticReferenceRequest,
-    SemanticReferenceRequestError, SemanticReferenceRequestId, SemanticReferenceRequestLedger,
-    SemanticReferenceRequestOutcome, SemanticReferenceRequestQuery, SemanticReferenceStatistics,
-    StandardAttribute, StandardAttributeKind,
+    AccessRight, AccessRightRowRestriction, Confidence, DataSetPayloadError, EdgeKind, FactOrigin,
+    GraphEdge, GraphNode, GraphNodePayload, GraphNodePayloadError, NodeKind, ProducerId,
+    Provenance, ResolutionError, ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode,
+    SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphBuildDiff,
+    SemanticGraphBuildSnapshot, SemanticGraphReport, SemanticGraphValidationResult,
+    SemanticGraphValidator, SemanticReference, SemanticReferenceCategory, SemanticReferenceOutcome,
+    SemanticReferenceRequest, SemanticReferenceRequestError, SemanticReferenceRequestId,
+    SemanticReferenceRequestLedger, SemanticReferenceRequestOutcome, SemanticReferenceRequestQuery,
+    SemanticReferenceStatistics, StandardAttribute, StandardAttributeKind,
 };
 use oneagent_metadata::{
     CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataMemberPayload,
@@ -681,6 +682,14 @@ impl FileSystemEdtSemanticGraphBuilder {
             collected_metadata.extend(collected)?;
         }
 
+        report_data_composition_emission::emit_report_data_composition(
+            project_root,
+            &mut graph,
+            &collected_metadata.report_data_composition,
+            &mut diagnostics,
+            &mut reference_statistics,
+        )?;
+
         collected_metadata
             .modules
             .sort_by(|left, right| left.id().cmp(right.id()));
@@ -876,6 +885,7 @@ struct CollectedTopLevelMetadata {
     subsystem_content: BTreeSet<PendingSubsystemContentObservation>,
     subsystem_hierarchy: BTreeSet<PendingSubsystemHierarchyObservation>,
     role_rights: Vec<EdtRoleRightsDescriptor>,
+    report_data_composition: Vec<EdtReportDataCompositionDescriptor>,
 }
 
 impl CollectedTopLevelMetadata {
@@ -888,6 +898,8 @@ impl CollectedTopLevelMetadata {
         self.subsystem_content.extend(other.subsystem_content);
         self.subsystem_hierarchy.extend(other.subsystem_hierarchy);
         self.role_rights.extend(other.role_rights);
+        self.report_data_composition
+            .extend(other.report_data_composition);
         Ok(())
     }
 }
@@ -1220,6 +1232,8 @@ fn collect_metadata_descriptor(
         )?),
     )?;
 
+    collect_report_data_composition(object_directory, &descriptor, &mut collected)?;
+
     collect_top_level_command_parameter_types(graph, &descriptor, &mut collected.references)?;
 
     let children = structure_reader
@@ -1279,6 +1293,21 @@ fn collect_metadata_descriptor(
     collected.modules.extend(form_command_modules);
 
     Ok(collected)
+}
+
+fn collect_report_data_composition(
+    object_directory: &Path,
+    descriptor: &EdtMetadataObjectDescriptor,
+    collected: &mut CollectedTopLevelMetadata,
+) -> Result<(), EdtGraphError> {
+    if descriptor.kind() == MetadataKind::Report {
+        collected.report_data_composition.push(
+            FileSystemEdtReportDataCompositionReader
+                .read(object_directory, descriptor)
+                .map_err(EdtGraphError::ReportDataComposition)?,
+        );
+    }
+    Ok(())
 }
 
 fn emit_form_command_modules(
@@ -3030,6 +3059,9 @@ pub enum EdtGraphError {
     /// A top-level metadata descriptor could not be read.
     MetadataObject(EdtMetadataObjectError),
 
+    /// Report Data Composition declarations or artifacts could not be read.
+    ReportDataComposition(EdtReportDataCompositionError),
+
     /// An Event Subscription descriptor could not be read.
     EventSubscription(EdtEventSubscriptionError),
 
@@ -3123,6 +3155,28 @@ pub enum EdtGraphError {
     /// Typed metadata payload conflicts with its graph node kind.
     NodePayload(GraphNodePayloadError),
 
+    /// A parsed Data Set payload violates its source cardinality contract.
+    DataSetPayload(DataSetPayloadError),
+
+    /// A Report Data Composition source identity collides with an existing node.
+    DuplicateDataCompositionNode(EntityId),
+
+    /// The accepted Report owner is missing or has an incompatible node kind.
+    InvalidReportDataCompositionOwner {
+        /// Report identity.
+        report_id: EntityId,
+        /// Actual graph kind, or `None` when missing.
+        actual_kind: Option<NodeKind>,
+    },
+
+    /// A parsed DCS artifact path is outside the current project root.
+    ReportDataCompositionArtifactOutsideProject {
+        /// Current project root.
+        project_root: PathBuf,
+        /// Artifact path.
+        path: PathBuf,
+    },
+
     /// BSL symbols could not be added to the graph.
     Bsl(EdtBslGraphError),
 
@@ -3134,29 +3188,18 @@ impl Display for EdtGraphError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Load(error) => write!(formatter, "failed to load EDT configuration: {error}"),
-            Self::ReadDirectory { path, source } => {
-                write!(
-                    formatter,
-                    "failed to read directory {}: {source}",
-                    path.display()
-                )
-            }
-            Self::ReadDirectoryEntry { path, source } => {
-                write!(
-                    formatter,
-                    "failed to read an entry in {}: {source}",
-                    path.display()
-                )
-            }
-            Self::ReadFileType { path, source } => {
-                write!(
-                    formatter,
-                    "failed to read file type for {}: {source}",
-                    path.display()
-                )
-            }
+            Self::ReadDirectory { .. }
+            | Self::ReadDirectoryEntry { .. }
+            | Self::ReadFileType { .. } => format_file_system_graph_error(self, formatter),
             Self::MetadataObject(error) => {
                 write!(formatter, "failed to read EDT metadata object: {error}")
+            }
+            Self::ReportDataComposition(_)
+            | Self::DataSetPayload(_)
+            | Self::DuplicateDataCompositionNode(_)
+            | Self::InvalidReportDataCompositionOwner { .. }
+            | Self::ReportDataCompositionArtifactOutsideProject { .. } => {
+                format_report_data_composition_graph_error(self, formatter)
             }
             Self::EventSubscription(error) => {
                 write!(formatter, "failed to read EDT Event Subscription: {error}")
@@ -3233,6 +3276,66 @@ impl Display for EdtGraphError {
     }
 }
 
+fn format_file_system_graph_error(
+    error: &EdtGraphError,
+    formatter: &mut Formatter<'_>,
+) -> std::fmt::Result {
+    match error {
+        EdtGraphError::ReadDirectory { path, source } => write!(
+            formatter,
+            "failed to read directory {}: {source}",
+            path.display()
+        ),
+        EdtGraphError::ReadDirectoryEntry { path, source } => write!(
+            formatter,
+            "failed to read an entry in {}: {source}",
+            path.display()
+        ),
+        EdtGraphError::ReadFileType { path, source } => write!(
+            formatter,
+            "failed to read file type for {}: {source}",
+            path.display()
+        ),
+        _ => unreachable!("file-system formatter received another error category"),
+    }
+}
+
+fn format_report_data_composition_graph_error(
+    error: &EdtGraphError,
+    formatter: &mut Formatter<'_>,
+) -> std::fmt::Result {
+    match error {
+        EdtGraphError::ReportDataComposition(error) => write!(
+            formatter,
+            "failed to read Report Data Composition source: {error}"
+        ),
+        EdtGraphError::DataSetPayload(error) => write!(
+            formatter,
+            "invalid Report Data Composition Data Set: {error}"
+        ),
+        EdtGraphError::DuplicateDataCompositionNode(id) => write!(
+            formatter,
+            "Report Data Composition node identity is duplicated: {id}"
+        ),
+        EdtGraphError::InvalidReportDataCompositionOwner {
+            report_id,
+            actual_kind,
+        } => write!(
+            formatter,
+            "Report Data Composition owner `{report_id}` is invalid; actual kind: {actual_kind:?}"
+        ),
+        EdtGraphError::ReportDataCompositionArtifactOutsideProject { project_root, path } => {
+            write!(
+                formatter,
+                "Report Data Composition artifact {} is outside project root {}",
+                path.display(),
+                project_root.display()
+            )
+        }
+        _ => unreachable!("Data Composition formatter received another error category"),
+    }
+}
+
 fn format_subsystem_hierarchy_graph_error(
     error: &EdtGraphError,
     formatter: &mut Formatter<'_>,
@@ -3272,6 +3375,7 @@ impl std::error::Error for EdtGraphError {
             | Self::ReadDirectoryEntry { source, .. }
             | Self::ReadFileType { source, .. } => Some(source),
             Self::MetadataObject(error) => Some(error),
+            Self::ReportDataComposition(error) => Some(error),
             Self::EventSubscription(error) => Some(error),
             Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
@@ -3281,6 +3385,7 @@ impl std::error::Error for EdtGraphError {
             Self::Graph(error) => Some(error),
             Self::ReferenceRequest(error) => Some(error),
             Self::NodePayload(error) => Some(error),
+            Self::DataSetPayload(error) => Some(error),
             Self::InvalidIdentifier
             | Self::InvalidName
             | Self::InvalidMetadataReferenceRequest { .. }
@@ -3290,7 +3395,10 @@ impl std::error::Error for EdtGraphError {
             | Self::SubsystemDescriptorOutsideProject { .. }
             | Self::InvalidSubsystemSource { .. }
             | Self::InvalidFormCommandModuleOwner { .. }
-            | Self::InvalidCommandParameterSource { .. } => None,
+            | Self::InvalidCommandParameterSource { .. }
+            | Self::DuplicateDataCompositionNode(_)
+            | Self::InvalidReportDataCompositionOwner { .. }
+            | Self::ReportDataCompositionArtifactOutsideProject { .. } => None,
             Self::Bsl(error) => Some(error),
             Self::FormNavigation(error) => Some(error),
         }

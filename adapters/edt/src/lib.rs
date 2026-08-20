@@ -4,6 +4,7 @@ mod bsl_graph;
 mod command_parameter;
 mod coverage;
 mod event_subscription;
+mod event_subscription_emission;
 // The resolver is a production prerequisite for later Event Subscription emission.
 #[allow(dead_code)]
 mod event_subscription_resolution;
@@ -617,12 +618,7 @@ impl FileSystemEdtSemanticGraphBuilder {
         let (configuration, configuration_payload) =
             FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
         let mut graph = SemanticGraph::new();
-        let mut configuration_modules = Vec::new();
-        let mut configuration_writes_sources = Vec::new();
-        let mut metadata_references = MetadataReferenceCollection::default();
-        let mut metadata_extensions = BTreeSet::new();
-        let (mut subsystem_content, mut subsystem_hierarchy) = (BTreeSet::new(), BTreeSet::new());
-        let mut role_rights = Vec::new();
+        let mut collected_metadata = CollectedTopLevelMetadata::default();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
 
@@ -639,7 +635,7 @@ impl FileSystemEdtSemanticGraphBuilder {
             return Ok(EdtSemanticGraphBuildResult::new(graph, Vec::new()));
         }
 
-        let kind_by_directory = supported_metadata_directories();
+        let kind_by_directory = production_metadata_directories();
 
         for entry in fs::read_dir(&source_root).map_err(|source| EdtGraphError::ReadDirectory {
             path: source_root.clone(),
@@ -673,49 +669,45 @@ impl FileSystemEdtSemanticGraphBuilder {
                 &configuration_id,
                 &mut graph,
             )?;
-            configuration_modules.extend(collected.modules);
-            configuration_writes_sources.extend(collected.writes_sources);
-            metadata_references.extend(collected.references)?;
-            metadata_extensions.extend(collected.extensions);
-            subsystem_content.extend(collected.subsystem_content);
-            subsystem_hierarchy.extend(collected.subsystem_hierarchy);
-            role_rights.extend(collected.role_rights);
+            collected_metadata.extend(collected)?;
         }
 
-        configuration_modules.sort_by(|left, right| left.id().cmp(right.id()));
+        collected_metadata
+            .modules
+            .sort_by(|left, right| left.id().cmp(right.id()));
 
-        resolve_metadata_extensions(&mut graph, &metadata_extensions)?;
+        resolve_metadata_extensions(&mut graph, &collected_metadata.extensions)?;
         emit_subsystem_composition(
             &mut graph,
-            &subsystem_hierarchy,
-            &subsystem_content,
+            &collected_metadata.subsystem_hierarchy,
+            &collected_metadata.subsystem_content,
             &mut diagnostics,
             &mut reference_statistics,
         )?;
 
         emit_rejected_command_parameters(
-            &metadata_references,
+            &collected_metadata.references,
             &mut diagnostics,
             &mut reference_statistics,
         )?;
 
         let mut reference_requests = resolve_metadata_references(
             &mut graph,
-            &metadata_references,
+            &collected_metadata.references,
             &mut diagnostics,
             metadata_reference_scope,
         )?;
 
         emit_role_grants(
             &mut graph,
-            &role_rights,
+            &collected_metadata.role_rights,
             &mut diagnostics,
             &mut reference_statistics,
         )?;
 
         add_configuration_module_semantics(
             &mut graph,
-            &configuration_modules,
+            &collected_metadata.modules,
             metadata_reference_scope,
             &mut diagnostics,
             &mut reference_statistics,
@@ -724,7 +716,8 @@ impl FileSystemEdtSemanticGraphBuilder {
 
         finish_configuration_graph_build(
             graph,
-            &configuration_writes_sources,
+            &collected_metadata.writes_sources,
+            &collected_metadata.event_subscriptions,
             diagnostics,
             reference_statistics,
             reference_requests,
@@ -741,6 +734,15 @@ fn collect_supported_metadata_directory(
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     if kind == MetadataKind::Subsystem {
         collect_subsystem_hierarchy(project_root, configuration_id, graph)
+    } else if kind == MetadataKind::EventSubscription {
+        Ok(CollectedTopLevelMetadata {
+            event_subscriptions: event_subscription_emission::collect_event_subscription_directory(
+                directory,
+                configuration_id,
+                graph,
+            )?,
+            ..CollectedTopLevelMetadata::default()
+        })
     } else {
         collect_top_level_metadata(project_root, directory, kind, configuration_id, graph)
     }
@@ -802,14 +804,21 @@ fn insert_configuration_node(
 
 fn finish_configuration_graph_build(
     mut graph: SemanticGraph,
-    sources: &[writes_emission::EdtWritesSource],
+    writes_sources: &[writes_emission::EdtWritesSource],
+    event_subscriptions: &[EdtEventSubscriptionDescriptor],
     mut diagnostics: BTreeSet<SemanticDiagnostic>,
     mut reference_statistics: SemanticReferenceStatistics,
     reference_requests: SemanticReferenceRequestLedger,
 ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
+    event_subscription_emission::emit_resolved_event_subscriptions(
+        &mut graph,
+        event_subscriptions,
+        &mut diagnostics,
+        &mut reference_statistics,
+    )?;
     writes_emission::emit_resolved_writes(
         &mut graph,
-        sources,
+        writes_sources,
         query_source_resolution::WorkspaceResolutionScope::Complete,
         &mut diagnostics,
         &mut reference_statistics,
@@ -847,10 +856,17 @@ fn supported_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
     ])
 }
 
+fn production_metadata_directories() -> BTreeMap<&'static str, MetadataKind> {
+    let mut directories = supported_metadata_directories();
+    directories.insert("EventSubscriptions", MetadataKind::EventSubscription);
+    directories
+}
+
 #[derive(Debug, Default)]
 struct CollectedTopLevelMetadata {
     modules: Vec<EdtModuleDescriptor>,
     writes_sources: Vec<writes_emission::EdtWritesSource>,
+    event_subscriptions: Vec<EdtEventSubscriptionDescriptor>,
     references: MetadataReferenceCollection,
     extensions: BTreeSet<PendingMetadataExtension>,
     subsystem_content: BTreeSet<PendingSubsystemContentObservation>,
@@ -862,6 +878,7 @@ impl CollectedTopLevelMetadata {
     fn extend(&mut self, other: Self) -> Result<(), EdtGraphError> {
         self.modules.extend(other.modules);
         self.writes_sources.extend(other.writes_sources);
+        self.event_subscriptions.extend(other.event_subscriptions);
         self.references.extend(other.references)?;
         self.extensions.extend(other.extensions);
         self.subsystem_content.extend(other.subsystem_content);
@@ -3009,6 +3026,9 @@ pub enum EdtGraphError {
     /// A top-level metadata descriptor could not be read.
     MetadataObject(EdtMetadataObjectError),
 
+    /// An Event Subscription descriptor could not be read.
+    EventSubscription(EdtEventSubscriptionError),
+
     /// The internal structure of a metadata object could not be read.
     MetadataStructure(EdtMetadataStructureError),
 
@@ -3134,6 +3154,9 @@ impl Display for EdtGraphError {
             Self::MetadataObject(error) => {
                 write!(formatter, "failed to read EDT metadata object: {error}")
             }
+            Self::EventSubscription(error) => {
+                write!(formatter, "failed to read EDT Event Subscription: {error}")
+            }
             Self::MetadataStructure(error) => {
                 write!(
                     formatter,
@@ -3245,6 +3268,7 @@ impl std::error::Error for EdtGraphError {
             | Self::ReadDirectoryEntry { source, .. }
             | Self::ReadFileType { source, .. } => Some(source),
             Self::MetadataObject(error) => Some(error),
+            Self::EventSubscription(error) => Some(error),
             Self::MetadataStructure(error) => Some(error),
             Self::Module(error) => Some(error),
             Self::SubsystemContent(error) => Some(error),

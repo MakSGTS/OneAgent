@@ -1250,11 +1250,11 @@ pub fn semantic_coverage_node_kinds() -> Vec<NodeKind> {
 
 /// Returns every currently declared edge kind for registry consistency checks.
 #[must_use]
-pub const fn semantic_coverage_edge_kinds() -> [EdgeKind; 10] {
+pub const fn semantic_coverage_edge_kinds() -> [EdgeKind; 11] {
     all_edge_kinds()
 }
 
-const fn all_edge_kinds() -> [EdgeKind; 10] {
+const fn all_edge_kinds() -> [EdgeKind; 11] {
     [
         EdgeKind::Contains,
         EdgeKind::Calls,
@@ -1266,6 +1266,7 @@ const fn all_edge_kinds() -> [EdgeKind; 10] {
         EdgeKind::Extends,
         EdgeKind::DependsOn,
         EdgeKind::Opens,
+        EdgeKind::Triggers,
     ]
 }
 
@@ -1310,7 +1311,7 @@ const fn all_provenance_capabilities() -> [SemanticProvenanceCapability; 8] {
     ]
 }
 
-const fn all_metadata_kinds() -> [MetadataKind; 23] {
+const fn all_metadata_kinds() -> [MetadataKind; 24] {
     [
         MetadataKind::Configuration,
         MetadataKind::Subsystem,
@@ -1334,6 +1335,7 @@ const fn all_metadata_kinds() -> [MetadataKind; 23] {
         MetadataKind::HttpService,
         MetadataKind::WebService,
         MetadataKind::XdtoPackage,
+        MetadataKind::EventSubscription,
         MetadataKind::Unknown,
     ]
 }
@@ -1372,6 +1374,7 @@ const fn edge_kind_code(kind: EdgeKind) -> &'static str {
         EdgeKind::Extends => "extends",
         EdgeKind::DependsOn => "depends_on",
         EdgeKind::Opens => "opens",
+        EdgeKind::Triggers => "triggers",
     }
 }
 

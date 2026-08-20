@@ -60,4 +60,6 @@ pub enum EdgeKind {
     DependsOn,
     /// Source opens target form.
     Opens,
+    /// Event subscription invokes its handler procedure.
+    Triggers,
 }

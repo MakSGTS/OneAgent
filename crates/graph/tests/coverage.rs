@@ -137,6 +137,37 @@ fn opens_has_stable_supported_graph_and_impact_coverage() {
 }
 
 #[test]
+fn event_subscription_and_triggers_have_graph_model_coverage_without_impact() {
+    let report = SemanticCoverageRegistry::audit();
+    let node = report
+        .capability(SemanticCoverageCapabilityId::SemanticNode(
+            NodeKind::Metadata(MetadataKind::EventSubscription),
+        ))
+        .expect("Event Subscription node coverage must exist");
+    let edge = report
+        .capability(SemanticCoverageCapabilityId::SemanticEdge(
+            EdgeKind::Triggers,
+        ))
+        .expect("Triggers edge coverage must exist");
+    let impact = report
+        .capability(SemanticCoverageCapabilityId::ImpactPropagation(
+            EdgeKind::Triggers,
+        ))
+        .expect("Triggers impact coverage must exist");
+
+    assert_eq!(
+        node.stable_id(),
+        "semantic_node.metadata.event_subscription"
+    );
+    assert_eq!(node.status(), SemanticCoverageStatus::Supported);
+    assert_eq!(edge.stable_id(), "semantic_edge.triggers");
+    assert_eq!(edge.status(), SemanticCoverageStatus::Supported);
+    assert_eq!(impact.stable_id(), "impact_propagation.triggers");
+    assert_eq!(impact.status(), SemanticCoverageStatus::NotApplicable);
+    assert!(impact.evidence().is_empty());
+}
+
+#[test]
 fn access_right_node_has_graph_domain_coverage_entry() {
     let report = SemanticCoverageRegistry::audit();
     let capability = report

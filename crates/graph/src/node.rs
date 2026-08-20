@@ -233,8 +233,8 @@ impl GraphNode {
 mod tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_metadata::{
-        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataMemberPayload,
-        MetadataPayload, MetadataSpecificPayload,
+        CommonMetadataPayload, DocumentMetadataPayload, EventSubscriptionMetadataPayload,
+        MetadataKind, MetadataMemberPayload, MetadataPayload, MetadataSpecificPayload,
     };
 
     use super::{GraphNode, GraphNodePayload};
@@ -278,6 +278,37 @@ mod tests {
         .expect_err("metadata payload on Module must be rejected");
 
         assert_eq!(error.node_kind(), NodeKind::Module);
+    }
+
+    #[test]
+    fn event_subscription_payload_requires_exact_metadata_node_kind() {
+        let payload = GraphNodePayload::Metadata(MetadataPayload::new(
+            CommonMetadataPayload::empty(),
+            Some(MetadataSpecificPayload::EventSubscription(
+                EventSubscriptionMetadataPayload::new(name("BeforeWrite")),
+            )),
+        ));
+
+        let node = GraphNode::new_with_payload(
+            id("event_subscription.before_write"),
+            name("BeforeWriteSubscription"),
+            NodeKind::Metadata(MetadataKind::EventSubscription),
+            payload.clone(),
+        )
+        .expect("Event Subscription payload must be accepted by the graph API");
+        assert_eq!(node.payload(), &payload);
+
+        let error = GraphNode::new_with_payload(
+            id("document.sales"),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Document),
+            payload,
+        )
+        .expect_err("Event Subscription payload on Document must be rejected");
+        assert_eq!(
+            error.node_kind(),
+            NodeKind::Metadata(MetadataKind::Document)
+        );
     }
 
     #[test]

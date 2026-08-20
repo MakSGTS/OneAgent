@@ -69,3 +69,28 @@ fn report_counts_opens_edges_by_kind() {
     assert_eq!(report.graph().total_edges(), 1);
     assert_eq!(report.edges().by_kind()[&EdgeKind::Opens], 1);
 }
+
+#[test]
+fn report_counts_triggers_edges_by_kind() {
+    let subscription = id("metadata.event_subscription.before_write");
+    let procedure = id("procedure.before_write");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(GraphNode::new(
+        subscription.clone(),
+        name("BeforeWriteSubscription"),
+        NodeKind::Metadata(oneagent_metadata::MetadataKind::EventSubscription),
+    ));
+    graph.insert_node(GraphNode::new(
+        procedure.clone(),
+        name("BeforeWrite"),
+        NodeKind::Procedure,
+    ));
+    graph
+        .insert_edge(GraphEdge::new(subscription, procedure, EdgeKind::Triggers))
+        .expect("Triggers edge must be stored");
+
+    let report = SemanticGraphReport::from_graph(&graph);
+
+    assert_eq!(report.graph().total_edges(), 1);
+    assert_eq!(report.edges().by_kind()[&EdgeKind::Triggers], 1);
+}

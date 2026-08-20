@@ -554,7 +554,7 @@ mod tests {
         NodeKind::Unknown,
     ];
 
-    const EDGE_KINDS: [EdgeKind; 10] = [
+    const EDGE_KINDS: [EdgeKind; 11] = [
         EdgeKind::Contains,
         EdgeKind::Calls,
         EdgeKind::References,
@@ -565,6 +565,7 @@ mod tests {
         EdgeKind::Extends,
         EdgeKind::DependsOn,
         EdgeKind::Opens,
+        EdgeKind::Triggers,
     ];
 
     #[derive(Debug, Clone, PartialEq, Eq)]

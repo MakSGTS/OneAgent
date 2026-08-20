@@ -4,7 +4,8 @@ use oneagent_graph::{
     GraphNodePayload, NodeKind, NodeModifiedAspect, SemanticGraph, SemanticGraphDiff,
 };
 use oneagent_metadata::{
-    CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
+    CommonMetadataPayload, EventSubscriptionMetadataPayload, MetadataKind, MetadataMemberPayload,
+    MetadataPayload, MetadataSpecificPayload,
 };
 
 fn id(value: &str) -> EntityId {
@@ -126,6 +127,78 @@ fn payload_only_change_preserves_identity_and_modifies_semantic_content() {
             .common()
             .synonym(),
         Some("Goods")
+    );
+}
+
+#[test]
+fn event_change_preserves_node_identity_and_modifies_semantic_content() {
+    let node_id = id("metadata.event_subscription.before_write");
+    let node = |event: &str| {
+        GraphNode::new_with_payload(
+            node_id.clone(),
+            name("BeforeWriteSubscription"),
+            NodeKind::Metadata(MetadataKind::EventSubscription),
+            GraphNodePayload::Metadata(MetadataPayload::new(
+                CommonMetadataPayload::empty(),
+                Some(MetadataSpecificPayload::EventSubscription(
+                    EventSubscriptionMetadataPayload::new(name(event)),
+                )),
+            )),
+        )
+        .expect("Event Subscription payload must be valid")
+    };
+    let mut old = SemanticGraph::new();
+    let mut new = SemanticGraph::new();
+    old.insert_node(node("BeforeWrite"));
+    new.insert_node(node("OnWrite"));
+
+    let diff = old.diff(&new);
+
+    assert!(diff.added_nodes().is_empty());
+    assert!(diff.removed_nodes().is_empty());
+    assert_eq!(diff.modified_nodes().len(), 1);
+    assert_eq!(diff.modified_nodes()[0].id().as_str(), node_id.as_str());
+    assert_eq!(
+        diff.modified_nodes()[0].modified_aspects(),
+        &[NodeModifiedAspect::SemanticContent]
+    );
+}
+
+#[test]
+fn triggers_edge_changes_keep_stable_typed_diff_identity() {
+    let subscription = id("metadata.event_subscription.before_write");
+    let procedure = id("procedure.before_write");
+    let mut old = SemanticGraph::new();
+    let mut new = SemanticGraph::new();
+
+    for graph in [&mut old, &mut new] {
+        graph.insert_node(GraphNode::new(
+            subscription.clone(),
+            name("BeforeWriteSubscription"),
+            NodeKind::Metadata(MetadataKind::EventSubscription),
+        ));
+        graph.insert_node(GraphNode::new(
+            procedure.clone(),
+            name("BeforeWrite"),
+            NodeKind::Procedure,
+        ));
+    }
+    new.insert_edge(GraphEdge::new(
+        subscription.clone(),
+        procedure.clone(),
+        EdgeKind::Triggers,
+    ))
+    .expect("Triggers edge must be stored");
+
+    let diff = old.diff(&new);
+
+    assert_eq!(diff.added_edges().len(), 1);
+    assert_eq!(diff.added_edges()[0].edge_kind(), EdgeKind::Triggers);
+    assert!(
+        diff.added_edges()[0]
+            .id()
+            .as_str()
+            .ends_with("kind:triggers")
     );
 }
 

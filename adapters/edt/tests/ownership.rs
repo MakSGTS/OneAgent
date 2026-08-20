@@ -208,11 +208,12 @@ fn assert_supported_coverage(result: &EdtSemanticGraphBuildResult) {
     assert!(coverage.edt_pipeline().gaps().iter().all(|gap| {
         gap.capability_id() != SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::Attribute)
     }));
-    assert!(
+    assert_eq!(
         coverage
             .edt_pipeline()
             .gaps_by_priority(SemanticCoverageGapPriority::High)
-            .is_empty()
+            .len(),
+        3
     );
     assert_eq!(
         coverage
@@ -223,7 +224,7 @@ fn assert_supported_coverage(result: &EdtSemanticGraphBuildResult) {
     );
     for (priority, expected) in [
         (SemanticCoverageGapPriority::Critical, 0),
-        (SemanticCoverageGapPriority::High, 0),
+        (SemanticCoverageGapPriority::High, 3),
         (SemanticCoverageGapPriority::Medium, 0),
     ] {
         let combined = coverage.graph_domain().gaps_by_priority(priority).len()

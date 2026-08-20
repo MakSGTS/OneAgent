@@ -488,6 +488,7 @@ impl SemanticGraphSchema {
             EdgeKind::Reads => allows_reads(source_kind, target_kind),
             EdgeKind::Writes => allows_writes(source_kind, target_kind),
             EdgeKind::Opens => allows_opens(source_kind, target_kind),
+            EdgeKind::Triggers => allows_triggers(source_kind, target_kind),
         }
     }
 }
@@ -1247,6 +1248,25 @@ const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
                         | MetadataKind::AccumulationRegister
                 )
             ))
+        || (matches!(source, NodeKind::Metadata(MetadataKind::EventSubscription))
+            && (is_event_subscription_source_target(target)
+                || matches!(target, NodeKind::Procedure)))
+}
+
+const fn is_event_subscription_source_target(kind: NodeKind) -> bool {
+    matches!(
+        kind,
+        NodeKind::Metadata(
+            MetadataKind::Catalog
+                | MetadataKind::Document
+                | MetadataKind::InformationRegister
+                | MetadataKind::AccumulationRegister
+                | MetadataKind::AccountingRegister
+                | MetadataKind::CalculationRegister
+                | MetadataKind::BusinessProcess
+                | MetadataKind::Task
+        )
+    )
 }
 
 const fn allows_depends_on(source: NodeKind, target: NodeKind) -> bool {
@@ -1284,6 +1304,11 @@ const fn allows_opens(source: NodeKind, target: NodeKind) -> bool {
             target,
             NodeKind::Form | NodeKind::Metadata(MetadataKind::CommonForm)
         )
+}
+
+const fn allows_triggers(source: NodeKind, target: NodeKind) -> bool {
+    matches!(source, NodeKind::Metadata(MetadataKind::EventSubscription))
+        && matches!(target, NodeKind::Procedure)
 }
 
 const fn allows_reads(source: NodeKind, target: NodeKind) -> bool {

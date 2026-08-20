@@ -26,6 +26,7 @@ const fn edge_kind_code(kind: EdgeKind) -> &'static str {
         EdgeKind::Extends => "extends",
         EdgeKind::DependsOn => "depends_on",
         EdgeKind::Opens => "opens",
+        EdgeKind::Triggers => "triggers",
     }
 }
 
@@ -58,6 +59,17 @@ mod tests {
             "edge:source#6:source;target#6:target;kind:depends_on"
         );
         assert_ne!(opens, depends_on);
+    }
+
+    #[test]
+    fn triggers_has_a_stable_machine_identity() {
+        let triggers = edge_id("source", "target", EdgeKind::Triggers);
+
+        assert_eq!(
+            triggers.as_str(),
+            "edge:source#6:source;target#6:target;kind:triggers"
+        );
+        assert_ne!(triggers, edge_id("source", "target", EdgeKind::References));
     }
 
     #[test]

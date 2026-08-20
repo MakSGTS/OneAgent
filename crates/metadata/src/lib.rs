@@ -51,6 +51,8 @@ pub enum MetadataKind {
     WebService,
     /// `XDTO` package.
     XdtoPackage,
+    /// Event subscription.
+    EventSubscription,
     /// Unknown or not-yet-supported metadata kind.
     Unknown,
 }
@@ -82,6 +84,7 @@ impl MetadataKind {
             Self::HttpService => "http_service",
             Self::WebService => "web_service",
             Self::XdtoPackage => "xdto_package",
+            Self::EventSubscription => "event_subscription",
             Self::Unknown => "unknown",
         }
     }
@@ -134,6 +137,9 @@ impl MetadataPayload {
         match self.specific {
             None => true,
             Some(MetadataSpecificPayload::Document(_)) => matches!(kind, MetadataKind::Document),
+            Some(MetadataSpecificPayload::EventSubscription(_)) => {
+                matches!(kind, MetadataKind::EventSubscription)
+            }
         }
     }
 }
@@ -199,6 +205,28 @@ impl MetadataMemberPayload {
 pub enum MetadataSpecificPayload {
     /// Content intrinsic to a Document metadata object.
     Document(DocumentMetadataPayload),
+    /// Content intrinsic to an Event Subscription metadata object.
+    EventSubscription(EventSubscriptionMetadataPayload),
+}
+
+/// Source-independent Event Subscription content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventSubscriptionMetadataPayload {
+    event: EntityName,
+}
+
+impl EventSubscriptionMetadataPayload {
+    /// Creates Event Subscription content from its declared event name.
+    #[must_use]
+    pub const fn new(event: EntityName) -> Self {
+        Self { event }
+    }
+
+    /// Returns the declared event name.
+    #[must_use]
+    pub const fn event(&self) -> &EntityName {
+        &self.event
+    }
 }
 
 /// Source-independent Document content.
@@ -429,9 +457,9 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use super::{
-        CommonMetadataPayload, DocumentMetadataPayload, MetadataKind, MetadataMemberPayload,
-        MetadataObject, MetadataPayload, MetadataRegisterRecord, MetadataSpecificPayload,
-        MetadataTree,
+        CommonMetadataPayload, DocumentMetadataPayload, EventSubscriptionMetadataPayload,
+        MetadataKind, MetadataMemberPayload, MetadataObject, MetadataPayload,
+        MetadataRegisterRecord, MetadataSpecificPayload, MetadataTree,
     };
 
     fn id(value: &str) -> EntityId {
@@ -589,6 +617,49 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "metadata payload is incompatible with catalog metadata kind"
+        );
+    }
+
+    #[test]
+    fn event_subscription_payload_preserves_event_and_exact_compatibility() {
+        let event = name("BeforeWrite");
+        let payload = MetadataPayload::new(
+            CommonMetadataPayload::empty(),
+            Some(MetadataSpecificPayload::EventSubscription(
+                EventSubscriptionMetadataPayload::new(event.clone()),
+            )),
+        );
+
+        let object = MetadataObject::new_with_payload(
+            id("event_subscription.before_write"),
+            name("BeforeWriteSubscription"),
+            MetadataKind::EventSubscription,
+            None,
+            payload.clone(),
+        )
+        .expect("Event Subscription payload must be accepted for its metadata kind");
+        let Some(MetadataSpecificPayload::EventSubscription(specific)) =
+            object.payload().specific()
+        else {
+            panic!("Event Subscription payload must remain typed");
+        };
+
+        assert_eq!(specific.event(), &event);
+        assert_eq!(object.payload(), &payload);
+
+        let error = MetadataObject::new_with_payload(
+            id("document.sales"),
+            name("Sales"),
+            MetadataKind::Document,
+            None,
+            payload,
+        )
+        .expect_err("Event Subscription payload on Document must be rejected");
+
+        assert_eq!(error.kind(), MetadataKind::Document);
+        assert_eq!(
+            error.to_string(),
+            "metadata payload is incompatible with document metadata kind"
         );
     }
 }

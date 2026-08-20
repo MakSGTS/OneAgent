@@ -279,6 +279,50 @@ fn modified_opened_form_propagates_impact_to_opening_procedure() {
 }
 
 #[test]
+fn triggers_does_not_propagate_impact_to_event_subscription() {
+    let build = |procedure_name: &str| {
+        let mut graph = SemanticGraph::new();
+        add_node(
+            &mut graph,
+            "metadata.event_subscription.before_write",
+            "BeforeWriteSubscription",
+            NodeKind::Metadata(MetadataKind::EventSubscription),
+        );
+        add_node(
+            &mut graph,
+            "procedure.before_write",
+            procedure_name,
+            NodeKind::Procedure,
+        );
+        add_edge(
+            &mut graph,
+            "metadata.event_subscription.before_write",
+            "procedure.before_write",
+            EdgeKind::Triggers,
+        );
+        graph
+    };
+    let previous = build("BeforeWrite");
+    let current = build("BeforeWriteChanged");
+    let diff = previous.diff(&current);
+
+    let result =
+        SemanticImpactAnalyzer::analyze(&previous, &current, &diff, &SemanticImpactOptions::new(1))
+            .expect("impact analysis must succeed");
+
+    assert_eq!(result.affected_nodes().len(), 1);
+    assert_eq!(
+        result.affected_nodes()[0].node_id().as_str(),
+        "procedure.before_write"
+    );
+    assert!(result.affected_nodes().iter().all(|node| {
+        node.reasons()
+            .iter()
+            .all(|reason| reason.edge_kind() != Some(EdgeKind::Triggers))
+    }));
+}
+
+#[test]
 fn result_is_repeatable_and_independent_from_insertion_order() {
     let previous = dependency_graph("Callee", false);
     let current = dependency_graph("CalleeRenamed", false);

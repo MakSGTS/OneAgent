@@ -787,6 +787,7 @@ const fn edge_title(kind: EdgeKind) -> &'static str {
         EdgeKind::Extends => "extends",
         EdgeKind::DependsOn => "depends on",
         EdgeKind::Opens => "opens",
+        EdgeKind::Triggers => "triggers",
     }
 }
 
@@ -799,7 +800,7 @@ mod tests {
         SemanticProvenanceCapability, SemanticReference, SemanticReferenceCapability,
     };
     use oneagent_metadata::MetadataKind;
-    use std::fs;
+    use std::{collections::BTreeSet, fs};
 
     use super::{EdtSemanticCoverageRegistry, all_metadata_kinds, metadata_reference_target_kinds};
     use crate::{
@@ -812,12 +813,22 @@ mod tests {
             .join("tests/fixtures/sprint7_forms_commands_project")
     }
 
-    fn assert_no_high_gap(report: &SemanticCoverageReport) {
-        assert!(
-            report
-                .gaps_by_priority(SemanticCoverageGapPriority::High)
-                .is_empty()
-        );
+    fn assert_no_unplanned_high_gap(report: &SemanticCoverageReport) {
+        let actual = report
+            .gaps_by_priority(SemanticCoverageGapPriority::High)
+            .into_iter()
+            .map(|gap| gap.capability_id().as_str())
+            .collect::<BTreeSet<_>>();
+        let expected = [
+            "metadata_entity.event_subscription",
+            "semantic_edge.triggers",
+            "semantic_node.metadata.event_subscription",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+
+        assert_eq!(actual, expected);
     }
 
     fn assert_metadata_node_has_complete_production_evidence(kind: MetadataKind) {
@@ -961,7 +972,7 @@ mod tests {
         assert!(first.duplicate_ids().is_empty());
         assert!(!first.capabilities().is_empty());
         assert_eq!(first.summary().total(), first.capabilities().len());
-        assert_eq!(first.summary().total(), 101);
+        assert_eq!(first.summary().total(), 104);
         assert_eq!(
             first
                 .summary()
@@ -976,23 +987,37 @@ mod tests {
                 .get(&SemanticCoverageStatus::NotApplicable),
             Some(&5)
         );
-        assert!(first.summary().by_gap_priority().is_empty());
+        assert_eq!(
+            first
+                .summary()
+                .by_status()
+                .get(&SemanticCoverageStatus::Unsupported),
+            Some(&2)
+        );
+        assert_eq!(
+            first
+                .summary()
+                .by_status()
+                .get(&SemanticCoverageStatus::DeclaredOnly),
+            Some(&1)
+        );
+        assert_no_unplanned_high_gap(&first);
 
         let graph_domain = SemanticCoverageRegistry::audit();
-        assert_eq!(graph_domain.summary().total(), 85);
+        assert_eq!(graph_domain.summary().total(), 88);
         assert_eq!(
             graph_domain
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&82)
+            Some(&84)
         );
         assert_eq!(
             graph_domain
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::NotApplicable),
-            Some(&3)
+            Some(&4)
         );
         assert!(graph_domain.summary().by_gap_priority().is_empty());
     }
@@ -1018,7 +1043,7 @@ mod tests {
                 "oneagent_edt::sprint7_evidence::sprint7_repository_fixture_proves_modules_references_and_navigation_end_to_end",
             ]
         );
-        assert_no_high_gap(&report);
+        assert_no_unplanned_high_gap(&report);
     }
 
     #[test]
@@ -1129,7 +1154,7 @@ mod tests {
                 .iter()
                 .any(|test| test == representative)
         );
-        assert_eq!(report.summary().total(), 101);
+        assert_eq!(report.summary().total(), 104);
         assert_eq!(
             report
                 .summary()
@@ -1144,7 +1169,21 @@ mod tests {
                 .get(&SemanticCoverageStatus::NotApplicable),
             Some(&5)
         );
-        assert!(report.summary().by_gap_priority().is_empty());
+        assert_eq!(
+            report
+                .summary()
+                .by_status()
+                .get(&SemanticCoverageStatus::Unsupported),
+            Some(&2)
+        );
+        assert_eq!(
+            report
+                .summary()
+                .by_status()
+                .get(&SemanticCoverageStatus::DeclaredOnly),
+            Some(&1)
+        );
+        assert_no_unplanned_high_gap(&report);
     }
 
     #[test]
@@ -1202,7 +1241,7 @@ mod tests {
                 .gaps_by_priority(SemanticCoverageGapPriority::Critical)
                 .is_empty()
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1256,7 +1295,7 @@ mod tests {
                 .gaps_by_priority(SemanticCoverageGapPriority::Critical)
                 .is_empty()
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1281,7 +1320,7 @@ mod tests {
                 + first
                     .gaps_by_priority(SemanticCoverageGapPriority::High)
                     .len(),
-            0
+            3
         );
         assert_eq!(
             graph_domain
@@ -1300,10 +1339,12 @@ mod tests {
         let representative =
             "oneagent_edt::payload::payload_matrix_covers_every_supported_edt_metadata_kind";
 
-        for kind in all_metadata_kinds()
-            .into_iter()
-            .filter(|kind| !matches!(kind, MetadataKind::Form | MetadataKind::Unknown))
-        {
+        for kind in all_metadata_kinds().into_iter().filter(|kind| {
+            !matches!(
+                kind,
+                MetadataKind::Form | MetadataKind::EventSubscription | MetadataKind::Unknown
+            )
+        }) {
             let capability = report
                 .capability(SemanticCoverageCapabilityId::MetadataEntity(kind))
                 .expect("supported metadata coverage must exist");
@@ -1380,7 +1421,7 @@ mod tests {
                 .all(|gap| gap.capability_id() != capability.id())
         );
 
-        assert_no_high_gap(&report);
+        assert_no_unplanned_high_gap(&report);
     }
 
     #[test]
@@ -1420,7 +1461,7 @@ mod tests {
         assert_eq!(command.evidence(), command.required_evidence());
         assert!(command.missing_evidence().is_empty());
 
-        assert_no_high_gap(&report);
+        assert_no_unplanned_high_gap(&report);
     }
 
     #[test]
@@ -1461,7 +1502,7 @@ mod tests {
             .expect("form coverage must exist");
         assert_eq!(form.status(), SemanticCoverageStatus::NotApplicable);
 
-        assert_no_high_gap(&report);
+        assert_no_unplanned_high_gap(&report);
     }
 
     #[test]
@@ -1498,7 +1539,7 @@ mod tests {
         assert_eq!(document.evidence(), document.required_evidence());
         assert!(document.missing_evidence().is_empty());
 
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1556,7 +1597,7 @@ mod tests {
         assert!(!flat_unknown.notes().is_empty());
 
         let high_gaps = first.gaps_by_priority(SemanticCoverageGapPriority::High);
-        assert!(high_gaps.is_empty());
+        assert_eq!(high_gaps.len(), 3);
         assert!(
             high_gaps
                 .iter()
@@ -1567,7 +1608,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != flat_unknown.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1634,7 +1675,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::High),
-            None
+            Some(&3)
         );
         assert_eq!(
             first
@@ -1643,7 +1684,7 @@ mod tests {
                 .get(&SemanticCoverageGapPriority::Medium),
             None
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
     }
 
     #[test]
@@ -1689,7 +1730,7 @@ mod tests {
                 .summary()
                 .by_gap_priority()
                 .get(&SemanticCoverageGapPriority::High),
-            None
+            Some(&3)
         );
         assert_eq!(
             first
@@ -1698,7 +1739,7 @@ mod tests {
                 .get(&SemanticCoverageGapPriority::Medium),
             None
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
     }
 
     #[test]
@@ -1725,7 +1766,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != includes.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1818,7 +1859,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != unknown.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1863,7 +1904,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != ownership.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1906,7 +1947,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != unknown.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -1974,7 +2015,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != depends_on.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)
@@ -2008,7 +2049,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != capability.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
     }
 
     #[test]
@@ -2048,7 +2089,7 @@ mod tests {
                 .iter()
                 .all(|gap| gap.capability_id() != ownership.id())
         );
-        assert_no_high_gap(&first);
+        assert_no_unplanned_high_gap(&first);
         assert_eq!(
             first
                 .gaps_by_priority(SemanticCoverageGapPriority::Medium)

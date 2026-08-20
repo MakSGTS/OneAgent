@@ -28,7 +28,7 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
 
     assert_eq!(report.edt_pipeline(), &edt);
     assert_eq!(report.graph_domain(), &graph);
-    assert_eq!(edt.summary().total(), 101);
+    assert_eq!(edt.summary().total(), 104);
     assert_eq!(
         edt.summary()
             .by_status()
@@ -41,20 +41,32 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
             .get(&SemanticCoverageStatus::NotApplicable),
         Some(&5)
     );
-    assert_eq!(graph.summary().total(), 85);
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Unsupported),
+        Some(&2)
+    );
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::DeclaredOnly),
+        Some(&1)
+    );
+    assert_eq!(graph.summary().total(), 88);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&82)
+        Some(&84)
     );
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::NotApplicable),
-        Some(&3)
+        Some(&4)
     );
 
     for capability_id in [
@@ -107,7 +119,7 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
 
     assert_eq!(report.edt_pipeline(), &edt);
     assert_eq!(report.graph_domain(), &graph);
-    assert_eq!(edt.summary().total(), 101);
+    assert_eq!(edt.summary().total(), 104);
     assert_eq!(
         edt.summary()
             .by_status()
@@ -120,20 +132,32 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
             .get(&SemanticCoverageStatus::NotApplicable),
         Some(&5)
     );
-    assert_eq!(graph.summary().total(), 85);
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Unsupported),
+        Some(&2)
+    );
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::DeclaredOnly),
+        Some(&1)
+    );
+    assert_eq!(graph.summary().total(), 88);
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&82)
+        Some(&84)
     );
     assert_eq!(
         graph
             .summary()
             .by_status()
             .get(&SemanticCoverageStatus::NotApplicable),
-        Some(&3)
+        Some(&4)
     );
 
     for capability_id in [

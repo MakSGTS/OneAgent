@@ -1073,7 +1073,7 @@ mod tests {
         NodeKind::Subsystem,
         NodeKind::Unknown,
     ];
-    const EDGE_KINDS: [EdgeKind; 10] = [
+    const EDGE_KINDS: [EdgeKind; 11] = [
         EdgeKind::Contains,
         EdgeKind::Calls,
         EdgeKind::References,
@@ -1084,6 +1084,7 @@ mod tests {
         EdgeKind::Extends,
         EdgeKind::DependsOn,
         EdgeKind::Opens,
+        EdgeKind::Triggers,
     ];
 
     fn id(value: &str) -> EntityId {

@@ -651,6 +651,66 @@ fn opens_participates_in_generic_filters_dependencies_usages_and_traversal() {
 }
 
 #[test]
+fn triggers_participates_in_generic_query_but_not_dependency_navigation() {
+    let subscription = id("metadata.event_subscription.before_write");
+    let procedure = id("procedure.before_write");
+    let mut graph = SemanticGraph::new();
+    graph.insert_node(GraphNode::new(
+        subscription.clone(),
+        name("BeforeWriteSubscription"),
+        NodeKind::Metadata(MetadataKind::EventSubscription),
+    ));
+    graph.insert_node(GraphNode::new(
+        procedure.clone(),
+        name("BeforeWrite"),
+        NodeKind::Procedure,
+    ));
+    graph
+        .insert_edge(GraphEdge::new(
+            subscription.clone(),
+            procedure.clone(),
+            EdgeKind::Triggers,
+        ))
+        .expect("Triggers edge must be stored");
+    graph
+        .insert_edge(GraphEdge::new(
+            subscription.clone(),
+            procedure.clone(),
+            EdgeKind::References,
+        ))
+        .expect("handler References edge must be stored");
+
+    let query = graph.query();
+    let subscription_id = node_id(subscription.as_str());
+    let traversal = query.traverse(
+        &subscription_id,
+        &SemanticGraphTraversalOptions::new(SemanticGraphTraversalDirection::Downstream, 1)
+            .with_edge_filter(SemanticGraphEdgeFilter::only(EdgeKind::Triggers)),
+    );
+
+    assert!(!SemanticGraphQuery::is_dependency_edge_kind(
+        EdgeKind::Triggers
+    ));
+    assert!(SemanticGraphQuery::is_dependency_edge_kind(
+        EdgeKind::References
+    ));
+    assert_eq!(
+        query
+            .outgoing_edges_by_kind(&subscription_id, EdgeKind::Triggers)
+            .len(),
+        1
+    );
+    assert!(
+        query
+            .direct_dependencies_by_kind(&subscription_id, EdgeKind::Triggers)
+            .is_empty()
+    );
+    assert_eq!(query.direct_dependencies(&subscription_id).len(), 1);
+    assert_eq!(traversal.len(), 1);
+    assert_eq!(traversal[0].node_id().as_str(), procedure.as_str());
+}
+
+#[test]
 fn bounded_breadth_first_traversal_handles_cycles_and_depth() {
     let normal = graph_fixture(false);
     let reversed = graph_fixture(true);

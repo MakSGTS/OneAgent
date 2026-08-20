@@ -4132,6 +4132,7 @@ mod graph_tests {
             EdgeKind::Extends => "extends",
             EdgeKind::DependsOn => "depends_on",
             EdgeKind::Opens => "opens",
+            EdgeKind::Triggers => "triggers",
         };
 
         format!(
@@ -4418,9 +4419,9 @@ mod graph_tests {
         let payload = document
             .metadata_payload()
             .expect("Document metadata payload must exist");
-        let MetadataSpecificPayload::Document(document_payload) = payload
-            .specific()
-            .expect("Document-specific payload must exist");
+        let Some(MetadataSpecificPayload::Document(document_payload)) = payload.specific() else {
+            panic!("Document-specific payload must exist");
+        };
         let records = document_payload
             .register_records()
             .iter()

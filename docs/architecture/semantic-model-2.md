@@ -2359,8 +2359,29 @@ direct metadata-owned Query declarations without emitting QuerySource requests,
 Reads, DependsOn, References, partial source candidates, or query-language
 diagnostics. DCS query grammar, virtual tables, batches, temporary tables,
 nested Union entities, field folders, settings, and runtime composition remain
-deferred. Architecture acceptance changes no production or Coverage status;
-implementation and evidence proceed through the ordered Sprint 12 tasks.
+deferred.
+
+Sprint 12 Tasks 1-4 now provide graph-domain, parser, production, and executable
+evidence for this bounded slice. The EDT Report path joins declared template
+UUID/name/main-selection values to exact `.dcs` artifacts, emits typed accepted
+entities with deterministic content-bearing provenance, and projects nested,
+folder, and unsupported observations only through typed diagnostics and legacy
+rejected-observation statistics. Fatal structural source failures produce no
+successful partial build result. The tracked
+`adapters/edt/tests/fixtures/sprint12_report_data_composition_project/` fixture
+records exact ignored live paths, source hashes, reduction treatment, and
+reduced-artifact SHA-256 values for Query, Object, Union, empty main, non-main,
+nested-deferred, and folder-deferred shapes.
+
+Generic Query, Diff, report, Validation, Impact exclusion, complete index, and
+incremental clean-rebuild evidence cover Schema/DataSet/Field/Query
+add/remove, main-role, Data Set kind/source, Field path, Query text, ownership,
+and deferred-observation transitions. The public request ledger remains empty
+for DCS queries, and no DCS `Reads`, `DependsOn`, or `References` relation is
+emitted. Executable registry state is Graph Domain 91 capabilities: 87
+`Supported` and 4 `NotApplicable`; EDT 110 capabilities: 105 `Supported` and 5
+`NotApplicable`. Both registries have zero gaps. Sprint 12 remains active until
+the independent Task 5 integration review records a non-blocking decision.
 
 ### Provenance inventory
 

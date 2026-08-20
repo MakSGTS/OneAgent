@@ -22,6 +22,89 @@ fn event_subscriptions_fixture() -> PathBuf {
         .join("tests/fixtures/sprint11_event_subscriptions_project")
 }
 
+fn report_data_composition_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sprint12_report_data_composition_project")
+}
+
+#[test]
+fn report_data_composition_fixture_closes_nodes_and_ownership_coverage() {
+    let build = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&report_data_composition_fixture())
+        .expect("live-derived Report Data Composition fixture must build");
+    let report = EdtSemanticCoverageReport::for_build_result(&build);
+    let edt = report.edt_pipeline();
+    let graph = report.graph_domain();
+
+    for capability_id in [
+        SemanticCoverageCapabilityId::SemanticNode(NodeKind::DataCompositionSchema),
+        SemanticCoverageCapabilityId::SemanticNode(NodeKind::DataSet),
+        SemanticCoverageCapabilityId::SemanticNode(NodeKind::DataCompositionField),
+        SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::DataCompositionSchema),
+        SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::DataSet),
+        SemanticCoverageCapabilityId::OwnershipRelation(NodeKind::DataCompositionField),
+    ] {
+        let capability = edt
+            .capability(capability_id)
+            .expect("Data Composition capability must be registered");
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+        assert!(capability.limitations().is_empty());
+        assert_eq!(
+            capability.representative_tests(),
+            [
+                "oneagent_edt::report_data_composition::live_derived_fixture_is_typed_consumer_visible_and_deterministic"
+            ]
+        );
+    }
+
+    assert_eq!(edt.summary().total(), 110);
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Supported),
+        Some(&105)
+    );
+    assert_eq!(graph.summary().total(), 91);
+    assert_eq!(
+        graph
+            .summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Supported),
+        Some(&87)
+    );
+    assert!(edt.gaps().is_empty());
+    assert_eq!(
+        report
+            .observed()
+            .nodes()
+            .get(&NodeKind::DataCompositionSchema)
+            .expect("fixture must observe Schemas")
+            .total(),
+        7
+    );
+    assert_eq!(
+        report
+            .observed()
+            .nodes()
+            .get(&NodeKind::DataSet)
+            .expect("fixture must observe Data Sets")
+            .total(),
+        6
+    );
+    assert_eq!(
+        report
+            .observed()
+            .nodes()
+            .get(&NodeKind::DataCompositionField)
+            .expect("fixture must observe Fields")
+            .total(),
+        6
+    );
+    assert!(report.validation().is_valid());
+}
+
 #[test]
 fn event_subscription_fixture_closes_metadata_node_and_triggers_coverage() {
     let build = FileSystemEdtSemanticGraphBuilder
@@ -52,12 +135,12 @@ fn event_subscription_fixture_closes_metadata_node_and_triggers_coverage() {
         );
     }
 
-    assert_eq!(edt.summary().total(), 104);
+    assert_eq!(edt.summary().total(), 110);
     assert_eq!(
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&99)
+        Some(&105)
     );
     assert!(edt.gaps().is_empty());
     assert_eq!(
@@ -92,12 +175,12 @@ fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
 
     assert_eq!(report.edt_pipeline(), &edt);
     assert_eq!(report.graph_domain(), &graph);
-    assert_eq!(edt.summary().total(), 104);
+    assert_eq!(edt.summary().total(), 110);
     assert_eq!(
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&99)
+        Some(&105)
     );
     assert_eq!(
         edt.summary()
@@ -183,12 +266,12 @@ fn conditional_grants_preserve_supported_coverage_aggregates() {
 
     assert_eq!(report.edt_pipeline(), &edt);
     assert_eq!(report.graph_domain(), &graph);
-    assert_eq!(edt.summary().total(), 104);
+    assert_eq!(edt.summary().total(), 110);
     assert_eq!(
         edt.summary()
             .by_status()
             .get(&SemanticCoverageStatus::Supported),
-        Some(&99)
+        Some(&105)
     );
     assert_eq!(
         edt.summary()

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Report xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="339e8cba-a92e-42f6-8d00-3b8b56ce3b0f">
+  <name>UniversalReport</name>
+  <mainDataCompositionSchema>Report.UniversalReport.Template.MainDataCompositionSchema</mainDataCompositionSchema>
+  <templates uuid="567c68fd-74c7-4b6e-9119-56ac8d78073c">
+    <name>MainDataCompositionSchema</name>
+    <templateType>DataCompositionSchema</templateType>
+  </templates>
+</mdclass:Report>

@@ -387,10 +387,12 @@ mod tests {
         NormalizedSemanticIndexOperation,
     };
     use crate::{
-        AccessRight, AccessRightRowRestriction, Confidence, EdgeId, EdgeKind, FactOrigin,
+        AccessRight, AccessRightRowRestriction, Confidence, DataCompositionFieldPayload,
+        DataCompositionSchemaPayload, DataSetKind, DataSetPayload, EdgeId, EdgeKind, FactOrigin,
         GraphEdge, GraphNode, NodeId, NodeKind, ProducerId, Provenance, ResolutionError,
         ResolutionState, SemanticGraph, SemanticGraphDiff, SemanticGraphRelation,
-        SemanticGraphTraversalDirection, SemanticGraphTraversalOptions,
+        SemanticGraphTraversalDirection, SemanticGraphTraversalOptions, data_composition_field_id,
+        data_set_id, data_set_query_id,
         node::GraphNodePayload,
         semantic_index::{
             AcceptedSemanticIndex, SemanticIndexLifecycleError, SemanticIndexState,
@@ -550,6 +552,142 @@ mod tests {
                     vec![provenance(access_right_id.as_str(), FactOrigin::Resolved)],
                 ))
                 .expect("conditional References endpoints must exist");
+        }
+        graph
+    }
+
+    #[derive(Clone, Copy)]
+    struct DataCompositionTransition<'source> {
+        main: bool,
+        kind: DataSetKind,
+        data_source: Option<&'source str>,
+        field_path: &'source str,
+        owner: &'source str,
+        depth: DataCompositionDepth,
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum DataCompositionDepth {
+        None,
+        Schema,
+        DataSet,
+        Field,
+        Query,
+    }
+
+    fn data_composition_owner_graph() -> SemanticGraph {
+        let mut graph = SemanticGraph::new();
+        insert_nodes(
+            &mut graph,
+            [
+                node(
+                    "report.a",
+                    "ReportA",
+                    NodeKind::Metadata(MetadataKind::Report),
+                ),
+                node(
+                    "report.b",
+                    "ReportB",
+                    NodeKind::Metadata(MetadataKind::Report),
+                ),
+            ],
+        );
+        graph
+    }
+
+    fn data_composition_transition_graph(
+        transition: &DataCompositionTransition<'_>,
+    ) -> SemanticGraph {
+        let schema_id = id("schema.fixture");
+        let data_set_id =
+            data_set_id(&schema_id, &name("DataSet")).expect("Data Set identity must be valid");
+        let field_id = data_composition_field_id(&data_set_id, &name("Field"))
+            .expect("Field identity must be valid");
+        let query_id = data_set_query_id(&data_set_id).expect("Query identity must be valid");
+        let mut graph = data_composition_owner_graph();
+        if transition.depth == DataCompositionDepth::None {
+            return graph;
+        }
+        graph.insert_node(
+            GraphNode::new_with_payload(
+                schema_id.clone(),
+                name("Schema"),
+                NodeKind::DataCompositionSchema,
+                GraphNodePayload::DataCompositionSchema(DataCompositionSchemaPayload::new(
+                    transition.main,
+                )),
+            )
+            .expect("Schema payload must be valid"),
+        );
+        insert_edges(
+            &mut graph,
+            [edge(
+                transition.owner,
+                schema_id.as_str(),
+                EdgeKind::Contains,
+                FactOrigin::Parsed,
+            )],
+        );
+        if transition.depth == DataCompositionDepth::Schema {
+            return graph;
+        }
+        graph.insert_node(
+            GraphNode::new_with_payload(
+                data_set_id.clone(),
+                name("DataSet"),
+                NodeKind::DataSet,
+                GraphNodePayload::DataSet(
+                    DataSetPayload::new(transition.kind, transition.data_source.map(name))
+                        .expect("Data Set payload must be valid"),
+                ),
+            )
+            .expect("Data Set node payload must be valid"),
+        );
+        insert_edges(
+            &mut graph,
+            [edge(
+                schema_id.as_str(),
+                data_set_id.as_str(),
+                EdgeKind::Contains,
+                FactOrigin::Parsed,
+            )],
+        );
+        if matches!(
+            transition.depth,
+            DataCompositionDepth::Field | DataCompositionDepth::Query
+        ) {
+            graph.insert_node(
+                GraphNode::new_with_payload(
+                    field_id.clone(),
+                    name("Field"),
+                    NodeKind::DataCompositionField,
+                    GraphNodePayload::DataCompositionField(DataCompositionFieldPayload::new(name(
+                        transition.field_path,
+                    ))),
+                )
+                .expect("Field node payload must be valid"),
+            );
+            insert_edges(
+                &mut graph,
+                [edge(
+                    data_set_id.as_str(),
+                    field_id.as_str(),
+                    EdgeKind::Contains,
+                    FactOrigin::Parsed,
+                )],
+            );
+        }
+        if transition.depth == DataCompositionDepth::Query {
+            graph.insert_node(node(query_id.as_str(), "Query", NodeKind::Query));
+            insert_edges(
+                &mut graph,
+                [edge(
+                    data_set_id.as_str(),
+                    query_id.as_str(),
+                    EdgeKind::Contains,
+                    FactOrigin::Parsed,
+                )],
+            );
         }
         graph
     }
@@ -2643,6 +2781,74 @@ mod tests {
             "procedure.handler.b"
         );
         assert!(accepted_removed.query().node(&subscription).is_none());
+    }
+
+    #[test]
+    fn data_composition_transitions_match_complete_clean_rebuilds() {
+        let query = DataCompositionTransition {
+            main: false,
+            kind: DataSetKind::Query,
+            data_source: Some("DataSource1"),
+            field_path: "Path.Before",
+            owner: "report.a",
+            depth: DataCompositionDepth::Query,
+        };
+        let empty = DataCompositionTransition {
+            depth: DataCompositionDepth::None,
+            ..query
+        };
+        let main_changed = DataCompositionTransition {
+            main: true,
+            ..query
+        };
+        let source_changed = DataCompositionTransition {
+            data_source: Some("DataSource2"),
+            ..main_changed
+        };
+        let object_changed = DataCompositionTransition {
+            kind: DataSetKind::Object,
+            depth: DataCompositionDepth::Field,
+            ..source_changed
+        };
+        let field_changed = DataCompositionTransition {
+            field_path: "Path.After",
+            ..object_changed
+        };
+        let owner_changed = DataCompositionTransition {
+            owner: "report.b",
+            ..field_changed
+        };
+        let field_removed = DataCompositionTransition {
+            depth: DataCompositionDepth::DataSet,
+            ..owner_changed
+        };
+        let data_set_removed = DataCompositionTransition {
+            depth: DataCompositionDepth::Schema,
+            ..owner_changed
+        };
+
+        let graphs = [
+            data_composition_transition_graph(&empty),
+            data_composition_transition_graph(&query),
+            data_composition_transition_graph(&main_changed),
+            data_composition_transition_graph(&source_changed),
+            data_composition_transition_graph(&object_changed),
+            data_composition_transition_graph(&field_changed),
+            data_composition_transition_graph(&owner_changed),
+            data_composition_transition_graph(&field_removed),
+            data_composition_transition_graph(&data_set_removed),
+            data_composition_transition_graph(&empty),
+        ];
+        let mut accepted = AcceptedSemanticIndex::rebuild(&graphs[0]);
+        for current in &graphs[1..] {
+            accepted = transition_and_assert(&accepted, current);
+        }
+        assert!(
+            accepted
+                .query()
+                .nodes_by_kind(NodeKind::DataCompositionSchema)
+                .is_empty()
+        );
     }
 
     #[test]

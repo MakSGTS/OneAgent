@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataCompositionSchema xmlns="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dataSource>
+    <name>DataSource1</name>
+    <dataSourceType>Local</dataSourceType>
+  </dataSource>
+  <dataSet xsi:type="DataSetQuery">
+    <name>ReportItems</name>
+    <field xsi:type="DataSetFieldField">
+      <dataPath>ItemKind</dataPath>
+      <field>ItemKind</field>
+    </field>
+    <dataSource>DataSource1</dataSource>
+    <query>SELECT
+  FormulaOperands.Id,
+  FormulaOperands.Operand AS ReportItem,
+  FormulaOperands.Operand.ItemKind AS ItemKind,
+  FormulaOperands.Operand.NameForPrinting AS NameForPrinting,
+  FormulaOperands.Operand.ReverseSign AS ReverseSign,
+  FormulaOperands.Operand.HasSettings AS HasSettings,
+  FormulaOperands.Operand.AdditionalSelection AS AdditionalSelection,
+  FALSE AS ThisIsReference,
+  "" AS TotalPresentation,
+  "0" AS Value,
+  "" AS Filter,
+  "" AS ReportRowCode,
+  "" AS Note,
+  UNDEFINED AS Accuracy
+FROM
+  Catalog.FinancialReportItems.FormulaOperands AS FormulaOperands
+WHERE
+  FormulaOperands.Ref.Owner = &amp;ReportKind
+  AND FormulaOperands.Ref = &amp;ReportItem</query>
+  </dataSet>
+</DataCompositionSchema>

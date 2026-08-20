@@ -5,8 +5,8 @@ use oneagent_edt::{
 };
 use oneagent_graph::{
     DataSetKind, EdgeKind, FactOrigin, NodeId, NodeKind, NodeModifiedAspect, ResolutionState,
-    SemanticDiagnosticCode, SemanticGraph, data_composition_field_id, data_set_id,
-    data_set_query_id,
+    SemanticDiagnosticCode, SemanticGraph, SemanticImpactAnalyzer, SemanticImpactOptions,
+    data_composition_field_id, data_set_id, data_set_query_id,
 };
 use oneagent_metadata::MetadataKind;
 use std::collections::BTreeSet;
@@ -113,6 +113,22 @@ fn query_data_set(name: &str, fields: &str, query: &str) -> String {
     )
 }
 
+fn query_transition_schema(field_path: &str, query: &str) -> String {
+    schema(&format!(
+        "{}{}",
+        data_source(),
+        query_data_set("DataSet", &field("Field", field_path), query,)
+    ))
+}
+
+fn object_transition_schema(field_path: &str) -> String {
+    schema(&format!(
+        r#"{}<dataSet xsi:type="DataSetObject"><name>DataSet</name>{}<dataSource>DataSource1</dataSource><objectName>RuntimeTable</objectName></dataSet>"#,
+        data_source(),
+        field("Field", field_path)
+    ))
+}
+
 fn build(project: &GeneratedProject) -> oneagent_edt::EdtSemanticGraphBuildResult {
     FileSystemEdtSemanticGraphBuilder
         .build_graph_with_diagnostics(project.path())
@@ -156,6 +172,137 @@ fn rich_project() -> GeneratedProject {
         ],
     );
     project
+}
+
+fn production_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sprint12_report_data_composition_project")
+}
+
+fn single_report_project(main: bool, artifact: &str) -> GeneratedProject {
+    let project = GeneratedProject::new();
+    let main = if main {
+        "<mainDataCompositionSchema>Report.TransitionReport.Template.Main</mainDataCompositionSchema>"
+    } else {
+        ""
+    };
+    project.write_report(
+        "TransitionReport",
+        "report-transition",
+        &template("schema-transition", "Main"),
+        main,
+        &[("Main", artifact)],
+    );
+    project
+}
+
+#[test]
+fn live_derived_fixture_is_typed_consumer_visible_and_deterministic() {
+    let fixture = production_fixture();
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("live-derived Report Data Composition fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("repeated Report Data Composition fixture build must succeed");
+
+    assert_fixture_shape(&first);
+    assert_builds_equal(&first, &repeated);
+    assert!(first.diff(&repeated).is_empty());
+}
+
+fn assert_fixture_shape(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
+    let graph = result.graph();
+    let query = graph.query();
+    assert_eq!(
+        query.nodes_by_kind(NodeKind::DataCompositionSchema).len(),
+        7
+    );
+    assert_eq!(query.nodes_by_kind(NodeKind::DataSet).len(), 6);
+    assert_eq!(query.nodes_by_kind(NodeKind::DataCompositionField).len(), 6);
+    assert_eq!(query.nodes_by_kind(NodeKind::Query).len(), 3);
+    assert_eq!(query.edges_by_kind(EdgeKind::Contains).len(), 29);
+    assert_fixture_payloads(graph);
+    assert_fixture_diagnostics_and_relation_boundary(result);
+    assert_eq!(
+        result.report().nodes().by_kind()[&NodeKind::DataCompositionSchema],
+        7
+    );
+    assert_eq!(result.report().nodes().by_kind()[&NodeKind::DataSet], 6);
+    assert_eq!(
+        result.report().nodes().by_kind()[&NodeKind::DataCompositionField],
+        6
+    );
+    assert!(result.validate().is_valid());
+}
+
+fn assert_fixture_payloads(graph: &SemanticGraph) {
+    let query_schema = id("b4233d51-daa9-47ff-8b51-f65c31fc8037");
+    let query_data_set = data_set_id(&query_schema, &name("DataSet"))
+        .expect("fixture Data Set identity must be valid");
+    let query_id =
+        data_set_query_id(&query_data_set).expect("fixture Query identity must be valid");
+    assert!(
+        graph
+            .node(&query_schema)
+            .and_then(oneagent_graph::GraphNode::data_composition_schema_payload)
+            .expect("fixture Schema payload must exist")
+            .is_main()
+    );
+    assert_eq!(
+        graph
+            .node(&query_data_set)
+            .and_then(oneagent_graph::GraphNode::data_set_payload)
+            .expect("fixture Data Set payload must exist")
+            .kind(),
+        DataSetKind::Query
+    );
+    assert_eq!(
+        graph
+            .query()
+            .owner(&NodeId::new(query_id.as_str()))
+            .expect("fixture Data Set must own Query")
+            .id(),
+        &query_data_set
+    );
+    let financial_schema = graph
+        .node(&id("5f25a4ab-1a3e-4676-ab32-d3c92e7e39e6"))
+        .and_then(oneagent_graph::GraphNode::data_composition_schema_payload)
+        .expect("non-main fixture Schema payload must exist");
+    assert!(!financial_schema.is_main());
+    assert!(
+        graph
+            .node(&query_id)
+            .expect("fixture Query must exist")
+            .provenance()
+            .iter()
+            .any(|provenance| provenance.source().is_some_and(|source| {
+                source.as_str().contains("AccessGroups.Profile AS Profile")
+            }))
+    );
+}
+
+fn assert_fixture_diagnostics_and_relation_boundary(
+    result: &oneagent_edt::EdtSemanticGraphBuildResult,
+) {
+    let codes = result
+        .diagnostics()
+        .iter()
+        .map(oneagent_graph::SemanticDiagnostic::code)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        codes,
+        BTreeSet::from([
+            SemanticDiagnosticCode::DataCompositionNestedDataSetDeferred,
+            SemanticDiagnosticCode::DataCompositionFieldFolderDeferred,
+        ])
+    );
+    assert_eq!(result.reference_statistics().total(), 2);
+    assert_eq!(result.reference_statistics().unsupported_prefix(), 2);
+    assert!(result.reference_requests().is_empty());
+    for kind in [EdgeKind::Reads, EdgeKind::DependsOn, EdgeKind::References] {
+        assert!(result.graph().query().edges_by_kind(kind).is_empty());
+    }
 }
 
 #[test]
@@ -270,6 +417,130 @@ fn assert_emitted_provenance(graph: &SemanticGraph) {
 }
 
 #[test]
+fn production_payload_transitions_preserve_identity_and_have_exact_diff_scope() {
+    let baseline_artifact = query_transition_schema("Path.Before", "SELECT 1");
+    let project = single_report_project(false, &baseline_artifact);
+    let baseline = build(&project);
+    project.write_report(
+        "TransitionReport",
+        "report-transition",
+        &template("schema-transition", "Main"),
+        "<mainDataCompositionSchema>Report.TransitionReport.Template.Main</mainDataCompositionSchema>",
+        &[("Main", &baseline_artifact)],
+    );
+    let main = build(&project);
+    let object_artifact = object_transition_schema("Path.Before");
+    project.write_report(
+        "TransitionReport",
+        "report-transition",
+        &template("schema-transition", "Main"),
+        "",
+        &[("Main", &object_artifact)],
+    );
+    let object = build(&project);
+    let field_artifact = query_transition_schema("Path.After", "SELECT 1");
+    project.write_report(
+        "TransitionReport",
+        "report-transition",
+        &template("schema-transition", "Main"),
+        "",
+        &[("Main", &field_artifact)],
+    );
+    let field_changed = build(&project);
+    let schema_id = id("schema-transition");
+    let data_set_id =
+        data_set_id(&schema_id, &name("DataSet")).expect("Data Set identity must be valid");
+    let field_id = data_composition_field_id(&data_set_id, &name("Field"))
+        .expect("Field identity must be valid");
+    let query_id = data_set_query_id(&data_set_id).expect("Query identity must be valid");
+
+    let main_diff = baseline.diff(&main);
+    assert_modified_content_and_provenance(main_diff.graph(), &schema_id);
+    assert_eq!(main_diff.graph().modified_nodes().len(), 1);
+
+    let kind_diff = baseline.diff(&object);
+    assert_modified_content_and_provenance(kind_diff.graph(), &data_set_id);
+    assert_eq!(kind_diff.graph().modified_nodes().len(), 1);
+    assert_eq!(kind_diff.graph().removed_nodes().len(), 1);
+    assert_eq!(
+        kind_diff.graph().removed_nodes()[0].id().as_str(),
+        query_id.as_str()
+    );
+
+    let field_diff = baseline.diff(&field_changed);
+    assert_modified_content_and_provenance(field_diff.graph(), &field_id);
+    assert_eq!(field_diff.graph().modified_nodes().len(), 1);
+    for result in [&baseline, &main, &object, &field_changed] {
+        assert!(result.validate().is_valid());
+        assert!(result.reference_requests().is_empty());
+    }
+}
+
+fn assert_modified_content_and_provenance(
+    diff: &oneagent_graph::SemanticGraphDiff,
+    expected: &EntityId,
+) {
+    let change = diff
+        .modified_nodes()
+        .iter()
+        .find(|change| change.id().as_str() == expected.as_str())
+        .expect("stable entity must be modified");
+    assert!(
+        change
+            .modified_aspects()
+            .contains(&NodeModifiedAspect::SemanticContent)
+    );
+    assert!(
+        change
+            .modified_aspects()
+            .contains(&NodeModifiedAspect::Provenance)
+    );
+}
+
+#[test]
+fn deferred_observation_transition_changes_only_build_level_evidence() {
+    let accepted = schema(&format!(
+        r#"{}<dataSet xsi:type="DataSetUnion"><name>Union</name>{}</dataSet>"#,
+        data_source(),
+        field("Field", "Path")
+    ));
+    let deferred = schema(&format!(
+        r#"{}<dataSet xsi:type="DataSetUnion"><name>Union</name>{}<field xsi:type="DataSetFieldFolder"><dataPath>Folder</dataPath></field><dataSet xsi:type="DataSetQuery"><name>Nested</name><dataSource>DataSource1</dataSource><query>SELECT 1</query></dataSet></dataSet>"#,
+        data_source(),
+        field("Field", "Path")
+    ));
+    let project = single_report_project(true, &accepted);
+    let before = build(&project);
+    project.rewrite_artifact("TransitionReport", "Main", &deferred);
+    let current = build(&project);
+    let diff = before.diff(&current);
+
+    assert!(diff.graph().is_empty());
+    assert_eq!(diff.diagnostics().added().len(), 2);
+    assert_eq!(diff.reference_requests().summary().total_changes(), 0);
+    assert_eq!(before.reference_statistics().total(), 0);
+    assert_eq!(current.reference_statistics().total(), 2);
+    assert_eq!(
+        before
+            .graph()
+            .query()
+            .nodes_by_kind(NodeKind::DataSet)
+            .len(),
+        1
+    );
+    assert_eq!(
+        current
+            .graph()
+            .query()
+            .nodes_by_kind(NodeKind::DataSet)
+            .len(),
+        1
+    );
+    assert!(before.validate().is_valid());
+    assert!(current.validate().is_valid());
+}
+
+#[test]
 fn query_text_changes_preserve_query_identity_and_modify_only_source_evidence() {
     let project = rich_project();
     let before = build(&project);
@@ -314,6 +585,18 @@ fn query_text_changes_preserve_query_identity_and_modify_only_source_evidence() 
             .expect("current Query must exist")
             .kind(),
         NodeKind::Query
+    );
+    let impact = SemanticImpactAnalyzer::analyze(
+        before.graph(),
+        current.graph(),
+        diff.graph(),
+        &SemanticImpactOptions::new(4),
+    )
+    .expect("opaque Query evidence impact must succeed");
+    assert_eq!(impact.affected_nodes().len(), 1);
+    assert_eq!(
+        impact.affected_nodes()[0].node_id().as_str(),
+        query_id.as_str()
     );
 }
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Report xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="bc14b146-09ee-48ae-9580-09e91d5629e4">
+  <name>ControlOfProductsAccounting</name>
+  <mainDataCompositionSchema>Report.ControlOfProductsAccounting.Template.MainDataCompositionSchema</mainDataCompositionSchema>
+  <templates uuid="24679aac-09b7-40fb-b594-8c1bad21ad6d">
+    <name>MainDataCompositionSchema</name>
+    <templateType>DataCompositionSchema</templateType>
+  </templates>
+</mdclass:Report>

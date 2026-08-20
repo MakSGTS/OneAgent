@@ -1,9 +1,10 @@
-use oneagent_common::EntityId;
+use oneagent_common::{EntityId, EntityName};
 use oneagent_edt::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
     AccessRight, AccessRightRowRestriction, Confidence, EdgeKind, FactOrigin, ImpactNodeStatus,
     NodeId, NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph,
-    SemanticImpactAnalyzer, SemanticImpactOptions,
+    SemanticImpactAnalyzer, SemanticImpactOptions, data_composition_field_id, data_set_id,
+    data_set_query_id,
 };
 use std::path::{Path, PathBuf};
 
@@ -20,8 +21,89 @@ fn event_subscriptions_fixture() -> PathBuf {
         .join("tests/fixtures/sprint11_event_subscriptions_project")
 }
 
+fn report_data_composition_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sprint12_report_data_composition_project")
+}
+
 fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("identifier must be valid")
+}
+
+fn name(value: &str) -> EntityName {
+    EntityName::new(value).expect("name must be valid")
+}
+
+#[test]
+fn report_data_composition_is_visible_through_complete_generic_indexes() {
+    let fixture = report_data_composition_fixture();
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("live-derived Report Data Composition fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&fixture)
+        .expect("repeated Report Data Composition fixture build must succeed");
+    let graph = first.graph();
+    let query = graph.query();
+    let schema_id = id("b4233d51-daa9-47ff-8b51-f65c31fc8037");
+    let data_set_id = data_set_id(&schema_id, &name("DataSet")).expect("Data Set ID must be valid");
+    let field_id =
+        data_composition_field_id(&data_set_id, &name("Profile")).expect("Field ID must be valid");
+    let query_id = data_set_query_id(&data_set_id).expect("Query ID must be valid");
+
+    for (entity_id, kind) in [
+        (&schema_id, NodeKind::DataCompositionSchema),
+        (&data_set_id, NodeKind::DataSet),
+        (&field_id, NodeKind::DataCompositionField),
+        (&query_id, NodeKind::Query),
+    ] {
+        assert_eq!(
+            graph
+                .resolution_index()
+                .resolve_entity_id_of_kind(entity_id, kind)
+                .expect("complete Resolution index must find the typed fixture node")
+                .id(),
+            entity_id
+        );
+        assert_eq!(
+            query
+                .node(&NodeId::new(entity_id.as_str()))
+                .expect("complete Query index must find the typed fixture node")
+                .kind(),
+            kind
+        );
+    }
+    assert_eq!(
+        query
+            .owner(&NodeId::new(schema_id.as_str()))
+            .expect("Query index must find the Report owner")
+            .id(),
+        &id("ce87e3e8-2d05-415b-bd27-c366ca871097")
+    );
+    assert_eq!(
+        query
+            .owner(&NodeId::new(data_set_id.as_str()))
+            .expect("Query index must find the Schema owner")
+            .id(),
+        &schema_id
+    );
+    assert_eq!(
+        query
+            .children(&NodeId::new(data_set_id.as_str()))
+            .into_iter()
+            .map(|node| node.id().clone())
+            .collect::<Vec<_>>(),
+        [field_id, query_id]
+    );
+    assert!(
+        query
+            .direct_dependencies(&NodeId::new(data_set_id.as_str()))
+            .is_empty()
+    );
+    assert_eq!(first.report(), repeated.report());
+    assert!(graph.diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+    assert!(first.validate().is_valid());
 }
 
 fn conditional_access_right_id() -> EntityId {

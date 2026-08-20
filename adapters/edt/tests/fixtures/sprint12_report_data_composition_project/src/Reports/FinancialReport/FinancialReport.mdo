@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Report xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="c8f78bdd-7b76-4c9e-8fd4-b61d2f84b202">
+  <name>FinancialReport</name>
+  <templates uuid="5f25a4ab-1a3e-4676-ab32-d3c92e7e39e6">
+    <name>DerivedItemOperands</name>
+    <templateType>DataCompositionSchema</templateType>
+  </templates>
+</mdclass:Report>

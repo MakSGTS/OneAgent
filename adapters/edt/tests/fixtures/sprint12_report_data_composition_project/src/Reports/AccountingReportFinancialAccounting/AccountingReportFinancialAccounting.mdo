@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Report xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="be7784d7-fe0e-4673-adee-20c40ebe7e1c">
+  <name>AccountingReportFinancialAccounting</name>
+  <mainDataCompositionSchema>Report.AccountingReportFinancialAccounting.Template.MainDataCompositionSchema</mainDataCompositionSchema>
+  <templates uuid="e4653ff9-0d62-4a94-b73e-5077d4e932c2">
+    <name>MainDataCompositionSchema</name>
+    <templateType>DataCompositionSchema</templateType>
+  </templates>
+</mdclass:Report>

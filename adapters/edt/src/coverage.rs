@@ -452,6 +452,16 @@ fn ownership_capability(child: NodeKind) -> SemanticCoverageCapability {
         capability.with_representative_test(
             "oneagent_edt::sprint7_evidence::sprint7_repository_fixture_proves_modules_references_and_navigation_end_to_end",
         )
+    } else if matches!(
+        child,
+        NodeKind::Query
+            | NodeKind::DataCompositionSchema
+            | NodeKind::DataSet
+            | NodeKind::DataCompositionField
+    ) {
+        capability.with_representative_test(
+            "oneagent_edt::report_data_composition::live_derived_fixture_is_typed_consumer_visible_and_deterministic",
+        )
     } else if child == NodeKind::Attribute {
         capability.with_representative_test(
             "oneagent_edt::ownership::tabular_section_ownership_fixture_builds_with_immediate_owners",
@@ -627,16 +637,6 @@ fn all_metadata_kinds() -> Vec<MetadataKind> {
 
 fn edt_coverage_node_kinds() -> Vec<NodeKind> {
     semantic_coverage_node_kinds()
-        .into_iter()
-        .filter(|kind| {
-            !matches!(
-                kind,
-                NodeKind::DataCompositionSchema
-                    | NodeKind::DataSet
-                    | NodeKind::DataCompositionField
-            )
-        })
-        .collect()
 }
 
 fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
@@ -666,7 +666,7 @@ fn representative_metadata_kinds() -> BTreeSet<MetadataKind> {
     ])
 }
 
-const fn ownership_child_kinds() -> [NodeKind; 11] {
+const fn ownership_child_kinds() -> [NodeKind; 14] {
     [
         NodeKind::Module,
         NodeKind::Procedure,
@@ -679,6 +679,9 @@ const fn ownership_child_kinds() -> [NodeKind; 11] {
         NodeKind::Dimension,
         NodeKind::Resource,
         NodeKind::Measure,
+        NodeKind::DataCompositionSchema,
+        NodeKind::DataSet,
+        NodeKind::DataCompositionField,
     ]
 }
 
@@ -769,11 +772,11 @@ fn edt_emits_node_kind(kind: NodeKind) -> bool {
         | NodeKind::Role
         | NodeKind::StandardAttribute
         | NodeKind::Subsystem
-        | NodeKind::AccessRight => true,
-        NodeKind::DataCompositionSchema
+        | NodeKind::AccessRight
+        | NodeKind::DataCompositionSchema
         | NodeKind::DataSet
-        | NodeKind::DataCompositionField
-        | NodeKind::Unknown => false,
+        | NodeKind::DataCompositionField => true,
+        NodeKind::Unknown => false,
     }
 }
 
@@ -802,6 +805,9 @@ const fn representative_node_test(kind: NodeKind) -> &'static str {
         }
         NodeKind::Attribute | NodeKind::TabularSection => {
             "oneagent_edt::grants::grants_real_edt_fixture_emits_scoped_access_rights_with_stable_provenance"
+        }
+        NodeKind::DataCompositionSchema | NodeKind::DataSet | NodeKind::DataCompositionField => {
+            "oneagent_edt::report_data_composition::live_derived_fixture_is_typed_consumer_visible_and_deterministic"
         }
         _ => "oneagent_edt::graph_tests",
     }
@@ -996,13 +1002,13 @@ mod tests {
         assert!(first.duplicate_ids().is_empty());
         assert!(!first.capabilities().is_empty());
         assert_eq!(first.summary().total(), first.capabilities().len());
-        assert_eq!(first.summary().total(), 104);
+        assert_eq!(first.summary().total(), 110);
         assert_eq!(
             first
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&99)
+            Some(&105)
         );
         assert_eq!(
             first
@@ -1178,13 +1184,13 @@ mod tests {
                 .iter()
                 .any(|test| test == representative)
         );
-        assert_eq!(report.summary().total(), 104);
+        assert_eq!(report.summary().total(), 110);
         assert_eq!(
             report
                 .summary()
                 .by_status()
                 .get(&SemanticCoverageStatus::Supported),
-            Some(&99)
+            Some(&105)
         );
         assert_eq!(
             report

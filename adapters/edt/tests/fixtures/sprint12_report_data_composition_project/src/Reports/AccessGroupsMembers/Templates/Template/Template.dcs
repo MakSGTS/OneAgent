@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataCompositionSchema xmlns="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dataSource>
+    <name>DataSource1</name>
+    <dataSourceType>Local</dataSourceType>
+  </dataSource>
+  <dataSet xsi:type="DataSetQuery">
+    <name>DataSet</name>
+    <field xsi:type="DataSetFieldField">
+      <dataPath>Profile</dataPath>
+      <field>Profile</field>
+    </field>
+    <dataSource>DataSource1</dataSource>
+    <query>SELECT
+  AccessGroups.Profile AS Profile,
+  AccessGroups.Ref AS AccessGroup,
+  AccessGroups_Users.User AS Member,
+  AccessGroups_Users.ValidityPeriod AS MemberTill,
+  UserGroupCompositions.User AS User,
+  UserGroupCompositions.Used
+    AND NOT AccessGroups.DeletionMark
+    AND NOT ISNULL(AccessGroups.Profile.DeletionMark, TRUE) AS ValidMember
+FROM
+  Catalog.AccessGroups AS AccessGroups
+    INNER JOIN Catalog.AccessGroups.Users AS AccessGroups_Users
+    ON AccessGroups.Ref = AccessGroups_Users.Ref
+    INNER JOIN InformationRegister.UserGroupCompositions AS UserGroupCompositions
+    ON (AccessGroups_Users.User = UserGroupCompositions.UsersGroup)
+WHERE
+  ISNULL(UserGroupCompositions.User.IsInternal, FALSE) &lt;&gt; TRUE
+  AND (NOT &amp;ShouldIncludeValidMembersOnly
+      OR UserGroupCompositions.Used
+        AND NOT AccessGroups.DeletionMark
+        AND NOT ISNULL(AccessGroups.Profile.DeletionMark, TRUE))</query>
+  </dataSet>
+</DataCompositionSchema>

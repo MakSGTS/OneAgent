@@ -167,7 +167,7 @@ the [Sprint 10 integration review](reviews/sprint-10-subsystems-composition.md).
 Sprint 11 is completed under
 [ADR-0033](adr/0033-event-subscription-semantics.md) with a `pass` decision in
 the [Sprint 11 integration review](reviews/sprint-11-event-subscriptions.md).
-Sprint 12 is the next planning target; v0.3 remains planned through Sprint 14.
+Sprint 12 is active; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -754,7 +754,7 @@ performance claims remain deferred.
 |---|---|---|
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | completed |
-| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | next |
+| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | active |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
 
@@ -2761,9 +2761,10 @@ Plan Sprint 11 event subscriptions
 
 #### Sprint 12 SKD and Report Model execution plan
 
-Sprint 12 is planned from committed Sprint 11 review head
+Sprint 12 was planned from committed Sprint 11 review head
 `8b0d22ef955129d4bf6eb88549529a81baf9c466`. The review records `pass`, Sprint
-11 is `completed`, and Sprint 12 is the only sprint marked `next`.
+11 is `completed`, and Sprint 12 is now `active` through its ordered
+implementation and evidence tasks.
 
 The repository-owned
 [source investigation](architecture/report-data-composition-source-investigation.md)
@@ -2986,6 +2987,21 @@ reduction treatment, and reduced hashes; add/remove/modify/main/data-set/field/
 query/deferred transitions match clean rebuilds; Coverage statuses/evidence and
 aggregate counts derive from live registries; all query-source relations remain
 absent; full workspace validation succeeds.
+
+**Current state after Task 4:** the production Report path joins tracked
+live-derived Report descriptors and DCS artifacts into typed Schema, direct
+Data Set, direct named Field, and metadata-owned Query nodes with exact
+immediate ownership and deterministic provenance. The fixture under
+`adapters/edt/tests/fixtures/sprint12_report_data_composition_project/` records
+every ignored live origin, source hash, reduction treatment, and reduced hash.
+Generic Query, Diff, report, Validation, Impact exclusion, complete index, and
+incremental clean-rebuild transitions cover accepted payload, ownership,
+add/remove, reordered, repeated, and deferred-observation changes. The
+executable Graph Domain registry has 91 capabilities: 87 `Supported` and 4
+`NotApplicable`; EDT has 110 capabilities: 105 `Supported` and 5
+`NotApplicable`. Both registries have no gaps. DCS QuerySource requests and
+`Reads`, `DependsOn`, and `References` remain absent. Sprint 12 remains
+`active` pending Task 5 integration review.
 
 Focused validation:
 

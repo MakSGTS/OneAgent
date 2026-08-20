@@ -1052,7 +1052,11 @@ mod tests {
     use oneagent_metadata::MetadataKind;
 
     use super::SemanticIndex;
-    use crate::{EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticGraph, SemanticGraphQuery};
+    use crate::{
+        DataCompositionFieldPayload, DataCompositionSchemaPayload, DataSetKind, DataSetPayload,
+        EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeKind, SemanticGraph,
+        SemanticGraphQuery, data_composition_field_id, data_set_id, data_set_query_id,
+    };
 
     const NODE_KINDS: [NodeKind; 20] = [
         NodeKind::Metadata(MetadataKind::Catalog),
@@ -1275,6 +1279,84 @@ mod tests {
             edge_ids(index.outgoing_edges(&source))
                 .windows(2)
                 .all(|pair| pair[0] < pair[1])
+        );
+    }
+
+    #[test]
+    fn data_composition_payloads_and_ownership_are_completely_indexed() {
+        let report_id = id("report.fixture");
+        let schema_id = id("schema.fixture");
+        let data_set_id =
+            data_set_id(&schema_id, &name("DataSet")).expect("Data Set identity must be valid");
+        let field_id = data_composition_field_id(&data_set_id, &name("Field"))
+            .expect("Field identity must be valid");
+        let query_id = data_set_query_id(&data_set_id).expect("Query identity must be valid");
+        let nodes = [
+            GraphNode::new(
+                report_id.clone(),
+                name("Report"),
+                NodeKind::Metadata(MetadataKind::Report),
+            ),
+            GraphNode::new_with_payload(
+                schema_id.clone(),
+                name("Schema"),
+                NodeKind::DataCompositionSchema,
+                GraphNodePayload::DataCompositionSchema(DataCompositionSchemaPayload::new(true)),
+            )
+            .expect("Schema payload must be valid"),
+            GraphNode::new_with_payload(
+                data_set_id.clone(),
+                name("DataSet"),
+                NodeKind::DataSet,
+                GraphNodePayload::DataSet(
+                    DataSetPayload::new(DataSetKind::Query, Some(name("DataSource1")))
+                        .expect("Data Set payload must be valid"),
+                ),
+            )
+            .expect("Data Set node payload must be valid"),
+            GraphNode::new_with_payload(
+                field_id.clone(),
+                name("Field"),
+                NodeKind::DataCompositionField,
+                GraphNodePayload::DataCompositionField(DataCompositionFieldPayload::new(name(
+                    "Source.Field",
+                ))),
+            )
+            .expect("Field payload must be valid"),
+            GraphNode::new(query_id.clone(), name("Query"), NodeKind::Query),
+        ];
+        let mut graph = SemanticGraph::new();
+        for node in nodes {
+            graph.insert_node(node);
+        }
+        for (owner, child) in [
+            (&report_id, &schema_id),
+            (&schema_id, &data_set_id),
+            (&data_set_id, &field_id),
+            (&data_set_id, &query_id),
+        ] {
+            graph
+                .insert_edge(GraphEdge::new(
+                    owner.clone(),
+                    child.clone(),
+                    EdgeKind::Contains,
+                ))
+                .expect("Data Composition ownership endpoints must exist");
+        }
+        let index = SemanticIndex::new(&graph);
+
+        assert!(
+            index
+                .node(&schema_id)
+                .and_then(GraphNode::data_composition_schema_payload)
+                .expect("indexed Schema payload must exist")
+                .is_main()
+        );
+        assert_eq!(index.owners(&query_id)[0].id(), &data_set_id);
+        assert_eq!(index.children(&data_set_id).len(), 2);
+        assert_eq!(
+            index.nodes_by_kind(NodeKind::DataCompositionField)[0].id(),
+            &field_id
         );
     }
 

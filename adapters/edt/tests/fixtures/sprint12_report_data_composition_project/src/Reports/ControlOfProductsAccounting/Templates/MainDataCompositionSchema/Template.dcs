@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataCompositionSchema xmlns="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dataSource>
+    <name>DataSource1</name>
+    <dataSourceType>Local</dataSourceType>
+  </dataSource>
+  <dataSet xsi:type="DataSetQuery">
+    <name>DataSet1</name>
+    <field xsi:type="DataSetFieldField">
+      <dataPath>Product</dataPath>
+      <field>Product</field>
+    </field>
+    <dataSource>DataSource1</dataSource>
+    <query>SELECT ALLOWED</query>
+  </dataSet>
+  <nestedSchema>
+    <name>Report2</name>
+    <schema>
+      <dataSource>
+        <name>DataSource1</name>
+        <dataSourceType>Local</dataSourceType>
+      </dataSource>
+      <dataSet xsi:type="DataSetQuery">
+        <name>DataSet1</name>
+        <field xsi:type="DataSetFieldField">
+          <dataPath>Product</dataPath>
+          <field>Product</field>
+        </field>
+        <dataSource>DataSource1</dataSource>
+        <query>SELECT ALLOWED</query>
+      </dataSet>
+    </schema>
+  </nestedSchema>
+</DataCompositionSchema>

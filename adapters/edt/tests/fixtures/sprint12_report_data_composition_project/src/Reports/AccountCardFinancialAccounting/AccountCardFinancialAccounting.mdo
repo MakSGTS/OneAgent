@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Report xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="8145f4ef-9ba8-482c-8d1b-48c9f0a9f714">
+  <name>AccountCardFinancialAccounting</name>
+  <mainDataCompositionSchema>Report.AccountCardFinancialAccounting.Template.MainDataCompositionSchema</mainDataCompositionSchema>
+  <templates uuid="757e0f67-213e-4f0f-a257-ac2b3905e04f">
+    <name>MainDataCompositionSchema</name>
+    <templateType>DataCompositionSchema</templateType>
+  </templates>
+</mdclass:Report>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Report xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="ce87e3e8-2d05-415b-bd27-c366ca871097">
+  <name>AccessGroupsMembers</name>
+  <mainDataCompositionSchema>Report.AccessGroupsMembers.Template.Template</mainDataCompositionSchema>
+  <templates uuid="b4233d51-daa9-47ff-8b51-f65c31fc8037">
+    <name>Template</name>
+    <templateType>DataCompositionSchema</templateType>
+  </templates>
+</mdclass:Report>

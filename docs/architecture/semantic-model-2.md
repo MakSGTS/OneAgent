@@ -2380,8 +2380,15 @@ and deferred-observation transitions. The public request ledger remains empty
 for DCS queries, and no DCS `Reads`, `DependsOn`, or `References` relation is
 emitted. Executable registry state is Graph Domain 91 capabilities: 87
 `Supported` and 4 `NotApplicable`; EDT 110 capabilities: 105 `Supported` and 5
-`NotApplicable`. Both registries have zero gaps. Sprint 12 remains active until
-the independent Task 5 integration review records a non-blocking decision.
+`NotApplicable`. Both registries have zero gaps. Sprint 12 remained active until
+the independent Task 5 integration review recorded a non-blocking decision.
+
+The
+[Sprint 12 integration review](../reviews/sprint-12-skd-report-model.md)
+subsequently records `pass` against committed Task 4 head
+`ba9f8350bc78784052a56ab95680a019719a1792`. Sprint 12 is completed without a
+review-time production, public API, Coverage, or deferred-scope change, and
+Sprint 13 XDTO and Service Model is the next planning target.
 
 ### Provenance inventory
 

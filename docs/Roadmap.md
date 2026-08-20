@@ -142,6 +142,7 @@ planned reuse; every sprint still performs a focused readiness check at kickoff.
 | Sprint 9 — Roles and Access Rights | v0.3 | Preserve optional opaque EDT row restrictions as typed conditional direct Grants without changing unconditional AccessRight compatibility or claiming effective authorization. | [Sprint review](reviews/sprint-9-roles-access-rights.md) | completed |
 | Sprint 10 — Subsystems and Composition | v0.3 | Preserve strict nested Subsystem source agreement, direct hierarchy and composition, and computed transitive membership without persisted closure. | [Sprint review](reviews/sprint-10-subsystems-composition.md) | completed |
 | Sprint 11 — Event Subscriptions | v0.3 | Preserve stable Event Subscription identity, typed event content, exact and family source References, and owned handler References and Triggers without runtime-dispatch claims. | [Sprint review](reviews/sprint-11-event-subscriptions.md) | completed |
+| Sprint 12 — SKD and Report Model | v0.3 | Preserve Report-owned Data Composition Schemas, direct Data Sets and Fields, and metadata-owned Queries without speculative nested identities or partial query dependencies. | [Sprint review](reviews/sprint-12-skd-report-model.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
@@ -167,7 +168,10 @@ the [Sprint 10 integration review](reviews/sprint-10-subsystems-composition.md).
 Sprint 11 is completed under
 [ADR-0033](adr/0033-event-subscription-semantics.md) with a `pass` decision in
 the [Sprint 11 integration review](reviews/sprint-11-event-subscriptions.md).
-Sprint 12 is active; v0.3 remains planned through Sprint 14.
+Sprint 12 is completed under
+[ADR-0034](adr/0034-report-data-composition-semantics.md) with a `pass` decision
+in the [Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
+Sprint 13 is the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -754,8 +758,8 @@ performance claims remain deferred.
 |---|---|---|
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | completed |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | completed |
-| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | active |
-| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
+| Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | completed |
+| Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | next |
 | Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | planned |
 
 #### Sprint 6 Attributes and Tabular Sections execution plan
@@ -2763,8 +2767,9 @@ Plan Sprint 11 event subscriptions
 
 Sprint 12 was planned from committed Sprint 11 review head
 `8b0d22ef955129d4bf6eb88549529a81baf9c466`. The review records `pass`, Sprint
-11 is `completed`, and Sprint 12 is now `active` through its ordered
-implementation and evidence tasks.
+11 is `completed`, and Sprint 12 completed its ordered implementation,
+evidence, and review tasks with a `pass` decision recorded in the
+[Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
 
 The repository-owned
 [source investigation](architecture/report-data-composition-source-investigation.md)
@@ -3000,8 +3005,9 @@ add/remove, reordered, repeated, and deferred-observation changes. The
 executable Graph Domain registry has 91 capabilities: 87 `Supported` and 4
 `NotApplicable`; EDT has 110 capabilities: 105 `Supported` and 5
 `NotApplicable`. Both registries have no gaps. DCS QuerySource requests and
-`Reads`, `DependsOn`, and `References` remain absent. Sprint 12 remains
-`active` pending Task 5 integration review.
+`Reads`, `DependsOn`, and `References` remain absent. This was the committed
+Task 4 gate; Task 5 subsequently recorded `pass` without changing production
+behavior.
 
 Focused validation:
 
@@ -3047,6 +3053,13 @@ cargo test -p oneagent-edt --test semantic_index
 ```
 
 Run the complete workspace validation and record exact command results.
+
+**Final state after Task 5:** the independent integration review records
+`pass` against committed Task 4 head
+`ba9f8350bc78784052a56ab95680a019719a1792`. Sprint 12 is `completed`, Sprint
+13 XDTO and Service Model is `next`, and the exact verified Sprint 11 prompt
+suite is retired in the review commit. No implementation, public API, Coverage,
+or deferred-scope change is part of the review transition.
 
 ##### Sprint 12 state gates and completion criteria
 

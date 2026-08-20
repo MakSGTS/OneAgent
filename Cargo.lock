@@ -353,6 +353,17 @@ name = "oneagent-common"
 version = "0.1.0"
 
 [[package]]
+name = "oneagent-designer-xml"
+version = "0.1.0"
+dependencies = [
+ "oneagent-common",
+ "oneagent-metadata",
+ "oneagent-workspace",
+ "quick-xml",
+ "tempfile",
+]
+
+[[package]]
 name = "oneagent-edt"
 version = "0.1.0"
 dependencies = [
@@ -408,6 +419,7 @@ dependencies = [
 name = "oneagent-workspace-fs"
 version = "0.1.0"
 dependencies = [
+ "oneagent-designer-xml",
  "oneagent-workspace",
  "tempfile",
 ]

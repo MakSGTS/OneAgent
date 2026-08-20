@@ -11,6 +11,7 @@ members = [
     "crates/bsl",
     "adapters/filesystem",
     "adapters/edt",
+    "adapters/designer-xml",
     "crates/analysis",
 ]
 

@@ -1,12 +1,14 @@
 [package]
-name = "oneagent-workspace-fs"
+name = "oneagent-designer-xml"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-oneagent-designer-xml = { path = "../designer-xml" }
+oneagent-common = { path = "../../crates/common" }
+oneagent-metadata = { path = "../../crates/metadata" }
 oneagent-workspace = { path = "../../crates/workspace" }
+quick-xml = "0.38"
 
 [dev-dependencies]
 tempfile = "3"

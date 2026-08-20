@@ -1,7 +1,8 @@
 //! Filesystem adapter for discovering `1C:Enterprise` workspaces.
 
+use oneagent_designer_xml::{DesignerXmlDiscoveryError, is_designer_xml_project};
 use oneagent_workspace::{DiscoveredConfiguration, WorkspaceDetector, WorkspaceFormat};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,14 +27,34 @@ impl FileSystemWorkspaceDetector {
         self,
         directory: &Path,
         depth: usize,
-        results: &mut BTreeSet<PathBuf>,
+        results: &mut BTreeMap<PathBuf, WorkspaceFormat>,
     ) -> Result<(), DiscoveryError> {
         if depth > self.max_depth {
             return Ok(());
         }
 
-        if is_edt_project(directory) {
-            results.insert(directory.to_path_buf());
+        let edt = is_edt_project(directory);
+        let designer_xml =
+            is_designer_xml_project(directory).map_err(|source| DiscoveryError::DesignerXml {
+                path: directory.to_path_buf(),
+                source,
+            })?;
+
+        if edt && designer_xml {
+            return Err(DiscoveryError::ConflictingFormatMarkers(
+                directory.to_path_buf(),
+            ));
+        }
+
+        if edt || designer_xml {
+            results.insert(
+                directory.to_path_buf(),
+                if edt {
+                    WorkspaceFormat::Edt
+                } else {
+                    WorkspaceFormat::DesignerXml
+                },
+            );
             return Ok(());
         }
 
@@ -85,12 +106,12 @@ impl WorkspaceDetector for FileSystemWorkspaceDetector {
             )));
         }
 
-        let mut roots = BTreeSet::new();
+        let mut roots = BTreeMap::new();
         self.discover_directory(root, 0, &mut roots)?;
 
         Ok(roots
             .into_iter()
-            .map(|path| DiscoveredConfiguration::new(path, WorkspaceFormat::Edt))
+            .map(|(path, format)| DiscoveredConfiguration::new(path, format))
             .collect())
     }
 }
@@ -139,6 +160,15 @@ pub enum DiscoveryError {
         /// Underlying I/O error.
         source: std::io::Error,
     },
+    /// A candidate Designer XML root is invalid.
+    DesignerXml {
+        /// Candidate root path.
+        path: PathBuf,
+        /// Format-specific inspection error.
+        source: DesignerXmlDiscoveryError,
+    },
+    /// One directory has both accepted EDT and Designer XML markers.
+    ConflictingFormatMarkers(PathBuf),
 }
 
 impl Display for DiscoveryError {
@@ -179,6 +209,16 @@ impl Display for DiscoveryError {
                     path.display()
                 )
             }
+            Self::DesignerXml { path, source } => write!(
+                formatter,
+                "invalid Designer XML project at {}: {source}",
+                path.display()
+            ),
+            Self::ConflictingFormatMarkers(path) => write!(
+                formatter,
+                "workspace project has conflicting EDT and Designer XML markers: {}",
+                path.display()
+            ),
         }
     }
 }
@@ -189,7 +229,10 @@ impl std::error::Error for DiscoveryError {
             Self::ReadDirectory { source, .. }
             | Self::ReadDirectoryEntry { source, .. }
             | Self::ReadFileType { source, .. } => Some(source),
-            Self::RootDoesNotExist(_) | Self::RootIsNotDirectory(_) => None,
+            Self::DesignerXml { source, .. } => Some(source),
+            Self::RootDoesNotExist(_)
+            | Self::RootIsNotDirectory(_)
+            | Self::ConflictingFormatMarkers(_) => None,
         }
     }
 }
@@ -201,6 +244,16 @@ mod tests {
     use tempfile::tempdir;
 
     use super::FileSystemWorkspaceDetector;
+
+    const DESIGNER_DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
+    const DESIGNER_CONFIGURATION: &str = r#"<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" version="2.20"><Configuration uuid="408a41e7-907a-4fb3-8999-83d1e8b6e093"><Properties><Name>DNSWorldEdition</Name></Properties></Configuration></MetaDataObject>"#;
+
+    fn write_designer_markers(project: &std::path::Path) {
+        fs::write(project.join("ConfigDumpInfo.xml"), DESIGNER_DUMP_INFO)
+            .expect("Designer dump marker must be created");
+        fs::write(project.join("Configuration.xml"), DESIGNER_CONFIGURATION)
+            .expect("Designer configuration marker must be created");
+    }
 
     #[test]
     fn detects_edt_project() {
@@ -240,6 +293,59 @@ mod tests {
             .expect("discovery must succeed");
 
         assert!(configurations.is_empty());
+    }
+
+    #[test]
+    fn detects_designer_xml_project_and_stops_at_its_boundary() {
+        let root = tempdir().expect("temporary directory must be created");
+        let project = root.path().join("DesignerConfiguration");
+        let nested_edt = project.join("nested");
+
+        fs::create_dir_all(nested_edt.join("src/Configuration"))
+            .expect("nested EDT structure must be created");
+        write_designer_markers(&project);
+        fs::write(nested_edt.join(".project"), "<projectDescription />")
+            .expect("nested EDT marker must be created");
+        fs::write(
+            nested_edt.join("src/Configuration/Configuration.mdo"),
+            "<mdclass:Configuration />",
+        )
+        .expect("nested EDT configuration must be created");
+
+        let configurations = FileSystemWorkspaceDetector::default()
+            .discover(root.path())
+            .expect("discovery must succeed");
+
+        assert_eq!(configurations.len(), 1);
+        assert_eq!(configurations[0].root_path(), project);
+        assert_eq!(configurations[0].format(), WorkspaceFormat::DesignerXml);
+    }
+
+    #[test]
+    fn rejects_conflicting_edt_and_designer_markers() {
+        let root = tempdir().expect("temporary directory must be created");
+        let project = root.path().join("ConflictingConfiguration");
+
+        fs::create_dir_all(project.join("src/Configuration"))
+            .expect("EDT directory structure must be created");
+        write_designer_markers(&project);
+        fs::write(project.join(".project"), "<projectDescription />")
+            .expect("EDT project file must be created");
+        fs::write(
+            project.join("src/Configuration/Configuration.mdo"),
+            "<mdclass:Configuration />",
+        )
+        .expect("EDT configuration must be created");
+
+        let error = FileSystemWorkspaceDetector::default()
+            .discover(root.path())
+            .expect_err("conflicting markers must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("conflicting EDT and Designer XML markers")
+        );
     }
 
     #[test]

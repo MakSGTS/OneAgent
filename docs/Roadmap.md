@@ -138,6 +138,7 @@ planned reuse; every sprint still performs a focused readiness check at kickoff.
 | Sprint 5 — Incremental Indexing | v0.2 | Update the shared semantic index deterministically from canonical graph snapshot changes while retaining unaffected derived lookup state. | [Sprint review](reviews/sprint-5-incremental-indexing.md), [v0.2 release review](reviews/v0.2-release-review.md) | completed |
 | Sprint 6 — Attributes and Tabular Sections | v0.3 | Preserve repository-proven optional Attribute and TabularSection synonym as typed member content without changing identity, immediate ownership, or the completed reference slice. | [Sprint review](reviews/sprint-6-attributes-tabular-sections.md) | completed |
 | Sprint 7 — Forms and Commands | v0.3 | Add accepted Form and Command modules, mapped Command parameter references, and precise static Form navigation without expanding the deferred UI model. | [Sprint review](reviews/sprint-7-forms-commands.md) | completed |
+| Sprint 8 — Registers and Queries | v0.3 | Expand direct persistent Query sources through public requests, retained Reads, and normalized Query dependencies without broadening the accepted grammar. | [Sprint review](reviews/sprint-8-registers-queries.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
@@ -151,8 +152,10 @@ Sprint 7 is completed under
 [ADR-0029](adr/0029-form-command-navigation-semantics.md) with a `pass`
 decision in the
 [Sprint 7 integration review](reviews/sprint-7-forms-commands.md). Sprint 8 is
-active: Tasks 1–5 are implemented and Task 6 integration review is pending;
-v0.3 remains planned through Sprint 14.
+completed under [ADR-0030](adr/0030-register-query-semantics.md) with a `pass`
+decision in the
+[Sprint 8 integration review](reviews/sprint-8-registers-queries.md). Sprint 9
+is the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -737,8 +740,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 8 — Registers and Queries | Expand register and query-language semantics, additional Query sources, and justified data dependencies. | active |
-| Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | planned |
+| Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | next |
 | Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
@@ -1482,7 +1484,7 @@ declaration sources, query-language data sources, register virtual tables,
 register metadata members, Reads, Writes, and DependsOn as interchangeable
 concepts.
 
-The live implementation baseline after Tasks 1–5 is:
+The completed implementation baseline is:
 
 - static named BSL Query declarations inside known Procedures or Functions
   already produce stable Query nodes with canonical ownership and provenance;
@@ -1514,7 +1516,8 @@ that the expanded Query register edges remain equivalent to a clean rebuild.
 The EDT Coverage Registry remains exactly 101 capabilities: 96 `Supported` and
 5 `NotApplicable`; the graph registry remains exactly 85 capabilities: 82
 `Supported` and 3 `NotApplicable`. Both retain zero Critical, High, and Medium
-gaps. Task 6 integration review is the remaining completion gate.
+gaps. Task 6 records `pass` in the
+[Sprint 8 integration review](reviews/sprint-8-registers-queries.md).
 
 The repository-owned
 [Register and Query source investigation](architecture/register-query-source-investigation.md)
@@ -1804,7 +1807,8 @@ The message does not authorize staging or committing.
 
 Sprint 8 remained `next` during planning and became `active` when the accepted
 planning baseline was committed and Task 1 began under the explicit execution
-instruction. Tasks 1–5 are now implemented; Task 6 remains the completion gate.
+instruction. Tasks 1–5 were implemented in dependency order, and Task 6 now
+records the passing completion decision.
 
 A task is `already_complete` only when current committed evidence and successful
 required validation prove every acceptance criterion. Do not create empty
@@ -1823,10 +1827,10 @@ Sprint 8 may transition to `completed` only when:
 - the complete repository Definition of Done passes;
 - Task 6 records `pass` or `pass with non-blocking follow-ups`.
 
-A blocked Task 6 leaves Sprint 8 incomplete. Only a non-blocking review and
-successful required validation make Sprint 9 Roles and Access Rights eligible
-as the next planning target. The v0.3 release remains planned through Sprint
-14.
+Task 6 records `pass` against committed Task 5 head
+`5fce866448a5559a78b812955cda28ebd0492406`; the required validation passed,
+Sprint 8 is `completed`, and Sprint 9 Roles and Access Rights is eligible as the
+next planning target. The v0.3 release remains planned through Sprint 14.
 
 #### v0.4 — Runtime API
 

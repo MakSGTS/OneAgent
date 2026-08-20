@@ -2003,6 +2003,14 @@ restrictions, consumer observability, clean-rebuild equivalence, unrelated
 metadata/Calls/Reads/Writes/Includes/Extends/Opens/DependsOn compatibility,
 unchanged graph and EDT Coverage aggregates, and complete workspace validation.
 
+Tasks 1–3 are now implemented in dependency order. The real EDT Grants fixture,
+generic Query and Resolution facades, Diff, Impact, reports, validation,
+complete and incremental Semantic Index transitions, and Coverage regression
+tests preserve the accepted conditional direct-grant boundary. Graph Coverage
+remains `85` total (`82` Supported, `3` NotApplicable); EDT Coverage remains
+`101` total (`96` Supported, `5` NotApplicable). Sprint 9 is not completed until
+Task 4 records a non-blocking integration-review decision.
+
 **Focused validation:**
 
 ```bash

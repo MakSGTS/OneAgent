@@ -386,9 +386,10 @@ mod tests {
         NormalizedSemanticIndexOperation,
     };
     use crate::{
-        Confidence, EdgeId, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeId, NodeKind,
-        ProducerId, Provenance, ResolutionError, ResolutionState, SemanticGraph, SemanticGraphDiff,
-        SemanticGraphRelation, SemanticGraphTraversalDirection, SemanticGraphTraversalOptions,
+        AccessRight, AccessRightRowRestriction, Confidence, EdgeId, EdgeKind, FactOrigin,
+        GraphEdge, GraphNode, NodeId, NodeKind, ProducerId, Provenance, ResolutionError,
+        ResolutionState, SemanticGraph, SemanticGraphDiff, SemanticGraphRelation,
+        SemanticGraphTraversalDirection, SemanticGraphTraversalOptions,
         node::GraphNodePayload,
         semantic_index::{
             AcceptedSemanticIndex, SemanticIndexLifecycleError, SemanticIndexState,
@@ -482,6 +483,55 @@ mod tests {
                 .insert_edge(edge)
                 .expect("test edge endpoints must exist");
         }
+    }
+
+    fn conditional_access_right(condition: &str, origin: FactOrigin) -> AccessRight {
+        AccessRight::new_with_row_restriction(
+            id("metadata.catalog.products"),
+            id("Read"),
+            Some(
+                AccessRightRowRestriction::new(condition)
+                    .expect("conditional access-right condition must be valid"),
+            ),
+            vec![provenance(condition, origin)],
+        )
+        .expect("conditional access right must be valid")
+    }
+
+    fn conditional_grants_graph(rights: impl IntoIterator<Item = AccessRight>) -> SemanticGraph {
+        let mut graph = SemanticGraph::new();
+        insert_nodes(
+            &mut graph,
+            [
+                node("role.reader", "Reader", NodeKind::Role),
+                node(
+                    "metadata.catalog.products",
+                    "Products",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+            ],
+        );
+        for access_right in rights {
+            let access_right_id = access_right.id().clone();
+            graph.insert_access_right(&access_right);
+            graph
+                .insert_edge(GraphEdge::new_with_provenance(
+                    id("role.reader"),
+                    access_right_id.clone(),
+                    EdgeKind::Grants,
+                    vec![provenance(access_right_id.as_str(), FactOrigin::Resolved)],
+                ))
+                .expect("conditional Grants endpoints must exist");
+            graph
+                .insert_edge(GraphEdge::new_with_provenance(
+                    access_right_id.clone(),
+                    id("metadata.catalog.products"),
+                    EdgeKind::References,
+                    vec![provenance(access_right_id.as_str(), FactOrigin::Resolved)],
+                ))
+                .expect("conditional References endpoints must exist");
+        }
+        graph
     }
 
     const NODE_KINDS: [NodeKind; 17] = [
@@ -1793,6 +1843,55 @@ mod tests {
         assert_eq!(
             incremental_resolution.resolve_child(&id("owner"), &name("Before")),
             clean_resolution.resolve_child(&id("owner"), &name("Before"))
+        );
+    }
+
+    #[test]
+    fn conditional_access_right_index_transitions_match_clean_rebuilds() {
+        let first_right = conditional_access_right("WHERE Owner = CurrentUser", FactOrigin::Parsed);
+        let refreshed_first_right =
+            conditional_access_right("WHERE Owner = CurrentUser", FactOrigin::Derived);
+        let second_right = conditional_access_right("WHERE NOT DeletionMark", FactOrigin::Parsed);
+        let previous = conditional_grants_graph([first_right.clone()]);
+        let middle =
+            conditional_grants_graph([refreshed_first_right.clone(), second_right.clone()]);
+        let current = conditional_grants_graph([second_right.clone()]);
+
+        let first_changes = NormalizedSemanticIndexChanges::between(&previous, &middle)
+            .expect("conditional add and refresh transition must normalize");
+        assert!(first_changes.operations().iter().any(|operation| matches!(
+            operation,
+            NormalizedSemanticIndexOperation::RefreshNode { .. }
+        )));
+        assert!(first_changes.operations().iter().any(|operation| matches!(
+            operation,
+            NormalizedSemanticIndexOperation::AddNode(node)
+                if node.id() == &NodeId::new(second_right.id().as_str())
+        )));
+        let accepted_middle = AcceptedSemanticIndex::rebuild(&previous)
+            .transition(&middle, &first_changes)
+            .expect("conditional add and refresh transition must publish");
+        assert_full_rebuild_equivalent(&previous, &middle, &accepted_middle);
+
+        let second_changes = NormalizedSemanticIndexChanges::between(&middle, &current)
+            .expect("conditional removal transition must normalize");
+        assert!(second_changes.operations().iter().any(|operation| matches!(
+            operation,
+            NormalizedSemanticIndexOperation::RemoveNode(node)
+                if node.id() == &NodeId::new(first_right.id().as_str())
+        )));
+        let accepted_current = accepted_middle
+            .transition(&current, &second_changes)
+            .expect("conditional removal transition must publish");
+        assert_full_rebuild_equivalent(&middle, &current, &accepted_current);
+        assert_eq!(
+            accepted_current
+                .query()
+                .nodes_by_kind(NodeKind::AccessRight)
+                .into_iter()
+                .map(GraphNode::id)
+                .collect::<Vec<_>>(),
+            [second_right.id()]
         );
     }
 

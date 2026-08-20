@@ -1,9 +1,10 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, GraphNodePayload, ImpactAnalysisError,
-    ImpactNodeAvailability, ImpactNodeStatus, ImpactReasonKind, ImpactSnapshot, NodeId, NodeKind,
-    OwnershipImpactMode, ProducerId, Provenance, ProvenanceImpactMode, ResolutionState,
-    SemanticGraph, SemanticGraphEdgeFilter, SemanticImpactAnalyzer, SemanticImpactOptions,
+    AccessRight, AccessRightRowRestriction, Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode,
+    GraphNodePayload, ImpactAnalysisError, ImpactNodeAvailability, ImpactNodeStatus,
+    ImpactReasonKind, ImpactSnapshot, NodeId, NodeKind, OwnershipImpactMode, ProducerId,
+    Provenance, ProvenanceImpactMode, ResolutionState, SemanticGraph, SemanticGraphEdgeFilter,
+    SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use oneagent_metadata::{MetadataKind, MetadataMemberPayload};
 
@@ -627,6 +628,55 @@ fn member_payload_change_is_a_direct_impact_without_implicit_propagation() {
         impact.affected_nodes()[0].status(),
         ImpactNodeStatus::DirectlyChanged
     );
+}
+
+#[test]
+fn conditional_access_right_replacement_is_deterministic_direct_impact() {
+    let graph = |condition: &str| {
+        let mut graph = SemanticGraph::new();
+        let access_right = AccessRight::new_with_row_restriction(
+            id("metadata.catalog.products"),
+            id("Read"),
+            Some(AccessRightRowRestriction::new(condition).expect("condition must be valid")),
+            Vec::new(),
+        )
+        .expect("conditional access right must be valid");
+        graph.insert_access_right(&access_right);
+        graph
+    };
+    let previous = graph("WHERE Owner = CurrentUser");
+    let current = graph("WHERE NOT DeletionMark");
+    let diff = previous.diff(&current);
+
+    let impact =
+        SemanticImpactAnalyzer::analyze(&previous, &current, &diff, &SemanticImpactOptions::new(2))
+            .expect("conditional access-right impact must succeed");
+
+    assert_eq!(impact.affected_nodes().len(), 2);
+    assert_eq!(
+        impact
+            .affected_nodes()
+            .iter()
+            .filter(|node| node.status() == ImpactNodeStatus::Removed)
+            .count(),
+        1
+    );
+    assert_eq!(
+        impact
+            .affected_nodes()
+            .iter()
+            .filter(|node| node.status() == ImpactNodeStatus::DirectlyChanged)
+            .count(),
+        1
+    );
+    assert!(impact.affected_nodes().iter().all(|node| {
+        node.reasons().iter().all(|reason| {
+            matches!(
+                reason.kind(),
+                ImpactReasonKind::NodeAdded | ImpactReasonKind::NodeRemoved
+            )
+        })
+    }));
 }
 
 #[test]

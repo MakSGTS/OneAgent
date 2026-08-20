@@ -4,7 +4,7 @@ use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::{MetadataMemberPayload, MetadataPayload};
 use std::fmt::{Display, Formatter};
 
-use crate::{NodeKind, Provenance};
+use crate::{AccessRight, AccessRightPayload, NodeKind, Provenance};
 
 /// Closed typed content stored by a semantic graph node.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -16,6 +16,8 @@ pub enum GraphNodePayload {
     Metadata(MetadataPayload),
     /// Source-independent content of an `Attribute` or `TabularSection` node.
     MetadataMember(MetadataMemberPayload),
+    /// Source-independent content of an access-right node.
+    AccessRight(AccessRightPayload),
 }
 
 impl GraphNodePayload {
@@ -24,11 +26,12 @@ impl GraphNodePayload {
     pub const fn is_compatible_with(&self, kind: NodeKind) -> bool {
         match (self, kind) {
             (Self::None, _)
-            | (Self::MetadataMember(_), NodeKind::Attribute | NodeKind::TabularSection) => true,
+            | (Self::MetadataMember(_), NodeKind::Attribute | NodeKind::TabularSection)
+            | (Self::AccessRight(_), NodeKind::AccessRight) => true,
             (Self::Metadata(payload), NodeKind::Metadata(metadata_kind)) => {
                 payload.is_compatible_with(metadata_kind)
             }
-            (Self::Metadata(_) | Self::MetadataMember(_), _) => false,
+            (Self::Metadata(_) | Self::MetadataMember(_) | Self::AccessRight(_), _) => false,
         }
     }
 
@@ -37,7 +40,7 @@ impl GraphNodePayload {
     pub const fn metadata(&self) -> Option<&MetadataPayload> {
         match self {
             Self::Metadata(payload) => Some(payload),
-            Self::None | Self::MetadataMember(_) => None,
+            Self::None | Self::MetadataMember(_) | Self::AccessRight(_) => None,
         }
     }
 
@@ -45,8 +48,17 @@ impl GraphNodePayload {
     #[must_use]
     pub const fn metadata_member(&self) -> Option<&MetadataMemberPayload> {
         match self {
-            Self::None | Self::Metadata(_) => None,
+            Self::None | Self::Metadata(_) | Self::AccessRight(_) => None,
             Self::MetadataMember(payload) => Some(payload),
+        }
+    }
+
+    /// Returns access-right content when this is an access-right payload.
+    #[must_use]
+    pub const fn access_right(&self) -> Option<&AccessRightPayload> {
+        match self {
+            Self::AccessRight(payload) => Some(payload),
+            Self::None | Self::Metadata(_) | Self::MetadataMember(_) => None,
         }
     }
 }
@@ -84,6 +96,16 @@ pub struct GraphNode {
 }
 
 impl GraphNode {
+    pub(crate) fn from_access_right(access_right: &AccessRight) -> Self {
+        Self {
+            id: access_right.id().clone(),
+            name: access_right.name().clone(),
+            kind: NodeKind::AccessRight,
+            payload: GraphNodePayload::AccessRight(access_right.payload().clone()),
+            provenance: access_right.provenance().to_vec(),
+        }
+    }
+
     /// Creates a semantic graph node without provenance.
     #[must_use]
     pub const fn new(id: EntityId, name: EntityName, kind: NodeKind) -> Self {
@@ -189,6 +211,12 @@ impl GraphNode {
         self.payload.metadata_member()
     }
 
+    /// Returns source-independent access-right content when present.
+    #[must_use]
+    pub const fn access_right_payload(&self) -> Option<&AccessRightPayload> {
+        self.payload.access_right()
+    }
+
     /// Returns provenance records attached to the node.
     #[must_use]
     pub fn provenance(&self) -> &[Provenance] {
@@ -210,7 +238,7 @@ mod tests {
     };
 
     use super::{GraphNode, GraphNodePayload};
-    use crate::NodeKind;
+    use crate::{AccessRightPayload, AccessRightRowRestriction, NodeKind};
 
     fn id(value: &str) -> EntityId {
         EntityId::new(value).expect("identifier must be valid")
@@ -236,6 +264,7 @@ mod tests {
         assert_eq!(node.payload(), &GraphNodePayload::None);
         assert_eq!(node.metadata_payload(), None);
         assert_eq!(node.metadata_member_payload(), None);
+        assert_eq!(node.access_right_payload(), None);
     }
 
     #[test]
@@ -334,6 +363,54 @@ mod tests {
                 GraphNodePayload::MetadataMember(MetadataMemberPayload::empty()),
             )
             .expect_err("member payload must be rejected for unrelated node kinds");
+
+            assert_eq!(error.node_kind(), kind);
+        }
+    }
+
+    #[test]
+    fn accepts_access_right_payload_only_for_access_right_nodes() {
+        let payload = AccessRightPayload::new(Some(
+            AccessRightRowRestriction::new("WHERE NOT DeletionMark")
+                .expect("condition must be valid"),
+        ));
+        let node = GraphNode::new_with_payload(
+            id("conditional-right"),
+            name("Conditional right"),
+            NodeKind::AccessRight,
+            GraphNodePayload::AccessRight(payload.clone()),
+        )
+        .expect("AccessRight payload must be compatible");
+
+        assert_eq!(node.metadata_payload(), None);
+        assert_eq!(node.metadata_member_payload(), None);
+        assert_eq!(node.access_right_payload(), Some(&payload));
+
+        for kind in [
+            NodeKind::Metadata(MetadataKind::Catalog),
+            NodeKind::Module,
+            NodeKind::Procedure,
+            NodeKind::Function,
+            NodeKind::Query,
+            NodeKind::Form,
+            NodeKind::Command,
+            NodeKind::Attribute,
+            NodeKind::TabularSection,
+            NodeKind::StandardAttribute,
+            NodeKind::Dimension,
+            NodeKind::Resource,
+            NodeKind::Measure,
+            NodeKind::Role,
+            NodeKind::Subsystem,
+            NodeKind::Unknown,
+        ] {
+            let error = GraphNode::new_with_payload(
+                id("unrelated"),
+                name("Unrelated"),
+                kind,
+                GraphNodePayload::AccessRight(payload.clone()),
+            )
+            .expect_err("AccessRight payload must reject unrelated kinds");
 
             assert_eq!(error.node_kind(), kind);
         }

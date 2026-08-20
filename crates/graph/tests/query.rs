@@ -1,8 +1,8 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    EdgeChange, EdgeId, EdgeKind, GraphEdge, GraphNode, GraphNodePayload, NodeId, NodeKind,
-    SemanticGraph, SemanticGraphEdgeFilter, SemanticGraphQuery, SemanticGraphTraversalDirection,
-    SemanticGraphTraversalOptions,
+    AccessRight, AccessRightRowRestriction, EdgeChange, EdgeId, EdgeKind, GraphEdge, GraphNode,
+    GraphNodePayload, NodeId, NodeKind, SemanticGraph, SemanticGraphEdgeFilter, SemanticGraphQuery,
+    SemanticGraphTraversalDirection, SemanticGraphTraversalOptions,
 };
 use oneagent_metadata::{
     CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
@@ -817,4 +817,35 @@ fn member_payload_is_visible_without_becoming_an_exact_name_index() {
     );
     assert_eq!(query.nodes_by_name(&name("Company")), vec![node]);
     assert!(query.nodes_by_name(&name("Organization")).is_empty());
+}
+
+#[test]
+fn conditional_access_right_payload_is_visible_through_generic_query_lookup() {
+    let mut graph = SemanticGraph::new();
+    let access_right = AccessRight::new_with_row_restriction(
+        id("metadata.catalog.products"),
+        id("Read"),
+        Some(
+            AccessRightRowRestriction::new("WHERE NOT DeletionMark")
+                .expect("condition must be valid"),
+        ),
+        Vec::new(),
+    )
+    .expect("conditional access right must be valid");
+    graph.insert_access_right(&access_right);
+
+    let query = graph.query();
+    let node = query
+        .node(&node_id(access_right.id().as_str()))
+        .expect("conditional access right must exist");
+
+    assert_eq!(node.kind(), NodeKind::AccessRight);
+    assert_eq!(
+        node.access_right_payload()
+            .and_then(|payload| payload.row_restriction())
+            .expect("row restriction must exist")
+            .condition(),
+        "WHERE NOT DeletionMark"
+    );
+    assert_eq!(query.nodes_by_name(access_right.name()), vec![node]);
 }

@@ -1,7 +1,7 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
-    EdgeKind, GraphChangeKind, GraphEdge, GraphNode, GraphNodePayload, NodeKind,
-    NodeModifiedAspect, SemanticGraph, SemanticGraphDiff,
+    AccessRightPayload, AccessRightRowRestriction, EdgeKind, GraphChangeKind, GraphEdge, GraphNode,
+    GraphNodePayload, NodeKind, NodeModifiedAspect, SemanticGraph, SemanticGraphDiff,
 };
 use oneagent_metadata::{
     CommonMetadataPayload, MetadataKind, MetadataMemberPayload, MetadataPayload,
@@ -165,5 +165,46 @@ fn member_synonym_change_preserves_identity_and_modifies_semantic_content() {
             .expect("member payload must exist")
             .synonym(),
         Some("Organization")
+    );
+}
+
+#[test]
+fn access_right_payload_change_is_a_deterministic_semantic_content_change() {
+    let node_id = id("access-right");
+    let node = |condition: &str| {
+        GraphNode::new_with_payload(
+            node_id.clone(),
+            name("Conditional access right"),
+            NodeKind::AccessRight,
+            GraphNodePayload::AccessRight(AccessRightPayload::new(Some(
+                AccessRightRowRestriction::new(condition).expect("condition must be valid"),
+            ))),
+        )
+        .expect("AccessRight payload must be valid")
+    };
+    let mut old = SemanticGraph::new();
+    let mut new = SemanticGraph::new();
+    old.insert_node(node("WHERE Owner = CurrentUser"));
+    new.insert_node(node("WHERE NOT DeletionMark"));
+
+    let diff = old.diff(&new);
+
+    assert!(diff.added_nodes().is_empty());
+    assert!(diff.removed_nodes().is_empty());
+    assert_eq!(diff.modified_nodes().len(), 1);
+    assert_eq!(
+        diff.modified_nodes()[0].modified_aspects(),
+        &[NodeModifiedAspect::SemanticContent]
+    );
+    assert_eq!(
+        diff.modified_nodes()[0]
+            .new_state()
+            .expect("new snapshot must exist")
+            .payload()
+            .access_right()
+            .and_then(AccessRightPayload::row_restriction)
+            .expect("row restriction must exist")
+            .condition(),
+        "WHERE NOT DeletionMark"
     );
 }

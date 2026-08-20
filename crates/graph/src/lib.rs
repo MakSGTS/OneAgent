@@ -25,7 +25,10 @@ mod semantic_index;
 pub mod standard_attribute;
 pub mod validation;
 
-pub use access_right::{AccessRight, AccessRightError};
+pub use access_right::{
+    AccessRight, AccessRightError, AccessRightPayload, AccessRightRowRestriction,
+    AccessRightRowRestrictionError,
+};
 pub use build_diff::{
     BuildDiffSummary, CountChange, CountChangeDirection, CountDelta, DiagnosticChange,
     DiagnosticChangeKind, DiagnosticDiff, DiagnosticDiffSummary, DiagnosticIdentity,
@@ -227,12 +230,7 @@ impl SemanticGraph {
 
     /// Inserts an access-right node.
     pub fn insert_access_right(&mut self, access_right: &AccessRight) -> Option<GraphNode> {
-        self.insert_node(GraphNode::new_with_provenance(
-            access_right.id().clone(),
-            access_right.name().clone(),
-            NodeKind::AccessRight,
-            access_right.provenance().to_vec(),
-        ))
+        self.insert_node(GraphNode::from_access_right(access_right))
     }
 
     /// Returns a node by identifier.

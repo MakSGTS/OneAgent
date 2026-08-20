@@ -2759,6 +2759,310 @@ planning commit message:
 Plan Sprint 11 event subscriptions
 ```
 
+#### Sprint 12 SKD and Report Model execution plan
+
+Sprint 12 is planned from committed Sprint 11 review head
+`8b0d22ef955129d4bf6eb88549529a81baf9c466`. The review records `pass`, Sprint
+11 is `completed`, and Sprint 12 is the only sprint marked `next`.
+
+The repository-owned
+[source investigation](architecture/report-data-composition-source-investigation.md)
+proves 56 Report descriptors, 56 UUID-backed Data Composition Schema artifacts,
+70 uniquely named direct data sets, 970 uniquely named direct fields, and 38
+direct Query data sets. [ADR-0034](adr/0034-report-data-composition-semantics.md)
+accepts the smallest identity-safe entity and ownership slice. Eight nested
+duplicate-name Union query data sets and six field folders remain typed deferred
+observations. A live audit proves that none of 46 direct-or-nested DCS queries
+satisfies the current complete-source Query parser, so Sprint 12 emits no
+partial Reads, DependsOn, References, or QuerySource requests.
+
+The current graph implementation, parser implementation, graph emission,
+review, sprint-planning, and sequential-execution framework contracts express
+the required source, identity, validation, safety, Coverage, and reporting
+requirements. The Task prompt template readiness forecast requires no framework
+update until Sprint 14, and no concrete Sprint 12 gap was found. No Codex
+Framework change or post-sprint framework audit is justified.
+
+##### Sprint 12 objective
+
+Preserve repository-proven Report-owned Data Composition Schemas, direct Data
+Sets, named direct Data Composition Fields, and metadata-owned Query declarations
+as deterministic provenance-backed graph entities with exact immediate
+ownership, typed content, diagnostics, and generic consumer/index compatibility,
+without inventing nested Union identities or partially resolving unsupported
+DCS query grammar.
+
+##### Included scope
+
+- additive Data Composition Schema, Data Set, and Data Composition Field node
+  kinds with closed typed payloads;
+- collision-safe Schema UUID, owner-scoped direct Data Set/Field, and fixed-role
+  metadata-owned Query identities;
+- precise Report-to-Schema, Schema-to-DataSet, DataSet-to-Field, and
+  DataSet-to-Query Contains ownership;
+- Report DCS template declarations, optional main selection, exact artifact
+  correspondence, Data Composition Schema root, local data source, direct Query,
+  Object, and Union data sets, direct named fields, and complete query text;
+- production discovery through the existing Reports path, node/ownership
+  emission, provenance, typed fatal/deferred outcomes, diagnostics, statistics,
+  filesystem/XML reordering, and repeated-build determinism;
+- generic Query, Diff, Impact exclusion, reports, Validation, complete index,
+  incremental clean-rebuild equivalence, Coverage, and aggregate evidence;
+- one tracked provenance-backed reduced production fixture, current-state
+  synchronization, and integration review.
+
+##### Excluded scope
+
+- nested Union child identities, nested data sets/fields/queries, and field
+  folders;
+- DCS parameters, calculated fields outside the accepted direct field element,
+  roles, appearances, templates, settings, variants, layouts, filters, totals,
+  and runtime composition behavior;
+- DCS query-language expansion, virtual tables, batches, temporary tables,
+  QuerySource requests, Reads, DependsOn, References, result schemas, and
+  field-level lineage;
+- non-Report schemas, Common Templates, external resources, extensions, partial
+  workspaces, Designer XML, XDTO, services, Runtime, API, CLI, MCP, LSP, IDE,
+  persistence, or serialization;
+- unrelated graph/EDT capabilities, dependencies, refactors, or Coverage
+  transitions.
+
+##### Sprint 12 prerequisite gate
+
+Task 01 may begin only from one committed Sprint 12 planning baseline containing
+the source investigation, accepted ADR-0034, this Roadmap plan, Semantic Model
+planning synchronization, and the complete prompt suite under
+`docs/codex/prompts/sprint-12-skd-report-model/`. Every dependent task requires
+the preceding task's committed outcome. Stored prompt text never authorizes
+staging or committing; authorization comes only from the current execution
+instruction.
+
+The immediately preceding prompt suite is exactly
+`docs/codex/prompts/sprint-11-event-subscriptions/`, containing these seven
+tracked files:
+
+- `00-sprint-11-execution-loop.md`;
+- `01-implement-event-subscription-graph-model.md`;
+- `02-parse-event-subscription-descriptors.md`;
+- `03-resolve-event-subscription-targets.md`;
+- `04-emit-event-subscription-semantics.md`;
+- `05-complete-sprint-11-production-evidence.md`;
+- `06-sprint-11-integration-review.md`.
+
+It remains untouched during planning and implementation. Only the final Sprint
+12 review may retire those exact tracked files after a non-blocking decision
+and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Implement the Data Composition graph model. | Graph implementation / graph model | Typed nodes/payloads, collision-safe identities, precise Contains ownership, public exhaustive-consumer migration, indexes, and graph Coverage evidence. | Accepted Sprint 12 planning baseline. | `Implement Sprint 12 data composition graph model` |
+| 2 | Parse Report Data Composition Schemas. | Parser implementation / parser | Deterministic typed Report/DCS source model with accepted direct entities, fatal errors, and deferred nested/folder outcomes, without graph emission. | Task 1. | `Parse Sprint 12 report data composition schemas` |
+| 3 | Emit Report Data Composition semantics. | Graph implementation / graph emission | Production Report/DCS joining, nodes, ownership, metadata-owned Queries, provenance, diagnostics, statistics, and deterministic generated-project evidence. | Tasks 1–2. | `Emit Sprint 12 report data composition semantics` |
+| 4 | Complete Sprint 12 production evidence. | Graph implementation / graph emission | Provenance-backed fixture, generic consumers, complete/incremental indexes, EDT Coverage, aggregate counts, and current-state documentation. | Tasks 1–3. | `Complete Sprint 12 production evidence` |
+| 5 | Review the integrated Sprint 12 baseline. | Review / review | Findings, full validation evidence, sprint decision, Sprint 11 suite retirement, and Sprint 13 hand-off. | Task 4 and all implementation validation. | `Complete Sprint 12 SKD and report model review` |
+
+Dependency graph:
+
+```text
+Committed Sprint 12 planning baseline
+    -> Task 1 graph model
+    -> Task 2 parser
+    -> Task 3 production emission
+    -> Task 4 production, Coverage, and documentation evidence
+    -> Task 5 integration review and conditional Sprint 11 suite retirement
+    -> Sprint 13 planning eligibility
+```
+
+##### Task 1 — Data Composition graph model
+
+**Included:** add `NodeKind::DataCompositionSchema`, `NodeKind::DataSet`, and
+`NodeKind::DataCompositionField`; closed Schema main-role, Data Set kind/source,
+and Field data-path payloads; length-prefixed owner-scoped identity helpers;
+precise Contains endpoints and unique immediate ownership; additive DataSet
+ownership for Query; exhaustive public consumer updates; generic Query, Diff,
+Impact policy, reports, Validation, complete/incremental index, and graph-domain
+Coverage evidence.
+
+**Excluded:** EDT parsing, Report discovery changes, production insertion,
+diagnostics/statistics, fixtures, and EDT Coverage transitions.
+
+**Acceptance evidence:** existing variants/codes/identities remain unchanged;
+new payloads reject every wrong kind; content-only changes preserve IDs and are
+modified Diff facts; delimiter-containing identity inputs do not collide;
+exactly four new Contains pairs validate while reversed/transitive/unrelated
+pairs fail; every accepted child has one owner; existing Procedure/Function
+Query ownership remains compatible; generic consumers and complete/incremental
+indexes are deterministic; Contains adds no Impact dependency.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 2 — Report Data Composition parser
+
+**Included:** add one focused parser joining an existing Report descriptor's
+UUID/name to direct DCS template UUID/name/type declarations, optional exact
+main selection, exact `Templates/<name>/Template.dcs` artifacts, DCS namespace,
+root local data source, direct Query/Object/Union data sets, named direct fields,
+and one complete Query text per direct Query data set; return canonical typed
+accepted and nested/folder/unknown deferred observations.
+
+**Excluded:** graph node/edge insertion, production diagnostics/statistics,
+query-language parsing, target resolution, Reads/DependsOn/References, tracked
+production fixture, and Coverage changes.
+
+**Acceptance evidence:** all 56 live declarations and files agree; valid empty,
+main, non-main, Query, Object, and Union shapes parse; accepted direct names are
+unique and order-independent; missing/extra/ambiguous artifacts, duplicate
+UUID/name, malformed main selection, wrong root/namespace, malformed XML,
+unreadable file, invalid required values, data-source mismatch, query
+cardinality mismatch, and duplicate direct entities are typed deterministic
+errors; eight nested duplicate-name Union children and six folders are distinct
+deferred outcomes; repeated reads are equal.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-edt --lib report_data_composition::tests
+cargo test -p oneagent-edt --lib metadata_object::tests
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 3 — Report Data Composition semantic emission
+
+**Included:** integrate the committed parser with the existing Reports
+production path; retain Report identity/payload/members/modules; insert Schema,
+direct Data Set, direct named Field, and metadata-owned Query nodes plus exact
+Contains ownership; attach deterministic content-bearing provenance; project
+deferred/unsupported outcomes through diagnostics and legacy statistics; add
+generated project success/failure/reordering/repeated-build tests.
+
+**Excluded:** new graph/parser semantics, query-language analysis or source
+relations, final provenance-backed fixture, broad index/Coverage evidence,
+current-state documentation completion, and unsupported nested entities.
+
+**Acceptance evidence:** valid main/non-main/empty/Query/Object/Union projects
+emit exact typed nodes and immediate owners without changing Report behavior;
+Query text changes preserve Query ID and produce modified evidence; nested/folder
+observations emit no placeholder nodes and are typed/counted once; fatal source
+errors produce no successful partial build; no QuerySource request, Reads,
+DependsOn, or References is created; Query/Validation observe accepted facts;
+reordered source and repeated builds are equal; unrelated regressions pass.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-edt --test report_data_composition
+cargo test -p oneagent-graph --test validation
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 4 — Complete production evidence
+
+**Included:** add a tracked provenance-documented reduced fixture covering
+Query, Object, Union, empty, non-main, nested-deferred, and folder-deferred live
+shapes; prove generic Query, Diff, Impact exclusion, reports, Validation,
+reordered/repeated builds, complete index, and incremental clean-rebuild
+transitions; transition only justified graph/EDT Coverage evidence; recompute
+aggregate counts; synchronize Semantic Model and Roadmap current-state text
+without completing the sprint.
+
+**Excluded:** new entity, parser, identity, ownership, query grammar, relation,
+diagnostic, or statistics semantics; Sprint 13 planning; previous-suite
+retirement; unrelated Coverage changes.
+
+**Acceptance evidence:** every applicable ADR-0034 completion criterion is
+executable; the fixture README records exact live paths, source hashes,
+reduction treatment, and reduced hashes; add/remove/modify/main/data-set/field/
+query/deferred transitions match clean rebuilds; Coverage statuses/evidence and
+aggregate counts derive from live registries; all query-source relations remain
+absent; full workspace validation succeeds.
+
+Focused validation:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --test report_data_composition
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 5 — Sprint 12 integration review
+
+Review the exact planning-through-Task-4 commit range against ADR-0034, source
+investigation, prompt suite, and live repository. Verify entity/payload/identity,
+source parser, fatal/deferred policy, emission, ownership, provenance,
+diagnostics/statistics, no partial query relations, generic consumers, complete
+and incremental indexes, Coverage, documentation, compatibility, exclusions,
+and repository safety. Do not silently fix findings.
+
+Create `docs/reviews/sprint-12-skd-report-model.md` and transition Sprint 12 to
+`completed` with Sprint 13 as `next` only after `pass` or `pass with
+non-blocking follow-ups` and successful focused/full validation. A blocked
+decision creates no completion transition or review commit.
+
+After a non-blocking decision and successful complete validation, atomically
+retire every tracked prompt file under the verified immediately preceding suite
+`docs/codex/prompts/sprint-11-event-subscriptions/` in the same review commit.
+Any inventory mismatch, endangered untracked file, or retained link dependency
+blocks retirement and the final commit.
+
+Focused review additions:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --lib report_data_composition::tests
+cargo test -p oneagent-edt --test report_data_composition
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace validation and record exact command results.
+
+##### Sprint 12 state gates and completion criteria
+
+Sprint 12 remains `next` during planning. It becomes `active` only after the
+planning baseline is committed and Task 1 begins. A task is `already_complete`
+only when current committed evidence and successful required validation prove
+every criterion; no empty commit is created.
+
+Stop after the first prerequisite, implementation, validation, staging, commit,
+or review failure. Do not skip, reorder, combine, or partially commit dependent
+tasks. A blocked Task 5 leaves Sprint 12 incomplete, keeps the Sprint 11 prompt
+suite intact, and leaves Sprint 13 ineligible.
+
+Sprint 12 may transition to `completed` only when Tasks 1–4 are committed or
+proven already complete, the complete ADR-0034 graph/parser/production/
+provenance/determinism evidence passes, nested/folder/query-language scope
+remains deferred, unrelated compatibility and truthful Coverage state are
+preserved, the complete repository Definition of Done passes, and Task 5
+records a non-blocking review decision. Only then may Sprint 13 XDTO and Service
+Model become `next` and the exact Sprint 11 prompt suite be retired in the final
+review commit.
+
+Planning is documentation-only. Validate Markdown structure, links, prompt
+numbering, manifest order, prerequisite graph, commit-message agreement,
+accepted-versus-deferred scope, unchanged `next` state, verified previous-suite
+inventory, `git diff --check`, and absence of unrelated changes. Suggested
+planning commit message:
+
+```text
+Plan Sprint 12 data composition and reports
+```
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

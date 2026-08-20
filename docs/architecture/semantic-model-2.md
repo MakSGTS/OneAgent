@@ -2335,6 +2335,33 @@ Executable registry state is Graph Domain 88 capabilities: 84 `Supported` and
 integration review records `pass`; Sprint 11 is completed and Sprint 12 SKD
 and Report Model is the next planning target.
 
+Sprint 12 SKD and Report Model is governed by the accepted planning contract in
+`docs/adr/0034-report-data-composition-semantics.md` and the repository-owned
+source evidence in
+`docs/architecture/report-data-composition-source-investigation.md`. The first
+slice adds source-independent Data Composition Schema, direct Data Set, and
+direct named Data Composition Field nodes plus metadata-owned Query declarations
+under existing Report metadata. Immediate ownership is
+`Report --Contains--> DataCompositionSchema --Contains--> DataSet`, with
+`DataSet --Contains--> DataCompositionField` and `DataSet --Contains--> Query`.
+
+Schema identity uses the declared Report-template UUID. Direct Data Set and
+Field identities are collision-safe owner/local-name tuples, and each accepted
+direct Query uses a fixed role under its Data Set. Main-schema selection, Data
+Set kind/local data source, and Field data path are typed semantic content rather
+than identity. Eight nested duplicate-name Union children and six field folders
+remain typed deferred source observations because the repository supplies no
+stable first-slice identity for them.
+
+The real corpus contains 46 direct-or-nested DCS queries, and none satisfies
+the current complete-source Query parser. Sprint 12 therefore preserves 38
+direct metadata-owned Query declarations without emitting QuerySource requests,
+Reads, DependsOn, References, partial source candidates, or query-language
+diagnostics. DCS query grammar, virtual tables, batches, temporary tables,
+nested Union entities, field folders, settings, and runtime composition remain
+deferred. Architecture acceptance changes no production or Coverage status;
+implementation and evidence proceed through the ordered Sprint 12 tasks.
+
 ### Provenance inventory
 
 EDT attaches provenance while creating metadata object nodes, child nodes,

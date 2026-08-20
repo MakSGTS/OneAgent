@@ -2195,7 +2195,7 @@ present or absent restriction in provenance, and exposes it unchanged through
 Query, Resolution, Diff, Impact, reports, validation, and complete or incremental
 Semantic Index views. Real-fixture, duplicate, reordered, repeated-build,
 Coverage-regression, and clean-rebuild-equivalence tests provide the production
-completion evidence; Sprint 9 integration review remains pending.
+completion evidence. The Sprint 9 integration review records `pass`.
 `Grants` is distinct from `Includes` membership, `Contains` ownership,
 `Reads`/`Writes` data access, `DependsOn` dependencies, effective runtime
 authorization, denied access, inherited access, user assignment, access groups,
@@ -2360,10 +2360,10 @@ diff stability. The accepted role access-right slice is also complete: EDT role
 declarations resolve to scoped `NodeKind::AccessRight` nodes and canonical
 `Grants` edges. ADR-0031 opaque conditional direct-grant preservation is
 implemented with typed payload, deterministic identity, production emission,
-generic-consumer evidence, and unchanged Coverage aggregates. Sprint 9 remains
-open only for integration review. Deny semantics, condition evaluation,
-inheritance, defaults, profiles, groups, users, and effective authorization
-remain deferred.
+generic-consumer evidence, and unchanged Coverage aggregates. Sprint 9 is
+completed with a `pass` integration-review decision. Deny semantics, condition
+evaluation, inheritance, defaults, profiles, groups, users, and effective
+authorization remain deferred.
 
 The former `semantic_node.standard_attribute` High gap is closed. The EDT
 pipeline now derives document standard attributes from real document metadata

@@ -139,6 +139,7 @@ planned reuse; every sprint still performs a focused readiness check at kickoff.
 | Sprint 6 — Attributes and Tabular Sections | v0.3 | Preserve repository-proven optional Attribute and TabularSection synonym as typed member content without changing identity, immediate ownership, or the completed reference slice. | [Sprint review](reviews/sprint-6-attributes-tabular-sections.md) | completed |
 | Sprint 7 — Forms and Commands | v0.3 | Add accepted Form and Command modules, mapped Command parameter references, and precise static Form navigation without expanding the deferred UI model. | [Sprint review](reviews/sprint-7-forms-commands.md) | completed |
 | Sprint 8 — Registers and Queries | v0.3 | Expand direct persistent Query sources through public requests, retained Reads, and normalized Query dependencies without broadening the accepted grammar. | [Sprint review](reviews/sprint-8-registers-queries.md) | completed |
+| Sprint 9 — Roles and Access Rights | v0.3 | Preserve optional opaque EDT row restrictions as typed conditional direct Grants without changing unconditional AccessRight compatibility or claiming effective authorization. | [Sprint review](reviews/sprint-9-roles-access-rights.md) | completed |
 
 Sprint 5 is completed under
 [ADR-0027](adr/0027-incremental-semantic-index-maintenance.md) with a `pass`
@@ -155,7 +156,10 @@ decision in the
 completed under [ADR-0030](adr/0030-register-query-semantics.md) with a `pass`
 decision in the
 [Sprint 8 integration review](reviews/sprint-8-registers-queries.md). Sprint 9
-is the next planning target; v0.3 remains planned through Sprint 14.
+is completed under [ADR-0031](adr/0031-conditional-grants-semantics.md) with a
+`pass` decision in the
+[Sprint 9 integration review](reviews/sprint-9-roles-access-rights.md). Sprint
+10 is the next planning target; v0.3 remains planned through Sprint 14.
 
 #### Sprint 4 Semantic Index execution plan
 
@@ -740,8 +744,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 9 — Roles and Access Rights | Expand authorization modeling beyond the accepted Grants first slice where architecture evidence supports it. | next |
-| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | planned |
+| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | next |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
@@ -2008,8 +2011,8 @@ generic Query and Resolution facades, Diff, Impact, reports, validation,
 complete and incremental Semantic Index transitions, and Coverage regression
 tests preserve the accepted conditional direct-grant boundary. Graph Coverage
 remains `85` total (`82` Supported, `3` NotApplicable); EDT Coverage remains
-`101` total (`96` Supported, `5` NotApplicable). Sprint 9 is not completed until
-Task 4 records a non-blocking integration-review decision.
+`101` total (`96` Supported, `5` NotApplicable). Task 4 records `pass` in the
+[Sprint 9 integration review](reviews/sprint-9-roles-access-rights.md).
 
 **Focused validation:**
 
@@ -2061,6 +2064,12 @@ provenance/determinism evidence passes, unconditional identity and deferred
 scope remain intact, Coverage status and aggregates are unchanged, the complete
 repository Definition of Done passes, and Task 4 records a non-blocking review
 decision.
+
+Task 4 records `pass` against committed Task 3 head
+`0a7b4d7e4d080be92f7a64ddcc9a8eb336a46165`; the focused and complete
+validation matrices passed, Sprint 9 is `completed`, and Sprint 10 Subsystems
+and Composition is eligible as the next planning target. The v0.3 release
+remains planned through Sprint 14.
 
 Planning is documentation-only. Validate Markdown structure, links, prompt
 numbering, manifest order, prerequisite graph, commit-message agreement,
@@ -2141,9 +2150,11 @@ The v1.0 release integration review and release decision are part of Sprint 46.
 Deferred Sprint 3 scope is not implicitly promoted by this schedule. The
 accepted direct Query-source-derived `DependsOn` slice belongs to Sprint 8 and
 is implemented; broader Query grammar and source families remain deferred.
-Deny, inheritance, and effective authorization belong to Sprint 9;
-Subsystem hierarchy and transitive membership belong to Sprint 10; other
-reference-request families migrate in the sprint that owns their source contract.
+Deny, inheritance, defaults, profiles, groups, users, and effective
+authorization remain deferred beyond the completed Sprint 9 conditional
+direct-grant slice. Subsystem hierarchy and transitive membership belong to
+Sprint 10; other reference-request families migrate in the sprint that owns
+their source contract.
 
 ## Sprint 3 Semantic Coverage
 

@@ -1832,6 +1832,237 @@ Task 6 records `pass` against committed Task 5 head
 Sprint 8 is `completed`, and Sprint 9 Roles and Access Rights is eligible as the
 next planning target. The v0.3 release remains planned through Sprint 14.
 
+#### Sprint 9 Roles and Access Rights execution plan
+
+Sprint 9 preserves repository-proven row restrictions on direct EDT role
+grants without interpreting them as effective authorization. The accepted
+boundary is [ADR-0031](adr/0031-conditional-grants-semantics.md): a conditional
+explicit allow remains `Role --Grants--> AccessRight`, while the AccessRight
+typed payload and identity preserve the optional opaque row-restriction
+condition. Existing unconditional AccessRight identities remain byte-for-byte
+compatible.
+
+The planning data gate is satisfied by the real EDT
+`restrictionByCondition/condition` artifact in
+`adapters/edt/tests/fixtures/role_rights/BaseUser/Rights.rights`, its
+provenance-backed copy in the full Grants fixture, the typed
+`EdtRoleRowRestriction` parser model and malformed-input tests, the accepted
+ADR-0019 direct-only Grants semantics, and the production Grants builder and
+consumer suites. The parser already preserves the exact field, so Sprint 9 does
+not need a parser task. The private grant resolution observation and insertion
+pipeline are one small production boundary in `adapters/edt/src/lib.rs`; they
+remain one emission task rather than creating an unobservable intermediate
+state.
+
+The current architecture, graph implementation, graph emission, review,
+sprint-planning, and sequential-execution framework contracts express the
+complete evidence, safety, validation, and reporting requirements. No Codex
+Framework change or post-sprint framework audit is justified.
+
+##### Sprint 9 objective
+
+Preserve optional EDT row-restriction conditions as deterministic typed
+AccessRight content and conditional direct Grants, prove every generic graph
+consumer and production builder remains deterministic, and keep unconditional
+identity, deny policy, Coverage status, and deferred authorization semantics
+unchanged.
+
+##### Included scope
+
+- typed optional row-restriction content for `NodeKind::AccessRight`;
+- additive conditional AccessRight construction and deterministic identity;
+- unchanged unconditional AccessRight identity and display compatibility;
+- propagation of existing parsed conditions through private grant resolution,
+  aggregation, provenance, AccessRight insertion, Grants, and References;
+- positive and negative graph-model and EDT production evidence;
+- Query, Diff, Impact, report, complete-index, incremental-index, validation,
+  repeated-build, provenance, and Coverage-regression evidence;
+- synchronized Semantic Model, Coverage evidence text, Roadmap state, and final
+  integration review.
+
+##### Excluded scope
+
+- RLS expression parsing, normalization beyond outer whitespace, validation,
+  equivalence, compilation, execution, or effective row filtering;
+- explicit deny, false-value inference, inherited/default/transitive rights,
+  or effective authorization;
+- `setForNewObjects`, `setForAttributesByDefault`, and
+  `independentRightsOfChildObjects` semantics;
+- access profiles, access groups, BSP policy data, runtime users, assignments,
+  and role aggregation;
+- unsupported protected-resource families, placeholder targets, new NodeKind or
+  EdgeKind variants, new condition nodes, and direct Role-to-Metadata grants;
+- new persistence, transport, runtime API, CLI, MCP, LSP, or IDE surfaces;
+- Coverage capability or aggregate-count changes.
+
+##### Sprint 9 prerequisite gate
+
+Task 01 may begin only from one committed Sprint 9 planning baseline containing
+ADR-0031, this Roadmap plan, the Semantic Model synchronization, and the complete
+prompt suite under `docs/codex/prompts/sprint-9-roles-access-rights/`. Every
+dependent task requires the preceding task's committed outcome. Stored prompt
+text never authorizes staging or committing; authorization comes only from the
+current execution instruction.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Implement the conditional AccessRight graph model. | Graph implementation / graph model | Typed payload, additive conditional identity, unconditional compatibility, and generic graph consumer evidence. | Accepted Sprint 9 planning baseline. | `Implement Sprint 9 conditional access rights` |
+| 2 | Emit conditional direct role grants. | Graph implementation / graph emission | Existing parsed row restrictions propagated through private resolution, deterministic aggregation, provenance, AccessRight nodes, References, and Grants. | Task 1. | `Emit Sprint 9 conditional role grants` |
+| 3 | Complete Sprint 9 production evidence. | Graph implementation / graph emission | Representative full-builder, consumer, index-equivalence, Coverage-regression, and current-state documentation evidence. | Tasks 1–2. | `Complete Sprint 9 production evidence` |
+| 4 | Review the integrated Sprint 9 baseline. | Review / review | Findings, full validation evidence, sprint decision, and Sprint 10 hand-off. | Task 3 and all implementation validation. | `Complete Sprint 9 roles and access rights review` |
+
+Dependency graph:
+
+```text
+Committed Sprint 9 planning baseline
+    -> Task 1 conditional AccessRight graph model
+    -> Task 2 conditional Grants production
+    -> Task 3 production and documentation evidence
+    -> Task 4 integration review
+    -> Sprint 10 planning eligibility
+```
+
+##### Task 1 — Conditional AccessRight graph model
+
+**Included:** add the ADR-0031 typed AccessRight payload and optional restriction
+value, preserve existing constructors and unconditional identity, add an
+additive conditional constructor, store payload through
+`SemanticGraph::insert_access_right`, reject wrong-kind payloads, and prove
+Query, Diff, Impact, report, complete-index, incremental-index, validation, and
+Coverage declarations remain deterministic.
+
+**Excluded:** EDT parser or builder changes, new endpoint kinds, edge emission,
+fixtures, Coverage status changes, and authorization evaluation.
+
+**Acceptance evidence:** unconditional IDs and names remain exact; equal
+conditional inputs deduplicate; absent, present, outer-whitespace, empty,
+different-condition, different-right, and different-resource cases are typed
+and deterministic; graph consumers retain and compare the payload correctly;
+all existing graph behavior remains green.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph --lib access_right::tests
+cargo test -p oneagent-graph --lib node::tests
+cargo test -p oneagent-graph --test query
+cargo test -p oneagent-graph --test diff
+cargo test -p oneagent-graph --test impact
+cargo test -p oneagent-graph --test coverage
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 2 — Conditional direct Grants production
+
+**Included:** carry `EdtRoleRightDeclaration::row_restriction()` through the
+existing private resolved observation; include it in access-right, References,
+and Grants aggregation keys; create conditional AccessRight nodes; attach
+restriction-aware deterministic provenance; and add focused builder evidence for
+conditional/unconditional distinction, identical and distinct conditions,
+duplicates, reordered input, resolution outcomes, false values, and repeated
+builds.
+
+**Excluded:** parser source-shape changes unless required only to reject an
+already-defined empty condition, public reference-request migration, new
+diagnostic categories, unsupported resource families, Coverage transitions,
+and documentation completion.
+
+**Acceptance evidence:** the real Grants fixture exposes typed conditions for
+the two proven Catalog.Product rights; existing unconditional fact counts and
+identities change only where the source condition requires a distinct node;
+conditional and unconditional declarations never merge; diagnostics and
+reference statistics remain correct; all provenance and graph validation pass.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-edt role_rights
+cargo test -p oneagent-edt --test grants
+cargo test -p oneagent-graph --test validation
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 3 — Complete production evidence
+
+**Included:** extend representative full-builder and graph-consumer assertions
+for conditional payload lookup, Diff, Impact, reports, complete and incremental
+index equivalence, deterministic ordering, and unchanged unrelated semantic
+facts; synchronize current-state Semantic Model and Coverage evidence; keep
+registry statuses and exact aggregate counts unchanged.
+
+**Excluded:** new production semantics, parser grammar, evaluator APIs,
+condition-specific query services, Coverage capability additions, and Sprint 9
+completion before review.
+
+**Acceptance evidence:** the production builder proves present and absent
+restrictions, consumer observability, clean-rebuild equivalence, unrelated
+metadata/Calls/Reads/Writes/Includes/Extends/Opens/DependsOn compatibility,
+unchanged graph and EDT Coverage aggregates, and complete workspace validation.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --test grants
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 4 — Sprint 9 integration review
+
+Review the exact planning and Task 1–3 commit range without silently fixing
+implementation findings. Recheck ADR-0031, every acceptance criterion and
+exclusion, exact unconditional compatibility, conditional production evidence,
+generic consumers, Coverage aggregates, documentation, repository safety, and
+the complete validation matrix. Create
+`docs/reviews/sprint-9-roles-access-rights.md` and transition Sprint 9 to
+`completed` only for `pass` or `pass with non-blocking follow-ups`.
+
+Focused review additions:
+
+```bash
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt role_rights
+cargo test -p oneagent-edt --test grants
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace validation and record exact command results.
+
+##### Sprint 9 state gates and completion criteria
+
+Sprint 9 remains `next` during planning. It becomes `active` only after the
+planning baseline is committed and Task 1 begins. A task is `already_complete`
+only when current committed evidence and successful required validation prove
+every criterion; no empty commit is created.
+
+Stop after the first prerequisite, implementation, validation, staging, commit,
+or review failure. Do not skip, reorder, combine, or partially commit dependent
+tasks. A blocked Task 4 leaves Sprint 9 incomplete and Sprint 10 ineligible.
+
+Sprint 9 may transition to `completed` only when Tasks 1–3 are committed or
+proven already complete, the complete ADR-0031 model/production/consumer/
+provenance/determinism evidence passes, unconditional identity and deferred
+scope remain intact, Coverage status and aggregates are unchanged, the complete
+repository Definition of Done passes, and Task 4 records a non-blocking review
+decision.
+
+Planning is documentation-only. Validate Markdown structure, links, prompt
+numbering, manifest order, prerequisite graph, commit-message agreement,
+accepted-versus-deferred scope, unchanged `next` state, `git diff --check`, and
+absence of unrelated changes. Suggested planning commit message:
+
+```text
+Plan Sprint 9 roles and access rights
+```
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

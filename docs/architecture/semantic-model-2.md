@@ -2176,10 +2176,23 @@ Resolved declarations emit one shared scoped access-right node per
 resource/right pair, one Grants edge per role/access-right pair, and a companion
 `AccessRight --References--> Metadata(...)` edge. Provenance is aggregated,
 sorted, and deduplicated before graph insertion. False values, default flags,
-and RLS expressions do not alter identity or add other authorization facts;
+and RLS expressions in the completed first slice do not alter identity or add
+other authorization facts;
 missing, ambiguous, incompatible, and unsupported targets create no grant or
 placeholder node. `semantic_node.access_right` and `semantic_edge.grants` are
 Supported by the EDT Coverage Registry.
+
+The accepted Sprint 9 extension is governed by
+`docs/adr/0031-conditional-grants-semantics.md`. It preserves an optional EDT
+`restrictionByCondition/condition` as opaque typed AccessRight content without
+parsing or evaluating the expression. Unconditional AccessRight identity remains
+byte-for-byte compatible. A conditional right appends one length-delimited
+canonical condition component to the existing resource/right identity so that
+conditional and unconditional declarations, and distinct condition texts,
+cannot merge. The endpoint matrix remains Role-to-AccessRight Grants plus the
+AccessRight-to-resource References companion. This architecture acceptance is
+not production-completion evidence; Sprint 9 must still implement the graph
+payload, EDT projection, consumer tests, provenance, determinism, and review.
 `Grants` is distinct from `Includes` membership, `Contains` ownership,
 `Reads`/`Writes` data access, `DependsOn` dependencies, effective runtime
 authorization, denied access, inherited access, user assignment, access groups,
@@ -2342,8 +2355,10 @@ preserving the existing `NodeKind::Metadata(MetadataKind::Role)` object node.
 Repeated builds preserve role node identity, provenance, and graph/build-result
 diff stability. The accepted role access-right slice is also complete: EDT role
 declarations resolve to scoped `NodeKind::AccessRight` nodes and canonical
-`Grants` edges. Deny semantics, inheritance, and effective authorization remain
-deferred.
+`Grants` edges. ADR-0031 accepts opaque conditional direct-grant preservation as
+the Sprint 9 target, but that extension remains planned until its implementation
+and review complete. Deny semantics, condition evaluation, inheritance, and
+effective authorization remain deferred.
 
 The former `semantic_node.standard_attribute` High gap is closed. The EDT
 pipeline now derives document standard attributes from real document metadata

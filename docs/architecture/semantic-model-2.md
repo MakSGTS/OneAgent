@@ -2489,9 +2489,12 @@ The dedicated Designer registry contains 58 deterministic capabilities: 55
 `not_applicable` capabilities for nested Form and Unknown placeholder facts.
 Its only gap is the evidence-backed Calculation Register deferral. This is
 adapter-specific Coverage; Graph Domain and EDT Coverage remain unchanged.
-Tasks 1–7 are implemented and validated in the current Sprint 14 baseline, but
-the sprint and v0.3 release review remain incomplete until Task 8 records a
-non-blocking integration decision.
+The [Sprint 14 integration review](../reviews/sprint-14-designer-xml-adapter.md)
+records `pass` against committed Task 7 head
+`19d56818a1345b4cced43db7275165ff24ce0748`. Sprint 14 is completed without a
+review-time production, public API, Coverage, or deferred-scope change. The
+v0.3 release integration review is now eligible; Sprint 15 Runtime Service
+Container becomes the next planning target only after that release gate.
 
 Metadata members, specialized Role/Subsystem/Event/DCS/XDTO/service semantics,
 Form/Command/configuration/register module roles, semantic references and other

@@ -885,7 +885,7 @@ performance claims remain deferred.
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | completed |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | completed |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | completed |
-| Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | next |
+| Sprint 14 — Designer XML Adapter | Ingest supported Designer XML configuration dumps through a source adapter without changing canonical semantic identities. | completed |
 
 #### Sprint 6 Attributes and Tabular Sections execution plan
 
@@ -3581,14 +3581,16 @@ Plan Sprint 13 XDTO and service model
 
 #### Sprint 14 Designer XML Adapter execution plan
 
-Sprint 14 is planned from committed readiness head
-`5b8c57b44247ffed5b26a52877b3b333bbf64703`. Sprint 13 is `completed`, its
-post-review Web Service XDTO correction is committed and validated, and Sprint
-14 is the unique `next` target. The v0.3 release review remains ineligible until
-Sprint 14 completes with a non-blocking integration-review decision.
+Sprint 14 was planned from committed readiness head
+`5b8c57b44247ffed5b26a52877b3b333bbf64703` and completed through the
+[Sprint 14 integration review](reviews/sprint-14-designer-xml-adapter.md), which
+records `pass` against committed Task 7 head
+`19d56818a1345b4cced43db7275165ff24ce0748`. The v0.3 release integration
+review is now eligible. Sprint 15 Runtime Service Container is the next planning
+target only after that release gate completes.
 
-**Implemented current state:** Tasks 1–7 are complete in the current Sprint 14
-baseline. The dedicated adapter now detects hierarchical Designer XML 2.20,
+**Completed current state:** Tasks 1–8 are complete. The dedicated adapter
+detects hierarchical Designer XML 2.20,
 loads explicit complete or partial scopes, parses the accepted configuration,
 20 top-level metadata families and generic Object/Manager/Common modules, and
 emits canonical configuration, metadata, Module, Procedure, Function, and
@@ -3598,9 +3600,9 @@ projection, an exact one-node controlled synonym difference, negative and
 partial outcomes, public consumers, complete indexes, and incremental
 clean-rebuild equivalence. Designer-specific Coverage reports 58 capabilities:
 55 `supported`, one `unsupported`, two `not_applicable`, and the single
-Calculation Register evidence gap. Task 8 integration review is still pending;
-Sprint 14 is not completed, the Sprint 13 prompt suite remains present, and the
-v0.3 release review remains ineligible.
+Calculation Register evidence gap. The review introduced no production, public
+API, Coverage, or deferred-scope change and retired the exact Sprint 13 prompt
+suite. The Sprint 14 suite and reusable bootstrap remain present.
 
 The ignored paired `OneAgent_DesignerXML/` and `OneAgent_EDTproject/` corpora,
 the tracked [Designer XML corpus registration](architecture/designer-xml-source-corpus.md),

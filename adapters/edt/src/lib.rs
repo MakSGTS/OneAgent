@@ -19,6 +19,7 @@ mod query_source_resolution;
 mod report_data_composition;
 mod report_data_composition_emission;
 mod role_rights;
+mod service_descriptor;
 mod subsystem_content;
 mod subsystem_hierarchy;
 mod writes;
@@ -67,6 +68,12 @@ pub use module_reader::{
 pub use role_rights::{
     EdtRoleObjectRights, EdtRoleRightDeclaration, EdtRoleRightsDescriptor, EdtRoleRightsError,
     EdtRoleRightsReader, EdtRoleRowRestriction, FileSystemEdtRoleRightsReader,
+};
+
+pub use service_descriptor::{
+    EdtHttpMethod, EdtHttpServiceDescriptor, EdtHttpUrlTemplate, EdtServiceDescriptorError,
+    EdtServiceDescriptorReader, EdtWebServiceDescriptor, EdtWebServiceOperation,
+    EdtWebServiceParameter, EdtWebServiceXdtoPackage, FileSystemEdtServiceDescriptorReader,
 };
 
 pub use subsystem_content::{

@@ -46,7 +46,7 @@ struct FixtureIds {
     url_template: EntityId,
     http_method: EntityId,
     http_module: EntityId,
-    http_procedure: EntityId,
+    http_function: EntityId,
     web_service: EntityId,
     operation: EntityId,
     parameter: EntityId,
@@ -65,7 +65,7 @@ impl FixtureIds {
             url_template: id("uuid.http.url-template"),
             http_method: id("uuid.http.method"),
             http_module: id("metadata.http.api:common_module"),
-            http_procedure: id("metadata.http.api:common_module:procedure:Handle"),
+            http_function: id("metadata.http.api:common_module:function:Handle"),
             web_service: id("metadata.web.exchange"),
             operation: id("uuid.web.operation"),
             parameter: id("uuid.web.parameter"),
@@ -148,10 +148,10 @@ fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
             node_provenance("source.http-module"),
         ),
         GraphNode::new_with_provenance(
-            ids.http_procedure.clone(),
+            ids.http_function.clone(),
             name("Handle"),
-            NodeKind::Procedure,
-            node_provenance("source.http-procedure"),
+            NodeKind::Function,
+            node_provenance("source.http-function"),
         ),
         GraphNode::new_with_payload_and_provenance(
             ids.web_service.clone(),
@@ -224,9 +224,9 @@ fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
         ),
         (
             ids.http_module,
-            ids.http_procedure.clone(),
+            ids.http_function.clone(),
             EdgeKind::Contains,
-            "edge.http-procedure",
+            "edge.http-function",
         ),
         (
             ids.web_service.clone(),
@@ -274,13 +274,13 @@ fn graph(explicit_http_method: Option<&str>, reverse: bool) -> SemanticGraph {
         ),
         (
             ids.http_method.clone(),
-            ids.http_procedure.clone(),
+            ids.http_function.clone(),
             EdgeKind::References,
             "edge.http-handler-reference",
         ),
         (
             ids.http_method,
-            ids.http_procedure,
+            ids.http_function,
             EdgeKind::Triggers,
             "edge.http-trigger",
         ),
@@ -425,7 +425,7 @@ fn schema_accepts_only_adr_0035_additive_pairs() {
         ),
         (NodeKind::WebServiceOperation, NodeKind::XdtoType),
         (NodeKind::WebServiceParameter, NodeKind::XdtoType),
-        (NodeKind::HttpServiceMethod, NodeKind::Procedure),
+        (NodeKind::HttpServiceMethod, NodeKind::Function),
         (NodeKind::WebServiceOperation, NodeKind::Function),
     ];
 
@@ -438,7 +438,7 @@ fn schema_accepts_only_adr_0035_additive_pairs() {
         assert!(!schema.allows(target, EdgeKind::References, source));
     }
     for (source, target) in [
-        (NodeKind::HttpServiceMethod, NodeKind::Procedure),
+        (NodeKind::HttpServiceMethod, NodeKind::Function),
         (NodeKind::WebServiceOperation, NodeKind::Function),
     ] {
         assert!(schema.allows(source, EdgeKind::Triggers, target));
@@ -527,7 +527,7 @@ fn xdto_and_service_requests_use_stable_categories_and_reference_projections() {
                 owner: ids.http_module.clone(),
                 name: name("Handle"),
             },
-            [NodeKind::Procedure],
+            [NodeKind::Function],
             [provenance(
                 "request.handler.collection",
                 ResolutionState::Unresolved,
@@ -535,8 +535,8 @@ fn xdto_and_service_requests_use_stable_categories_and_reference_projections() {
         )
         .expect("handler request must be valid")
         .into_resolved(
-            ids.http_procedure.clone(),
-            NodeKind::Procedure,
+            ids.http_function.clone(),
+            NodeKind::Function,
             [provenance(
                 "request.handler.resolution",
                 ResolutionState::Resolved,

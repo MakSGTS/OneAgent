@@ -88,7 +88,7 @@ declaration parsing where justified.
 - The live corpus parses exactly 2/35/35 HTTP Service/URL Template/Method and
   8/119/360 Web Service/Operation/Parameter declarations with stable UUIDs.
 - All 154 handler expressions are retained exactly without parser-time symbol
-  resolution or BSL kind inference from the XML field name.
+  resolution or BSL kind inference from service XML field names.
 - Two internal package references, five external package namespaces, one absent
   package declaration, 478 external type occurrences, and one internal type
   occurrence have exact typed classifications.

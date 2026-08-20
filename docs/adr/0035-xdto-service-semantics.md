@@ -26,10 +26,10 @@ bags or ordinal nodes would create unstable and source-specific semantics.
 
 The service corpus provides a smaller exact contract: stable UUIDs for every
 HTTP URL Template/Method and Web Operation/Parameter; owner-local handler names
-that resolve to existing service-module Procedures for HTTP and Functions for
-Web; exact XDTO package references; exact `(namespace, type name)`
-declarations; and deterministic negative or external outcomes. The XML field
-name `procedureName` does not define the BSL declaration kind.
+that resolve to existing service-module Functions for both HTTP and Web; exact
+XDTO package references; exact `(namespace, type name)` declarations; and
+deterministic negative or external outcomes. Source XML handler-field names do
+not define the BSL declaration kind.
 
 ## Decision
 
@@ -179,7 +179,7 @@ Canonical requests are:
 |---|---|---|---|
 | Web Service metadata node | `XdtoPackage` | exact package name | `Metadata(XdtoPackage)` |
 | Web Operation or Parameter | `XdtoType` | exact child under package resolved by namespace | `XdtoType` |
-| HTTP Method | `Callable` | exact child Procedure under the owning service Module | `Procedure` |
+| HTTP Method | `Callable` | exact child Function under the owning service Module | `Function` |
 | Web Operation | `Callable` | exact child Function under the owning service Module | `Function` |
 
 The adapter may first map an XDTO namespace to exactly one repository package,
@@ -210,7 +210,7 @@ Extend the precise `References` endpoint matrix only with:
 Metadata(WebService) --References--> Metadata(XdtoPackage)
 WebServiceOperation --References--> XdtoType
 WebServiceParameter --References--> XdtoType
-HttpServiceMethod --References--> Procedure
+HttpServiceMethod --References--> Function
 WebServiceOperation --References--> Function
 ```
 
@@ -234,7 +234,7 @@ declarative dispatch source --Triggers--> resolved callable
 Extend its accepted endpoints with:
 
 ```text
-HttpServiceMethod --Triggers--> Procedure
+HttpServiceMethod --Triggers--> Function
 WebServiceOperation --Triggers--> Function
 ```
 
@@ -376,18 +376,19 @@ Rejected because descriptor dispatch is not a BSL call-site fact. References
 plus Triggers preserve navigation and invocation intent without inventing code
 execution.
 
-### Infer Procedure from the Web XML field name
+### Infer Procedure from a service XML field name
 
-Rejected because all 119 live Web handler names resolve to owned BSL Functions
-and zero resolve to Procedures. The serialized field name `procedureName` is a
-source-format label, not a semantic declaration-kind contract.
+Rejected because all 35 live HTTP and 119 live Web handler names resolve to
+owned BSL Functions and zero resolve to Procedures. Serialized `handler` and
+`procedureName` fields are source-format labels, not semantic declaration-kind
+contracts.
 
 ### Accept both Procedure and Function for every service family
 
-Rejected because the complete live corpus proves a narrower exact matrix: all
-35 HTTP handlers are Procedures and all 119 Web handlers are Functions.
-Accepting both kinds would hide incompatible declarations and broaden endpoint
-validation without source evidence.
+Rejected because the complete live corpus proves the narrower exact target
+kind `Function` for all 154 handlers. Accepting both kinds would hide
+incompatible declarations and broaden endpoint validation without source
+evidence.
 
 ### Add a service-specific query or index
 

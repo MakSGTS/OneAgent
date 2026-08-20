@@ -1290,7 +1290,7 @@ const fn allows_reference(source: NodeKind, target: NodeKind) -> bool {
             source,
             NodeKind::WebServiceOperation | NodeKind::WebServiceParameter
         ) && matches!(target, NodeKind::XdtoType))
-        || (matches!(source, NodeKind::HttpServiceMethod) && matches!(target, NodeKind::Procedure))
+        || (matches!(source, NodeKind::HttpServiceMethod) && matches!(target, NodeKind::Function))
         || (matches!(source, NodeKind::WebServiceOperation) && matches!(target, NodeKind::Function))
 }
 
@@ -1348,10 +1348,9 @@ const fn allows_opens(source: NodeKind, target: NodeKind) -> bool {
 }
 
 const fn allows_triggers(source: NodeKind, target: NodeKind) -> bool {
-    (matches!(
-        source,
-        NodeKind::Metadata(MetadataKind::EventSubscription) | NodeKind::HttpServiceMethod
-    ) && matches!(target, NodeKind::Procedure))
+    (matches!(source, NodeKind::Metadata(MetadataKind::EventSubscription))
+        && matches!(target, NodeKind::Procedure))
+        || (matches!(source, NodeKind::HttpServiceMethod) && matches!(target, NodeKind::Function))
         || (matches!(source, NodeKind::WebServiceOperation) && matches!(target, NodeKind::Function))
 }
 

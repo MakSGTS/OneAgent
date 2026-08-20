@@ -3103,8 +3103,8 @@ Repository-owned
 proves 20 descriptor/schema XDTO Package pairs, 12,666 uniquely named direct
 Value/Object types, two HTTP Services with 35 URL Templates and 35 Methods, and
 eight Web Services with 119 Operations and 360 Parameters. All 154 service
-handler declarations resolve uniquely to existing owned BSL callables: 35 HTTP
-handlers are Procedures and 119 Web handlers are Functions. The accepted
+handler declarations resolve uniquely to existing owned BSL callables: all 35
+HTTP and 119 Web handlers are Functions, and zero are Procedures. The accepted
 [ADR-0035](adr/0035-xdto-service-semantics.md) limits the first slice to direct
 types, service declaration structure, internal package/type references, and
 declarative handler dispatch. XDTO properties, imports, restrictions, external
@@ -3140,8 +3140,8 @@ Triggers without inventing external schema nodes or runtime transport behavior.
   malformed, and unsupported-value behavior;
 - public XDTO package/type and callable request lifecycle with deterministic
   provenance, diagnostics, and statistics;
-- internal References plus HTTP declarative Triggers to existing Procedure
-  nodes and Web declarative Triggers to existing Function nodes, with external
+- internal References plus HTTP and Web declarative Triggers to existing
+  Function nodes, with external
   namespaces preserved but not materialized;
 - generated positive/negative/reordered/repeated production evidence;
 - one tracked provenance-backed reduced production fixture;
@@ -3310,8 +3310,8 @@ repeated-build tests.
 index/Coverage evidence, current-state documentation completion, and deferred
 XDTO or runtime behavior.
 
-**Acceptance evidence:** internal package/type, all HTTP Procedure handlers,
-and all Web Function handlers resolve; external namespaces emit no requests,
+**Acceptance evidence:** internal package/type and all HTTP/Web Function
+handlers resolve; external namespaces emit no requests,
 placeholders, edges, or false missing diagnostics; missing/ambiguous/
 incompatible/wrong-owner internal declarations have exact request outcomes and
 diagnostics; fatal source errors yield no successful partial build; accepted

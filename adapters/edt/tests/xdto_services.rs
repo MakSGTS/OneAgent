@@ -127,7 +127,7 @@ fn write_http(project: &Path, handler: &str, http_method: Option<&str>) {
     .expect("HTTP descriptor must be written");
     fs::write(
         directory.join("Module.bsl"),
-        "Procedure HandleHttp()\nEndProcedure\n\nProcedure AlternateHttp()\nEndProcedure\n",
+        "Function HandleHttp()\nEndFunction\n\nFunction AlternateHttp()\nEndFunction\n",
     )
     .expect("HTTP module must be written");
 }
@@ -144,7 +144,7 @@ fn write_web(project: &Path) {
     .expect("Web descriptor must be written");
     fs::write(
         directory.join("Module.bsl"),
-        "Function HandleWeb()\nEndFunction\n\nProcedure ForeignHttpHandler()\nEndProcedure\n",
+        "Function HandleWeb()\nEndFunction\n\nFunction ForeignHttpHandler()\nEndFunction\n",
     )
     .expect("Web module must be written");
 }
@@ -241,8 +241,7 @@ fn production_builder_emits_payloads_children_requests_and_resolved_relations() 
             return true;
         }
         match request.source_node().as_str() {
-            "method-id" => request.expected_kinds() == [NodeKind::Procedure],
-            "operation-id" => request.expected_kinds() == [NodeKind::Function],
+            "method-id" | "operation-id" => request.expected_kinds() == [NodeKind::Function],
             _ => false,
         }
     }));

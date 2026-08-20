@@ -395,7 +395,7 @@ fn collect_intents<'a>(
                         method.id().clone(),
                         method.handler().clone(),
                         module.clone(),
-                        NodeKind::Procedure,
+                        NodeKind::Function,
                         service.metadata().descriptor_path(),
                     )?);
                 }

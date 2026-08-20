@@ -122,15 +122,16 @@ Observed values and cardinalities are:
 | `reuseSessions` | `AutoUse` for both services |
 | `sessionMaxAge` | `20` for both services |
 | explicit `httpMethod` | `POST` in 11 methods; absent in 24 methods |
-| handler | one non-empty procedure name per method |
+| handler | one non-empty handler name per method |
 
 Method identity must use its declared UUID, not repeated method names, HTTP
 verb, handler name, ordinal, or URL text. URL Template identity likewise uses
 its declared UUID. `rootURL`, template text, explicit HTTP method value, and
 handler binding are mutable content or relation evidence rather than identity.
 
-All 35 handler names resolve case-insensitively to exactly one Procedure in the
-owning HTTP Service module. No missing or ambiguous live handler was found.
+All 35 handler names resolve case-insensitively to exactly one Function in the
+owning HTTP Service module. Zero resolve to Procedure, and no missing or
+ambiguous live binding was found.
 
 ## Web Service descriptors
 
@@ -208,7 +209,7 @@ The repository provides a reliable acceptance oracle:
 - existing graph ownership, validation, Query, Diff, report, complete index,
   and incremental rebuild APIs can observe additions, removals, content
   changes, and ownership changes;
-- existing BSL Module/Procedure nodes provide exact handler resolution targets;
+- existing BSL Module/Function nodes provide exact handler resolution targets;
 - malformed XML, missing/extra/ambiguous artifacts, wrong roots/namespaces,
   missing/duplicate UUIDs or names, namespace mismatch, duplicate direct type
   names, invalid Boolean/direction/package reference values, missing/ambiguous
@@ -231,7 +232,7 @@ The repository evidence is sufficient to plan and test this bounded slice:
 - resolve repository XDTO package and direct-type declarations without creating
   external placeholders;
 - resolve HTTP Method and Web Service Operation handlers to existing owned
-  Procedure nodes and project declarative dispatch;
+  Function nodes and project declarative dispatch;
 - preserve exact UUID or collision-safe owner/name identity, provenance,
   diagnostics, statistics, requests, determinism, generic consumers, complete
   and incremental indexes, and Coverage evidence.

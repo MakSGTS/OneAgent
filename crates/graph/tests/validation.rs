@@ -145,7 +145,7 @@ fn accepted_reference_pairs() -> Vec<(NodeKind, NodeKind)> {
         ),
         (NodeKind::WebServiceOperation, NodeKind::XdtoType),
         (NodeKind::WebServiceParameter, NodeKind::XdtoType),
-        (NodeKind::HttpServiceMethod, NodeKind::Procedure),
+        (NodeKind::HttpServiceMethod, NodeKind::Function),
         (NodeKind::WebServiceOperation, NodeKind::Function),
     ]);
     pairs
@@ -825,10 +825,10 @@ fn triggers_schema_accepts_only_declared_dispatch_source_and_callable_pairs() {
 
     for source_kind in &kinds {
         for target_kind in &kinds {
-            let expected = (matches!(
-                source_kind,
-                NodeKind::Metadata(MetadataKind::EventSubscription) | NodeKind::HttpServiceMethod
-            ) && *target_kind == NodeKind::Procedure)
+            let expected = (*source_kind == NodeKind::Metadata(MetadataKind::EventSubscription)
+                && *target_kind == NodeKind::Procedure)
+                || (*source_kind == NodeKind::HttpServiceMethod
+                    && *target_kind == NodeKind::Function)
                 || (*source_kind == NodeKind::WebServiceOperation
                     && *target_kind == NodeKind::Function);
             let actual = schema.allows(*source_kind, EdgeKind::Triggers, *target_kind);

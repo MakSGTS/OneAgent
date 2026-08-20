@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="8f4a03a4-1625-4663-98d4-f532c9cf1158">
+  <name>Common</name>
+  <content>CommonModule.AddressableStorage</content>
+  <subsystems>FinancialAccounting</subsystems>
+  <parentSubsystem>Subsystem.DNSCore</parentSubsystem>
+</mdclass:Subsystem>

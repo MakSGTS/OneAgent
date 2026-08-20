@@ -744,7 +744,7 @@ performance claims remain deferred.
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | next |
+| Sprint 10 — Subsystems and Composition | Add hierarchy, nested discovery, composition, and transitive membership contracts where justified. | active |
 | Sprint 11 — Event Subscriptions | Model event subscriptions, handlers, references, and resulting semantic relations. | planned |
 | Sprint 12 — SKD and Report Model | Add data-composition and report-specific semantic entities and relations. | planned |
 | Sprint 13 — XDTO and Service Model | Expand XDTO, HTTP service, and Web service semantics beyond top-level metadata-node coverage. | planned |
@@ -2298,6 +2298,17 @@ repository-proven depth and duplicate-name shapes are represented; no persisted
 transitive edge exists; generic and indexed consumers agree with clean builds;
 graph and EDT Coverage statuses and aggregate counts change only if derived live
 registry evidence requires it; the complete workspace gate passes.
+
+**Implemented current state:** the tracked
+`adapters/edt/tests/fixtures/sprint10_subsystems_project/` fixture records exact
+live-source paths, selected fields, source hashes, and reduced-artifact hashes.
+Production-builder tests cover depths 1–5, duplicate local names, shared and
+nested direct members, deferred self-content, provenance, deterministic Query,
+Diff, reports, validation, and repeated builds. Complete and incremental index
+tests cover hierarchy/member add, remove, reparent, and content replacement
+against clean rebuilds. EDT Coverage remains 101 capabilities (96 `Supported`,
+5 `NotApplicable`); graph Coverage remains 85 capabilities (82 `Supported`, 3
+`NotApplicable`). Sprint 10 remains `active` pending Task 5 review.
 
 **Focused validation:**
 

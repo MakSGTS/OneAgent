@@ -16,6 +16,10 @@ fn id(value: &str) -> EntityId {
     EntityId::new(value).expect("fixture identifier must be valid")
 }
 
+fn production_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint10_subsystems_project")
+}
+
 fn write_configuration(root: &Path) {
     let directory = root.join("src/Configuration");
     fs::create_dir_all(&directory).expect("configuration directory must be created");
@@ -238,6 +242,127 @@ fn assert_root_branch_provenance(edge: &oneagent_graph::GraphEdge) {
     assert_eq!(provenance.origin(), FactOrigin::Resolved);
     assert_eq!(provenance.confidence(), Confidence::Exact);
     assert_eq!(provenance.resolution(), ResolutionState::Resolved);
+}
+
+fn assert_fixture_report_and_repeat(
+    first: &oneagent_edt::EdtSemanticGraphBuildResult,
+    repeated: &oneagent_edt::EdtSemanticGraphBuildResult,
+) {
+    let report = first.report();
+    assert_eq!(report.nodes().by_kind().get(&NodeKind::Subsystem), Some(&9));
+    assert_eq!(report.edges().by_kind().get(&EdgeKind::Includes), Some(&10));
+    assert_eq!(report.nodes().with_provenance(), report.nodes().total());
+    assert_eq!(report.edges().with_provenance(), report.edges().total());
+    assert!(first.validate().is_valid());
+    assert!(first.graph().diff(repeated.graph()).is_empty());
+    assert!(first.diff(repeated).is_empty());
+    assert_eq!(first.report(), repeated.report());
+}
+
+#[test]
+fn provenance_backed_fixture_covers_depth_duplicate_names_membership_and_reports() {
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&production_fixture())
+        .expect("provenance-backed Sprint 10 fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&production_fixture())
+        .expect("repeated Sprint 10 fixture build must succeed");
+    let graph = first.graph();
+    let query = graph.query();
+    let hierarchy_edges = query
+        .edges_by_kind(EdgeKind::Includes)
+        .into_iter()
+        .filter(|edge| {
+            graph
+                .node(edge.target())
+                .is_some_and(|node| node.kind() == NodeKind::Subsystem)
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        graph
+            .nodes_by_kind(NodeKind::Metadata(MetadataKind::Subsystem))
+            .len(),
+        9
+    );
+    assert_eq!(graph.nodes_by_kind(NodeKind::Subsystem).len(), 9);
+    assert_eq!(hierarchy_edges.len(), 6);
+    assert_eq!(query.edges_by_kind(EdgeKind::Includes).len(), 10);
+    assert_eq!(first.reference_statistics().total(), 5);
+    assert_eq!(first.reference_statistics().resolved(), 4);
+    assert_eq!(first.reference_statistics().unsupported_prefix(), 1);
+    assert_eq!(first.diagnostics().len(), 1);
+    assert_eq!(
+        first.diagnostics()[0].code(),
+        SemanticDiagnosticCode::ReferenceUnsupportedPrefix
+    );
+
+    let dns_core = NodeId::new("09aab5d3-1bb5-481b-bab0-6794171c94af:subsystem");
+    let mut direct_targets = query
+        .outgoing_edges_by_kind(&dns_core, EdgeKind::Includes)
+        .into_iter()
+        .map(|edge| edge.target().clone())
+        .collect::<Vec<_>>();
+    direct_targets.sort();
+    assert_eq!(
+        direct_targets,
+        [
+            id("8f4a03a4-1625-4663-98d4-f532c9cf1158:subsystem"),
+            id("93569485-444c-422c-b938-7574b9778420"),
+        ]
+    );
+    assert_eq!(
+        query
+            .transitive_subsystem_members(&dns_core)
+            .into_iter()
+            .map(|node| node.id().clone())
+            .collect::<Vec<_>>(),
+        [
+            id("38675671-3207-4902-87cd-9e6d276ab265"),
+            id("93569485-444c-422c-b938-7574b9778420"),
+        ]
+    );
+    assert!(query.direct_dependencies(&dns_core).is_empty());
+    assert!(!graph.edges().any(|edge| {
+        edge.source().as_str() == dns_core.as_str()
+            && edge.target().as_str() == "38675671-3207-4902-87cd-9e6d276ab265"
+            && edge.kind() == EdgeKind::Includes
+    }));
+
+    let bank_ids = graph
+        .nodes_by_kind(NodeKind::Subsystem)
+        .into_iter()
+        .filter(|node| node.name().as_str() == "Bank")
+        .map(|node| node.id().clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        bank_ids,
+        [
+            id("69e89788-a848-47e5-b637-9f393b9c20b5:subsystem"),
+            id("e8c846bb-4d2c-4ae3-966f-28d107e54b20:subsystem"),
+        ]
+    );
+
+    let deepest_edge = hierarchy_edges
+        .iter()
+        .find(|edge| edge.target().as_str() == "e8c846bb-4d2c-4ae3-966f-28d107e54b20:subsystem")
+        .expect("depth-five Bank hierarchy edge must exist");
+    let deepest_source = deepest_edge.provenance()[0]
+        .source()
+        .expect("hierarchy provenance must retain its source")
+        .as_str();
+    assert!(deepest_source.contains(
+        "src/Subsystems/DNSCore/Subsystems/Common/Subsystems/FinancialAccounting/Subsystems/Treasury/Treasury.mdo"
+    ));
+    assert!(deepest_source.contains(
+        "src/Subsystems/DNSCore/Subsystems/Common/Subsystems/FinancialAccounting/Subsystems/Treasury/Subsystems/Bank/Bank.mdo"
+    ));
+    assert_eq!(
+        deepest_edge.provenance()[0].producer().as_str(),
+        "oneagent.edt.subsystem-hierarchy-resolution"
+    );
+
+    assert_fixture_report_and_repeat(&first, &repeated);
 }
 
 #[test]

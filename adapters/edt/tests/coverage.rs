@@ -6,10 +6,94 @@ use oneagent_graph::{
     EdgeKind, NodeKind, SemanticCoverageCapabilityId, SemanticCoverageRegistry,
     SemanticCoverageStatus,
 };
+use oneagent_metadata::MetadataKind;
 use std::path::{Path, PathBuf};
 
 fn grants_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/grants_project")
+}
+
+fn subsystem_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint10_subsystems_project")
+}
+
+#[test]
+fn nested_subsystems_expand_supported_evidence_without_registry_changes() {
+    let build = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&subsystem_fixture())
+        .expect("provenance-backed Subsystem fixture must build");
+    let report = EdtSemanticCoverageReport::for_build_result(&build);
+    let edt = EdtSemanticCoverageRegistry::audit();
+    let graph = SemanticCoverageRegistry::audit();
+
+    assert_eq!(report.edt_pipeline(), &edt);
+    assert_eq!(report.graph_domain(), &graph);
+    assert_eq!(edt.summary().total(), 101);
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Supported),
+        Some(&96)
+    );
+    assert_eq!(
+        edt.summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::NotApplicable),
+        Some(&5)
+    );
+    assert_eq!(graph.summary().total(), 85);
+    assert_eq!(
+        graph
+            .summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::Supported),
+        Some(&82)
+    );
+    assert_eq!(
+        graph
+            .summary()
+            .by_status()
+            .get(&SemanticCoverageStatus::NotApplicable),
+        Some(&3)
+    );
+
+    for capability_id in [
+        SemanticCoverageCapabilityId::SemanticNode(NodeKind::Subsystem),
+        SemanticCoverageCapabilityId::SemanticNode(NodeKind::Metadata(MetadataKind::Subsystem)),
+        SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Contains),
+        SemanticCoverageCapabilityId::SemanticEdge(EdgeKind::Includes),
+    ] {
+        let capability = edt
+            .capability(capability_id)
+            .expect("nested Subsystem capability must remain registered");
+        assert_eq!(capability.status(), SemanticCoverageStatus::Supported);
+        assert_eq!(capability.evidence(), capability.required_evidence());
+        assert!(capability.missing_evidence().is_empty());
+    }
+
+    let observed_subsystems = report
+        .observed()
+        .nodes()
+        .get(&NodeKind::Subsystem)
+        .expect("fixture must observe flat Subsystems");
+    let observed_metadata_subsystems = report
+        .observed()
+        .nodes()
+        .get(&NodeKind::Metadata(MetadataKind::Subsystem))
+        .expect("fixture must observe metadata Subsystems");
+    let observed_includes = report
+        .observed()
+        .edges()
+        .get(&EdgeKind::Includes)
+        .expect("fixture must observe direct Includes edges");
+    assert_eq!(observed_subsystems.total(), 9);
+    assert_eq!(observed_subsystems.with_provenance(), 9);
+    assert_eq!(observed_metadata_subsystems.total(), 9);
+    assert_eq!(observed_metadata_subsystems.with_provenance(), 9);
+    assert_eq!(observed_includes.total(), 10);
+    assert_eq!(observed_includes.with_provenance(), 10);
+    assert!(report.validation().is_valid());
+    assert_eq!(report.build_report(), &build.report());
 }
 
 #[test]

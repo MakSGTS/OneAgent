@@ -1,13 +1,18 @@
 use oneagent_common::EntityId;
 use oneagent_edt::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
-    AccessRight, AccessRightRowRestriction, EdgeKind, ImpactNodeStatus, NodeId, NodeKind,
-    SemanticGraph, SemanticImpactAnalyzer, SemanticImpactOptions,
+    AccessRight, AccessRightRowRestriction, Confidence, EdgeKind, FactOrigin, ImpactNodeStatus,
+    NodeId, NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph,
+    SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use std::path::{Path, PathBuf};
 
 fn grants_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/grants_project")
+}
+
+fn subsystem_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sprint10_subsystems_project")
 }
 
 fn id(value: &str) -> EntityId {
@@ -43,6 +48,88 @@ fn without_node(graph: &SemanticGraph, removed: &EntityId) -> SemanticGraph {
             .expect("filtered edge endpoints must exist");
     }
     filtered
+}
+
+#[test]
+fn subsystem_hierarchy_complete_indexes_and_provenance_diff_match_repeated_builds() {
+    let first = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&subsystem_fixture())
+        .expect("provenance-backed Subsystem fixture must build");
+    let repeated = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_diagnostics(&subsystem_fixture())
+        .expect("repeated Subsystem fixture build must succeed");
+    let graph = first.graph();
+    let dns_core = NodeId::new("09aab5d3-1bb5-481b-bab0-6794171c94af:subsystem");
+    let expected_members = [
+        id("38675671-3207-4902-87cd-9e6d276ab265"),
+        id("93569485-444c-422c-b938-7574b9778420"),
+    ];
+
+    assert_eq!(
+        graph
+            .query()
+            .transitive_subsystem_members(&dns_core)
+            .into_iter()
+            .map(|node| node.id().clone())
+            .collect::<Vec<_>>(),
+        expected_members
+    );
+    assert_eq!(
+        repeated
+            .graph()
+            .query()
+            .transitive_subsystem_members(&dns_core)
+            .into_iter()
+            .map(|node| node.id().clone())
+            .collect::<Vec<_>>(),
+        expected_members
+    );
+    for member in &expected_members {
+        assert_eq!(
+            graph
+                .resolution_index()
+                .resolve_entity_id(member)
+                .expect("complete Resolution index must find each transitive member")
+                .id(),
+            member
+        );
+    }
+    assert_eq!(first.report(), repeated.report());
+    assert!(graph.diff(repeated.graph()).is_empty());
+    assert!(first.diff(&repeated).is_empty());
+
+    let changed_provenance = Provenance::new(
+        Some(id("sprint10-provenance-transition")),
+        ProducerId::new("oneagent.edt.tests.sprint10-provenance-transition"),
+        FactOrigin::Derived,
+        Confidence::Exact,
+        ResolutionState::NotApplicable,
+    );
+    let mut changed = SemanticGraph::new();
+    for source_node in graph.nodes() {
+        let mut node = source_node.clone();
+        if node.id().as_str() == "e8c846bb-4d2c-4ae3-966f-28d107e54b20:subsystem" {
+            node.add_provenance(changed_provenance.clone());
+        }
+        changed.insert_node(node);
+    }
+    for source_edge in graph.edges() {
+        let mut edge = source_edge.clone();
+        if edge.source().as_str() == "62513da0-595d-4b8e-bcba-29d34846ca48:subsystem"
+            && edge.target().as_str() == "e8c846bb-4d2c-4ae3-966f-28d107e54b20:subsystem"
+            && edge.kind() == EdgeKind::Includes
+        {
+            edge.add_provenance(changed_provenance.clone());
+        }
+        changed
+            .insert_edge(edge)
+            .expect("fixture edge endpoints must remain complete");
+    }
+    let provenance_diff = graph.diff(&changed);
+    assert_eq!(provenance_diff.modified_nodes().len(), 1);
+    assert_eq!(provenance_diff.modified_edges().len(), 1);
+    assert_eq!(provenance_diff.summary().total_changes(), 2);
+    assert!(changed.validate().is_valid());
 }
 
 #[test]

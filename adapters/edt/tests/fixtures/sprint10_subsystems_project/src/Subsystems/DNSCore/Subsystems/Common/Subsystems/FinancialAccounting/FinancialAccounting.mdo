@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="6d59bea6-6a46-414f-bafa-568f1e89d74f">
+  <name>FinancialAccounting</name>
+  <subsystems>Treasury</subsystems>
+  <parentSubsystem>Subsystem.DNSCore.Subsystem.Common</parentSubsystem>
+</mdclass:Subsystem>

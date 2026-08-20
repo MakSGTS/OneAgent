@@ -2213,40 +2213,44 @@ access-control subject. Direction is from the declaring Subsystem to the direct
 member, standard edge identity is `(source, target, EdgeKind::Includes)`, and
 transitive closure is not stored.
 
-The implemented first production slice is restricted to top-level Subsystem
-discovery and direct `<content>` targets whose serialized prefix maps to a
-top-level metadata kind already discovered and emitted by the EDT adapter.
-Metadata Subsystem targets, nested Subsystem discovery, hierarchy fields,
-unsupported metadata families, and derived membership remain deferred. The
-producer resolves by exact metadata kind and local name, does not invent
-placeholder targets, and attaches deterministic resolved provenance containing
-the project-relative descriptor path, raw token, parsed target, resolved node,
-and a stable subsystem-content resolution producer stage.
+Production discovery now covers top-level and nested Subsystems through the
+exact `Subsystems/<Name>` hierarchy accepted by ADR-0032. Every nested
+descriptor must agree with its parent's direct `subsystems` declaration, its
+own complete qualified `parentSubsystem`, and its immediate physical nesting.
+The producer resolves direct content by exact metadata kind and local name,
+does not invent placeholder targets, and attaches deterministic resolved
+provenance containing the project-relative descriptor path, raw token, parsed
+target, resolved node, and a stable subsystem-content resolution producer
+stage. Unsupported metadata families and semantic meaning for
+`Subsystem.<...>` content remain deferred.
 Includes is distinct from `Contains` ownership, `References` linkage, `Grants`
 authorization, and `DependsOn` dependency. It remains excluded from dependency
 and Impact traversal; generic outgoing, incoming, and all-edge queries are
 sufficient for direct membership navigation.
 
 Direct source extraction is implemented by `EdtSubsystemContentReader`. The
-reader accepts an already discovered top-level Subsystem metadata descriptor,
+reader accepts every hierarchy-reader-discovered Subsystem metadata descriptor,
 requires the `mdclass:Subsystem` root, and returns the Subsystem metadata ID,
 descriptor path, and only direct child `<content>` observations. Raw tokens are
 XML-decoded without trimming, case conversion, aliasing, localization, or
 qualified-name splitting; empty observations are preserved, while equivalent
 observations are sorted and deduplicated deterministically. Missing direct
-content is valid, descendant content and nested Subsystems are ignored, and
-malformed or wrong-kind descriptors return typed reader errors.
+content is valid, descendant content is ignored, and malformed or wrong-kind
+descriptors return typed reader errors.
 
 The production builder collects deterministic pending observations while
-processing discovered top-level Subsystems, normalizes only the explicit
-ADR-0020 prefix allowlist, and resolves after all top-level metadata and flat
-Subsystem nodes exist. Malformed qualified tokens and unsupported or deferred
+processing the complete validated hierarchy, normalizes only the explicit
+ADR-0020 prefix allowlist, and resolves after all metadata and flat Subsystem
+nodes exist. It emits configuration ownership for nested metadata Subsystems and
+direct hierarchy Includes between flat Subsystems with exact hierarchy
+provenance. Malformed qualified content tokens and unsupported or deferred
 prefixes use distinct typed diagnostics and reference-statistics outcomes;
 missing, ambiguous, and incompatible targets reuse the exact graph resolution
 categories. Resolved source-target pairs are aggregated through canonical edge
 identity, and equivalent provenance is sorted and deduplicated before insertion.
-The graph validator accepts only
-`NodeKind::Subsystem --Includes--> NodeKind::Metadata(allowlisted kind)`.
+The graph validator accepts both the allowlisted metadata-member endpoint and
+the flat Subsystem hierarchy endpoint, while rejecting self-loops and directed
+Subsystem hierarchy cycles deterministically.
 
 This accepted contract partially supersedes only ADR-0017's older classification
 of Subsystem membership as `Contains`; ADR-0017's `DependsOn` decisions remain
@@ -2272,10 +2276,13 @@ Query projection across outgoing Subsystem hierarchy edges and is never stored
 as derived Includes closure. Includes remains excluded from dependency and
 Impact traversal. `Subsystem.<...>` content, command-interface behavior,
 directory-only inference, placeholder Subsystems, contradictory-source
-recovery, and unrelated metadata-family expansion remain deferred. This is an
-accepted planning contract, not implemented support; the current top-level-only
-production and Coverage statements above remain authoritative until the Sprint
-10 implementation and review gates pass.
+recovery, and unrelated metadata-family expansion remain deferred. The tracked
+Sprint 10 production fixture and generated transition matrices cover five
+source-proven depths, duplicate local names, shared/nested direct content,
+deferred self-content, provenance, deterministic consumers, and complete and
+incremental index equivalence. The coarse Coverage capabilities remain
+`Supported` without registry or aggregate-count changes; Sprint 10 remains
+active until its integration review.
 
 ### Provenance inventory
 
@@ -2402,9 +2409,12 @@ member-level provenance, and satisfies the graph ownership validator.
 The former `semantic_node.subsystem` High gap is closed. The EDT pipeline now
 emits flat `NodeKind::Subsystem` nodes for every discovered subsystem metadata
 object while preserving the existing `NodeKind::Metadata(MetadataKind::Subsystem)`
-object node. Repeated builds preserve subsystem node identity, provenance, and
-graph/build-result diff stability. Subsystem hierarchy, nested Subsystem
-discovery, and transitive membership remain separate future capabilities.
+object node. Recursive production discovery now preserves validated direct
+Subsystem hierarchy through flat-node Includes edges, configuration ownership
+for nested metadata objects, and nested direct content. Query derives stable
+transitive metadata membership without persisted closure. Repeated builds and
+complete or incremental index transitions preserve identity, provenance, and
+graph/build-result equivalence.
 
 The EDT registry now reports 101 capabilities: 96 `Supported` and 5
 `NotApplicable`, with 0 Critical gaps, 0 High gaps, and 0 Medium gaps. The
@@ -2425,12 +2435,13 @@ capability is `Supported` with complete typed payload preservation evidence.
 Completion does not broaden the accepted first-slice contracts. Deferred work
 remains: broader query-language grammar and source forms beyond the four direct
 persistent namespaces;
-deny, inheritance, and effective authorization; Subsystem hierarchy, nested
-Subsystem discovery, and transitive membership; and reference-request migration
-for BSL calls, Writes targets, protected resources, Subsystem content, and
-extension targets. Query sources have completed public request migration for
-the accepted direct-source boundary. Serialization, CLI, runtime product work,
-and quality percentages also remain outside this completed Sprint 3 scope.
+deny, inheritance, and effective authorization; semantic meaning for
+`Subsystem.<...>` content, command-interface behavior, cross-project hierarchy,
+and contradictory-source recovery; and reference-request migration for BSL
+calls, Writes targets, protected resources, Subsystem content, and extension
+targets. Query sources have completed public request migration for the accepted
+direct-source boundary. Serialization, CLI, runtime product work, and quality
+percentages also remain outside the implemented boundary.
 
 ## Definition of done for Semantic Model 2.0 core
 

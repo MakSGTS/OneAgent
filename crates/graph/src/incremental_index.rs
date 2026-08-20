@@ -2405,6 +2405,68 @@ mod tests {
         removed
     }
 
+    fn subsystem_transition_graph(
+        parent: &str,
+        nested: bool,
+        members: &[(&str, &str, &str, NodeKind)],
+    ) -> SemanticGraph {
+        let mut graph = SemanticGraph::new();
+        insert_nodes(
+            &mut graph,
+            [
+                node("subsystem.a", "A", NodeKind::Subsystem),
+                node("subsystem.b", "B", NodeKind::Subsystem),
+                node("subsystem.child", "Child", NodeKind::Subsystem),
+            ],
+        );
+        if nested {
+            graph.insert_node(node("subsystem.nested", "Nested", NodeKind::Subsystem));
+        }
+        for (member, member_name, _, kind) in members {
+            graph.insert_node(node(member, member_name, *kind));
+        }
+        graph
+            .insert_edge(edge(
+                parent,
+                "subsystem.child",
+                EdgeKind::Includes,
+                FactOrigin::Resolved,
+            ))
+            .expect("parent-child hierarchy edge must be valid");
+        if nested {
+            graph
+                .insert_edge(edge(
+                    "subsystem.child",
+                    "subsystem.nested",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ))
+                .expect("nested hierarchy edge must be valid");
+        }
+        for (member, _, owner, _) in members {
+            graph
+                .insert_edge(edge(
+                    owner,
+                    member,
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ))
+                .expect("direct Subsystem member edge must be valid");
+        }
+        graph
+    }
+
+    fn transitive_subsystem_member_ids(
+        query: &crate::SemanticGraphQuery<'_>,
+        subsystem: &str,
+    ) -> Vec<EntityId> {
+        query
+            .transitive_subsystem_members(&NodeId::new(subsystem))
+            .into_iter()
+            .map(|member| member.id().clone())
+            .collect()
+    }
+
     #[test]
     fn subsystem_membership_transitions_match_clean_rebuilds() {
         let initial = initial_subsystem_membership_graph();
@@ -2414,22 +2476,119 @@ mod tests {
         let accepted_initial = AcceptedSemanticIndex::rebuild(&initial);
         let accepted_replaced = transition_and_assert(&accepted_initial, &replaced);
         let accepted_removed = transition_and_assert(&accepted_replaced, &removed);
-        let member_ids = |query: &crate::SemanticGraphQuery<'_>, subsystem: &str| {
-            query
-                .transitive_subsystem_members(&NodeId::new(subsystem))
-                .into_iter()
-                .map(|member| member.id().clone())
-                .collect::<Vec<_>>()
-        };
-
         assert_eq!(
-            member_ids(&accepted_replaced.query(), "subsystem.root"),
+            transitive_subsystem_member_ids(&accepted_replaced.query(), "subsystem.root"),
             vec![id("metadata.catalog.new")]
         );
-        assert!(member_ids(&accepted_removed.query(), "subsystem.root").is_empty());
+        assert!(
+            transitive_subsystem_member_ids(&accepted_removed.query(), "subsystem.root").is_empty()
+        );
         assert_eq!(
-            member_ids(&accepted_removed.query(), "subsystem.child"),
+            transitive_subsystem_member_ids(&accepted_removed.query(), "subsystem.child"),
             vec![id("metadata.catalog.new")]
+        );
+    }
+
+    #[test]
+    fn subsystem_add_remove_reparent_and_content_replacement_match_clean_rebuilds() {
+        let initial = subsystem_transition_graph(
+            "subsystem.a",
+            false,
+            &[(
+                "metadata.document.old",
+                "Old",
+                "subsystem.child",
+                NodeKind::Metadata(MetadataKind::Document),
+            )],
+        );
+        let added = subsystem_transition_graph(
+            "subsystem.a",
+            true,
+            &[
+                (
+                    "metadata.document.old",
+                    "Old",
+                    "subsystem.child",
+                    NodeKind::Metadata(MetadataKind::Document),
+                ),
+                (
+                    "metadata.catalog.shared",
+                    "Shared",
+                    "subsystem.nested",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+            ],
+        );
+        let content_replaced = subsystem_transition_graph(
+            "subsystem.a",
+            true,
+            &[
+                (
+                    "metadata.document.new",
+                    "New",
+                    "subsystem.child",
+                    NodeKind::Metadata(MetadataKind::Document),
+                ),
+                (
+                    "metadata.catalog.shared",
+                    "Shared",
+                    "subsystem.nested",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+            ],
+        );
+        let reparented = subsystem_transition_graph(
+            "subsystem.b",
+            true,
+            &[
+                (
+                    "metadata.document.new",
+                    "New",
+                    "subsystem.child",
+                    NodeKind::Metadata(MetadataKind::Document),
+                ),
+                (
+                    "metadata.catalog.shared",
+                    "Shared",
+                    "subsystem.nested",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+            ],
+        );
+        let removed = subsystem_transition_graph(
+            "subsystem.b",
+            false,
+            &[(
+                "metadata.document.new",
+                "New",
+                "subsystem.child",
+                NodeKind::Metadata(MetadataKind::Document),
+            )],
+        );
+
+        let accepted_initial = AcceptedSemanticIndex::rebuild(&initial);
+        let accepted_added = transition_and_assert(&accepted_initial, &added);
+        let accepted_replaced = transition_and_assert(&accepted_added, &content_replaced);
+        let accepted_reparented = transition_and_assert(&accepted_replaced, &reparented);
+        let accepted_removed = transition_and_assert(&accepted_reparented, &removed);
+        assert_eq!(
+            transitive_subsystem_member_ids(&accepted_added.query(), "subsystem.a"),
+            vec![id("metadata.catalog.shared"), id("metadata.document.old")]
+        );
+        assert_eq!(
+            transitive_subsystem_member_ids(&accepted_replaced.query(), "subsystem.a"),
+            vec![id("metadata.catalog.shared"), id("metadata.document.new")]
+        );
+        assert!(
+            transitive_subsystem_member_ids(&accepted_reparented.query(), "subsystem.a").is_empty()
+        );
+        assert_eq!(
+            transitive_subsystem_member_ids(&accepted_reparented.query(), "subsystem.b"),
+            vec![id("metadata.catalog.shared"), id("metadata.document.new")]
+        );
+        assert_eq!(
+            transitive_subsystem_member_ids(&accepted_removed.query(), "subsystem.b"),
+            vec![id("metadata.document.new")]
         );
     }
 }

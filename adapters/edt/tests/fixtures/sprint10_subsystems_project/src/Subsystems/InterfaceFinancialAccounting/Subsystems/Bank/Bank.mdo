@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="69e89788-a848-47e5-b637-9f393b9c20b5">
+  <name>Bank</name>
+  <content>Document.BankAccountIssue</content>
+  <parentSubsystem>Subsystem.InterfaceFinancialAccounting</parentSubsystem>
+</mdclass:Subsystem>

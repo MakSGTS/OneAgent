@@ -1398,7 +1398,21 @@ fn normalize_subsystem_content_target(raw_token: &str) -> SubsystemContentTarget
         return SubsystemContentTarget::Malformed;
     };
 
-    if prefix.is_empty() || local_name.is_empty() || components.next().is_some() {
+    if prefix.is_empty() || local_name.is_empty() {
+        return SubsystemContentTarget::Malformed;
+    }
+
+    if prefix == "Subsystem" {
+        if components.any(str::is_empty) {
+            return SubsystemContentTarget::Malformed;
+        }
+        return SubsystemContentTarget::Unsupported {
+            prefix: prefix.to_owned(),
+            deferred: true,
+        };
+    }
+
+    if components.next().is_some() {
         return SubsystemContentTarget::Malformed;
     }
 
@@ -1422,12 +1436,6 @@ fn normalize_subsystem_content_target(raw_token: &str) -> SubsystemContentTarget
         "HTTPService" => MetadataKind::HttpService,
         "WebService" => MetadataKind::WebService,
         "XDTOPackage" => MetadataKind::XdtoPackage,
-        "Subsystem" => {
-            return SubsystemContentTarget::Unsupported {
-                prefix: prefix.to_owned(),
-                deferred: true,
-            };
-        }
         _ => {
             return SubsystemContentTarget::Unsupported {
                 prefix: prefix.to_owned(),
@@ -3571,6 +3579,15 @@ mod graph_tests {
 
         assert_eq!(
             normalize_subsystem_content_target("Subsystem.Child"),
+            SubsystemContentTarget::Unsupported {
+                prefix: "Subsystem".to_owned(),
+                deferred: true,
+            }
+        );
+        assert_eq!(
+            normalize_subsystem_content_target(
+                "Subsystem.StandardSubsystems.Subsystem.ObjectAttributesLock"
+            ),
             SubsystemContentTarget::Unsupported {
                 prefix: "Subsystem".to_owned(),
                 deferred: true,

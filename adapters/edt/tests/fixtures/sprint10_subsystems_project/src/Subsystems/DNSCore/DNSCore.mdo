@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdclass:Subsystem xmlns:mdclass="http://g5.1c.ru/v8/dt/metadata/mdclass" uuid="09aab5d3-1bb5-481b-bab0-6794171c94af">
+  <name>DNSCore</name>
+  <content>CommonModule.AddressableStorage</content>
+  <subsystems>Common</subsystems>
+</mdclass:Subsystem>

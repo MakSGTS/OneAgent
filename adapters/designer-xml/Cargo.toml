@@ -5,13 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+oneagent-bsl = { path = "../../crates/bsl" }
 oneagent-common = { path = "../../crates/common" }
+oneagent-graph = { path = "../../crates/graph" }
 oneagent-metadata = { path = "../../crates/metadata" }
 oneagent-workspace = { path = "../../crates/workspace" }
 quick-xml = "0.38"
 
 [dev-dependencies]
-oneagent-bsl = { path = "../../crates/bsl" }
 tempfile = "3"
 
 [lints]

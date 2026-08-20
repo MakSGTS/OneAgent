@@ -358,6 +358,7 @@ version = "0.1.0"
 dependencies = [
  "oneagent-bsl",
  "oneagent-common",
+ "oneagent-graph",
  "oneagent-metadata",
  "oneagent-workspace",
  "quick-xml",

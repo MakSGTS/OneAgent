@@ -2,6 +2,8 @@
 
 mod metadata_object;
 mod module_reader;
+mod semantic_graph;
+mod source_hash;
 
 pub use metadata_object::{
     DesignerXmlMetadataObjectDescriptor, DesignerXmlMetadataObjectError,
@@ -11,6 +13,10 @@ pub use metadata_object::{
 pub use module_reader::{
     DesignerXmlModuleDescriptor, DesignerXmlModuleError, DesignerXmlModuleKind,
     DesignerXmlModuleReader, DesignerXmlModuleSourceEvidence, FileSystemDesignerXmlModuleReader,
+};
+pub use semantic_graph::{
+    DesignerXmlGraphError, DesignerXmlSemanticGraphBuilder,
+    FileSystemDesignerXmlSemanticGraphBuilder,
 };
 
 use oneagent_common::{EntityId, EntityName};

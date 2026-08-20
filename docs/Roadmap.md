@@ -2393,6 +2393,335 @@ planning commit message:
 Plan Sprint 10 subsystems and composition
 ```
 
+#### Sprint 11 Event Subscriptions execution plan
+
+Sprint 11 is planned from committed Sprint 10 review head
+`62d22c53d0e0c7f077d477398fe899c311dd5cc3`. The review records `pass`, Sprint
+10 is `completed`, and Sprint 11 is the only sprint marked `next`.
+
+The repository-owned
+[source investigation](architecture/event-subscription-source-investigation.md)
+proves 99 real EDT descriptors, 314 source-selector occurrences, 18 event
+values, and 93 unique handler paths. Every handler resolves to an existing
+Common Module Procedure, including four non-exported procedures, and every
+qualified selector belonging to a currently modeled metadata family has a real
+target. [ADR-0033](adr/0033-event-subscription-semantics.md) accepts the bounded
+metadata, payload, source-selection, handler-resolution, References, and
+Triggers contracts. Unsupported source families remain observable diagnostics
+and do not authorize speculative metadata entities.
+
+The current graph implementation, parser implementation, graph model, graph
+emission, review, sprint-planning, and sequential-execution framework contracts
+express the required evidence, safety, validation, and reporting requirements.
+The Task prompt template readiness forecast requires no framework update until
+Sprint 14, and no concrete Sprint 11 gap was found. No Codex Framework change or
+post-sprint framework audit is justified.
+
+##### Sprint 11 objective
+
+Discover repository-proven EDT Event Subscriptions, preserve stable identity
+and typed event content, resolve supported source selectors and Common Module
+handler procedures, emit direct provenance-backed References and Triggers
+relations, and prove deterministic compatibility across generic graph and
+index consumers without inventing unsupported metadata families or runtime
+dispatch semantics.
+
+##### Included scope
+
+- additive `MetadataKind::EventSubscription` and typed event-name payload;
+- additive `EdgeKind::Triggers` with one precise EventSubscription-to-Procedure
+  endpoint;
+- additive References endpoints from Event Subscription to supported source
+  metadata and Procedure;
+- top-level `src/EventSubscriptions` discovery, UUID/name/synonym/event/source/
+  handler parsing, and configuration ownership;
+- exact qualified and complete family source selection for Catalog, Document,
+  Information Register, Accumulation Register, Accounting Register,
+  Calculation Register, Business Process, and Task;
+- exact Common Module ownership resolution to Procedure, including
+  non-exported handlers;
+- typed malformed, unsupported, missing, ambiguous, incompatible, and invalid-
+  owner outcomes without placeholder graph facts;
+- deterministic provenance, diagnostics, legacy statistics, Query, Validation,
+  Diff, Impact-policy, reports, complete index, incremental index, and repeated
+  builds;
+- one tracked provenance-backed reduced production fixture, truthful Coverage
+  transitions, Semantic Model current-state synchronization, Roadmap transition,
+  and integration review.
+
+##### Excluded scope
+
+- Constant, Defined Type, Exchange Plan, Chart of Accounts, Chart of
+  Calculation Types, and Chart of Characteristic Types metadata modeling;
+- public multi-target ADR-0024 request-ledger migration;
+- Function handlers, case-insensitive aliases, extensions, cross-project or
+  partial-workspace source selection;
+- handler signature validation, runtime dispatch, event frequency, ordering,
+  priorities, activation conditions, and closed platform event enumeration;
+- Event Subscription comments or unproven XML fields;
+- Triggers-based dependency or Impact propagation, event-specific Query APIs,
+  derived reachability, or stored closure;
+- persistence, Runtime, API, CLI, MCP, LSP, IDE, Designer XML, SKD, XDTO, or
+  service behavior;
+- unrelated Coverage transitions or metadata-family expansion.
+
+##### Sprint 11 prerequisite gate
+
+Task 01 may begin only from one committed Sprint 11 planning baseline containing
+the source investigation, ADR-0033, this Roadmap plan, Semantic Model planning
+synchronization, and the complete prompt suite under
+`docs/codex/prompts/sprint-11-event-subscriptions/`. Every dependent task
+requires the preceding task's committed outcome. Stored prompt text never
+authorizes staging or committing; authorization comes only from the current
+execution instruction.
+
+The immediately preceding prompt suite is exactly
+`docs/codex/prompts/sprint-10-subsystems-composition/`, containing these six
+tracked files:
+
+- `00-sprint-10-execution-loop.md`;
+- `01-implement-subsystem-hierarchy-graph-rules.md`;
+- `02-parse-nested-subsystem-hierarchy.md`;
+- `03-emit-nested-subsystem-composition.md`;
+- `04-complete-sprint-10-production-evidence.md`;
+- `05-sprint-10-integration-review.md`.
+
+It remains untouched during planning and implementation. Only the final Sprint
+11 review may retire those exact tracked files after a non-blocking decision
+and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Implement Event Subscription graph model. | Graph implementation / graph model | Metadata kind, typed payload, References/Triggers endpoint rules, public exhaustive-consumer migration, and generic graph evidence. | Accepted Sprint 11 planning baseline. | `Implement Sprint 11 event subscription graph model` |
+| 2 | Parse Event Subscription descriptors. | Parser implementation / parser | Deterministic typed EDT descriptor, selector, event, and handler parsing without resolution or graph emission. | Task 1. | `Parse Sprint 11 event subscription descriptors` |
+| 3 | Resolve Event Subscription targets. | Graph implementation / graph emission | Adapter-private exact/family source and owned-handler resolution outcomes, diagnostics, statistics policy, and focused tests without production integration. | Tasks 1–2. | `Resolve Sprint 11 event subscription targets` |
+| 4 | Emit Event Subscription semantics. | Graph implementation / graph emission | Production discovery, metadata/ownership insertion, source and handler References, Triggers, provenance, diagnostics, statistics, and determinism. | Tasks 1–3. | `Emit Sprint 11 event subscription semantics` |
+| 5 | Complete Sprint 11 production evidence. | Graph implementation / graph emission | Provenance-backed fixture, consumer/index transitions, Coverage transitions, aggregate verification, and current-state documentation. | Tasks 1–4. | `Complete Sprint 11 production evidence` |
+| 6 | Review the integrated Sprint 11 baseline. | Review / review | Findings, full validation evidence, sprint decision, Sprint 10 suite retirement, and Sprint 12 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 11 event subscriptions review` |
+
+Dependency graph:
+
+```text
+Committed Sprint 11 planning baseline
+    -> Task 1 graph model
+    -> Task 2 parser
+    -> Task 3 target resolution
+    -> Task 4 production emission
+    -> Task 5 production, Coverage, and documentation evidence
+    -> Task 6 integration review and conditional Sprint 10 suite retirement
+    -> Sprint 12 planning eligibility
+```
+
+##### Task 1 — Event Subscription graph model
+
+**Included:** add `MetadataKind::EventSubscription`, stable machine code,
+closed typed event payload, payload-kind validation, `EdgeKind::Triggers`,
+precise Triggers and additive ADR-0025 References endpoint matrices, exhaustive
+enum-consumer updates, canonical identity/equality/diff behavior, generic Query,
+Validation, report, Impact-policy, complete-index, incremental-index, and
+Coverage-model evidence.
+
+**Excluded:** EDT parsing, production discovery, target resolution, edge
+emission, fixtures, EDT diagnostics/statistics, and final Coverage transitions.
+
+**Acceptance evidence:** payload-only changes preserve UUID node identity and
+produce semantic-content modification; existing MetadataKind and EdgeKind codes
+remain unchanged; all accepted source-metadata and Procedure References pairs
+and the one Triggers pair validate; every reversed, Unknown, Function, Module,
+unsupported metadata, and unrelated pair fails deterministically; Triggers is
+queryable and diffable but does not enter dependency/Impact classification;
+generic and indexed behavior is deterministic.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 2 — Event Subscription descriptor parser
+
+**Included:** add one focused EDT parser for the exact root UUID, name, optional
+synonym, at least one direct source `types`, non-empty event, and one
+`CommonModule.<module>.<procedure>` handler; preserve occurrence ordinals;
+classify supported exact/family, unsupported, and malformed source selectors;
+return typed fatal descriptor errors and deterministic ordered observations.
+
+**Excluded:** graph node or edge insertion, metadata target lookup, handler
+ownership lookup, diagnostics/statistics projection, public request-ledger
+migration, production fixture, and Coverage changes.
+
+**Acceptance evidence:** raw repository shapes with 1, 30, 41, and 94 source
+entries parse; present/absent/non-ASCII synonym and all 18 observed event names
+remain exact; exported and non-exported handler paths parse identically;
+missing, duplicate, empty, malformed, wrong-root, invalid UUID/name,
+three-component selector, bad handler namespace/depth, multiple descriptor,
+unreadable, and reordered cases have deterministic outcomes; no graph behavior
+changes.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-edt --lib event_subscription::tests
+cargo test -p oneagent-edt --lib metadata_object::tests
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 3 — Event Subscription target resolution
+
+**Included:** add adapter-private deterministic resolution for exact supported
+source names, complete supported source families, and exact Common Module
+Module/Procedure ownership; preserve duplicate observation context; classify
+resolved, missing, ambiguous, incompatible, invalid-owner, malformed, and
+unsupported outcomes; define one statistics outcome per selector or handler
+without graph edge insertion.
+
+**Excluded:** production directory discovery, Event Subscription node or
+ownership insertion, References/Triggers emission, public ADR-0024 ledger
+migration, fixture/Coverage completion, and unsupported metadata entities.
+
+**Acceptance evidence:** every supported prefix maps to the accepted kind;
+family results are complete, unique, and stable-ID ordered; exact results use
+name and kind; equivalent manager/object observations retain distinct
+provenance inputs without duplicate targets; handler resolution accepts owned
+non-exported Procedure and rejects Function, wrong owner, missing, ambiguous,
+and malformed paths; reordered inputs are equal.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-edt --lib event_subscription_resolution::tests
+cargo test -p oneagent-graph --test resolution
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 4 — Event Subscription semantic emission
+
+**Included:** add production `EventSubscriptions` discovery; insert typed
+metadata nodes and configuration Contains ownership; resolve after metadata and
+BSL declarations exist; emit source and handler References plus handler
+Triggers with deterministic aggregated provenance; project typed diagnostics
+and reference statistics once per observation; preserve recoverable resolution
+failure behavior and complete repeated-build determinism.
+
+**Excluded:** new parser grammar, new graph kinds beyond Task 1, unsupported
+source metadata, public request ledger, final fixture/Coverage transition,
+current-state documentation completion, and Triggers dependency policy.
+
+**Acceptance evidence:** representative generated production projects prove
+exact and family sources, manager/object duplicate target aggregation, exported
+and non-exported handlers, event payload, ownership, Query, validation,
+provenance, diagnostics/statistics, missing/ambiguous/incompatible/unsupported
+outcomes, no placeholder facts, source reordering, repeated builds, and
+unchanged unrelated graph behavior.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-edt --test event_subscriptions
+cargo test -p oneagent-graph --test validation
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 5 — Complete production evidence
+
+**Included:** add a tracked provenance-documented reduced fixture derived from
+the live ignored corpus; prove exact/family/duplicate/unsupported selectors,
+exported/non-exported handlers, payload and relation changes, Query, Diff,
+Impact-policy, reports, validation, complete/incremental index equivalence,
+Coverage transitions, aggregate recomputation, and synchronized Semantic Model
+and Roadmap current-state text without completing the sprint.
+
+**Excluded:** new parser or graph semantics, unsupported metadata families,
+request-ledger migration, Triggers dependency propagation, Runtime behavior,
+and Sprint 12 planning.
+
+**Acceptance evidence:** every ADR-0033 completion criterion is executable; the
+fixture README records exact source paths and hashes; add/remove/modify source,
+event, and handler transitions match clean rebuilds; graph and EDT Coverage
+statuses and aggregate counts are derived from live registries; all unrelated
+capabilities and full workspace behavior remain compatible.
+
+**Focused validation:**
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --test event_subscriptions
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace implementation gate afterward.
+
+##### Task 6 — Sprint 11 integration review
+
+Review the exact planning and Task 1–5 commit range without silently fixing
+implementation findings. Recheck ADR-0033, parser failures, source and handler
+resolution, endpoint policy, payload, production emission, provenance,
+diagnostics/statistics, consumers, indexes, Coverage, documentation, repository
+safety, and the complete validation matrix. Create
+`docs/reviews/sprint-11-event-subscriptions.md` and transition Sprint 11 to
+`completed` only for `pass` or `pass with non-blocking follow-ups`.
+
+After a non-blocking decision and successful complete validation, atomically
+retire every tracked prompt file under the verified immediately preceding suite
+`docs/codex/prompts/sprint-10-subsystems-composition/` in the same review
+commit. Any inventory mismatch, untracked endangered file, or retained link
+dependency blocks retirement and the final commit.
+
+Focused review additions:
+
+```bash
+cargo test -p oneagent-metadata
+cargo test -p oneagent-graph
+cargo test -p oneagent-edt --lib event_subscription::tests
+cargo test -p oneagent-edt --lib event_subscription_resolution::tests
+cargo test -p oneagent-edt --test event_subscriptions
+cargo test -p oneagent-edt --test coverage
+cargo test -p oneagent-edt --test semantic_index
+```
+
+Run the complete workspace validation and record exact command results.
+
+##### Sprint 11 state gates and completion criteria
+
+Sprint 11 remains `next` during planning. It becomes `active` only after the
+planning baseline is committed and Task 1 begins. A task is `already_complete`
+only when current committed evidence and successful required validation prove
+every criterion; no empty commit is created.
+
+Stop after the first prerequisite, implementation, validation, staging, commit,
+or review failure. Do not skip, reorder, combine, or partially commit dependent
+tasks. A blocked Task 6 leaves Sprint 11 incomplete, keeps the Sprint 10 prompt
+suite intact, and leaves Sprint 12 ineligible.
+
+Sprint 11 may transition to `completed` only when Tasks 1–5 are committed or
+proven already complete, the complete ADR-0033 metadata/parser/resolution/
+production/provenance/determinism evidence passes, unsupported source families
+remain deferred, unrelated compatibility and truthful Coverage state are
+preserved, the complete repository Definition of Done passes, and Task 6
+records a non-blocking review decision. Only then may Sprint 12 SKD and Report
+Model become `next` and the exact Sprint 10 prompt suite be retired in the final
+review commit.
+
+Planning is documentation-only. Validate Markdown structure, links, prompt
+numbering, manifest order, prerequisite graph, commit-message agreement,
+accepted-versus-deferred scope, unchanged `next` state, verified previous-suite
+inventory, `git diff --check`, and absence of unrelated changes. Suggested
+planning commit message:
+
+```text
+Plan Sprint 11 event subscriptions
+```
+
 #### v0.4 — Runtime API
 
 | Sprint | Goal | Status |

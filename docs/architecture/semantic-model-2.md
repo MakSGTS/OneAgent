@@ -2281,8 +2281,37 @@ Sprint 10 production fixture and generated transition matrices cover five
 source-proven depths, duplicate local names, shared/nested direct content,
 deferred self-content, provenance, deterministic consumers, and complete and
 incremental index equivalence. The coarse Coverage capabilities remain
-`Supported` without registry or aggregate-count changes; Sprint 10 remains
-active until its integration review.
+`Supported` without registry or aggregate-count changes. The Sprint 10
+integration review records `pass`.
+
+Sprint 11 Event Subscriptions is governed by
+`docs/adr/0033-event-subscription-semantics.md`. The accepted first slice adds a
+top-level `MetadataKind::EventSubscription` with UUID identity, configuration
+ownership, optional common synonym, and closed typed event-name payload.
+Source selectors and handler paths remain relation evidence rather than copied
+payload.
+
+The accepted canonical relations are direct resolved
+`Metadata(EventSubscription) --References--> Metadata(supported source kind)`,
+`Metadata(EventSubscription) --References--> Procedure`, and
+`Metadata(EventSubscription) --Triggers--> Procedure`. Qualified source
+selectors resolve one exact name and kind; bare source-family selectors resolve
+the complete stable-ID-ordered set of current graph metadata nodes for the
+mapped family. The first source matrix is limited to Catalog, Document,
+Information Register, Accumulation Register, Accounting Register, Calculation
+Register, Business Process, and Task. Unsupported Constants, Defined Types,
+Exchange Plans, and Chart families remain typed diagnostics without Unknown or
+placeholder targets.
+
+Handlers resolve through exact declared Common Module ownership to one
+Procedure. Export status is not required because the repository-owned EDT
+corpus contains valid non-exported handler procedures. `Triggers` has only the
+EventSubscription-to-Procedure endpoint and is not independently added to the
+dependency or Impact policy; the companion References fact supplies the
+existing dependency navigation. Multi-target source selectors remain outside
+the ADR-0024 public single-target request ledger until a compatible request
+lifecycle is accepted. Production and Coverage remain unchanged during Sprint
+11 planning.
 
 ### Provenance inventory
 

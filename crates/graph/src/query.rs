@@ -11,7 +11,7 @@ use oneagent_common::{EntityId, EntityName};
 
 use crate::semantic_index::{SemanticIndex, SemanticIndexState};
 use crate::{
-    EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph,
+    EdgeId, EdgeKind, GraphEdge, GraphNode, NodeId, NodeKind, SemanticGraph, SemanticGraphSchema,
     edge_identity::edge_id as stable_edge_id,
 };
 
@@ -460,6 +460,64 @@ impl<'graph> SemanticGraphQuery<'graph> {
         };
 
         self.index().incoming_edges_by_kind(&id, kind).to_vec()
+    }
+
+    /// Returns metadata members included by a Subsystem or any descendant Subsystem.
+    ///
+    /// The query follows only direct outgoing Subsystem-to-Subsystem
+    /// [`EdgeKind::Includes`] edges and returns direct metadata membership from
+    /// every visited Subsystem. Results are unique and ordered by stable node
+    /// identity. Subsystem traversal nodes are not returned, no transitive
+    /// edges are created, and unknown or non-Subsystem inputs return an empty
+    /// result. Invalid hierarchy cycles are handled defensively.
+    #[must_use]
+    pub fn transitive_subsystem_members(&self, subsystem: &NodeId) -> Vec<&'graph GraphNode> {
+        let Some(subsystem_id) = entity_id_from_node_id(subsystem) else {
+            return Vec::new();
+        };
+        if self
+            .graph
+            .node(&subsystem_id)
+            .is_none_or(|node| node.kind() != NodeKind::Subsystem)
+        {
+            return Vec::new();
+        }
+
+        let mut visited_subsystems = BTreeSet::from([subsystem_id.clone()]);
+        let mut pending_subsystems = VecDeque::from([subsystem_id]);
+        let mut member_ids = BTreeSet::new();
+
+        while let Some(current) = pending_subsystems.pop_front() {
+            let current_id = node_id_from_entity(&current);
+            for edge in self.outgoing_edges_by_kind(&current_id, EdgeKind::Includes) {
+                let Some(target) = self.graph.node(edge.target()) else {
+                    continue;
+                };
+
+                match target.kind() {
+                    NodeKind::Subsystem => {
+                        if visited_subsystems.insert(target.id().clone()) {
+                            pending_subsystems.push_back(target.id().clone());
+                        }
+                    }
+                    NodeKind::Metadata(_)
+                        if SemanticGraphSchema.allows(
+                            NodeKind::Subsystem,
+                            EdgeKind::Includes,
+                            target.kind(),
+                        ) =>
+                    {
+                        member_ids.insert(target.id().clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        member_ids
+            .iter()
+            .filter_map(|member_id| self.graph.node(member_id))
+            .collect()
     }
 
     /// Returns direct downstream neighbor nodes in deterministic `NodeId` order.

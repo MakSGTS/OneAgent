@@ -803,6 +803,10 @@ mod tests {
             observed_relations(incremental.direct_usages(node_id)),
             observed_relations(rebuilt.direct_usages(node_id))
         );
+        assert_eq!(
+            observed_nodes(incremental.transitive_subsystem_members(node_id)),
+            observed_nodes(rebuilt.transitive_subsystem_members(node_id))
+        );
     }
 
     fn assert_filtered_node_query_equivalent(
@@ -2289,5 +2293,143 @@ mod tests {
 
         let rebuilt = AcceptedSemanticIndex::rebuild(&final_graph);
         assert_full_rebuild_equivalent(&final_graph, &final_graph, &rebuilt);
+    }
+
+    fn initial_subsystem_membership_graph() -> SemanticGraph {
+        let mut initial = SemanticGraph::new();
+        insert_nodes(
+            &mut initial,
+            [
+                node("subsystem.root", "Root", NodeKind::Subsystem),
+                node("subsystem.child", "Child", NodeKind::Subsystem),
+                node(
+                    "metadata.document.old",
+                    "Old",
+                    NodeKind::Metadata(MetadataKind::Document),
+                ),
+            ],
+        );
+        insert_edges(
+            &mut initial,
+            [
+                edge(
+                    "subsystem.root",
+                    "subsystem.child",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "subsystem.child",
+                    "metadata.document.old",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+            ],
+        );
+        initial
+    }
+
+    fn replaced_subsystem_membership_graph() -> SemanticGraph {
+        let mut replaced = SemanticGraph::new();
+        insert_nodes(
+            &mut replaced,
+            [
+                node("subsystem.root", "Root", NodeKind::Subsystem),
+                node("subsystem.child", "Child", NodeKind::Subsystem),
+                node("subsystem.nested", "Nested", NodeKind::Subsystem),
+                node(
+                    "metadata.catalog.new",
+                    "New",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+            ],
+        );
+        insert_edges(
+            &mut replaced,
+            [
+                edge(
+                    "subsystem.root",
+                    "subsystem.child",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "subsystem.child",
+                    "subsystem.nested",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "subsystem.nested",
+                    "metadata.catalog.new",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+            ],
+        );
+        replaced
+    }
+
+    fn removed_subsystem_membership_graph() -> SemanticGraph {
+        let mut removed = SemanticGraph::new();
+        insert_nodes(
+            &mut removed,
+            [
+                node("subsystem.root", "Root", NodeKind::Subsystem),
+                node("subsystem.child", "Child", NodeKind::Subsystem),
+                node("subsystem.nested", "Nested", NodeKind::Subsystem),
+                node(
+                    "metadata.catalog.new",
+                    "New",
+                    NodeKind::Metadata(MetadataKind::Catalog),
+                ),
+            ],
+        );
+        insert_edges(
+            &mut removed,
+            [
+                edge(
+                    "subsystem.child",
+                    "subsystem.nested",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+                edge(
+                    "subsystem.nested",
+                    "metadata.catalog.new",
+                    EdgeKind::Includes,
+                    FactOrigin::Resolved,
+                ),
+            ],
+        );
+        removed
+    }
+
+    #[test]
+    fn subsystem_membership_transitions_match_clean_rebuilds() {
+        let initial = initial_subsystem_membership_graph();
+        let replaced = replaced_subsystem_membership_graph();
+        let removed = removed_subsystem_membership_graph();
+
+        let accepted_initial = AcceptedSemanticIndex::rebuild(&initial);
+        let accepted_replaced = transition_and_assert(&accepted_initial, &replaced);
+        let accepted_removed = transition_and_assert(&accepted_replaced, &removed);
+        let member_ids = |query: &crate::SemanticGraphQuery<'_>, subsystem: &str| {
+            query
+                .transitive_subsystem_members(&NodeId::new(subsystem))
+                .into_iter()
+                .map(|member| member.id().clone())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            member_ids(&accepted_replaced.query(), "subsystem.root"),
+            vec![id("metadata.catalog.new")]
+        );
+        assert!(member_ids(&accepted_removed.query(), "subsystem.root").is_empty());
+        assert_eq!(
+            member_ids(&accepted_removed.query(), "subsystem.child"),
+            vec![id("metadata.catalog.new")]
+        );
     }
 }

@@ -512,6 +512,7 @@ impl SemanticGraphValidator {
         let mut issues = Vec::new();
 
         Self::validate_edges(graph, &mut issues);
+        Self::validate_subsystem_hierarchy_cycles(graph, &mut issues);
         Self::validate_ownership(graph, &mut issues);
         Self::validate_provenance(graph, &mut issues);
 
@@ -836,6 +837,69 @@ impl SemanticGraphValidator {
                     .with_edge_kind(edge.kind())
                     .with_provenance(edge.provenance()),
                 );
+            }
+        }
+    }
+
+    fn validate_subsystem_hierarchy_cycles(
+        graph: &SemanticGraph,
+        issues: &mut Vec<SemanticGraphValidationIssue>,
+    ) {
+        let mut hierarchy = BTreeMap::<EntityId, BTreeSet<EntityId>>::new();
+
+        for edge in graph.edges().filter(|edge| {
+            edge.kind() == EdgeKind::Includes
+                && edge.source() != edge.target()
+                && graph
+                    .node(edge.source())
+                    .is_some_and(|node| node.kind() == NodeKind::Subsystem)
+                && graph
+                    .node(edge.target())
+                    .is_some_and(|node| node.kind() == NodeKind::Subsystem)
+        }) {
+            hierarchy
+                .entry(edge.source().clone())
+                .or_default()
+                .insert(edge.target().clone());
+        }
+
+        for start in hierarchy.keys() {
+            let mut pending = vec![(start.clone(), vec![start.clone()])];
+            let mut visited = BTreeSet::new();
+
+            while let Some((current, path)) = pending.pop() {
+                if !visited.insert(current.clone()) {
+                    continue;
+                }
+
+                let Some(children) = hierarchy.get(&current) else {
+                    continue;
+                };
+                for child in children.iter().rev() {
+                    if child == start {
+                        let mut cycle = path.clone();
+                        cycle.push(child.clone());
+                        issues.push(
+                            SemanticGraphValidationIssue::new(
+                                SemanticGraphValidationCode::Cycle,
+                                SemanticGraphValidationSeverity::Error,
+                                SemanticGraphValidationIssueKind::Semantic,
+                                "semantic graph Subsystem hierarchy contains a cycle",
+                                "acyclic Subsystem Includes hierarchy",
+                            )
+                            .with_nodes(cycle)
+                            .with_edge_kind(EdgeKind::Includes),
+                        );
+                        pending.clear();
+                        break;
+                    }
+
+                    if !visited.contains(child) {
+                        let mut child_path = path.clone();
+                        child_path.push(child.clone());
+                        pending.push((child.clone(), child_path));
+                    }
+                }
             }
         }
     }
@@ -1289,30 +1353,31 @@ const fn allows_grants(source_kind: NodeKind, target_kind: NodeKind) -> bool {
 
 const fn allows_includes(source_kind: NodeKind, target_kind: NodeKind) -> bool {
     matches!(source_kind, NodeKind::Subsystem)
-        && matches!(
-            target_kind,
-            NodeKind::Metadata(
-                MetadataKind::Catalog
-                    | MetadataKind::Document
-                    | MetadataKind::Enumeration
-                    | MetadataKind::CommonModule
-                    | MetadataKind::Report
-                    | MetadataKind::DataProcessor
-                    | MetadataKind::InformationRegister
-                    | MetadataKind::AccumulationRegister
-                    | MetadataKind::AccountingRegister
-                    | MetadataKind::CalculationRegister
-                    | MetadataKind::BusinessProcess
-                    | MetadataKind::Task
-                    | MetadataKind::Role
-                    | MetadataKind::Command
-                    | MetadataKind::CommonForm
-                    | MetadataKind::Template
-                    | MetadataKind::HttpService
-                    | MetadataKind::WebService
-                    | MetadataKind::XdtoPackage
-            )
-        )
+        && (matches!(target_kind, NodeKind::Subsystem)
+            || matches!(
+                target_kind,
+                NodeKind::Metadata(
+                    MetadataKind::Catalog
+                        | MetadataKind::Document
+                        | MetadataKind::Enumeration
+                        | MetadataKind::CommonModule
+                        | MetadataKind::Report
+                        | MetadataKind::DataProcessor
+                        | MetadataKind::InformationRegister
+                        | MetadataKind::AccumulationRegister
+                        | MetadataKind::AccountingRegister
+                        | MetadataKind::CalculationRegister
+                        | MetadataKind::BusinessProcess
+                        | MetadataKind::Task
+                        | MetadataKind::Role
+                        | MetadataKind::Command
+                        | MetadataKind::CommonForm
+                        | MetadataKind::Template
+                        | MetadataKind::HttpService
+                        | MetadataKind::WebService
+                        | MetadataKind::XdtoPackage
+                )
+            ))
 }
 
 const fn forbids_self_loop(kind: EdgeKind) -> bool {

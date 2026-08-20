@@ -1588,7 +1588,7 @@ fn grants_rejects_unrelated_endpoint_pairs() {
 }
 
 #[test]
-fn includes_accepts_only_subsystem_to_first_slice_metadata_kinds() {
+fn includes_accepts_subsystem_hierarchy_and_first_slice_metadata_kinds() {
     let schema = SemanticGraphSchema;
     let allowed = [
         MetadataKind::Catalog,
@@ -1619,6 +1619,7 @@ fn includes_accepts_only_subsystem_to_first_slice_metadata_kinds() {
             NodeKind::Metadata(metadata_kind),
         ));
     }
+    assert!(schema.allows(NodeKind::Subsystem, EdgeKind::Includes, NodeKind::Subsystem,));
 
     for target_kind in [
         NodeKind::Metadata(MetadataKind::Configuration),
@@ -1626,7 +1627,6 @@ fn includes_accepts_only_subsystem_to_first_slice_metadata_kinds() {
         NodeKind::Metadata(MetadataKind::Form),
         NodeKind::Metadata(MetadataKind::Unknown),
         NodeKind::Role,
-        NodeKind::Subsystem,
         NodeKind::Unknown,
     ] {
         assert!(!schema.allows(NodeKind::Subsystem, EdgeKind::Includes, target_kind));
@@ -1668,6 +1668,70 @@ fn includes_self_loop_is_rejected_defensively() {
     assert!(!result.is_valid());
     assert!(result.issues().iter().any(|issue| {
         issue.code() == SemanticGraphValidationCode::ForbiddenSelfLoop
+            && issue.edge_kind() == Some(EdgeKind::Includes)
+    }));
+}
+
+#[test]
+fn subsystem_includes_cycle_is_reported_once_with_stable_nodes() {
+    let subsystem_ids = [
+        id("metadata.subsystem.a:subsystem"),
+        id("metadata.subsystem.b:subsystem"),
+        id("metadata.subsystem.c:subsystem"),
+    ];
+    let member_id = id("metadata.document.shared");
+    let mut graph = SemanticGraph::new();
+
+    for (subsystem_id, subsystem_name) in subsystem_ids.iter().zip(["A", "B", "C"]) {
+        graph.insert_node(GraphNode::new_with_provenance(
+            subsystem_id.clone(),
+            name(subsystem_name),
+            NodeKind::Subsystem,
+            vec![provenance(subsystem_id.as_str())],
+        ));
+    }
+    graph.insert_node(GraphNode::new_with_provenance(
+        member_id.clone(),
+        name("Shared"),
+        NodeKind::Metadata(MetadataKind::Document),
+        vec![provenance("metadata.document.shared")],
+    ));
+    for (source, target) in [
+        (&subsystem_ids[0], &subsystem_ids[1]),
+        (&subsystem_ids[1], &subsystem_ids[2]),
+        (&subsystem_ids[2], &subsystem_ids[0]),
+        (&subsystem_ids[0], &member_id),
+        (&subsystem_ids[1], &member_id),
+    ] {
+        graph
+            .insert_edge(GraphEdge::new_with_provenance(
+                source.clone(),
+                target.clone(),
+                EdgeKind::Includes,
+                vec![provenance(source.as_str())],
+            ))
+            .expect("test endpoints must exist");
+    }
+
+    let result = graph.validate();
+    let cycles = result
+        .issues()
+        .iter()
+        .filter(|issue| {
+            issue.code() == SemanticGraphValidationCode::Cycle
+                && issue.edge_kind() == Some(EdgeKind::Includes)
+        })
+        .collect::<Vec<_>>();
+
+    assert!(!result.is_valid());
+    assert_eq!(cycles.len(), 1);
+    assert_eq!(cycles[0].nodes(), subsystem_ids);
+    assert_eq!(
+        cycles[0].invariant(),
+        "acyclic Subsystem Includes hierarchy"
+    );
+    assert!(!result.issues().iter().any(|issue| {
+        issue.code() == SemanticGraphValidationCode::InvalidEdgeEndpoints
             && issue.edge_kind() == Some(EdgeKind::Includes)
     }));
 }

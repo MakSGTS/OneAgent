@@ -536,13 +536,25 @@ fn includes_is_excluded_from_impact_dependency_propagation() {
         );
         add_node(
             graph,
+            "metadata.subsystem.orders:subsystem",
+            "Orders",
+            NodeKind::Subsystem,
+        );
+        add_node(
+            graph,
             "metadata.document.member",
             member_name,
-            NodeKind::Unknown,
+            NodeKind::Metadata(MetadataKind::Document),
         );
         add_edge(
             graph,
             "metadata.subsystem.sales:subsystem",
+            "metadata.subsystem.orders:subsystem",
+            EdgeKind::Includes,
+        );
+        add_edge(
+            graph,
+            "metadata.subsystem.orders:subsystem",
             "metadata.document.member",
             EdgeKind::Includes,
         );

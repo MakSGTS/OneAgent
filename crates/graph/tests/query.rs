@@ -849,3 +849,122 @@ fn conditional_access_right_payload_is_visible_through_generic_query_lookup() {
     );
     assert_eq!(query.nodes_by_name(access_right.name()), vec![node]);
 }
+
+fn subsystem_membership_graph(reverse: bool) -> SemanticGraph {
+    let mut graph = SemanticGraph::new();
+    let mut nodes = vec![
+        GraphNode::new(id("subsystem.root"), name("Root"), NodeKind::Subsystem),
+        GraphNode::new(id("subsystem.child"), name("Child"), NodeKind::Subsystem),
+        GraphNode::new(
+            id("subsystem.grandchild"),
+            name("Grandchild"),
+            NodeKind::Subsystem,
+        ),
+        GraphNode::new(
+            id("metadata.catalog.products"),
+            name("Products"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+        ),
+        GraphNode::new(
+            id("metadata.document.sales"),
+            name("Sales"),
+            NodeKind::Metadata(MetadataKind::Document),
+        ),
+        GraphNode::new(
+            id("metadata.subsystem.child"),
+            name("Child"),
+            NodeKind::Metadata(MetadataKind::Subsystem),
+        ),
+        GraphNode::new(id("unknown.member"), name("Unknown"), NodeKind::Unknown),
+    ];
+    let mut edges = vec![
+        GraphEdge::new(
+            id("subsystem.root"),
+            id("subsystem.child"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.child"),
+            id("subsystem.grandchild"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.grandchild"),
+            id("subsystem.root"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.root"),
+            id("metadata.document.sales"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.child"),
+            id("metadata.catalog.products"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.grandchild"),
+            id("metadata.document.sales"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.child"),
+            id("metadata.subsystem.child"),
+            EdgeKind::Includes,
+        ),
+        GraphEdge::new(
+            id("subsystem.child"),
+            id("unknown.member"),
+            EdgeKind::Includes,
+        ),
+    ];
+    if reverse {
+        nodes.reverse();
+        edges.reverse();
+    }
+    for node in nodes {
+        graph.insert_node(node);
+    }
+    for edge in edges {
+        graph.insert_edge(edge).expect("test endpoints must exist");
+    }
+    graph
+}
+
+#[test]
+fn transitive_subsystem_members_are_derived_deterministically_without_closure_edges() {
+    let normal = subsystem_membership_graph(false);
+    let reversed = subsystem_membership_graph(true);
+    let root = node_id("subsystem.root");
+    let expected = vec![
+        id("metadata.catalog.products"),
+        id("metadata.document.sales"),
+    ];
+
+    assert_eq!(
+        node_ids(normal.query().transitive_subsystem_members(&root)),
+        expected
+    );
+    assert_eq!(
+        node_ids(reversed.query().transitive_subsystem_members(&root)),
+        expected
+    );
+    assert!(
+        normal
+            .query()
+            .transitive_subsystem_members(&node_id("metadata.document.sales"))
+            .is_empty()
+    );
+    assert!(
+        normal
+            .query()
+            .transitive_subsystem_members(&node_id("missing.subsystem"))
+            .is_empty()
+    );
+    assert!(!normal.edges().any(|edge| {
+        edge.source().as_str() == "subsystem.root"
+            && edge.target().as_str() == "metadata.catalog.products"
+            && edge.kind() == EdgeKind::Includes
+    }));
+}

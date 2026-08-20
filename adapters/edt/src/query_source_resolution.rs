@@ -148,7 +148,8 @@ impl QuerySourceResolutionIndex {
         }
     }
 
-    /// Resolves every source only when parsing proved the complete accepted source set.
+    /// Resolves accepted occurrences directly for focused resolver policy tests.
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn resolve(
         &self,
@@ -160,14 +161,6 @@ impl QuerySourceResolutionIndex {
         }
 
         let program = parse_result.program()?;
-        if program
-            .sources()
-            .iter()
-            .any(|source| !is_private_resolution_category(source.category()))
-        {
-            return None;
-        }
-
         Some(
             program
                 .sources()
@@ -227,6 +220,7 @@ impl QuerySourceResolutionIndex {
         Ok(terminal)
     }
 
+    #[cfg(test)]
     fn resolve_occurrence(
         &self,
         source: &QuerySourceOccurrence,
@@ -424,13 +418,6 @@ fn query_source_outcome_candidates(outcome: &QuerySourceResolutionOutcome) -> &[
 
 fn query_source_lookup_key(value: &str) -> String {
     value.to_lowercase()
-}
-
-const fn is_private_resolution_category(category: QuerySourceCategory) -> bool {
-    matches!(
-        category,
-        QuerySourceCategory::Catalog | QuerySourceCategory::InformationRegister
-    )
 }
 
 const fn expected_metadata_kind(category: QuerySourceCategory) -> NodeKind {
@@ -924,21 +911,6 @@ mod tests {
                 target_id: id("information-register.objects-to-delete"),
             }])
         );
-    }
-
-    #[test]
-    fn legacy_projection_resolver_keeps_new_categories_gated_until_task_04() {
-        let graph = SemanticGraph::new();
-
-        for source in [
-            "SELECT Ref FROM AccumulationRegister.InventoryCost",
-            "SELECT Ref FROM AccountingRegister.FinancialAccounting",
-        ] {
-            assert_eq!(
-                resolve(&graph, source, WorkspaceResolutionScope::Complete),
-                None
-            );
-        }
     }
 
     #[test]

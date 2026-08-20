@@ -5,15 +5,15 @@ use oneagent_bsl::{
     BslModuleSymbols, BslParseError, BslQuery, BslQueryError, BslQueryExtractor, BslSymbol,
     BslSymbolKind, CrossModuleCallResolver, LineBslCallExtractor, LineBslDeclarationExtractor,
     LineBslQueryExtractor, LocalBslCallResolver, QualifiedBslCallResolver, QueryLanguageDiagnostic,
-    QueryLanguageDiagnosticKind, QueryLanguageParser, QuerySourceCategory, QuerySourceOccurrence,
-    UnresolvedBslCall, UnresolvedCrossModuleCall,
+    QueryLanguageDiagnosticKind, QueryLanguageParser, UnresolvedBslCall, UnresolvedCrossModuleCall,
 };
-use oneagent_common::{EntityId, EntityName};
+use oneagent_common::{EntityId, EntityName, EntityNameError};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphEdge, GraphError, NodeKind, ProducerId, Provenance,
     ResolutionError, ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode,
     SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
-    SemanticReferenceOutcome, SemanticReferenceStatistics,
+    SemanticReferenceOutcome, SemanticReferenceRequest, SemanticReferenceRequestLedger,
+    SemanticReferenceRequestOutcome, SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,13 +23,16 @@ use std::path::Path;
 
 use crate::EdtModuleDescriptor;
 use crate::query_source_resolution::{
-    QuerySourceResolutionIndex, QuerySourceResolutionOutcome, WorkspaceResolutionScope,
+    QuerySourceRequestError, QuerySourceResolutionIndex, WorkspaceResolutionScope,
+    collect_query_source_requests,
 };
 
 const EDT_BSL_GRAPH_PRODUCER: &str = "oneagent.edt.bsl-graph";
 const QUERY_LANGUAGE_PARSER_STAGE: &str = "oneagent.bsl.query-language-parser";
 const QUERY_SOURCE_RESOLVER_STAGE: &str = "oneagent.edt.query-source-resolution";
 const QUERY_READS_CONTRIBUTOR: &str = "oneagent.edt.query-reads";
+const QUERY_DEPENDENCY_CONTRIBUTOR: &str = "oneagent.edt.query-dependency";
+const QUERY_SOURCE_DIAGNOSTIC_CONTRIBUTOR: &str = "oneagent.edt.query-source-diagnostic";
 
 /// Parsed declarations and calls collected from one EDT BSL module.
 ///
@@ -209,12 +212,14 @@ pub(crate) fn add_configuration_module_symbols_with_diagnostics(
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<usize, EdtBslGraphError> {
+    let mut reference_requests = SemanticReferenceRequestLedger::new();
     add_configuration_module_symbols_with_diagnostics_in_scope(
         graph,
         modules,
         WorkspaceResolutionScope::Partial,
         diagnostics,
         reference_statistics,
+        &mut reference_requests,
     )
 }
 
@@ -224,6 +229,7 @@ pub(crate) fn add_configuration_module_symbols_with_diagnostics_in_scope(
     workspace_scope: WorkspaceResolutionScope,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
 ) -> Result<usize, EdtBslGraphError> {
     let analyzed_modules = modules
         .iter()
@@ -236,6 +242,7 @@ pub(crate) fn add_configuration_module_symbols_with_diagnostics_in_scope(
         workspace_scope,
         diagnostics,
         reference_statistics,
+        reference_requests,
     )
 }
 
@@ -252,6 +259,7 @@ fn add_analyzed_modules(
     workspace_scope: WorkspaceResolutionScope,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
 ) -> Result<usize, EdtBslGraphError> {
     // Pass 1: insert declarations from every module.
     for module in modules {
@@ -265,6 +273,7 @@ fn add_analyzed_modules(
         workspace_scope,
         diagnostics,
         reference_statistics,
+        reference_requests,
     )?;
 
     let available_modules = modules
@@ -305,12 +314,14 @@ pub fn add_module_symbols(
     let analyzed_module = analyze_module(module)?;
     let mut diagnostics = BTreeSet::new();
     let mut reference_statistics = SemanticReferenceStatistics::new();
+    let mut reference_requests = SemanticReferenceRequestLedger::new();
     add_analyzed_modules(
         graph,
         std::slice::from_ref(&analyzed_module),
         WorkspaceResolutionScope::Partial,
         &mut diagnostics,
         &mut reference_statistics,
+        &mut reference_requests,
     )
 }
 
@@ -375,9 +386,9 @@ fn insert_query_reads(
     workspace_scope: WorkspaceResolutionScope,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
 ) -> Result<(), EdtBslGraphError> {
-    let resolution_index = QuerySourceResolutionIndex::new(graph);
-    let mut evidence_by_edge = BTreeMap::<(EntityId, EntityId), Vec<Provenance>>::new();
+    let mut collected_requests = SemanticReferenceRequestLedger::new();
 
     for module in modules {
         for query in module.queries() {
@@ -409,37 +420,40 @@ fn insert_query_reads(
                 continue;
             }
 
-            let program = parse_result
-                .program()
-                .expect("a complete query-language source set must expose a program");
-            let Some(outcomes) = resolution_index.resolve(&parse_result, workspace_scope) else {
+            let Some(collected) =
+                collect_query_source_requests(&parse_result, module.source(), query)
+                    .map_err(EdtBslGraphError::from)?
+            else {
                 continue;
             };
-
-            for (source, outcome) in program.sources().iter().zip(outcomes) {
-                process_query_source_outcome(
-                    graph,
-                    module,
-                    query,
-                    source,
-                    outcome,
-                    &mut evidence_by_edge,
-                    diagnostics,
-                    reference_statistics,
-                )?;
+            for request in collected.requests() {
+                collected_requests
+                    .insert(request.clone())
+                    .map_err(QuerySourceRequestError::Request)
+                    .map_err(EdtBslGraphError::from)?;
             }
         }
     }
 
-    for ((query_id, target_id), mut provenance) in evidence_by_edge {
+    let terminal_requests = QuerySourceResolutionIndex::new(graph)
+        .resolve_requests(&collected_requests, workspace_scope)
+        .map_err(EdtBslGraphError::from)?;
+    let mut evidence_by_edge = BTreeMap::<(EntityId, EntityId, EdgeKind), Vec<Provenance>>::new();
+
+    for request in terminal_requests.requests() {
+        project_query_source_request(graph, request, diagnostics, &mut evidence_by_edge)?;
+        reference_requests
+            .insert(request.clone())
+            .map_err(QuerySourceRequestError::Request)
+            .map_err(EdtBslGraphError::from)?;
+    }
+
+    for ((query_id, target_id, kind), mut provenance) in evidence_by_edge {
         provenance.sort_by(|left, right| left.source().cmp(&right.source()));
         provenance.dedup();
         graph
             .insert_edge(GraphEdge::new_with_provenance(
-                query_id,
-                target_id,
-                EdgeKind::Reads,
-                provenance,
+                query_id, target_id, kind, provenance,
             ))
             .map_err(EdtBslGraphError::Graph)?;
     }
@@ -447,48 +461,52 @@ fn insert_query_reads(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_query_source_outcome(
+fn project_query_source_request(
     graph: &SemanticGraph,
-    module: &AnalyzedBslModule,
-    query: &BslQuery,
-    source: &QuerySourceOccurrence,
-    outcome: QuerySourceResolutionOutcome,
-    evidence_by_edge: &mut BTreeMap<(EntityId, EntityId), Vec<Provenance>>,
+    request: &SemanticReferenceRequest,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
-    reference_statistics: &mut SemanticReferenceStatistics,
+    evidence_by_edge: &mut BTreeMap<(EntityId, EntityId, EdgeKind), Vec<Provenance>>,
 ) -> Result<(), EdtBslGraphError> {
-    let QuerySourceResolutionOutcome::Resolved { target_id } = outcome else {
-        return record_query_source_resolution_diagnostic(
-            module,
-            query,
-            source,
-            outcome,
-            diagnostics,
-            reference_statistics,
-        );
+    if request.outcome() != SemanticReferenceRequestOutcome::Resolved {
+        return project_query_source_diagnostic(request, diagnostics);
+    }
+    let [target_id] = request.candidates() else {
+        return Err(invalid_query_source_request(request));
+    };
+    let [expected_kind] = request.expected_kinds() else {
+        return Err(invalid_query_source_request(request));
     };
     let target = graph
-        .node(&target_id)
+        .node(target_id)
         .ok_or_else(|| EdtBslGraphError::Graph(GraphError::MissingNode(target_id.clone())))?;
-    let target_kind = target.kind();
-    if target_kind != expected_query_target_kind(source.category()) {
-        return Err(EdtBslGraphError::Graph(GraphError::MissingNode(target_id)));
+    if target.kind() != *expected_kind {
+        return Err(invalid_query_source_request(request));
     }
 
-    evidence_by_edge
-        .entry((query.id().clone(), target.id().clone()))
-        .or_default()
-        .push(query_source_provenance(
-            module.source(),
-            query,
-            source,
-            Some((target.id(), target_kind)),
-            "resolved",
+    for (kind, producer, origin) in [
+        (
+            EdgeKind::Reads,
+            QUERY_READS_CONTRIBUTOR,
             FactOrigin::Resolved,
-            ResolutionState::Resolved,
-        )?);
-    reference_statistics.record(SemanticReferenceOutcome::Resolved, true);
+        ),
+        (
+            EdgeKind::DependsOn,
+            QUERY_DEPENDENCY_CONTRIBUTOR,
+            FactOrigin::Derived,
+        ),
+    ] {
+        evidence_by_edge
+            .entry((request.source_node().clone(), target_id.clone(), kind))
+            .or_default()
+            .extend(query_request_projection_provenance(
+                request,
+                Some((target_id, *expected_kind)),
+                kind,
+                producer,
+                origin,
+                ResolutionState::Resolved,
+            )?);
+    }
     Ok(())
 }
 
@@ -557,142 +575,126 @@ fn record_query_language_diagnostic(
     Ok(())
 }
 
-fn record_query_source_resolution_diagnostic(
-    module: &AnalyzedBslModule,
-    query: &BslQuery,
-    source: &QuerySourceOccurrence,
-    outcome: QuerySourceResolutionOutcome,
+fn project_query_source_diagnostic(
+    request: &SemanticReferenceRequest,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
-    reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<(), EdtBslGraphError> {
-    let reference = SemanticReference::Raw(source.raw_spelling().to_owned());
-    let expected_kind = expected_query_target_kind(source.category());
-    let (mut diagnostic, statistics_outcome, resolution, outcome_name) = match outcome {
-        QuerySourceResolutionOutcome::MissingTarget => (
-            SemanticDiagnostic::new(
-                SemanticDiagnosticCode::ReferenceUnresolved,
-                SemanticDiagnosticSeverity::Error,
-                SemanticDiagnosticKind::UnresolvedTarget,
-                "query source metadata target could not be resolved",
-                reference,
-            ),
-            SemanticReferenceOutcome::Unresolved,
-            ResolutionState::Unresolved,
-            "missing",
+    let (code, severity, kind, message) = match request.outcome() {
+        SemanticReferenceRequestOutcome::MissingTarget => (
+            SemanticDiagnosticCode::ReferenceUnresolved,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::UnresolvedTarget,
+            "query source metadata target could not be resolved",
         ),
-        QuerySourceResolutionOutcome::AmbiguousTarget { candidates } => (
-            SemanticDiagnostic::new(
-                SemanticDiagnosticCode::ReferenceAmbiguous,
-                SemanticDiagnosticSeverity::Error,
-                SemanticDiagnosticKind::AmbiguousTarget,
-                "query source metadata target is ambiguous",
-                reference,
-            )
-            .with_candidates(candidates),
-            SemanticReferenceOutcome::Ambiguous,
-            ResolutionState::Ambiguous,
-            "ambiguous",
+        SemanticReferenceRequestOutcome::AmbiguousTarget => (
+            SemanticDiagnosticCode::ReferenceAmbiguous,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::AmbiguousTarget,
+            "query source metadata target is ambiguous",
         ),
-        QuerySourceResolutionOutcome::IncompatibleTargetKind { candidates } => (
-            SemanticDiagnostic::new(
-                SemanticDiagnosticCode::ReferenceIncompatibleKind,
-                SemanticDiagnosticSeverity::Error,
-                SemanticDiagnosticKind::IncompatibleTargetKind,
-                "query source metadata target has an incompatible kind",
-                reference,
-            )
-            .with_candidates(candidates),
-            SemanticReferenceOutcome::IncompatibleTargetKind,
-            ResolutionState::Unresolved,
-            "incompatible",
+        SemanticReferenceRequestOutcome::IncompatibleTargetKind => (
+            SemanticDiagnosticCode::ReferenceIncompatibleKind,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::IncompatibleTargetKind,
+            "query source metadata target has an incompatible kind",
         ),
-        QuerySourceResolutionOutcome::PartialWorkspaceTargetAbsent => (
-            SemanticDiagnostic::new(
-                SemanticDiagnosticCode::ReferenceUnresolved,
-                SemanticDiagnosticSeverity::Warning,
-                SemanticDiagnosticKind::UnresolvedTarget,
-                "query source metadata target is absent from the partial workspace",
-                reference,
-            ),
-            SemanticReferenceOutcome::Unresolved,
-            ResolutionState::Partial,
-            "partial_workspace_absent",
+        SemanticReferenceRequestOutcome::PartialWorkspace => (
+            SemanticDiagnosticCode::ReferenceUnresolved,
+            SemanticDiagnosticSeverity::Warning,
+            SemanticDiagnosticKind::UnresolvedTarget,
+            "query source metadata target is absent from the partial workspace",
         ),
-        QuerySourceResolutionOutcome::Resolved { .. } => {
-            unreachable!("resolved query sources do not produce diagnostics")
+        SemanticReferenceRequestOutcome::Collected
+        | SemanticReferenceRequestOutcome::Resolved
+        | SemanticReferenceRequestOutcome::InvalidOwnerReference => {
+            return Err(invalid_query_source_request(request));
         }
     };
 
-    diagnostic = diagnostic
-        .with_source_node(query.id().clone())
-        .with_expected_kinds(vec![expected_kind])
-        .with_provenance(vec![query_source_provenance(
-            module.source(),
-            query,
-            source,
-            None,
-            outcome_name,
-            FactOrigin::Resolved,
-            resolution,
-        )?]);
-    diagnostics.insert(diagnostic);
-    reference_statistics.record(statistics_outcome, true);
+    diagnostics.insert(
+        SemanticDiagnostic::new(code, severity, kind, message, request.reference().clone())
+            .with_source_node(request.source_node().clone())
+            .with_expected_kinds(request.expected_kinds().to_vec())
+            .with_candidates(request.candidates().to_vec())
+            .with_provenance(query_request_projection_provenance(
+                request,
+                None,
+                EdgeKind::Reads,
+                QUERY_SOURCE_DIAGNOSTIC_CONTRIBUTOR,
+                FactOrigin::Resolved,
+                request.state(),
+            )?),
+    );
     Ok(())
 }
 
-fn expected_query_target_kind(category: QuerySourceCategory) -> NodeKind {
-    match category {
-        QuerySourceCategory::Catalog => NodeKind::Metadata(MetadataKind::Catalog),
-        QuerySourceCategory::InformationRegister => {
-            NodeKind::Metadata(MetadataKind::InformationRegister)
-        }
-        QuerySourceCategory::AccumulationRegister => {
-            NodeKind::Metadata(MetadataKind::AccumulationRegister)
-        }
-        QuerySourceCategory::AccountingRegister => {
-            NodeKind::Metadata(MetadataKind::AccountingRegister)
-        }
+fn invalid_query_source_request(request: &SemanticReferenceRequest) -> EdtBslGraphError {
+    EdtBslGraphError::InvalidQuerySourceRequest {
+        request_id: request.id().clone(),
     }
 }
 
-fn query_source_provenance(
-    module_source: Option<&EntityId>,
-    query: &BslQuery,
-    source: &QuerySourceOccurrence,
+fn query_request_projection_provenance(
+    request: &SemanticReferenceRequest,
     target: Option<(&EntityId, NodeKind)>,
-    outcome: &str,
+    edge_kind: EdgeKind,
+    producer: &'static str,
     origin: FactOrigin,
     resolution: ResolutionState,
-) -> Result<Provenance, EdtBslGraphError> {
-    let mut context = query_context(module_source, query);
-    append_context(&mut context, "raw_source", source.raw_spelling());
-    append_context(
-        &mut context,
-        "range",
-        &format!(
-            "{}..{}",
-            source.location().start_byte(),
-            source.location().end_byte()
-        ),
-    );
-    append_context(
-        &mut context,
-        "category",
-        query_source_category_name(source.category()),
-    );
-    append_context(&mut context, "namespace", source.namespace());
-    append_context(&mut context, "local_name", source.local_name());
-    append_context(&mut context, "resolver_outcome", outcome);
-    if let Some((target_id, target_kind)) = target {
-        append_context(&mut context, "resolved_target", target_id.as_str());
+) -> Result<Vec<Provenance>, EdtBslGraphError> {
+    let mut provenance = Vec::new();
+    for evidence in request
+        .provenance()
+        .iter()
+        .filter(|evidence| evidence.origin() == FactOrigin::Parsed)
+    {
+        let mut context = evidence.source().map_or_else(
+            || request.source_node().as_str().to_owned(),
+            |source| source.as_str().to_owned(),
+        );
+        context.push_str("#query_request_projection");
+        append_context(&mut context, "request", request.id().as_str());
+        append_context(&mut context, "query", request.source_node().as_str());
+        append_context(&mut context, "outcome", request.outcome().as_str());
+        append_context(&mut context, "projection", edge_kind_name(edge_kind));
         append_context(
             &mut context,
-            "target_kind",
-            query_target_kind_name(target_kind),
+            "collection_evidence",
+            evidence.source().map_or("none", EntityId::as_str),
         );
+        if let Some((target_id, target_kind)) = target {
+            append_context(&mut context, "resolved_target", target_id.as_str());
+            append_context(
+                &mut context,
+                "target_kind",
+                query_target_kind_name(target_kind),
+            );
+        }
+        if edge_kind == EdgeKind::DependsOn {
+            append_context(&mut context, "proving_fact", "reads");
+            append_context(&mut context, "normalization", "query_data_dependency");
+        }
+        for candidate in request.candidates() {
+            append_context(&mut context, "candidate", candidate.as_str());
+        }
+
+        let source =
+            EntityId::new(context).map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
+        provenance.push(Provenance::new(
+            Some(source),
+            ProducerId::new(producer),
+            origin,
+            Confidence::Exact,
+            resolution,
+        ));
     }
 
-    provenance_from_context(context, origin, resolution)
+    if provenance.is_empty() {
+        return Err(invalid_query_source_request(request));
+    }
+    provenance.sort_by(|left, right| left.source().cmp(&right.source()));
+    provenance.dedup();
+    Ok(provenance)
 }
 
 fn query_diagnostic_provenance(
@@ -751,12 +753,11 @@ fn provenance_from_context(
     ))
 }
 
-const fn query_source_category_name(category: QuerySourceCategory) -> &'static str {
-    match category {
-        QuerySourceCategory::Catalog => "catalog",
-        QuerySourceCategory::InformationRegister => "information_register",
-        QuerySourceCategory::AccumulationRegister => "accumulation_register",
-        QuerySourceCategory::AccountingRegister => "accounting_register",
+const fn edge_kind_name(kind: EdgeKind) -> &'static str {
+    match kind {
+        EdgeKind::Reads => "reads",
+        EdgeKind::DependsOn => "depends_on",
+        _ => "diagnostic",
     }
 }
 
@@ -1019,6 +1020,18 @@ pub enum EdtBslGraphError {
     /// Semantic graph validation failed.
     Graph(GraphError),
 
+    /// A query source request violates its canonical adapter contract.
+    InvalidQuerySourceRequest {
+        /// Stable request identity.
+        request_id: oneagent_graph::SemanticReferenceRequestId,
+    },
+
+    /// A parsed query source local name could not become a semantic name.
+    InvalidQuerySourceTargetName(EntityNameError),
+
+    /// A public semantic reference request invariant failed.
+    ReferenceRequest(oneagent_graph::SemanticReferenceRequestError),
+
     /// A module source identifier could not be created.
     InvalidSourceIdentifier,
 }
@@ -1050,6 +1063,19 @@ impl Display for EdtBslGraphError {
                 write!(formatter, "semantic graph error: {error}")
             }
 
+            Self::InvalidQuerySourceRequest { request_id } => write!(
+                formatter,
+                "query source request `{request_id}` has invalid adapter content"
+            ),
+
+            Self::InvalidQuerySourceTargetName(error) => {
+                write!(formatter, "query source target name is invalid: {error}")
+            }
+
+            Self::ReferenceRequest(error) => {
+                write!(formatter, "semantic reference request error: {error}")
+            }
+
             Self::InvalidSourceIdentifier => {
                 formatter.write_str("EDT BSL source identifier is invalid")
             }
@@ -1065,7 +1091,24 @@ impl std::error::Error for EdtBslGraphError {
             Self::ParseCalls(error) => Some(error),
             Self::ParseQueries(error) => Some(error),
             Self::Graph(error) => Some(error),
-            Self::InvalidSourceIdentifier => None,
+            Self::InvalidQuerySourceTargetName(error) => Some(error),
+            Self::ReferenceRequest(error) => Some(error),
+            Self::InvalidSourceIdentifier | Self::InvalidQuerySourceRequest { .. } => None,
+        }
+    }
+}
+
+impl From<QuerySourceRequestError> for EdtBslGraphError {
+    fn from(error: QuerySourceRequestError) -> Self {
+        match error {
+            QuerySourceRequestError::InvalidSourceIdentifier => Self::InvalidSourceIdentifier,
+            QuerySourceRequestError::InvalidTargetName(error) => {
+                Self::InvalidQuerySourceTargetName(error)
+            }
+            QuerySourceRequestError::InvalidCollectedRequest { request_id } => {
+                Self::InvalidQuerySourceRequest { request_id }
+            }
+            QuerySourceRequestError::Request(error) => Self::ReferenceRequest(error),
         }
     }
 }
@@ -1076,7 +1119,9 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         Confidence, EdgeKind, FactOrigin, GraphError, GraphNode, NodeKind, ResolutionState,
-        SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticGraph, SemanticReferenceStatistics,
+        SemanticDiagnosticCode, SemanticDiagnosticKind, SemanticGraph,
+        SemanticReferenceRequestLedger, SemanticReferenceRequestOutcome,
+        SemanticReferenceStatistics,
     };
     use oneagent_metadata::MetadataKind;
     use std::collections::BTreeSet;
@@ -1457,6 +1502,7 @@ mod tests {
         ));
         let mut diagnostics = BTreeSet::new();
         let mut statistics = SemanticReferenceStatistics::new();
+        let mut requests = SemanticReferenceRequestLedger::new();
 
         add_configuration_module_symbols_with_diagnostics_in_scope(
             &mut graph,
@@ -1464,14 +1510,23 @@ mod tests {
             WorkspaceResolutionScope::Complete,
             &mut diagnostics,
             &mut statistics,
+            &mut requests,
         )
         .expect("query Reads must be emitted");
 
         let reads = graph.query().edges_by_kind(EdgeKind::Reads);
+        let dependencies = graph.query().edges_by_kind(EdgeKind::DependsOn);
         assert!(diagnostics.is_empty());
-        assert_eq!(statistics.resolved(), 1);
+        assert!(statistics.is_empty());
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests.requests()[0].outcome(),
+            SemanticReferenceRequestOutcome::Resolved
+        );
         assert_eq!(reads.len(), 1);
+        assert_eq!(dependencies.len(), 1);
         assert_eq!(reads[0].target(), &target_id);
+        assert_eq!(dependencies[0].target(), &target_id);
         assert_eq!(reads[0].provenance().len(), 1);
         let provenance = &reads[0].provenance()[0];
         let source = provenance
@@ -1486,10 +1541,18 @@ mod tests {
         assert_eq!(provenance.origin(), FactOrigin::Resolved);
         assert_eq!(provenance.confidence(), Confidence::Exact);
         assert_eq!(provenance.resolution(), ResolutionState::Resolved);
+        assert_eq!(
+            dependencies[0].provenance()[0].producer().as_str(),
+            "oneagent.edt.query-dependency"
+        );
+        assert_eq!(
+            dependencies[0].provenance()[0].origin(),
+            FactOrigin::Derived
+        );
     }
 
     #[test]
-    fn parsed_register_categories_do_not_enter_production_resolution_yet() {
+    fn direct_register_categories_emit_production_requests_reads_and_dependencies() {
         let root = tempdir().expect("temporary directory must be created");
         let module_path = root.path().join("ObjectModule.bsl");
         fs::write(
@@ -1532,6 +1595,7 @@ mod tests {
         ));
         let mut diagnostics = BTreeSet::new();
         let mut statistics = SemanticReferenceStatistics::new();
+        let mut requests = SemanticReferenceRequestLedger::new();
 
         add_configuration_module_symbols_with_diagnostics_in_scope(
             &mut graph,
@@ -1539,17 +1603,90 @@ mod tests {
             WorkspaceResolutionScope::Complete,
             &mut diagnostics,
             &mut statistics,
+            &mut requests,
         )
-        .expect("parser-only categories must not fail graph construction");
+        .expect("direct register categories must emit production facts");
 
         assert_eq!(graph.query().nodes_by_kind(NodeKind::Query).len(), 2);
-        assert!(graph.query().edges_by_kind(EdgeKind::Reads).is_empty());
+        assert_eq!(graph.query().edges_by_kind(EdgeKind::Reads).len(), 2);
+        assert_eq!(graph.query().edges_by_kind(EdgeKind::DependsOn).len(), 2);
         assert!(diagnostics.is_empty());
         assert!(statistics.is_empty());
+        assert_eq!(requests.len(), 2);
+        assert!(
+            requests
+                .requests()
+                .iter()
+                .all(|request| { request.outcome() == SemanticReferenceRequestOutcome::Resolved })
+        );
     }
 
     #[test]
     fn query_reads_aggregates_and_deduplicates_equivalent_evidence_before_insertion() {
+        let root = tempdir().expect("temporary directory must be created");
+        let module_path = root.path().join("ObjectModule.bsl");
+        let repeated_module_path = root.path().join("RepeatedObjectModule.bsl");
+        let source = concat!(
+            "Procedure Run()\n",
+            "    Query = New Query;\n",
+            "    Query.Text = \"SELECT Ref FROM Catalog.Products\";\n",
+            "EndProcedure\n",
+        );
+        fs::write(&module_path, source).expect("module file must be created");
+        fs::write(&repeated_module_path, source).expect("repeated module file must be created");
+
+        let module_id = id("document.query_host:object_module");
+        let module = EdtModuleDescriptor::new(
+            module_id.clone(),
+            name("ObjectModule"),
+            EdtModuleKind::Object,
+            module_path,
+        );
+        let repeated_module = EdtModuleDescriptor::new(
+            module_id.clone(),
+            name("ObjectModule"),
+            EdtModuleKind::Object,
+            repeated_module_path,
+        );
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            module_id,
+            name("ObjectModule"),
+            NodeKind::Module,
+        ));
+        graph.insert_node(GraphNode::new(
+            id("catalog.products"),
+            name("Products"),
+            NodeKind::Metadata(MetadataKind::Catalog),
+        ));
+        let mut diagnostics = BTreeSet::new();
+        let mut statistics = SemanticReferenceStatistics::new();
+        let mut requests = SemanticReferenceRequestLedger::new();
+
+        add_configuration_module_symbols_with_diagnostics_in_scope(
+            &mut graph,
+            &[module, repeated_module],
+            WorkspaceResolutionScope::Complete,
+            &mut diagnostics,
+            &mut statistics,
+            &mut requests,
+        )
+        .expect("duplicate query evidence must be aggregated");
+
+        let reads = graph.query().edges_by_kind(EdgeKind::Reads);
+        let dependencies = graph.query().edges_by_kind(EdgeKind::DependsOn);
+        assert!(diagnostics.is_empty());
+        assert!(statistics.is_empty());
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests.requests()[0].provenance().len(), 3);
+        assert_eq!(reads.len(), 1);
+        assert_eq!(dependencies.len(), 1);
+        assert_eq!(reads[0].provenance().len(), 2);
+        assert_eq!(dependencies[0].provenance().len(), 2);
+    }
+
+    #[test]
+    fn query_source_partial_request_projects_warning_without_edges_or_legacy_count() {
         let root = tempdir().expect("temporary directory must be created");
         let module_path = root.path().join("ObjectModule.bsl");
         fs::write(
@@ -1557,7 +1694,7 @@ mod tests {
             concat!(
                 "Procedure Run()\n",
                 "    Query = New Query;\n",
-                "    Query.Text = \"SELECT Ref FROM Catalog.Products\";\n",
+                "    Query.Text = \"SELECT Ref FROM Catalog.Missing\";\n",
                 "EndProcedure\n",
             ),
         )
@@ -1576,28 +1713,37 @@ mod tests {
             name("ObjectModule"),
             NodeKind::Module,
         ));
-        graph.insert_node(GraphNode::new(
-            id("catalog.products"),
-            name("Products"),
-            NodeKind::Metadata(MetadataKind::Catalog),
-        ));
         let mut diagnostics = BTreeSet::new();
         let mut statistics = SemanticReferenceStatistics::new();
+        let mut requests = SemanticReferenceRequestLedger::new();
 
         add_configuration_module_symbols_with_diagnostics_in_scope(
             &mut graph,
-            &[module.clone(), module],
-            WorkspaceResolutionScope::Complete,
+            &[module],
+            WorkspaceResolutionScope::Partial,
             &mut diagnostics,
             &mut statistics,
+            &mut requests,
         )
-        .expect("duplicate query evidence must be aggregated");
+        .expect("partial query source must remain recoverable");
 
-        let reads = graph.query().edges_by_kind(EdgeKind::Reads);
-        assert!(diagnostics.is_empty());
-        assert_eq!(statistics.resolved(), 2);
-        assert_eq!(reads.len(), 1);
-        assert_eq!(reads[0].provenance().len(), 1);
+        assert!(statistics.is_empty());
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests.requests()[0].outcome(),
+            SemanticReferenceRequestOutcome::PartialWorkspace
+        );
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics
+                .iter()
+                .next()
+                .expect("diagnostic must exist")
+                .severity(),
+            oneagent_graph::SemanticDiagnosticSeverity::Warning
+        );
+        assert!(graph.query().edges_by_kind(EdgeKind::Reads).is_empty());
+        assert!(graph.query().edges_by_kind(EdgeKind::DependsOn).is_empty());
     }
 
     #[test]
@@ -1621,6 +1767,7 @@ mod tests {
         let mut graph = SemanticGraph::new();
         let mut diagnostics = BTreeSet::new();
         let mut statistics = SemanticReferenceStatistics::new();
+        let mut requests = SemanticReferenceRequestLedger::new();
 
         let error = insert_query_reads(
             &mut graph,
@@ -1628,6 +1775,7 @@ mod tests {
             WorkspaceResolutionScope::Complete,
             &mut diagnostics,
             &mut statistics,
+            &mut requests,
         )
         .expect_err("missing Query node must fail graph construction");
 

@@ -677,7 +677,7 @@ impl FileSystemEdtSemanticGraphBuilder {
             &mut reference_statistics,
         )?;
 
-        let reference_requests = resolve_metadata_references(
+        let mut reference_requests = resolve_metadata_references(
             &mut graph,
             &metadata_references,
             &mut diagnostics,
@@ -697,6 +697,7 @@ impl FileSystemEdtSemanticGraphBuilder {
             metadata_reference_scope,
             &mut diagnostics,
             &mut reference_statistics,
+            &mut reference_requests,
         )?;
 
         finish_configuration_graph_build(
@@ -715,6 +716,7 @@ fn add_configuration_module_semantics(
     workspace_scope: query_source_resolution::WorkspaceResolutionScope,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
 ) -> Result<(), EdtGraphError> {
     let form_navigation = form_navigation_emission::collect_form_navigation(modules)
         .map_err(EdtGraphError::FormNavigation)?;
@@ -724,6 +726,7 @@ fn add_configuration_module_semantics(
         query_source_resolution::WorkspaceResolutionScope::Complete,
         diagnostics,
         reference_statistics,
+        reference_requests,
     )
     .map_err(EdtGraphError::Bsl)?;
     form_navigation_emission::emit_form_navigation(
@@ -4798,6 +4801,30 @@ mod graph_tests {
         );
     }
 
+    fn assert_query_data_dependencies(graph: &SemanticGraph, query_ids: [&NodeId; 2]) {
+        let query = graph.query();
+        assert!(query.edges_by_kind(EdgeKind::Writes).is_empty());
+        assert_eq!(
+            query_ids
+                .iter()
+                .map(|query_id| {
+                    query
+                        .outgoing_edges_by_kind(query_id, EdgeKind::DependsOn)
+                        .len()
+                })
+                .sum::<usize>(),
+            2
+        );
+        for query_id in query_ids {
+            assert_eq!(
+                query
+                    .outgoing_edges_by_kind(query_id, EdgeKind::DependsOn)
+                    .len(),
+                1
+            );
+        }
+    }
+
     #[test]
     fn emits_static_bsl_query_nodes_through_production_graph_builder() {
         let root = create_edt_project();
@@ -4881,16 +4908,13 @@ mod graph_tests {
                 .collect::<BTreeSet<_>>(),
             BTreeSet::from([before_write_query_id.as_str(), get_query_id.as_str()])
         );
-        assert!(query_api.edges_by_kind(EdgeKind::Writes).is_empty());
-        assert!(
-            query_api
-                .outgoing_edges_by_kind(&before_write_query_id, EdgeKind::DependsOn)
-                .is_empty()
-        );
-        assert!(
-            query_api
-                .outgoing_edges_by_kind(&get_query_id, EdgeKind::DependsOn)
-                .is_empty()
+        assert_query_data_dependencies(graph, [&before_write_query_id, &get_query_id]);
+        assert_eq!(
+            first
+                .reference_request_query()
+                .by_category(SemanticReferenceCategory::QuerySource)
+                .len(),
+            2
         );
         assert!(first.validate().is_valid());
         assert!(graph.diff(second.graph()).is_empty());

@@ -3,7 +3,8 @@ use oneagent_edt::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, ImpactNodeStatus, ImpactReasonKind,
     NodeId, NodeKind, ResolutionState, SemanticDiagnosticCode, SemanticDiagnosticKind,
-    SemanticGraphQuery, SemanticImpactAnalyzer, SemanticImpactOptions,
+    SemanticGraphQuery, SemanticImpactAnalyzer, SemanticImpactOptions, SemanticReferenceCategory,
+    SemanticReferenceRequestOutcome,
 };
 use oneagent_metadata::MetadataKind;
 use std::fs;
@@ -176,10 +177,10 @@ fn write_supported_negative_targets(root: &Path) {
     );
 }
 
-fn assert_no_query_companion_edges(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
+fn assert_no_unaccepted_query_edges(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
     let graph = result.graph();
     for query in graph.nodes_by_kind(NodeKind::Query) {
-        for kind in [EdgeKind::References, EdgeKind::Writes, EdgeKind::DependsOn] {
+        for kind in [EdgeKind::References, EdgeKind::Writes] {
             assert!(graph.outgoing_by_kind(query.id(), kind).is_empty());
         }
     }
@@ -189,6 +190,12 @@ fn assert_no_query_companion_edges(result: &oneagent_edt::EdtSemanticGraphBuildR
             .nodes_by_kind(NodeKind::Metadata(MetadataKind::Unknown))
             .is_empty()
     );
+}
+
+fn assert_no_resolved_query_data_edges(result: &oneagent_edt::EdtSemanticGraphBuildResult) {
+    for kind in [EdgeKind::Reads, EdgeKind::DependsOn] {
+        assert!(result.graph().query().edges_by_kind(kind).is_empty());
+    }
 }
 
 fn assert_resolved_reads_provenance(edge: &GraphEdge) {
@@ -203,24 +210,98 @@ fn assert_resolved_reads_provenance(edge: &GraphEdge) {
         ";owner#",
         ";binding#5:Query",
         ";declaration_line#",
-        ";parser_stage#",
-        ";resolver_stage#",
-        ";contributor_stage#",
         ";raw_source#",
         ";range#",
         ";category#",
         ";namespace#",
         ";local_name#",
+        ";request#",
+        ";outcome#8:resolved",
+        ";projection#5:reads",
+        ";collection_evidence#",
         ";resolved_target#",
         ";target_kind#",
     ] {
         assert!(source.contains(field));
     }
-    assert!(source.contains("/src/Documents/QueryHost/ObjectModule.bsl#query_reads"));
+    assert!(source.contains("/src/Documents/QueryHost/ObjectModule.bsl#query_source_request"));
     assert_eq!(provenance.producer().as_str(), "oneagent.edt.query-reads");
     assert_eq!(provenance.origin(), FactOrigin::Resolved);
     assert_eq!(provenance.confidence(), Confidence::Exact);
     assert_eq!(provenance.resolution(), ResolutionState::Resolved);
+}
+
+fn assert_derived_dependency_provenance(edge: &GraphEdge) {
+    assert_eq!(edge.provenance().len(), 1);
+    let provenance = &edge.provenance()[0];
+    let source = provenance
+        .source()
+        .expect("DependsOn provenance source must exist")
+        .as_str();
+
+    for field in [
+        ";request#",
+        ";query#",
+        ";outcome#8:resolved",
+        ";projection#10:depends_on",
+        ";resolved_target#",
+        ";target_kind#",
+        ";proving_fact#5:reads",
+        ";normalization#21:query_data_dependency",
+    ] {
+        assert!(source.contains(field), "missing provenance field `{field}`");
+    }
+    assert_eq!(
+        provenance.producer().as_str(),
+        "oneagent.edt.query-dependency"
+    );
+    assert_eq!(provenance.origin(), FactOrigin::Derived);
+    assert_eq!(provenance.confidence(), Confidence::Exact);
+    assert_eq!(provenance.resolution(), ResolutionState::Resolved);
+}
+
+fn assert_query_data_navigation(
+    graph: &oneagent_graph::SemanticGraph,
+    products_id: &EntityId,
+    deletion_queue_id: &EntityId,
+    read_products_id: &NodeId,
+    read_products_again_id: &NodeId,
+    read_deletion_queue_id: &NodeId,
+) {
+    let query = graph.query();
+    for (query_id, target_id) in [
+        (read_products_id, products_id),
+        (read_products_again_id, products_id),
+        (read_deletion_queue_id, deletion_queue_id),
+    ] {
+        let dependencies = query.direct_dependencies(query_id);
+        assert_eq!(dependencies.len(), 2);
+        assert!(dependencies.iter().all(|dependency| {
+            dependency.node().id() == target_id
+                && matches!(
+                    dependency.edge().kind(),
+                    EdgeKind::Reads | EdgeKind::DependsOn
+                )
+        }));
+        for kind in [EdgeKind::Reads, EdgeKind::DependsOn] {
+            assert_eq!(query.outgoing_edges_by_kind(query_id, kind).len(), 1);
+        }
+    }
+
+    let product_usages = query.direct_usages(&node_id(CATALOG_ID));
+    assert_eq!(product_usages.len(), 4);
+    assert!(
+        product_usages
+            .iter()
+            .all(|usage| { matches!(usage.edge().kind(), EdgeKind::Reads | EdgeKind::DependsOn) })
+    );
+    for query_id in [read_products_id, read_products_again_id] {
+        assert!(
+            product_usages
+                .iter()
+                .any(|usage| usage.node().id().as_str() == query_id.as_str())
+        );
+    }
 }
 
 #[test]
@@ -234,6 +315,7 @@ fn reads_real_edt_fixture_emits_both_target_kinds_with_stable_query_navigation()
     let graph = first.graph();
     let query = graph.query();
     let reads = query.edges_by_kind(EdgeKind::Reads);
+    let normalized_dependencies = query.edges_by_kind(EdgeKind::DependsOn);
     let products_id = id(CATALOG_ID);
     let deletion_queue_id = id(INFORMATION_REGISTER_ID);
     let read_products_id = query_id("procedure", "ReadProducts");
@@ -243,7 +325,17 @@ fn reads_real_edt_fixture_emits_both_target_kinds_with_stable_query_navigation()
     assert!(first.diagnostics().is_empty());
     assert_eq!(first.reference_statistics().total(), 3);
     assert_eq!(first.reference_statistics().resolved(), 3);
+    let query_requests = first
+        .reference_request_query()
+        .by_category(SemanticReferenceCategory::QuerySource);
+    assert_eq!(query_requests.len(), 3);
+    assert!(query_requests.iter().all(|request| {
+        request.outcome() == SemanticReferenceRequestOutcome::Resolved
+            && request.candidates().len() == 1
+            && request.provenance().len() == 2
+    }));
     assert_eq!(reads.len(), 3);
+    assert_eq!(normalized_dependencies.len(), 3);
     assert_eq!(
         reads
             .iter()
@@ -263,40 +355,23 @@ fn reads_real_edt_fixture_emits_both_target_kinds_with_stable_query_navigation()
     for edge in &reads {
         assert_resolved_reads_provenance(edge);
     }
-
-    for (query_id, target_id) in [
-        (&read_products_id, &products_id),
-        (&read_products_again_id, &products_id),
-        (&read_deletion_queue_id, &deletion_queue_id),
-    ] {
-        let dependencies = query.direct_dependencies(query_id);
-        assert_eq!(dependencies.len(), 1);
-        assert_eq!(dependencies[0].node().id(), target_id);
-        assert_eq!(dependencies[0].edge().kind(), EdgeKind::Reads);
-        assert_eq!(
-            query.outgoing_edges_by_kind(query_id, EdgeKind::Reads),
-            vec![dependencies[0].edge()]
-        );
+    for edge in &normalized_dependencies {
+        assert_derived_dependency_provenance(edge);
     }
 
-    let product_usages = query.direct_usages(&node_id(CATALOG_ID));
-    assert_eq!(product_usages.len(), 2);
-    assert!(
-        product_usages
-            .iter()
-            .all(|usage| usage.edge().kind() == EdgeKind::Reads)
-    );
-    assert!(
-        product_usages
-            .iter()
-            .any(|usage| { usage.node().id().as_str() == read_products_id.as_str() })
-    );
-    assert!(
-        product_usages
-            .iter()
-            .any(|usage| { usage.node().id().as_str() == read_products_again_id.as_str() })
+    assert_query_data_navigation(
+        graph,
+        &products_id,
+        &deletion_queue_id,
+        &read_products_id,
+        &read_products_again_id,
+        &read_deletion_queue_id,
     );
 
+    let report = first.report();
+    assert_eq!(report.edges().by_kind().get(&EdgeKind::Reads), Some(&3));
+    assert_eq!(report.edges().by_kind().get(&EdgeKind::DependsOn), Some(&3));
+    assert_eq!(report.resolution().resolved(), 3);
     let first_edge_ids = reads
         .iter()
         .map(|edge| {
@@ -321,7 +396,14 @@ fn reads_real_edt_fixture_emits_both_target_kinds_with_stable_query_navigation()
         })
         .collect::<Vec<_>>();
     assert_eq!(first_edge_ids, repeated_edge_ids);
-    assert_no_query_companion_edges(&first);
+    assert_eq!(first.reference_requests(), repeated.reference_requests());
+    assert_eq!(first.diagnostics(), repeated.diagnostics());
+    assert_eq!(
+        first.reference_statistics(),
+        repeated.reference_statistics()
+    );
+    assert_eq!(first.report(), repeated.report());
+    assert_no_unaccepted_query_edges(&first);
     assert!(first.validate().is_valid());
     assert!(graph.diff(repeated.graph()).is_empty());
     assert!(first.diff(&repeated).is_empty());
@@ -359,10 +441,12 @@ fn reads_changed_metadata_target_propagates_impact_to_query_usages() {
             .find(|node| node.node_id() == &query_id)
             .expect("Query usage must be affected by the changed metadata target");
         assert_eq!(affected.status(), ImpactNodeStatus::TransitivelyAffected);
-        assert!(affected.reasons().iter().any(|reason| {
-            reason.kind() == ImpactReasonKind::DependencyPropagation
-                && reason.edge_kind() == Some(EdgeKind::Reads)
-        }));
+        for edge_kind in [EdgeKind::Reads, EdgeKind::DependsOn] {
+            assert!(affected.reasons().iter().any(|reason| {
+                reason.kind() == ImpactReasonKind::DependencyPropagation
+                    && reason.edge_kind() == Some(edge_kind)
+            }));
+        }
     }
 }
 
@@ -392,14 +476,21 @@ fn assert_rejected_query_case(
     assert_eq!(first.reference_statistics().total(), 1);
     assert_eq!(first.reference_statistics().outcome_total(), 1);
     assert_eq!(first.reference_statistics().with_provenance(), 1);
-    assert!(
-        first
-            .graph()
-            .query()
-            .edges_by_kind(EdgeKind::Reads)
-            .is_empty()
-    );
-    assert_no_query_companion_edges(&first);
+    let query_requests = first
+        .reference_request_query()
+        .by_category(SemanticReferenceCategory::QuerySource);
+    if code == SemanticDiagnosticCode::ReferenceUnresolved {
+        assert_eq!(query_requests.len(), 1);
+        assert_eq!(
+            query_requests[0].outcome(),
+            SemanticReferenceRequestOutcome::MissingTarget
+        );
+        assert_eq!(diagnostic.reference(), query_requests[0].reference());
+    } else {
+        assert!(query_requests.is_empty());
+    }
+    assert_no_resolved_query_data_edges(&first);
+    assert_no_unaccepted_query_edges(&first);
     assert_eq!(first.diagnostics(), repeated.diagnostics());
     assert_eq!(
         first.reference_statistics(),
@@ -454,12 +545,12 @@ fn assert_rejected_builder_query_case(
     assert_eq!(first.reference_statistics().unsupported_prefix(), 1);
     assert!(
         first
-            .graph()
-            .query()
-            .edges_by_kind(EdgeKind::Reads)
+            .reference_request_query()
+            .by_category(SemanticReferenceCategory::QuerySource)
             .is_empty()
     );
-    assert_no_query_companion_edges(&first);
+    assert_no_resolved_query_data_edges(&first);
+    assert_no_unaccepted_query_edges(&first);
     assert_eq!(first.diagnostics(), repeated.diagnostics());
     assert_eq!(
         first.reference_statistics(),
@@ -582,14 +673,20 @@ fn reads_ambiguous_target_is_sorted_counted_and_emits_no_edge() {
         ]
     );
     assert_eq!(ambiguous.reference_statistics().ambiguous(), 1);
-    assert!(
-        ambiguous
-            .graph()
-            .query()
-            .edges_by_kind(EdgeKind::Reads)
-            .is_empty()
+    let requests = ambiguous
+        .reference_request_query()
+        .by_category(SemanticReferenceCategory::QuerySource);
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].outcome(),
+        SemanticReferenceRequestOutcome::AmbiguousTarget
     );
-    assert_no_query_companion_edges(&ambiguous);
+    assert_eq!(
+        ambiguous.diagnostics()[0].reference(),
+        requests[0].reference()
+    );
+    assert_no_resolved_query_data_edges(&ambiguous);
+    assert_no_unaccepted_query_edges(&ambiguous);
 }
 
 #[test]
@@ -629,14 +726,20 @@ fn reads_incompatible_target_is_typed_counted_and_emits_no_edge() {
             .incompatible_target_kind(),
         1
     );
-    assert!(
-        incompatible
-            .graph()
-            .query()
-            .edges_by_kind(EdgeKind::Reads)
-            .is_empty()
+    let requests = incompatible
+        .reference_request_query()
+        .by_category(SemanticReferenceCategory::QuerySource);
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].outcome(),
+        SemanticReferenceRequestOutcome::IncompatibleTargetKind
     );
-    assert_no_query_companion_edges(&incompatible);
+    assert_eq!(
+        incompatible.diagnostics()[0].reference(),
+        requests[0].reference()
+    );
+    assert_no_resolved_query_data_edges(&incompatible);
+    assert_no_unaccepted_query_edges(&incompatible);
 }
 
 #[test]
@@ -680,6 +783,14 @@ fn reads_query_identity_and_edge_identity_survive_query_text_changes() {
         .expect("changed Query owner must exist");
     let before_reads = before.graph().query().edges_by_kind(EdgeKind::Reads);
     let after_reads = after.graph().query().edges_by_kind(EdgeKind::Reads);
+    let before_dependencies = before.graph().query().edges_by_kind(EdgeKind::DependsOn);
+    let after_dependencies = after.graph().query().edges_by_kind(EdgeKind::DependsOn);
+    let before_request = before
+        .reference_request_query()
+        .by_category(SemanticReferenceCategory::QuerySource)[0];
+    let after_request = after
+        .reference_request_query()
+        .by_category(SemanticReferenceCategory::QuerySource)[0];
 
     assert_eq!(before_query.id(), after_query.id());
     assert_eq!(before_owner.id(), after_owner.id());
@@ -688,6 +799,22 @@ fn reads_query_identity_and_edge_identity_survive_query_text_changes() {
     assert_eq!(before_reads[0].source(), after_reads[0].source());
     assert_eq!(before_reads[0].target(), after_reads[0].target());
     assert_eq!(before_reads[0].kind(), after_reads[0].kind());
+    assert_eq!(before_dependencies.len(), 1);
+    assert_eq!(after_dependencies.len(), 1);
+    assert_eq!(
+        before_dependencies[0].source(),
+        after_dependencies[0].source()
+    );
+    assert_eq!(
+        before_dependencies[0].target(),
+        after_dependencies[0].target()
+    );
+    assert_eq!(before_request.id(), after_request.id());
+    assert_ne!(before_request.provenance(), after_request.provenance());
+    let build_diff = before.diff(&after);
+    assert!(build_diff.reference_requests().added().is_empty());
+    assert!(build_diff.reference_requests().removed().is_empty());
+    assert_eq!(build_diff.reference_requests().modified().len(), 1);
     assert!(before.validate().is_valid());
     assert!(after.validate().is_valid());
 }

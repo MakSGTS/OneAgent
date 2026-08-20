@@ -6,6 +6,10 @@ Repository-local inventory for ignored EDT projects used as architecture and
 fixture-derivation evidence. These projects are not tracked test fixtures and
 must not become CI prerequisites.
 
+The primary OneAgent EDT project now has a paired real
+[Designer XML source corpus](designer-xml-source-corpus.md) for Sprint 14
+source-format investigation and cross-adapter conformance work.
+
 ## Corpus policy
 
 - Keep complete EDT workspaces ignored because they contain large generated
@@ -27,6 +31,14 @@ Inventory observed on 2026-08-20:
 |---|---|---:|---:|---:|---|
 | OneAgent | `OneAgent_EDTproject` | 252 MB | 9,658 | 39 | Existing primary planning and fixture-provenance corpus |
 | Retail | `Retail_edt_project/Розница_базовая` | 3.1 GB | 53,652 | 43 | Additional broad Russian-language and Unicode research corpus |
+
+The paired `OneAgent_DesignerXML/` tree is a Designer-generated hierarchical
+export of the same `DNSWorldEdition` configuration identity as
+`OneAgent_EDTproject/`. It contains 10,964 files, including
+`ConfigDumpInfo.xml`, and is registered separately because its discovery
+markers, layout, serialization, and known bridge warnings are not EDT facts.
+Its exact producer chain, hashes, round-trip validation, and reduction policy
+are recorded in the linked corpus document.
 
 The complete Retail EDT workspace occupies 7.7 GB and contains 75,247 files,
 including Eclipse/EDT `.metadata` state. Only the project subtree under

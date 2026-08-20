@@ -130,6 +130,18 @@ contracts while preserving the existing parser, graph, and semantic-authority
 boundaries. Sprint 14 remains `next`; its kickoff must still recheck real
 Designer XML source evidence and accepted architecture before decomposition.
 
+The real-source prerequisite was satisfied on 2026-08-21 by the registered
+[OneAgent Designer XML source corpus](architecture/designer-xml-source-corpus.md).
+Designer 8.3.27.2214 produced the hierarchical export with
+`ConfigDumpInfo.xml`; its configuration UUID, name, version, and representative
+normalized module content match `OneAgent_EDTproject`. The ignored full corpus
+has tracked provenance, tree and representative hashes, a documented
+EDT-to-Designer loss boundary, and successful clean-infobase XML and CF
+round-trip validation. Sprint 14 is therefore eligible for safe task
+decomposition. Kickoff must still define the exact source detector,
+completeness policy, accepted semantic mapping, and cross-adapter conformance
+projection instead of assuming field-for-field losslessness.
+
 The current architecture, implementation, graph-model, graph-emission, parser,
 source-adapter, investigation, Semantic Index, review, sprint-planning, and
 sequential-execution contracts are forecast to cover Sprints 4–14 without

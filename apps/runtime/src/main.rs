@@ -1,12 +1,6 @@
 //! `OneAgent Runtime` executable.
 
-mod app;
-mod config;
-mod error;
-mod state;
-
-use app::App;
-use config::DefaultConfigurationProvider;
+use oneagent_runtime::{App, DefaultConfigurationProvider};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     App::builder()

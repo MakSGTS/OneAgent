@@ -151,6 +151,13 @@ rollback, requested shutdown, terminal failures, cleanup, and independent fresh
 runs. This implementation does not move graph meaning or source ingestion into
 Runtime, and it does not define the Sprint 16 HTTP health/readiness contract.
 
+ADR-0038 accepts the planned Sprint 16 HTTP boundary without changing semantic
+authority. Runtime will own one Axum service and listener, expose only stable
+liveness and lifecycle-derived readiness probes, and retain all listener,
+connection, cancellation, and task lifetimes under ADR-0037. The accepted
+contract is not yet implementation evidence; workspace orchestration and graph
+query APIs remain deferred to Sprints 17 and 18.
+
 ## Core principles
 
 ### Unified semantics

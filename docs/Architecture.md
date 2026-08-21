@@ -71,6 +71,17 @@ an HTTP health/readiness contract. HTTP routes, schemas, status mapping, and
 client compatibility remain Sprint 16 work; workspace, graph, watcher,
 persistence, and CLI services remain Sprints 17-21.
 
+## Accepted HTTP and health boundary
+
+[ADR-0038](adr/0038-http-api-health.md) accepts the planned Sprint 16 boundary:
+one Runtime-owned Axum service will bind during service startup, expose only
+`GET /health/live` and `GET /health/ready`, derive readiness exclusively from
+the canonical Runtime lifecycle, and complete through ADR-0037 cancellation and
+task ownership. The accepted wire schema, status matrix, loopback-default bind
+configuration, and public client/server evidence requirements are fixed before
+implementation. This section records an accepted plan, not current HTTP
+support; the current implementation remains the Sprint 15 service container.
+
 ### Sprint 15 public evidence matrix
 
 The public `apps/runtime/tests/service_container.rs` target imports only the

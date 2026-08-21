@@ -14,7 +14,7 @@ boundaries; they do not define a second task sequence.
 |---|---|---:|---|
 | v0.1 — Foundation | Workspace, Runtime foundation, discovery, EDT reader, and base metadata model | Sprint 1 | completed |
 | v0.2 — Semantic Core | Typed semantic graph, semantic index, and deterministic incremental indexing | Sprints 2–5 | completed |
-| v0.3 — 1C Knowledge Model | Broader metadata semantics and Designer XML ingestion | Sprints 6–14 | planned |
+| v0.3 — 1C Knowledge Model | Broader metadata semantics and Designer XML ingestion | Sprints 6–14 | completed |
 | v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | planned |
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | planned |
 | v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | planned |
@@ -27,6 +27,9 @@ or override the dependency order recorded in the sprint tables.
 
 The v0.2 boundary is closed with a `pass` decision in the
 [v0.2 release review](reviews/v0.2-release-review.md).
+The v0.3 boundary is closed with a `pass` decision in the
+[v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
+Container is the unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -196,9 +199,11 @@ in the [Sprint 12 integration review](reviews/sprint-12-skd-report-model.md).
 Sprint 13 is completed under
 [ADR-0035](adr/0035-xdto-service-semantics.md) with a `pass` decision in the
 [Sprint 13 integration review](reviews/sprint-13-xdto-service-model.md). Sprint
-14 is the next planning target. The corrective Web Service XDTO package
-cardinality gate below is complete; the v0.3 release review remains gated on
-Sprint 14 completion and review.
+14 is completed under [ADR-0036](adr/0036-designer-xml-adapter.md) with a
+`pass` decision in the
+[Sprint 14 integration review](reviews/sprint-14-designer-xml-adapter.md). The
+[v0.3 release review](reviews/v0.3-release-review.md) also records `pass`, so
+Sprint 15 Runtime Service Container is the unique `next` planning target.
 
 #### Post-Sprint 13 correction — multiple Web Service XDTO packages
 
@@ -225,8 +230,8 @@ References/Triggers endpoint matrices, Function handler targets, and Coverage
 status remain unchanged.
 
 This correction is not a new sprint and does not reopen the historical Sprint
-13 `pass`. The ordered prerequisite is complete, so Sprint 14 remains the
-unique `next` sprint and is eligible to begin:
+13 `pass`. At the committed correction baseline, its completion made Sprint 14
+the unique eligible `next` sprint:
 
 ```text
 Committed multiple-package architecture correction
@@ -3585,9 +3590,10 @@ Sprint 14 was planned from committed readiness head
 `5b8c57b44247ffed5b26a52877b3b333bbf64703` and completed through the
 [Sprint 14 integration review](reviews/sprint-14-designer-xml-adapter.md), which
 records `pass` against committed Task 7 head
-`19d56818a1345b4cced43db7275165ff24ce0748`. The v0.3 release integration
-review is now eligible. Sprint 15 Runtime Service Container is the next planning
-target only after that release gate completes.
+`19d56818a1345b4cced43db7275165ff24ce0748`. The subsequent
+[v0.3 release review](reviews/v0.3-release-review.md) records `pass`, completes
+the v0.3 boundary, and makes Sprint 15 Runtime Service Container the unique
+`next` planning target.
 
 **Completed current state:** Tasks 1–8 are complete. The dedicated adapter
 detects hierarchical Designer XML 2.20,
@@ -3779,7 +3785,7 @@ Plan Sprint 14 Designer XML adapter
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 15 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | planned |
+| Sprint 15 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | next |
 | Sprint 16 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | planned |
 | Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | planned |
 | Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | planned |

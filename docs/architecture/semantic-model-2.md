@@ -2445,10 +2445,10 @@ Coverage state. The corrective gate is now complete: the EDT parser and
 production builder consume the canonical declaration collection and emit one
 package request per unique repository declaration. The tracked Retail
 reduction covers multiple and mixed declarations plus global namespace/type
-resolution, and Coverage remains unchanged. Sprint 13 stays historically
-completed; Sprint 14 remains the unique next sprint and is now eligible to
-begin. The v0.3 release integration review remains ineligible until Sprint 14
-completes and passes its own integration review.
+resolution, and Coverage remains unchanged. At the committed correction
+baseline, Sprint 13 stayed historically completed and Sprint 14 became the
+unique eligible next sprint; the v0.3 release integration review remained
+gated on Sprint 14 completion.
 
 The first slice deliberately excludes 61,435 nested XDTO properties, imports,
 restrictions, inline types, external platform schema nodes, route matching,
@@ -2493,8 +2493,12 @@ The [Sprint 14 integration review](../reviews/sprint-14-designer-xml-adapter.md)
 records `pass` against committed Task 7 head
 `19d56818a1345b4cced43db7275165ff24ce0748`. Sprint 14 is completed without a
 review-time production, public API, Coverage, or deferred-scope change. The
-v0.3 release integration review is now eligible; Sprint 15 Runtime Service
-Container becomes the next planning target only after that release gate.
+[v0.3 release integration review](../reviews/v0.3-release-review.md) records
+`pass` against committed Sprint 14 review head
+`8dbb09a2c085c990308fa57621b510150be6c9a2`. The v0.3 boundary is complete,
+and Sprint 15 Runtime Service Container is the unique `next` planning target.
+Its kickoff retains the planned Runtime Services and APIs framework-readiness
+gate and must revalidate the live Runtime baseline.
 
 Metadata members, specialized Role/Subsystem/Event/DCS/XDTO/service semantics,
 Form/Command/configuration/register module roles, semantic references and other

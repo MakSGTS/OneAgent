@@ -1,6 +1,7 @@
 //! Application lifecycle state.
 
 use crate::error::RuntimeError;
+use tokio::sync::watch;
 
 /// Lifecycle states of `OneAgent Runtime`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +41,7 @@ impl LifecycleState {
             (self, next),
             (Self::Created, Self::Building)
                 | (Self::Building, Self::Initializing)
-                | (Self::Initializing, Self::Running)
+                | (Self::Initializing, Self::Running | Self::Stopping)
                 | (Self::Running, Self::Stopping)
                 | (Self::Stopping, Self::Stopped)
         )
@@ -51,22 +52,30 @@ impl LifecycleState {
 #[derive(Debug)]
 pub struct Lifecycle {
     state: LifecycleState,
+    sender: watch::Sender<LifecycleState>,
 }
 
 impl Lifecycle {
     /// Creates a lifecycle in the `Created` state.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
+        let (sender, _receiver) = watch::channel(LifecycleState::Created);
         Self {
             state: LifecycleState::Created,
+            sender,
         }
     }
 
     /// Returns the current lifecycle state.
-    #[cfg(test)]
     #[must_use]
     pub const fn state(&self) -> LifecycleState {
         self.state
+    }
+
+    /// Subscribes to transport-neutral lifecycle state changes.
+    #[must_use]
+    pub fn subscribe(&self) -> watch::Receiver<LifecycleState> {
+        self.sender.subscribe()
     }
 
     /// Moves the lifecycle to the requested state.
@@ -83,6 +92,7 @@ impl Lifecycle {
         }
 
         self.state = next;
+        self.sender.send_replace(next);
         Ok(())
     }
 }
@@ -132,5 +142,24 @@ mod tests {
             error.to_string(),
             "invalid lifecycle transition: created -> running"
         );
+    }
+
+    #[test]
+    fn initialization_can_transition_to_failure_cleanup() {
+        let mut lifecycle = Lifecycle::new();
+        lifecycle
+            .transition_to(LifecycleState::Building)
+            .expect("created -> building must be valid");
+        lifecycle
+            .transition_to(LifecycleState::Initializing)
+            .expect("building -> initializing must be valid");
+        lifecycle
+            .transition_to(LifecycleState::Stopping)
+            .expect("initializing -> stopping must be valid for rollback");
+        lifecycle
+            .transition_to(LifecycleState::Stopped)
+            .expect("stopping -> stopped must be valid");
+
+        assert_eq!(lifecycle.state(), LifecycleState::Stopped);
     }
 }

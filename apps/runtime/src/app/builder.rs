@@ -1,8 +1,11 @@
 //! Runtime application builder.
 
+use std::sync::Arc;
+
 use crate::app::{App, Lifecycle, LifecycleState};
 use crate::config::{ConfigurationProvider, RuntimeConfig};
 use crate::error::RuntimeError;
+use crate::service::{RuntimeService, ServiceContainerBuilder};
 use crate::state::AppState;
 
 /// Builds a fully initialized [`App`].
@@ -10,16 +13,35 @@ use crate::state::AppState;
 pub struct AppBuilder {
     configuration: Option<RuntimeConfig>,
     lifecycle: Lifecycle,
+    services: ServiceContainerBuilder,
 }
 
 impl AppBuilder {
     /// Creates an empty application builder.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             configuration: None,
             lifecycle: Lifecycle::new(),
+            services: ServiceContainerBuilder::new(),
         }
+    }
+
+    /// Registers one uniquely named Runtime service in startup order.
+    ///
+    /// # Errors
+    ///
+    /// Returns a service identity error for an empty or duplicate name.
+    pub fn register_service<S>(
+        mut self,
+        name: impl Into<String>,
+        service: S,
+    ) -> Result<Self, RuntimeError>
+    where
+        S: RuntimeService,
+    {
+        self.services = self.services.register(name, service)?;
+        Ok(self)
     }
 
     /// Loads configuration from a provider.
@@ -55,7 +77,10 @@ impl AppBuilder {
 
         self.lifecycle.transition_to(LifecycleState::Initializing)?;
 
-        Ok(App::new(AppState::new(configuration), self.lifecycle))
+        let state = Arc::new(AppState::new(configuration));
+        let services = self.services.build(Arc::clone(&state));
+
+        Ok(App::new(state, self.lifecycle, services))
     }
 }
 

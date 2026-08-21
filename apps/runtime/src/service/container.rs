@@ -131,7 +131,18 @@ impl ServiceContainer {
     /// Returns a named startup or task failure after all acknowledged services
     /// have been cancelled and joined.
     pub async fn start(self) -> Result<RunningServices, RuntimeError> {
+        self.start_with_stopping(|| Ok(())).await
+    }
+
+    pub(crate) async fn start_with_stopping<C>(
+        self,
+        on_stopping: C,
+    ) -> Result<RunningServices, RuntimeError>
+    where
+        C: FnOnce() -> Result<(), RuntimeError>,
+    {
         let mut running = RunningServices::new();
+        let mut on_stopping = Some(on_stopping);
 
         for registration in self.registrations {
             let ServiceRegistration { name, service } = registration;
@@ -143,7 +154,13 @@ impl ServiceContainer {
                 tokio::select! {
                     biased;
                     joined = running.join_next() => {
-                        let primary = running.classify_before_cancellation(joined);
+                        let mut primary = running.classify_before_cancellation(joined);
+                        primary.error = apply_stopping_transition(
+                            primary.error,
+                            on_stopping
+                                .take()
+                                .expect("stopping transition callback must be available"),
+                        );
 
                         start_handle.abort();
                         let start_cleanup = match start_handle.await {
@@ -184,26 +201,42 @@ impl ServiceContainer {
             match start_result {
                 Ok(Ok(task)) => running.spawn(name, source, task),
                 Ok(Err(error)) => {
-                    let primary = RuntimeError::ServiceStartFailed {
-                        service: name,
-                        source: error,
-                        cleanup: Vec::new(),
-                    };
+                    let primary = apply_stopping_transition(
+                        RuntimeError::ServiceStartFailed {
+                            service: name,
+                            source: error,
+                            cleanup: Vec::new(),
+                        },
+                        on_stopping
+                            .take()
+                            .expect("stopping transition callback must be available"),
+                    );
                     return Err(running.finish_fixed_primary(primary).await);
                 }
                 Err(error) => {
-                    let primary = RuntimeError::ServiceStartFailed {
-                        service: name,
-                        source: Box::new(error),
-                        cleanup: Vec::new(),
-                    };
+                    let primary = apply_stopping_transition(
+                        RuntimeError::ServiceStartFailed {
+                            service: name,
+                            source: Box::new(error),
+                            cleanup: Vec::new(),
+                        },
+                        on_stopping
+                            .take()
+                            .expect("stopping transition callback must be available"),
+                    );
                     return Err(running.finish_fixed_primary(primary).await);
                 }
             }
         }
 
         if let Some(joined) = running.try_join_next() {
-            let primary = running.classify_before_cancellation(joined);
+            let mut primary = running.classify_before_cancellation(joined);
+            primary.error = apply_stopping_transition(
+                primary.error,
+                on_stopping
+                    .take()
+                    .expect("stopping transition callback must be available"),
+            );
             let mut candidates = running.cleanup().await;
             return Err(select_task_primary(primary, &mut candidates));
         }
@@ -282,44 +315,88 @@ impl RunningServices {
     ///
     /// Returns a shutdown-source, unexpected-exit, service, or task-join error
     /// after complete cleanup.
-    pub async fn run_until<F, E>(mut self, shutdown: F) -> Result<(), RuntimeError>
+    pub async fn run_until<F, E>(self, shutdown: F) -> Result<(), RuntimeError>
     where
         F: Future<Output = Result<(), E>>,
         E: std::error::Error + Send + Sync + 'static,
     {
+        self.run_until_with_stopping(shutdown, || Ok(())).await
+    }
+
+    pub(crate) async fn run_until_with_stopping<F, E, C>(
+        mut self,
+        shutdown: F,
+        on_stopping: C,
+    ) -> Result<(), RuntimeError>
+    where
+        F: Future<Output = Result<(), E>>,
+        E: std::error::Error + Send + Sync + 'static,
+        C: FnOnce() -> Result<(), RuntimeError>,
+    {
+        let mut on_stopping = Some(on_stopping);
         if !self.has_active_tasks() {
-            return shutdown
-                .await
-                .map_err(|error| RuntimeError::ShutdownSourceFailed {
-                    source: Box::new(error),
-                    cleanup: Vec::new(),
-                });
+            return match shutdown.await {
+                Ok(()) => on_stopping
+                    .take()
+                    .expect("stopping transition callback must be available")(
+                ),
+                Err(error) => Err(apply_stopping_transition(
+                    RuntimeError::ShutdownSourceFailed {
+                        source: Box::new(error),
+                        cleanup: Vec::new(),
+                    },
+                    on_stopping
+                        .take()
+                        .expect("stopping transition callback must be available"),
+                )),
+            };
         }
 
         tokio::pin!(shutdown);
         tokio::select! {
             biased;
             joined = self.join_next() => {
-                let primary = self.classify_before_cancellation(joined);
+                let mut primary = self.classify_before_cancellation(joined);
+                primary.error = apply_stopping_transition(
+                    primary.error,
+                    on_stopping
+                        .take()
+                        .expect("stopping transition callback must be available"),
+                );
                 let mut candidates = self.cleanup().await;
                 Err(select_task_primary(primary, &mut candidates))
             }
             result = &mut shutdown => {
                 match result {
                     Ok(()) => {
+                        let transition_error = on_stopping
+                            .take()
+                            .expect("stopping transition callback must be available")()
+                            .err();
                         let mut candidates = self.cleanup().await;
                         if candidates.is_empty() {
-                            Ok(())
+                            transition_error.map_or(Ok(()), Err)
                         } else {
                             let primary = candidates.remove(0);
-                            Err(select_task_primary(primary, &mut candidates))
+                            let mut error = select_task_primary(primary, &mut candidates);
+                            if let Some(transition_error) = transition_error {
+                                error = error.with_cleanup(vec![CleanupFailure::from_error(
+                                    &transition_error,
+                                )]);
+                            }
+                            Err(error)
                         }
                     }
                     Err(error) => {
-                        let primary = RuntimeError::ShutdownSourceFailed {
-                            source: Box::new(error),
-                            cleanup: Vec::new(),
-                        };
+                        let primary = apply_stopping_transition(
+                            RuntimeError::ShutdownSourceFailed {
+                                source: Box::new(error),
+                                cleanup: Vec::new(),
+                            },
+                            on_stopping
+                                .take()
+                                .expect("stopping transition callback must be available"),
+                        );
                         Err(self.finish_fixed_primary(primary).await)
                     }
                 }
@@ -495,6 +572,16 @@ fn select_task_primary(
         .map(|candidate| CleanupFailure::from_error(&candidate.error))
         .collect();
     selected.error.with_cleanup(cleanup)
+}
+
+fn apply_stopping_transition<C>(primary: RuntimeError, on_stopping: C) -> RuntimeError
+where
+    C: FnOnce() -> Result<(), RuntimeError>,
+{
+    match on_stopping() {
+        Ok(()) => primary,
+        Err(error) => primary.with_cleanup(vec![CleanupFailure::from_error(&error)]),
+    }
 }
 
 #[cfg(test)]

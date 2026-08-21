@@ -45,6 +45,7 @@ technical workflows:
 - graph emission;
 - semantic index;
 - parser;
+- persistent state;
 - runtime service;
 - source adapter;
 - review.
@@ -99,6 +100,7 @@ docs/codex/
     graph-model.md
     implementation.md
     parser.md
+    persistent-state.md
     review.md
     runtime-service.md
     semantic-index.md
@@ -110,6 +112,7 @@ docs/codex/
     implementation.md
     investigation.md
     parser-implementation.md
+    persistent-state-implementation.md
     review.md
     runtime-service-implementation.md
     semantic-index-implementation.md
@@ -121,6 +124,7 @@ docs/codex/
     implementation-task.md
     investigation-task.md
     parser-task.md
+    persistent-state-task.md
     review-task.md
     runtime-service-task.md
     semantic-index-task.md
@@ -212,6 +216,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
   tasks.
 - Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
   discovery, assembly, mapping, or cross-adapter conformance implementation.
+- Use `docs/codex/profiles/persistent-state-implementation.md` for persisted
+  schemas, storage, invalidation, compatibility, migration, corruption, or
+  recovery implementation.
 - Use `docs/codex/profiles/runtime-service-implementation.md` for long-running
   service lifecycle, Runtime-owned concurrency, transport adapters, health, or
   supported client implementation.
@@ -237,6 +244,9 @@ module composition.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
   adapter ingestion or cross-adapter conformance.
+- Use `docs/codex/templates/persistent-state-task.md` for persisted schema,
+  storage, invalidation, compatibility, migration, corruption-recovery, or
+  integration work.
 - Use `docs/codex/templates/runtime-service-task.md` for Runtime service,
   lifecycle, health, transport-adapter, observability, or supported client work.
 - Use `docs/codex/templates/architecture-task.md` for architecture output.
@@ -266,6 +276,11 @@ Source adapter tasks orchestrate deterministic project discovery, artifact
 assembly, parsing, source-independent mapping, and cross-adapter conformance.
 They preserve parser separation and do not create an adapter-specific semantic
 authority.
+
+Persistent state tasks implement accepted persisted representations, storage,
+invalidation, compatibility, migration, corruption handling, and recovery.
+They keep canonical semantic state authoritative and do not select unresolved
+formats, identities, filesystem behavior, or Runtime integration architecture.
 
 Runtime service tasks implement accepted long-running lifecycle, structured
 task ownership, cancellation, shutdown, health, transport, or supported client

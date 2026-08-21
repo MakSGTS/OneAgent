@@ -113,7 +113,7 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — Sequential Sprint Planning and Execution | Sprint 7 | Live readiness audit, explicit prerequisite gates, dependency-ordered task manifests, current-instruction commit authorization, already-complete evidence, failure stopping, integration-review transitions, and final repository-state reporting implemented by the [Sprint planning template](codex/templates/sprint-planning-task.md), [Sprint execution-loop template](codex/templates/sprint-execution-loop.md), [sequential execution workflow](codex/workflows/sequential-sprint-execution.md), and updated task templates. | Sprints 7–46 | completed |
 | Task prompt template update completed — Source Adapter Ingestion | Sprint 14 | Multi-artifact source discovery and parsing, partial and malformed input, canonical identity equivalence across adapters, and end-to-end adapter conformance implemented by the [Source Adapter profile](codex/profiles/source-adapter-implementation.md), [Source Adapter workflow](codex/workflows/source-adapter.md), and [Source Adapter template](codex/templates/source-adapter-task.md). | Sprint 14 | completed |
 | Task prompt template update completed — Runtime Services and APIs | Sprint 15 | Long-running service lifecycle, ownership, concurrency, cancellation, shutdown, health, transport compatibility, observability, and client/server integration evidence implemented by the [Runtime Service profile](codex/profiles/runtime-service-implementation.md), [Runtime Service workflow](codex/workflows/runtime-service.md), and [Runtime Service template](codex/templates/runtime-service-task.md). | Sprints 15–19 and 21; baseline for Sprints 28 and 32 | completed |
-| Task prompt template update required — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence. | Sprint 20 | planned |
+| Task prompt template update completed — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence implemented by the [Persistent State profile](codex/profiles/persistent-state-implementation.md), [Persistent State workflow](codex/workflows/persistent-state.md), and [Persistent State template](codex/templates/persistent-state-task.md). | Sprint 20 | completed |
 | Task prompt template update required — Context Engine | Sprint 22 | Deterministic context selection, provenance, budgets, truncation, relevance evidence, reproducible evaluation, and data-boundary rules. | Sprints 22 and 33 | planned |
 | Task prompt template update required — LLM Providers | Sprint 23 | Provider capabilities, request/response compatibility, discovery, secrets, timeouts, retries, cancellation, error taxonomy, and contract tests. | Sprints 23–26 | planned |
 | Task prompt template update required — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests. | Sprints 27, 29, and 33 | planned |
@@ -166,6 +166,19 @@ registry, cancellation primitive, timeout, health schema, transport, endpoint,
 or client protocol; those remain architecture and task decisions. Sprint 15
 kickoff must still investigate the live Runtime baseline and accept its bounded
 first service-container contract before implementation.
+
+The Persistent State audit at committed Sprint 19 review head
+`4b8d7efc664d7f5942287b810d822afa320669d3` found that the generic
+implementation and Runtime Service contracts do not require persisted schema
+ownership, validity inputs, deterministic invalidation, version compatibility,
+migration containment, corruption classification, replacement safety, recovery,
+or clean-rebuild equivalence. The Persistent State modules add only those
+reusable execution and evidence requirements. They do not select a format,
+schema, cache key, fingerprint, checksum, storage path, replacement primitive,
+migration policy, eviction policy, or Runtime lifecycle; those remain
+architecture and task decisions. Sprint 20 kickoff must still investigate the
+live semantic snapshot and filesystem boundaries and accept a bounded first
+persistent-cache contract before implementation.
 
 ### Completed sprints
 

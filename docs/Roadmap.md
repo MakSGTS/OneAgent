@@ -3807,6 +3807,175 @@ Plan Sprint 14 Designer XML adapter
 
 The v0.4 release integration review follows Sprint 21.
 
+#### Sprint 15 Runtime Service Container execution plan
+
+Sprint 15 is planned from committed readiness head
+`bac838be07bbf9b9686e60419397e91e702adec1`. The
+[v0.3 release review](reviews/v0.3-release-review.md) records `pass`, Sprint 15
+is the unique `next` target, and the required Runtime Services and APIs Codex
+Framework stage is committed. Sprint 16 remains ineligible until Sprint 15
+completes with a non-blocking integration review.
+
+The current `oneagent-runtime` is a binary-only composition foundation. ADR-0002
+assigns construction to `AppBuilder`, immutable shared state to `AppState`, and
+explicit transitions to `Lifecycle`. The production `App::run` is synchronous,
+prints one banner, and immediately transitions through running and shutdown; no
+service registry, owned background task, cancellation source, long-running wait,
+public library boundary, or injected shutdown oracle exists. Tokio, Axum,
+Tracing, and Serde dependencies are already locked, but only configuration,
+builder, and lifecycle behavior is exercised by five Runtime tests.
+
+The committed [Runtime Service profile](codex/profiles/runtime-service-implementation.md),
+[workflow](codex/workflows/runtime-service.md), and
+[template](codex/templates/runtime-service-task.md), together with the existing
+investigation, architecture, review, sprint-planning, and sequential-execution
+contracts, cover every planned task. No further framework change is planned.
+Repository code, locked dependencies, macOS/Windows CI, and deterministic
+in-memory probe services provide sufficient data and test oracles; no external
+service, socket, fixture, or new dependency is required.
+
+##### Sprint 15 objective
+
+Establish the first accepted long-running Runtime service container with
+explicit service and task ownership, deterministic startup and shutdown,
+cancellation and failure propagation, and an asynchronously running composition
+root, without pulling later v0.4 services or transports forward.
+
+##### Included scope
+
+- exact investigation of the current Runtime lifecycle, ownership, dependencies,
+  public boundary, consumers, failures, and deterministic testability;
+- an accepted ADR for service identity/registration, task/resource ownership,
+  startup ordering and rollback, cancellation, shutdown, failure propagation,
+  lifecycle state, public Runtime boundary, observability, and first slice;
+- reusable service-container and cancellation primitives with complete task
+  ownership and deterministic terminal handling;
+- AppBuilder/App/lifecycle/main integration into a genuinely long-running async
+  Runtime with injected test shutdown and production signal ownership;
+- public in-memory integration evidence for startup, rollback, service failure,
+  requested shutdown, cleanup, ordering, and repeated fresh runs;
+- current-state documentation, full cross-platform workspace validation,
+  integration review, and conditional Sprint 14 prompt-suite retirement.
+
+##### Excluded scope
+
+- HTTP routes, listener binding, public health/readiness schema, and protocol
+  compatibility owned by Sprint 16;
+- workspace lifecycle/build orchestration, graph-query APIs, file watching,
+  persistence, and supported CLI behavior owned by Sprints 17–21;
+- semantic graph changes, source adapters, AI, MCP, LSP, IDE, global mutable
+  state, dependency-injection frameworks, detached tasks, new dependencies,
+  real-signal tests, arbitrary-sleep acceptance, packaging, benchmarks, and
+  performance claims.
+
+##### Sprint 15 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 15 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-15-runtime-service-container/`. Every dependent task
+requires the preceding committed outcome. Stored prompts do not authorize
+commits; authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-14-designer-xml-adapter/`, with these nine tracked
+files: `00-sprint-14-execution-loop.md`,
+`01-investigate-designer-xml-source-contracts.md`,
+`02-define-designer-xml-adapter-contract.md`,
+`03-implement-designer-xml-discovery.md`,
+`04-parse-designer-xml-metadata.md`,
+`05-parse-designer-xml-modules.md`,
+`06-emit-designer-xml-semantics.md`,
+`07-complete-sprint-14-conformance-evidence.md`, and
+`08-sprint-14-integration-review.md`. It remains untouched through Task 5. Only
+Task 6 may retire this exact inventory after a non-blocking review and successful
+complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Runtime service-container boundary. | Investigation / investigation | Current lifecycle, ownership, dependency, consumer, failure, compatibility, and deterministic-test evidence with explicit decision questions. | Accepted Sprint 15 planning baseline. | `Investigate Sprint 15 Runtime service container` |
+| 2 | Define the Runtime service-container contract. | Architecture / architecture | Accepted ADR-0037 ownership, lifecycle, concurrency, cancellation, shutdown, failure, public-boundary, observability, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 15 Runtime service container contract` |
+| 3 | Implement Runtime service-container primitives. | Runtime Service / runtime service | Owned service registration/execution, cancellation, startup rollback, failure propagation, shutdown, cleanup, and focused unit evidence. | Task 2. | `Implement Sprint 15 Runtime service container` |
+| 4 | Integrate the Runtime application lifecycle. | Runtime Service / runtime service | Async AppBuilder/App/lifecycle/main composition, injected shutdown, production signal ownership, and focused lifecycle evidence. | Task 3. | `Integrate Sprint 15 Runtime application lifecycle` |
+| 5 | Complete public production evidence and current-state documentation. | Runtime Service / runtime service | Public deterministic probe-service integration matrix, cleanup/repeated-run evidence, and synchronized current-state docs. | Task 4. | `Complete Sprint 15 Runtime service container evidence` |
+| 6 | Review the integrated Sprint 15 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 14 suite retirement, and Sprint 16 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 15 Runtime service container review` |
+
+```text
+Committed Sprint 15 planning baseline
+    -> Task 1 Runtime investigation
+    -> Task 2 accepted ADR-0037
+    -> Task 3 service container
+    -> Task 4 asynchronous App lifecycle
+    -> Task 5 public integration evidence and current-state docs
+    -> Task 6 integration review and conditional Sprint 14 suite retirement
+    -> Sprint 16 planning eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only
+`docs/architecture/runtime-service-container-investigation.md`. It records exact
+definitions, transitions, dependencies, consumers, CI constraints, existing and
+missing tests, compatibility-sensitive behavior, failure questions, candidate
+public boundary, deterministic probe oracle, and decision readiness. It selects
+no architecture and changes no production behavior.
+
+Task 2 creates `docs/adr/0037-runtime-service-container.md` and synchronizes only
+planning-level architecture text required by the decision. It defines the
+composition and public library boundary, service identity and registration,
+task/resource ownership, startup and rollback, cancellation, shutdown, service
+and join failure propagation, App lifecycle, internal observability, deterministic
+testing, first slice, migration, rejected alternatives, and deferred scope. It
+implements no production behavior.
+
+Task 3 implements only the accepted reusable container boundary and focused unit
+tests. Task 4 composes the committed container into the async App and production
+entry point with injected test shutdown and no HTTP behavior. Both tasks use the
+locked dependency surface, prohibit detached work and arbitrary-sleep evidence,
+preserve ADR-0002 responsibilities, and run focused plus full workspace
+validation.
+
+Task 5 exercises the public production boundary with deterministic in-memory
+probe services and synchronizes current-state documentation. It proves a pending
+Runtime remains active until injected shutdown, every accepted terminal path
+cleans up owned work, fresh repeated runs are equal, and tests remain compatible
+with macOS and Windows CI. It does not complete the sprint or add later services.
+
+Task 6 reviews the planning-through-Task-5 range and creates
+`docs/reviews/sprint-15-runtime-service-container.md` only for `pass` or `pass
+with non-blocking follow-ups` after all focused and full validation succeeds.
+That decision transitions Sprint 15 to `completed`, makes Sprint 16 HTTP API and
+Health the unique `next` target, and atomically retires the exact Sprint 14 suite
+in the same review commit. An inventory mismatch, endangered untracked file, or
+retained link dependency blocks retirement and the final commit. The review
+never silently fixes code.
+
+##### Sprint 15 state gates and completion criteria
+
+Sprint 15 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1–5, accepted ADR-0037, a
+long-running async App, explicit service/task ownership, deterministic startup,
+rollback, cancellation, shutdown and failure evidence, no detached work,
+cross-platform public integration tests, preserved deferred scope, the complete
+workspace gate, and a non-blocking Task 6 decision. A blocked review keeps
+Sprint 15 incomplete, preserves the Sprint 14 suite, and leaves Sprint 16
+ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 15 Runtime service container
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

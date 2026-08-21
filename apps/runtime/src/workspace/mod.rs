@@ -19,8 +19,10 @@ use oneagent_graph::{
 use oneagent_metadata::MetadataKind;
 use oneagent_workspace::{DiscoveredConfiguration, WorkspaceDetector, WorkspaceFormat};
 use oneagent_workspace_fs::FileSystemWorkspaceDetector;
+use tokio::sync::watch;
+use tokio::task::JoinError;
 
-use crate::BoxError;
+use crate::{BoxError, RuntimeService, ServiceContext, ServiceStartFuture, ServiceTask};
 
 /// Stable source-neutral category for an initial Workspace build failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +39,8 @@ pub enum WorkspaceBuildErrorKind {
     InvalidConfigurationCardinality,
     /// Two roots produced the same canonical Configuration identity.
     DuplicateConfigurationIdentity,
+    /// The Runtime-owned blocking initial-build task failed to join.
+    BuildTaskFailed,
 }
 
 /// Source-neutral error produced while constructing a complete Workspace snapshot.
@@ -92,6 +96,13 @@ pub enum WorkspaceBuildError {
         /// Later root that produced the same identity.
         duplicate_root: PathBuf,
     },
+    /// The Runtime-owned blocking initial-build task panicked or was cancelled.
+    BuildTask {
+        /// Configured Workspace root.
+        root_path: PathBuf,
+        /// Original Tokio task join failure.
+        source: JoinError,
+    },
 }
 
 impl WorkspaceBuildError {
@@ -109,6 +120,7 @@ impl WorkspaceBuildError {
             Self::DuplicateConfigurationIdentity { .. } => {
                 WorkspaceBuildErrorKind::DuplicateConfigurationIdentity
             }
+            Self::BuildTask { .. } => WorkspaceBuildErrorKind::BuildTaskFailed,
         }
     }
 
@@ -120,7 +132,8 @@ impl WorkspaceBuildError {
             | Self::UnsupportedFormat { root_path, .. }
             | Self::SemanticBuild { root_path, .. }
             | Self::GraphValidation { root_path, .. }
-            | Self::InvalidConfigurationCardinality { root_path, .. } => root_path,
+            | Self::InvalidConfigurationCardinality { root_path, .. }
+            | Self::BuildTask { root_path, .. } => root_path,
             Self::DuplicateConfigurationIdentity { duplicate_root, .. } => duplicate_root,
         }
     }
@@ -133,7 +146,9 @@ impl WorkspaceBuildError {
             | Self::SemanticBuild { format, .. }
             | Self::GraphValidation { format, .. }
             | Self::InvalidConfigurationCardinality { format, .. } => Some(*format),
-            Self::Discovery { .. } | Self::DuplicateConfigurationIdentity { .. } => None,
+            Self::Discovery { .. }
+            | Self::DuplicateConfigurationIdentity { .. }
+            | Self::BuildTask { .. } => None,
         }
     }
 
@@ -209,6 +224,11 @@ impl Display for WorkspaceBuildError {
                 first_root.display(),
                 duplicate_root.display()
             ),
+            Self::BuildTask { root_path, source } => write!(
+                formatter,
+                "Workspace blocking build task failed for {}: {source}",
+                root_path.display()
+            ),
         }
     }
 }
@@ -219,11 +239,102 @@ impl Error for WorkspaceBuildError {
             Self::Discovery { source, .. } | Self::SemanticBuild { source, .. } => {
                 Some(source.as_ref())
             }
+            Self::BuildTask { source, .. } => Some(source),
             Self::UnsupportedFormat { .. }
             | Self::GraphValidation { .. }
             | Self::InvalidConfigurationCardinality { .. }
             | Self::DuplicateConfigurationIdentity { .. } => None,
         }
+    }
+}
+
+/// Cloneable transport-neutral observation of the published Workspace snapshot.
+#[derive(Debug, Clone)]
+pub struct WorkspaceSnapshotObserver {
+    snapshot: watch::Receiver<Option<Arc<WorkspaceSnapshot>>>,
+}
+
+impl WorkspaceSnapshotObserver {
+    /// Returns the currently published complete snapshot, when present.
+    #[must_use]
+    pub fn snapshot(&self) -> Option<Arc<WorkspaceSnapshot>> {
+        self.snapshot.borrow().clone()
+    }
+
+    /// Creates an owned subscription to future snapshot changes.
+    #[must_use]
+    pub fn subscribe(&self) -> watch::Receiver<Option<Arc<WorkspaceSnapshot>>> {
+        self.snapshot.clone()
+    }
+}
+
+/// Runtime-owned service for one complete initial Workspace build.
+#[derive(Debug)]
+pub struct WorkspaceService<D = FileSystemWorkspaceDetector> {
+    builder: WorkspaceSnapshotBuilder<D>,
+    snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
+}
+
+impl WorkspaceService<FileSystemWorkspaceDetector> {
+    /// Creates the production Workspace service with no published snapshot.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_builder(WorkspaceSnapshotBuilder::new())
+    }
+}
+
+impl<D> WorkspaceService<D> {
+    fn with_builder(builder: WorkspaceSnapshotBuilder<D>) -> Self {
+        let (snapshot, _receiver) = watch::channel(None);
+        Self { builder, snapshot }
+    }
+
+    /// Creates a cloneable observer before this service is registered.
+    #[must_use]
+    pub fn snapshot_observer(&self) -> WorkspaceSnapshotObserver {
+        WorkspaceSnapshotObserver {
+            snapshot: self.snapshot.subscribe(),
+        }
+    }
+}
+
+impl Default for WorkspaceService<FileSystemWorkspaceDetector> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<D> RuntimeService for WorkspaceService<D>
+where
+    D: WorkspaceDetector + Send + 'static,
+{
+    fn start(self: Box<Self>, context: ServiceContext) -> ServiceStartFuture {
+        Box::pin(async move {
+            let root_path = context
+                .state()
+                .configuration()
+                .workspace_root()
+                .to_path_buf();
+            let error_root = root_path.clone();
+            let builder = self.builder;
+            let snapshot = tokio::task::spawn_blocking(move || builder.build(&root_path))
+                .await
+                .map_err(|source| WorkspaceBuildError::BuildTask {
+                    root_path: error_root,
+                    source,
+                })?
+                .map_err(|error| Box::new(error) as BoxError)?;
+            self.snapshot.send_replace(Some(Arc::new(snapshot)));
+
+            let mut cancellation = context.cancellation();
+            let snapshot = self.snapshot;
+            let task: ServiceTask = Box::pin(async move {
+                cancellation.cancelled().await;
+                snapshot.send_replace(None);
+                Ok(())
+            });
+            Ok(task)
+        })
     }
 }
 
@@ -535,14 +646,22 @@ fn configuration_identity(graph: &SemanticGraph) -> Result<(EntityId, EntityName
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
     use std::fs;
+    use std::future::pending;
+    use std::path::PathBuf;
+    use std::time::Duration;
 
     use oneagent_workspace::WorkspaceFormat;
     use tempfile::tempdir;
+    use tokio::sync::{oneshot, watch};
+    use tokio::time::timeout;
+
+    use crate::{App, ConfigurationProvider, LifecycleState, RuntimeConfig, RuntimeErrorKind};
 
     use super::{
-        DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceDetector,
-        WorkspaceSnapshotBuilder,
+        DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceDetector, WorkspaceService,
+        WorkspaceSnapshot, WorkspaceSnapshotBuilder,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -552,6 +671,31 @@ mod tests {
         projects: Vec<DiscoveredConfiguration>,
     }
 
+    #[derive(Debug, Clone)]
+    struct TestConfigurationProvider {
+        workspace_root: PathBuf,
+    }
+
+    impl ConfigurationProvider for TestConfigurationProvider {
+        fn load(&self) -> Result<RuntimeConfig, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(RuntimeConfig::new("OneAgent Runtime", "test")
+                .with_workspace_root(self.workspace_root.clone()))
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct PanickingDetector;
+
+    impl WorkspaceDetector for PanickingDetector {
+        fn discover(
+            &self,
+            _root: &std::path::Path,
+        ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
+        {
+            panic!("controlled Workspace detector panic")
+        }
+    }
+
     impl WorkspaceDetector for StaticDetector {
         fn discover(
             &self,
@@ -559,6 +703,42 @@ mod tests {
         ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
         {
             Ok(self.projects.clone())
+        }
+    }
+
+    async fn wait_for_snapshot(
+        snapshot: &mut watch::Receiver<Option<std::sync::Arc<WorkspaceSnapshot>>>,
+    ) -> std::sync::Arc<WorkspaceSnapshot> {
+        loop {
+            if let Some(snapshot) = snapshot.borrow().clone() {
+                return snapshot;
+            }
+            timeout(Duration::from_secs(1), snapshot.changed())
+                .await
+                .expect("Workspace snapshot wait must not hang")
+                .expect("Workspace service must retain snapshot ownership");
+        }
+    }
+
+    async fn wait_for_snapshot_clear(
+        snapshot: &mut watch::Receiver<Option<std::sync::Arc<WorkspaceSnapshot>>>,
+    ) {
+        while snapshot.borrow().is_some() {
+            let _ = timeout(Duration::from_secs(1), snapshot.changed())
+                .await
+                .expect("Workspace snapshot cleanup must not hang");
+        }
+    }
+
+    async fn wait_for_lifecycle(
+        lifecycle: &mut watch::Receiver<LifecycleState>,
+        expected: LifecycleState,
+    ) {
+        while *lifecycle.borrow() != expected {
+            timeout(Duration::from_secs(1), lifecycle.changed())
+                .await
+                .expect("lifecycle wait must not hang")
+                .expect("Runtime must retain lifecycle ownership");
         }
     }
 
@@ -752,5 +932,115 @@ mod tests {
         assert_eq!(error.kind(), WorkspaceBuildErrorKind::DiscoveryFailed);
         assert_eq!(error.root_path(), missing);
         assert!(std::error::Error::source(&error).is_some());
+    }
+
+    #[tokio::test]
+    async fn workspace_service_publishes_for_running_and_clears_on_shutdown() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let service = WorkspaceService::new();
+        let observer = service.snapshot_observer();
+        let mut snapshot_changes = observer.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let mut lifecycle = app.subscribe_lifecycle();
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        assert!(observer.snapshot().is_none());
+        assert_eq!(*lifecycle.borrow(), LifecycleState::Initializing);
+        let run = tokio::spawn(app.run(shutdown));
+
+        let snapshot = wait_for_snapshot(&mut snapshot_changes).await;
+        assert!(snapshot.is_empty());
+        assert!(observer.snapshot().is_some());
+        wait_for_lifecycle(&mut lifecycle, LifecycleState::Running).await;
+
+        shutdown_sender
+            .send(())
+            .expect("shutdown request must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace Runtime shutdown must not hang")
+            .expect("Runtime task must join")
+            .expect("requested shutdown must succeed");
+        wait_for_snapshot_clear(&mut snapshot_changes).await;
+        wait_for_lifecycle(&mut lifecycle, LifecycleState::Stopped).await;
+        assert!(observer.snapshot().is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_service_reports_named_start_failure_without_publication() {
+        let parent = tempdir().expect("temporary parent must be created");
+        let missing = parent.path().join("missing");
+        let service = WorkspaceService::new();
+        let observer = service.snapshot_observer();
+        let provider = TestConfigurationProvider {
+            workspace_root: missing,
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+
+        let error = timeout(
+            Duration::from_secs(1),
+            app.run(pending::<Result<(), Infallible>>()),
+        )
+        .await
+        .expect("Workspace startup failure must not hang")
+        .expect_err("invalid root must fail Workspace startup");
+
+        assert_eq!(error.kind(), RuntimeErrorKind::ServiceStartFailed);
+        assert_eq!(error.service_name(), Some("workspace"));
+        let source = std::error::Error::source(&error)
+            .and_then(|source| source.downcast_ref::<super::WorkspaceBuildError>())
+            .expect("Workspace startup error must preserve the build classification");
+        assert_eq!(source.kind(), WorkspaceBuildErrorKind::DiscoveryFailed);
+        assert!(observer.snapshot().is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_service_classifies_blocking_build_panics() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let service = WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(
+            PanickingDetector,
+        ));
+        let observer = service.snapshot_observer();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+
+        let error = timeout(
+            Duration::from_secs(1),
+            app.run(pending::<Result<(), Infallible>>()),
+        )
+        .await
+        .expect("Workspace task panic must not hang")
+        .expect_err("blocking build panic must fail Workspace startup");
+        let source = std::error::Error::source(&error)
+            .and_then(|source| source.downcast_ref::<super::WorkspaceBuildError>())
+            .expect("Workspace startup error must preserve the task classification");
+
+        assert_eq!(error.kind(), RuntimeErrorKind::ServiceStartFailed);
+        assert_eq!(error.service_name(), Some("workspace"));
+        assert_eq!(source.kind(), WorkspaceBuildErrorKind::BuildTaskFailed);
+        assert!(std::error::Error::source(source).is_some());
+        assert!(observer.snapshot().is_none());
     }
 }

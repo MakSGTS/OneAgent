@@ -1,6 +1,7 @@
 //! Runtime configuration.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::{Path, PathBuf};
 
 mod provider;
 
@@ -12,6 +13,7 @@ pub struct RuntimeConfig {
     application_name: String,
     environment: String,
     http_bind_address: SocketAddr,
+    workspace_root: PathBuf,
 }
 
 impl RuntimeConfig {
@@ -22,6 +24,7 @@ impl RuntimeConfig {
             application_name: application_name.into(),
             environment: environment.into(),
             http_bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3000),
+            workspace_root: PathBuf::from("."),
         }
     }
 
@@ -29,6 +32,13 @@ impl RuntimeConfig {
     #[must_use]
     pub const fn with_http_bind_address(mut self, address: SocketAddr) -> Self {
         self.http_bind_address = address;
+        self
+    }
+
+    /// Overrides the root discovered by the Workspace service.
+    #[must_use]
+    pub fn with_workspace_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.workspace_root = root.into();
         self
     }
 
@@ -48,6 +58,12 @@ impl RuntimeConfig {
     #[must_use]
     pub const fn http_bind_address(&self) -> SocketAddr {
         self.http_bind_address
+    }
+
+    /// Returns the root discovered by the Workspace service.
+    #[must_use]
+    pub fn workspace_root(&self) -> &Path {
+        &self.workspace_root
     }
 }
 
@@ -73,6 +89,7 @@ mod tests {
             configuration.http_bind_address(),
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3000)
         );
+        assert_eq!(configuration.workspace_root(), std::path::Path::new("."));
     }
 
     #[test]
@@ -83,5 +100,19 @@ mod tests {
         assert_eq!(configuration.application_name(), "Runtime");
         assert_eq!(configuration.environment(), "test");
         assert_eq!(configuration.http_bind_address(), address);
+        assert_eq!(configuration.workspace_root(), std::path::Path::new("."));
+    }
+
+    #[test]
+    fn workspace_root_override_preserves_other_configuration() {
+        let configuration =
+            RuntimeConfig::new("Runtime", "test").with_workspace_root("test-workspace");
+
+        assert_eq!(configuration.application_name(), "Runtime");
+        assert_eq!(configuration.environment(), "test");
+        assert_eq!(
+            configuration.workspace_root(),
+            std::path::Path::new("test-workspace")
+        );
     }
 }

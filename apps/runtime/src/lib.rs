@@ -20,6 +20,6 @@ pub use service::{
 };
 pub use state::AppState;
 pub use workspace::{
-    WorkspaceBuildError, WorkspaceBuildErrorKind, WorkspaceConfigurationSnapshot,
-    WorkspaceSnapshot, WorkspaceSnapshotBuilder,
+    WorkspaceBuildError, WorkspaceBuildErrorKind, WorkspaceConfigurationSnapshot, WorkspaceService,
+    WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
 };

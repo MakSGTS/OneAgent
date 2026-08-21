@@ -29,8 +29,8 @@ The v0.2 boundary is closed with a `pass` decision in the
 [v0.2 release review](reviews/v0.2-release-review.md).
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
-Container is completed with a `pass` decision; Sprint 16 HTTP API and Health is
-the unique `next` target.
+Container and Sprint 16 HTTP API and Health are completed with `pass`
+decisions; Sprint 17 Workspace Service is the unique `next` target.
 
 ## Roadmap reconciliation
 
@@ -3802,8 +3802,8 @@ Plan Sprint 14 Designer XML adapter
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 15 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | completed |
-| Sprint 16 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | next |
-| Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | planned |
+| Sprint 16 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | completed |
+| Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | next |
 | Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | planned |
 | Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | planned |
 | Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | planned |
@@ -3999,6 +3999,11 @@ Service profile, workflow, and template cover transport ownership, lifecycle,
 health, readiness, cancellation, shutdown, compatibility, and public
 client/server evidence; the framework readiness audit found no reusable gap.
 
+The [Sprint 16 integration review](reviews/sprint-16-http-api-health.md) now
+records `pass`. Sprint 16 is completed, its accepted listener and health
+boundary remain the current Runtime baseline, and Sprint 17 Workspace Service
+is the unique `next` target.
+
 The live Runtime already exposes a public, long-running service container,
 transport-neutral lifecycle observation, deterministic shutdown injection, and
 distinct startup and task failures. Its locked dependency surface includes
@@ -4013,8 +4018,8 @@ wire, and test boundary. Task 2 accepts ADR-0038 before production behavior is
 implemented. Task 3 adds only transport-neutral lifecycle-derived health state.
 Task 4 implements and composes the owned HTTP service and accepted probe routes.
 Task 5 completes public loopback client/server, failure, shutdown, repeated-run,
-and current-state evidence. Task 6 performs the integration review, state
-transition, and conditional Sprint 15 prompt-suite retirement.
+and current-state evidence. Task 6 records the passing integration review,
+state transition, and Sprint 15 prompt-suite retirement.
 
 ##### Sprint 16 objective
 
@@ -4133,22 +4138,19 @@ release, and equal fresh runs without arbitrary sleeps. It synchronizes README,
 Architecture, and Semantic Model current-state text but does not complete the
 sprint.
 
-Task 6 reviews the planning-through-Task-5 range and creates
-`docs/reviews/sprint-16-http-api-health.md` only for `pass` or `pass with
-non-blocking follow-ups` after all focused and full validation succeeds. That
-decision transitions Sprint 16 to `completed`, makes Sprint 17 Workspace Service
-the unique `next` target, and atomically retires the exact Sprint 15 suite in the
-same review commit. An inventory mismatch, endangered untracked file, or
-retained link dependency blocks retirement and the final commit. The review
-never silently fixes code.
+Task 6 reviewed the planning-through-Task-5 range and created
+`docs/reviews/sprint-16-http-api-health.md` after all focused and full
+validation succeeded. Its `pass` decision transitions Sprint 16 to `completed`,
+makes Sprint 17 Workspace Service the unique `next` target, and atomically
+retires the exact Sprint 15 suite in the same review commit. No inventory
+mismatch, endangered untracked file, or retained link dependency was found;
+the review changed no production code.
 
 ##### Sprint 16 state gates and completion criteria
 
-Sprint 16 remains `next` during planning and becomes `active` only after the
-planning commit and Task 1 start. `already_complete` requires current committed
-evidence and successful required validation; no empty commit is created. Stop
-after the first prerequisite, implementation, validation, staging, commit, or
-review failure. Do not skip, reorder, combine, or partially commit tasks.
+Sprint 16 remained `next` during planning and became `active` after the planning
+commit and Task 1 start. Its Task 6 `pass` decision now records it as
+`completed`. Sprint 17 is the unique `next` target.
 
 Completion requires committed or proven Tasks 1-5, accepted ADR-0038, one owned
 HTTP listener, stable liveness and lifecycle-derived readiness behavior, exact

@@ -125,4 +125,6 @@ channels as acknowledgements and timeouts only as hang guards.
 
 The [Sprint 15 integration review](reviews/sprint-15-runtime-service-container.md)
 records `pass` after the focused and complete workspace gates. Sprint 15 is
-completed; Sprint 16 owns the next HTTP and public health/readiness boundary.
+completed. The [Sprint 16 integration review](reviews/sprint-16-http-api-health.md)
+records `pass` for the owned HTTP and public health/readiness boundary; Sprint
+17 Workspace Service is the unique next target.

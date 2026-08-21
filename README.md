@@ -2,11 +2,10 @@
 
 AI Development Platform for 1C:Enterprise.
 
-OneAgent has completed the v0.3 source-independent 1C Knowledge Model and the
-Sprint 15 long-running Runtime service container. The Sprint 16 Runtime now owns
-an HTTP listener with stable liveness and lifecycle-derived readiness probes;
-its integration review is still pending. See [`docs/Roadmap.md`](docs/Roadmap.md)
-for the canonical execution order.
+OneAgent has completed the v0.3 source-independent 1C Knowledge Model, the
+Sprint 15 long-running Runtime service container, and the Sprint 16 HTTP API
+and Health boundary. Sprint 17 Workspace Service is the unique next target. See
+[`docs/Roadmap.md`](docs/Roadmap.md) for the canonical execution order.
 
 ## Workspace
 

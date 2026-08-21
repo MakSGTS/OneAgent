@@ -25,7 +25,9 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-runtime` exposes the long-running composition root as a reusable
      library. It owns ordered service startup, rollback, task handles,
      per-service cancellation, reverse shutdown, lifecycle, and terminal error
-     propagation. It does not yet expose an HTTP or workspace/graph service.
+     propagation. Its Runtime-owned Axum service exposes only HTTP liveness and
+     lifecycle-derived readiness probes; workspace and graph services remain
+     unimplemented.
    - `oneagent-cli` is a package placeholder and is not yet a supported client.
    - `oneagent-protocol` is a package foundation and does not yet expose HTTP,
      MCP, or LSP contracts.
@@ -40,8 +42,8 @@ Index remain read-only views over graph snapshots.
 
 The roadmap assigns future boundaries explicitly:
 
-- HTTP, workspace/graph Runtime services, file watching, persistence, and the
-  supported CLI arrive in Sprints 16–21.
+- Workspace/graph Runtime services, file watching, persistence, and the
+  supported CLI arrive in Sprints 17–21.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -66,21 +68,44 @@ the application reaches `Stopped` before returning its terminal result. The
 first slice has no detached tasks, global registry, new dependency, or bounded
 shutdown timeout.
 
-The public Runtime lifecycle and deterministic in-memory probe boundary are not
-an HTTP health/readiness contract. HTTP routes, schemas, status mapping, and
-client compatibility remain Sprint 16 work; workspace, graph, watcher,
+The public Runtime lifecycle and deterministic in-memory service probes remain
+the ownership foundation for the HTTP adapter; workspace, graph, watcher,
 persistence, and CLI services remain Sprints 17-21.
 
 ## Accepted HTTP and health boundary
 
-[ADR-0038](adr/0038-http-api-health.md) accepts the planned Sprint 16 boundary:
-one Runtime-owned Axum service will bind during service startup, expose only
-`GET /health/live` and `GET /health/ready`, derive readiness exclusively from
-the canonical Runtime lifecycle, and complete through ADR-0037 cancellation and
-task ownership. The accepted wire schema, status matrix, loopback-default bind
-configuration, and public client/server evidence requirements are fixed before
-implementation. This section records an accepted plan, not current HTTP
-support; the current implementation remains the Sprint 15 service container.
+[ADR-0038](adr/0038-http-api-health.md) governs the implemented Sprint 16 HTTP
+slice. One Runtime-owned Axum service binds during service startup, exposes only
+`GET /health/live` and `GET /health/ready`, derives readiness exclusively from
+the canonical Runtime lifecycle, and completes through ADR-0037 cancellation
+and task ownership. The default address is `127.0.0.1:3000`; callers can supply
+a typed override, including port zero, and observe the actual bound address
+without controlling the listener.
+
+Liveness returns `200` with `{"status":"alive"}` while the handler is
+reachable. Readiness returns `200` with `{"status":"ready"}` only during
+`Running`, and `503` with `{"status":"not_ready"}` during observable
+`Initializing` and `Stopping` states. Only GET is supported; registered wrong
+methods return `405` with `Allow: GET`, and unknown exact paths return `404`.
+The listener binds before startup acknowledgement, bind errors remain named
+service-start failures, and graceful shutdown releases the listener only after
+the Runtime-owned HTTP task completes.
+
+### Sprint 16 public evidence matrix
+
+The public `apps/runtime/tests/http_health.rs` target imports only the
+`oneagent_runtime` library surface and uses raw Tokio loopback TCP. Lifecycle
+watches and one-shot channels define asserted events; one-second timeouts are
+hang guards rather than timing evidence.
+
+| Contract | Public evidence |
+| --- | --- |
+| Lifecycle-derived readiness | Real requests return not-ready during gated `Initializing`, ready during `Running`, and not-ready during gated reverse cleanup in `Stopping`. |
+| Stable probe wire format | Liveness and readiness assert exact status, JSON media type, and closed single-field bodies. |
+| Exact negative matrix | HEAD and POST on both routes return `405`, `Allow: GET`, and empty bodies; unknown and trailing-slash paths return `404` with empty bodies. |
+| Startup failure | An occupied loopback address becomes named `ServiceStartFailed` for `http`, with no published address and terminal `Stopped`. |
+| Graceful shutdown and ownership | Requested shutdown retains the HTTP service until earlier reverse cleanup completes, then joins it, clears address observation, and permits rebind. |
+| Fresh repetition | Two separately built port-zero apps return equal wire responses and independently release every listener. |
 
 ### Sprint 15 public evidence matrix
 

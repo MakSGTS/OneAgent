@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::app::{App, Lifecycle, LifecycleState};
 use crate::config::{ConfigurationProvider, RuntimeConfig};
 use crate::error::RuntimeError;
+use crate::health::RuntimeHealth;
 use crate::service::{RuntimeService, ServiceContainerBuilder};
 use crate::state::AppState;
 
@@ -77,7 +78,8 @@ impl AppBuilder {
 
         self.lifecycle.transition_to(LifecycleState::Initializing)?;
 
-        let state = Arc::new(AppState::new(configuration));
+        let health = RuntimeHealth::new(self.lifecycle.subscribe());
+        let state = Arc::new(AppState::with_health(configuration, health));
         let services = self.services.build(Arc::clone(&state));
 
         Ok(App::new(state, self.lifecycle, services))
@@ -117,5 +119,10 @@ mod tests {
             application.state().configuration().application_name(),
             "OneAgent Runtime"
         );
+        assert_eq!(
+            application.state().health().snapshot().lifecycle(),
+            crate::LifecycleState::Initializing
+        );
+        assert!(!application.state().health().snapshot().is_ready());
     }
 }

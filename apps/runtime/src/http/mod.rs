@@ -1,4 +1,6 @@
-//! Runtime-owned HTTP health service.
+//! Runtime-owned HTTP health and Graph Query service.
+
+mod graph_query;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -13,12 +15,22 @@ use serde::Serialize;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
-use crate::{AppState, BoxError, RuntimeService, ServiceContext, ServiceStartFuture, ServiceTask};
+use crate::{
+    AppState, BoxError, GraphQueryService, RuntimeService, ServiceContext, ServiceStartFuture,
+    ServiceTask,
+};
+
+#[derive(Debug, Clone)]
+struct HttpRouterState {
+    app: Arc<AppState>,
+    graph_query: Option<GraphQueryService>,
+}
 
 /// Runtime service that owns the public HTTP listener and health routes.
 #[derive(Debug)]
 pub struct HttpService {
     bound_address: watch::Sender<Option<SocketAddr>>,
+    graph_query: Option<GraphQueryService>,
 }
 
 impl HttpService {
@@ -26,7 +38,20 @@ impl HttpService {
     #[must_use]
     pub fn new() -> Self {
         let (bound_address, _receiver) = watch::channel(None);
-        Self { bound_address }
+        Self {
+            bound_address,
+            graph_query: None,
+        }
+    }
+
+    /// Creates an unbound HTTP service with the complete Graph Query route set.
+    #[must_use]
+    pub fn with_graph_query(graph_query: GraphQueryService) -> Self {
+        let (bound_address, _receiver) = watch::channel(None);
+        Self {
+            bound_address,
+            graph_query: Some(graph_query),
+        }
     }
 
     /// Subscribes to the actual listener address selected during service startup.
@@ -45,17 +70,24 @@ impl Default for HttpService {
 impl RuntimeService for HttpService {
     fn start(self: Box<Self>, context: ServiceContext) -> ServiceStartFuture {
         Box::pin(async move {
+            let Self {
+                bound_address,
+                graph_query,
+            } = *self;
             let (state, mut cancellation) = context.into_parts();
             let listener = TcpListener::bind(state.configuration().http_bind_address()).await?;
             let actual_address = listener.local_addr()?;
-            let router = health_router(state);
-            self.bound_address.send_replace(Some(actual_address));
+            let router = http_router(HttpRouterState {
+                app: state,
+                graph_query,
+            });
+            bound_address.send_replace(Some(actual_address));
 
             let task: ServiceTask = Box::pin(async move {
                 let result = axum::serve(listener, router)
                     .with_graceful_shutdown(async move { cancellation.cancelled().await })
                     .await;
-                self.bound_address.send_replace(None);
+                bound_address.send_replace(None);
                 result.map_err(|error| Box::new(error) as BoxError)
             });
 
@@ -64,10 +96,14 @@ impl RuntimeService for HttpService {
     }
 }
 
-fn health_router(state: Arc<AppState>) -> Router {
-    Router::new()
+fn http_router(state: HttpRouterState) -> Router {
+    let mut router = Router::new()
         .route("/health/live", get_only(liveness_response))
-        .route("/health/ready", get_only(readiness_response))
+        .route("/health/ready", get_only(readiness_response));
+    if state.graph_query.is_some() {
+        router = router.merge(graph_query::routes());
+    }
+    router
         .layer(map_response(normalize_method_response))
         .with_state(state)
 }
@@ -103,8 +139,8 @@ async fn liveness_response() -> Json<HealthResponse> {
     Json(HealthResponse { status: "alive" })
 }
 
-async fn readiness_response(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let (status, value) = if state.health().snapshot().is_ready() {
+async fn readiness_response(State(state): State<HttpRouterState>) -> impl IntoResponse {
+    let (status, value) = if state.app.health().snapshot().is_ready() {
         (StatusCode::OK, "ready")
     } else {
         (StatusCode::SERVICE_UNAVAILABLE, "not_ready")
@@ -118,6 +154,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::convert::Infallible;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -125,7 +162,10 @@ mod tests {
     use tokio::sync::{oneshot, watch};
     use tokio::time::timeout;
 
-    use crate::{App, ConfigurationProvider, LifecycleState, RuntimeConfig, RuntimeErrorKind};
+    use crate::{
+        App, ConfigurationProvider, GraphQueryService, LifecycleState, RuntimeConfig,
+        RuntimeErrorKind, WorkspaceService,
+    };
 
     use super::HttpService;
 
@@ -137,6 +177,20 @@ mod tests {
     impl ConfigurationProvider for TestConfigurationProvider {
         fn load(&self) -> Result<RuntimeConfig, Box<dyn std::error::Error + Send + Sync>> {
             Ok(RuntimeConfig::new("OneAgent Runtime", "test").with_http_bind_address(self.address))
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct QueryConfigurationProvider {
+        address: SocketAddr,
+        workspace_root: PathBuf,
+    }
+
+    impl ConfigurationProvider for QueryConfigurationProvider {
+        fn load(&self) -> Result<RuntimeConfig, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(RuntimeConfig::new("OneAgent Runtime", "test")
+                .with_http_bind_address(self.address)
+                .with_workspace_root(self.workspace_root.clone()))
         }
     }
 
@@ -309,6 +363,130 @@ mod tests {
             .expect("HTTP Runtime shutdown must not hang")
             .expect("Runtime task must join")
             .expect("requested shutdown must succeed");
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn query_enabled_http_serves_all_routes_through_the_owned_listener() {
+        const CONFIGURATION_ID: &str = "408a41e7-907a-4fb3-8999-83d1e8b6e093";
+
+        let workspace = WorkspaceService::new();
+        let graph_query = GraphQueryService::new(workspace.snapshot_observer());
+        let http = HttpService::with_graph_query(graph_query);
+        let mut address = http.subscribe_bound_address();
+        let provider = QueryConfigurationProvider {
+            address: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            workspace_root: Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/workspace_service"),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("query test configuration must load")
+            .register_service("http", http)
+            .expect("HTTP service must register")
+            .register_service("workspace", workspace)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let mut lifecycle = app.subscribe_lifecycle();
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+        let actual_address = wait_for_address(&mut address).await;
+        wait_for_lifecycle(&mut lifecycle, LifecycleState::Running).await;
+
+        let configurations = request(actual_address, "GET", "/api/v1/configurations").await;
+        assert_eq!(configurations.status, 200);
+        assert_eq!(
+            configurations
+                .headers
+                .get("content-type")
+                .map(String::as_str),
+            Some("application/json")
+        );
+        let configurations: serde_json::Value = serde_json::from_str(&configurations.body)
+            .expect("configuration response must be JSON");
+        assert_eq!(
+            configurations["configurations"]
+                .as_array()
+                .expect("configurations must be an array")
+                .len(),
+            2
+        );
+
+        let node = request(
+            actual_address,
+            "GET",
+            &format!(
+                "/api/v1/graph/node?configuration_id={CONFIGURATION_ID}&node_id={CONFIGURATION_ID}"
+            ),
+        )
+        .await;
+        assert_eq!(node.status, 200);
+        let node: serde_json::Value =
+            serde_json::from_str(&node.body).expect("node response must be JSON");
+        assert_eq!(node["node"]["kind"], "metadata");
+        assert_eq!(node["node"]["metadata_kind"], "configuration");
+
+        let relations = request(
+            actual_address,
+            "GET",
+            &format!(
+                "/api/v1/graph/relations?configuration_id={CONFIGURATION_ID}&node_id={CONFIGURATION_ID}&direction=outgoing&edge_kind=contains&limit=1"
+            ),
+        )
+        .await;
+        assert_eq!(relations.status, 200);
+        let relations: serde_json::Value =
+            serde_json::from_str(&relations.body).expect("relation response must be JSON");
+        assert_eq!(relations["direction"], "outgoing");
+        assert_eq!(relations["edge_kind"], "contains");
+        assert_eq!(
+            relations["relations"]
+                .as_array()
+                .expect("relations must be an array")
+                .len(),
+            1
+        );
+
+        let traversal = request(
+            actual_address,
+            "GET",
+            &format!(
+                "/api/v1/graph/traverse?configuration_id={CONFIGURATION_ID}&node_id={CONFIGURATION_ID}&direction=outgoing&max_depth=0&include_start=true"
+            ),
+        )
+        .await;
+        assert_eq!(traversal.status, 200);
+        let traversal: serde_json::Value =
+            serde_json::from_str(&traversal.body).expect("traversal response must be JSON");
+        assert_eq!(traversal["nodes"][0]["node"]["id"], CONFIGURATION_ID);
+        assert_eq!(traversal["nodes"][0]["depth"], 0);
+        assert_eq!(
+            traversal["nodes"][0]["via_edge_id"],
+            serde_json::Value::Null
+        );
+
+        let malformed = request(
+            actual_address,
+            "GET",
+            "/api/v1/graph/node?configuration_id=value&node_id=%FF",
+        )
+        .await;
+        assert_eq!(malformed.status, 400);
+        assert_eq!(
+            malformed.body,
+            "{\"error\":{\"code\":\"invalid_query\",\"message\":\"query parameters are invalid\"}}"
+        );
+
+        shutdown_sender
+            .send(())
+            .expect("shutdown request must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("query-enabled Runtime shutdown must not hang")
+            .expect("Runtime task must join")
+            .expect("requested shutdown must succeed");
+        assert_eq!(*address.borrow(), None);
     }
 
     #[tokio::test]

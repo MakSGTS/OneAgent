@@ -45,6 +45,7 @@ technical workflows:
 - graph emission;
 - semantic index;
 - parser;
+- runtime service;
 - source adapter;
 - review.
 
@@ -99,6 +100,7 @@ docs/codex/
     implementation.md
     parser.md
     review.md
+    runtime-service.md
     semantic-index.md
     sequential-sprint-execution.md
     source-adapter.md
@@ -109,6 +111,7 @@ docs/codex/
     investigation.md
     parser-implementation.md
     review.md
+    runtime-service-implementation.md
     semantic-index-implementation.md
     source-adapter-implementation.md
   templates/
@@ -119,6 +122,7 @@ docs/codex/
     investigation-task.md
     parser-task.md
     review-task.md
+    runtime-service-task.md
     semantic-index-task.md
     sprint-execution-loop.md
     sprint-planning-task.md
@@ -208,6 +212,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
   tasks.
 - Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
   discovery, assembly, mapping, or cross-adapter conformance implementation.
+- Use `docs/codex/profiles/runtime-service-implementation.md` for long-running
+  service lifecycle, Runtime-owned concurrency, transport adapters, health, or
+  supported client implementation.
 - Use `docs/codex/profiles/architecture.md` for architecture-only work and ADRs.
 - Use `docs/codex/profiles/investigation.md` for read-only evidence gathering.
 - Use `docs/codex/profiles/review.md` for review-only tasks.
@@ -230,6 +237,8 @@ module composition.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
   adapter ingestion or cross-adapter conformance.
+- Use `docs/codex/templates/runtime-service-task.md` for Runtime service,
+  lifecycle, health, transport-adapter, observability, or supported client work.
 - Use `docs/codex/templates/architecture-task.md` for architecture output.
 - Use `docs/codex/templates/review-task.md` for review output.
 - Use `docs/codex/templates/sprint-planning-task.md` for a sprint kickoff,
@@ -257,6 +266,11 @@ Source adapter tasks orchestrate deterministic project discovery, artifact
 assembly, parsing, source-independent mapping, and cross-adapter conformance.
 They preserve parser separation and do not create an adapter-specific semantic
 authority.
+
+Runtime service tasks implement accepted long-running lifecycle, structured
+task ownership, cancellation, shutdown, health, transport, or supported client
+contracts. They keep composition, service execution, adapters, and clients in
+their accepted layers and do not select unresolved concurrency architecture.
 
 Graph model tasks change public graph representation or graph APIs. They must
 preserve deterministic identity and define validation/query impact.

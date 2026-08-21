@@ -201,22 +201,29 @@ cancels and joins the change source and any in-flight build, prevents a
 post-cancellation publication, clears the snapshot, and publishes terminal
 `Stopped` update status.
 
-### Sprint 19 public evidence matrix
+### Sprint 19 production and deterministic evidence matrix
 
 The public `apps/runtime/tests/file_watching.rs` target imports only the
 `oneagent_runtime` library surface, copies the tracked Sprint 17 fixture into
 fresh temporary roots, uses production polling/discovery/build paths, and
 queries the existing Graph Query API over raw Tokio loopback HTTP. Event watches
 are the asserted synchronization mechanism; five-second timeouts are hang
-guards rather than timing evidence.
+guards rather than timing evidence. Negative ignored-change and exact active-
+build concurrency assertions use the focused controlled-tick/gated-builder
+tests because ADR-0041 explicitly forbids treating the production polling period
+as a test oracle; those tests retain the real scanner or complete builder as the
+authority.
 
-| Contract | Public evidence |
+| Contract | Evidence |
 | --- | --- |
 | Both production formats | Exact EDT and Designer XML name changes trigger complete production rebuilds and become visible in separate snapshots and Graph Query responses. |
 | Atomic immutable replacement | A held pre-change `Arc` remains unchanged while later observations receive one valid replacement; Graph Query requests observe only complete published snapshots. |
 | Add/remove/rename-equivalent changes | Moving a Designer root outside the watched Workspace and back under a different root name proves removal and addition detection without a native rename event contract. |
+| Relevance and ignored state | Focused real-filesystem scans prove complete bytes, paths, entry kinds, and all five ignored-directory exclusions; a controlled production-service scan proves an ignored mutation leaves public update status unchanged. |
+| Burst and in-flight coalescing | Public status proves a mutation accepted after `Rebuilding` causes exactly one follow-up publication and a multi-entry project-tree addition causes one attempt; the focused gated builder proves one active build and one bounded latest-state follow-up. |
 | Failure retention and recovery | Corrupt EDT input reports a semantic-build failure while the last valid snapshot and query result remain available; a later repair publishes a recovered snapshot. |
-| Status and ownership | Public update status proves attempts, publications, phases, failure classification, recovery, terminal `Stopped`, snapshot cleanup, listener release, and equal fresh-run observations. |
+| Observation failure and readiness | Removing the watched root reports `Observation`, retains the queryable snapshot and exact ready health response, and publishes one recovered rebuild when the root returns. |
+| Status and ownership | Public update status proves attempts, publications, phases, failure classification, recovery, terminal `Stopped`, closed snapshot/update receivers, listener release, and equal fresh-run observations. |
 
 ### Sprint 16 public evidence matrix
 

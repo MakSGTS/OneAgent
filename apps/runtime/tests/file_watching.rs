@@ -150,6 +150,18 @@ async fn wait_for_snapshot(
     }
 }
 
+async fn wait_for_watch_closed<T>(receiver: &mut watch::Receiver<T>) {
+    loop {
+        match timeout(Duration::from_secs(5), receiver.changed())
+            .await
+            .expect("watch closure wait must not hang")
+        {
+            Ok(()) => {}
+            Err(_) => return,
+        }
+    }
+}
+
 fn configuration_names(snapshot: &WorkspaceSnapshot) -> Vec<String> {
     snapshot
         .configurations()
@@ -278,6 +290,11 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         "<Name>DNSWorldEdition</Name>",
         "<Name>DNSWorldWatched</Name>",
     );
+    let first_rebuild = wait_for_update(&mut updates, |status| {
+        status.phase() == WorkspaceUpdatePhase::Rebuilding
+            && status.attempt() == initial_status.attempt() + 1
+    })
+    .await;
     replace_exact(
         &root.path().join("edt/src/Configuration/Configuration.mdo"),
         "<name>WritesFixture</name>",
@@ -299,11 +316,22 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         wire_configuration_names(&configuration_list(address).await),
         ["DNSWorldWatched", "WritesWatched"]
     );
+    let followed_up = wait_for_update(&mut updates, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+            && status.attempt() == first_rebuild.attempt() + 1
+            && status.published() == initial_status.published() + 2
+    })
+    .await;
 
     let moved_designer = moved.path().join("designer");
     fs::rename(root.path().join("designer"), &moved_designer)
         .expect("Designer root removal must succeed");
     let removed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 1).await;
+    let removed_status = wait_for_update(&mut updates, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+            && status.published() == followed_up.published() + 1
+    })
+    .await;
     assert_eq!(
         removed.configurations()[0].configuration_id().as_str(),
         EDT_ID
@@ -316,6 +344,12 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     let renamed_designer = root.path().join("designer-renamed");
     fs::rename(&moved_designer, &renamed_designer).expect("Designer root addition must succeed");
     let renamed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    let renamed_status = wait_for_update(&mut updates, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+            && status.published() == removed_status.published() + 1
+    })
+    .await;
+    assert_eq!(renamed_status.attempt(), removed_status.attempt() + 1);
     let designer = renamed
         .configurations()
         .iter()
@@ -365,6 +399,36 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     assert!(recovered_status.attempt() > failed.attempt());
     assert_eq!(recovered_status.failure(), None);
 
+    let moved_workspace = moved.path().join("workspace");
+    fs::rename(root.path(), &moved_workspace).expect("Workspace root removal must succeed");
+    let observation_failed = wait_for_update(&mut updates, |status| {
+        status.phase() == WorkspaceUpdatePhase::Failed
+            && status.failure() == Some(WorkspaceUpdateFailureKind::Observation)
+    })
+    .await;
+    assert_eq!(observation_failed.attempt(), recovered_status.attempt());
+    assert_eq!(observation_failed.published(), recovered_status.published());
+    let readiness = request(address, "/health/ready").await;
+    assert_eq!(readiness.status, 200);
+    assert_eq!(readiness.body, r#"{"status":"ready"}"#);
+    assert_eq!(
+        wire_configuration_names(&configuration_list(address).await),
+        ["DNSWorldWatched", "WritesRecovered"]
+    );
+
+    fs::rename(&moved_workspace, root.path()).expect("Workspace root recovery must succeed");
+    let observation_recovered = wait_for_update(&mut updates, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+            && status.attempt() == observation_failed.attempt() + 1
+            && status.published() == observation_failed.published() + 1
+    })
+    .await;
+    assert_eq!(observation_recovered.failure(), None);
+    assert_eq!(
+        wire_configuration_names(&configuration_list(address).await),
+        ["DNSWorldWatched", "WritesRecovered"]
+    );
+
     shutdown_sender.send(()).expect("shutdown must be observed");
     timeout(Duration::from_secs(5), run)
         .await
@@ -377,6 +441,8 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         WorkspaceUpdatePhase::Stopped
     );
     assert!(observer.snapshot().is_none());
+    wait_for_watch_closed(&mut snapshots).await;
+    wait_for_watch_closed(&mut updates).await;
     assert_eq!(*addresses.borrow(), None);
     let rebound = TcpListener::bind(address)
         .await
@@ -424,6 +490,8 @@ async fn run_fresh_update_once() -> (Vec<String>, WorkspaceUpdateStatus) {
         .expect("Runtime task must join")
         .expect("requested shutdown must succeed");
     assert!(observer.snapshot().is_none());
+    wait_for_watch_closed(&mut snapshots).await;
+    wait_for_watch_closed(&mut updates).await;
     (configuration_names(&snapshot), status)
 }
 

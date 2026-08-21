@@ -188,6 +188,41 @@ pub struct SemanticReferenceRequest {
 }
 
 impl SemanticReferenceRequest {
+    /// Reconstructs a canonical terminal request from complete persisted evidence.
+    ///
+    /// This constructor accepts the combined provenance exposed by a completed
+    /// request. It deliberately does not guess the collection/resolution stage
+    /// split used by producer transitions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when identity, lifecycle, candidate, or provenance
+    /// invariants are not satisfied, or when `outcome` is not terminal.
+    #[allow(clippy::too_many_arguments)]
+    pub fn reconstruct_terminal(
+        source_node: EntityId,
+        category: SemanticReferenceCategory,
+        reference: SemanticReference,
+        expected_kinds: impl IntoIterator<Item = NodeKind>,
+        candidates: impl IntoIterator<Item = EntityId>,
+        state: ResolutionState,
+        outcome: SemanticReferenceRequestOutcome,
+        provenance: impl IntoIterator<Item = Provenance>,
+    ) -> Result<Self, SemanticReferenceRequestError> {
+        if outcome == SemanticReferenceRequestOutcome::Collected {
+            return Err(SemanticReferenceRequestError::NonTerminalReconstruction);
+        }
+        let identity =
+            ReferenceRequestIdentity::new(source_node, category, reference, expected_kinds)?;
+        Self::new(
+            identity,
+            candidates.into_iter().collect(),
+            state,
+            outcome,
+            provenance.into_iter().collect(),
+        )
+    }
+
     /// Creates an accepted unresolved request with collection provenance.
     ///
     /// # Errors
@@ -492,6 +527,8 @@ pub enum SemanticReferenceRequestError {
     MissingProvenance,
     /// Request provenance cannot use `NotApplicable` resolution state.
     NotApplicableProvenance,
+    /// Persisted complete builds may contain only terminal requests.
+    NonTerminalReconstruction,
     /// Stage provenance does not match the state produced by the stage.
     InvalidStageProvenance {
         /// Required stage resolution state.
@@ -552,6 +589,9 @@ impl Display for SemanticReferenceRequestError {
             }
             Self::NotApplicableProvenance => formatter
                 .write_str("semantic reference request provenance cannot be not applicable"),
+            Self::NonTerminalReconstruction => {
+                formatter.write_str("persisted semantic reference request must be terminal")
+            }
             Self::InvalidStageProvenance { expected, actual } => write!(
                 formatter,
                 "semantic reference request stage provenance is {actual:?}; expected {expected:?}"
@@ -1141,6 +1181,78 @@ mod tests {
         assert_eq!(
             invalid_owner.outcome(),
             SemanticReferenceRequestOutcome::InvalidOwnerReference
+        );
+    }
+
+    #[test]
+    fn terminal_reconstruction_preserves_normalized_complete_evidence() {
+        let produced = collected("source", "Target")
+            .into_resolved(
+                id("target"),
+                NodeKind::Metadata(MetadataKind::Catalog),
+                [provenance("resolver", ResolutionState::Resolved)],
+            )
+            .expect("resolution must succeed");
+        let reconstructed = SemanticReferenceRequest::reconstruct_terminal(
+            produced.source_node().clone(),
+            produced.category(),
+            produced.reference().clone(),
+            produced.expected_kinds().iter().rev().copied(),
+            produced.candidates().iter().rev().cloned(),
+            produced.state(),
+            produced.outcome(),
+            produced.provenance().iter().rev().cloned(),
+        )
+        .expect("complete terminal evidence must reconstruct");
+
+        assert_eq!(reconstructed, produced);
+        assert_eq!(reconstructed.id(), produced.id());
+    }
+
+    #[test]
+    fn terminal_reconstruction_rejects_non_terminal_and_invalid_evidence() {
+        assert_eq!(
+            SemanticReferenceRequest::reconstruct_terminal(
+                id("source"),
+                SemanticReferenceCategory::MetadataType,
+                SemanticReference::Name(name("Target")),
+                [NodeKind::Metadata(MetadataKind::Catalog)],
+                [],
+                ResolutionState::Unresolved,
+                SemanticReferenceRequestOutcome::Collected,
+                [provenance("collector", ResolutionState::Unresolved)],
+            ),
+            Err(SemanticReferenceRequestError::NonTerminalReconstruction)
+        );
+        assert_eq!(
+            SemanticReferenceRequest::reconstruct_terminal(
+                id("source"),
+                SemanticReferenceCategory::MetadataType,
+                SemanticReference::Name(name("Target")),
+                [NodeKind::Metadata(MetadataKind::Catalog)],
+                [],
+                ResolutionState::Resolved,
+                SemanticReferenceRequestOutcome::Resolved,
+                [provenance("resolver", ResolutionState::Resolved)],
+            ),
+            Err(SemanticReferenceRequestError::InvalidCandidateCount {
+                outcome: SemanticReferenceRequestOutcome::Resolved,
+                actual: 0,
+                required: "exactly one candidate",
+            })
+        );
+        assert_eq!(
+            SemanticReferenceRequest::reconstruct_terminal(
+                id("source"),
+                SemanticReferenceCategory::MetadataType,
+                SemanticReference::Name(name("Target")),
+                [NodeKind::Metadata(MetadataKind::Catalog)],
+                [id("target")],
+                ResolutionState::Resolved,
+                SemanticReferenceRequestOutcome::Resolved,
+                [],
+            ),
+            Err(SemanticReferenceRequestError::MissingProvenance)
         );
     }
 

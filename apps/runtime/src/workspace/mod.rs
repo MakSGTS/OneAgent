@@ -1,5 +1,7 @@
 //! Immutable Workspace semantic snapshots and deterministic initial builds.
 
+#[allow(dead_code)] // Task 4 integrates the completed private codec with storage.
+mod cache;
 mod change;
 mod graph_query;
 

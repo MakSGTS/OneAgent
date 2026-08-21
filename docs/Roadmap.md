@@ -4791,6 +4791,226 @@ and unrelated-change absence. Suggested planning commit message:
 Plan Sprint 19 File Watching
 ```
 
+#### Sprint 20 Persistent Cache execution plan
+
+Sprint 20 is planned from committed readiness head
+`9694d3e81f20376660ce67f1d64d002ffbabe92b`. The Sprint 19 integration
+review records `pass`, Sprint 20 is the unique `next` target, the working tree
+is clean, and the committed Persistent State Profile, Workflow, and Template
+close the required Codex Framework readiness stage. The tracked Runtime
+Workspace fixture, disposable temporary copies, complete-byte source state,
+canonical graph validation and Diff, public Graph Query observations, and
+macOS/Windows CI provide repository-owned codec, invalidation, corruption,
+recovery, lifecycle, and clean-rebuild test oracles.
+
+No accepted decision currently defines the persisted owner, complete payload,
+schema/version vocabulary, cache identity, invalidation inputs, filesystem
+location, replacement safety, compatibility, migration-by-rebuild behavior,
+corruption classification, recovery, Runtime integration, or observability.
+Investigation and ADR acceptance therefore precede implementation. Planning
+selects no format, fingerprint, checksum, storage path, replacement primitive,
+or new production dependency. Adding any production dependency remains gated
+on explicit user approval.
+
+##### Objective
+
+Persist complete validated Runtime Workspace semantic snapshots behind one
+versioned source-neutral cache boundary so an exact valid entry can be restored
+without adapter rebuilding, every incompatible, stale, corrupt, partial, or
+unverifiable entry is contained deterministically, source or semantic-contract
+changes trigger a clean rebuild, successful builds replace cache state safely,
+and cache hits, misses, recovery, file watching, Graph Query, lifecycle, health,
+shutdown, and repeated fresh runs have public cross-platform evidence.
+
+##### Included scope
+
+- repository-backed investigation of canonical snapshot content, graph
+  reconstruction and validation, source-state identity, Runtime configuration
+  and lifecycle, file-watcher relevance, filesystem behavior, dependencies,
+  fixtures, consumers, compatibility, and deterministic test seams;
+- an accepted ADR defining semantic authority, cache ownership, complete
+  persisted envelope/payload, schema and semantic-build versions, encoding,
+  ordering, identity, invalidation, load/write/replacement, corruption,
+  compatibility, migration-by-clean-rebuild, recovery, lifecycle,
+  observability, dependency, first-slice, and deferred-scope contracts;
+- a versioned source-neutral Workspace snapshot codec that round-trips every
+  accepted graph/payload/provenance/diagnostic/reference/report observation,
+  reconstructs through public invariants, validates before use, and rejects
+  malformed, partial, incompatible, or semantically invalid bytes;
+- deterministic cache storage and invalidation using the accepted complete
+  source-state and semantic-contract inputs, contained paths, safe complete
+  replacement, typed load/write outcomes, cleanup, and focused failure evidence;
+- Runtime startup and rebuild integration that publishes only a validated exact
+  hit or a complete clean build, persists successful initial and replacement
+  snapshots, preserves watcher coalescing and failure recovery, and never makes
+  cache state a second readiness or semantic authority;
+- public production evidence over tracked EDT and Designer XML inputs for cold
+  miss/write, warm hit without adapter rebuilding, source/contract invalidation,
+  corruption/incompatibility, write failure, clean-rebuild recovery, Graph Query
+  equivalence, file-change replacement, shutdown cleanup, and fresh repetition;
+- current-state documentation, complete workspace validation, integration
+  review, and conditional Sprint 19 prompt-suite retirement.
+
+##### Excluded scope
+
+- new graph facts, node/edge kinds, source parsing, adapter semantics, Coverage
+  transitions, public Graph Query or health wire changes, and mutable canonical
+  semantic authority;
+- incremental graph/index persistence, partial configuration publication,
+  per-file semantic repair, cache-based authorization, cross-process writers or
+  locking, remote/shared caches, compression, encryption, eviction, size or age
+  policy, user-facing cache management, supported CLI behavior owned by Sprint
+  21, and automatic migration from a historical schema that never existed;
+- stable cache-file compatibility beyond the accepted schema/version contract,
+  native filesystem notifications, Git/network workspaces, edit transactions,
+  dynamic configuration, restart, forced termination, authentication,
+  authorization, metrics/tracing export, benchmarks, and unsupported performance
+  or security claims.
+
+##### Sprint 20 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 20 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-20-persistent-cache/`. Every dependent task requires
+the preceding committed outcome. Stored prompts do not authorize commits;
+authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-19-file-watching/`, with these seven tracked files:
+`00-sprint-19-execution-loop.md`,
+`01-investigate-file-watching-boundary.md`,
+`02-define-file-watching-contract.md`,
+`03-implement-file-change-watching.md`,
+`04-integrate-workspace-rebuilds.md`,
+`05-complete-file-watching-evidence.md`, and
+`06-sprint-19-integration-review.md`. The tracked and filesystem inventories
+match and contain no untracked file at planning time. The suite remains
+untouched through Task 6. Only Task 7 may retire this exact inventory after a
+non-blocking review and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Persistent Cache boundary. | Investigation / investigation | Current snapshot, graph reconstruction/validation, source identity, Runtime lifecycle, filesystem, dependency, fixture, consumer, compatibility, and deterministic-test evidence with explicit ADR questions. | Accepted Sprint 20 planning baseline. | `Investigate Sprint 20 Persistent Cache` |
+| 2 | Define the Persistent Cache contract. | Architecture / architecture | Accepted ADR-0042 authority, schema, payload, identity, invalidation, storage, compatibility, corruption, recovery, lifecycle, dependency, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 20 Persistent Cache contract` |
+| 3 | Implement the Workspace snapshot cache codec. | Persistent State / persistent state | Accepted versioned complete snapshot encoding/decoding, invariant reconstruction, validation, deterministic bytes, and focused round-trip/rejection evidence. | Task 2. | `Implement Sprint 20 snapshot cache codec` |
+| 4 | Implement cache storage and deterministic invalidation. | Persistent State / persistent state | Accepted source/semantic validity identity, contained storage, complete replacement, typed hit/miss/rejection/write behavior, cleanup, and focused failure/recovery evidence. | Task 3. | `Implement Sprint 20 cache storage and invalidation` |
+| 5 | Integrate the Runtime cache lifecycle. | Persistent State plus Runtime Service / persistent state | Startup hit/miss/build/write orchestration, successful rebuild persistence, watcher compatibility, validated-only publication, lifecycle preservation, and focused integration evidence. | Task 4. | `Integrate Sprint 20 Runtime cache lifecycle` |
+| 6 | Complete public Persistent Cache evidence. | Persistent State plus Runtime Service / persistent state | Public cold/warm/invalidation/corruption/write-failure/recovery/watch/query/shutdown/repetition matrix and synchronized current-state docs. | Task 5. | `Complete Sprint 20 Persistent Cache evidence` |
+| 7 | Review the integrated Sprint 20 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 19 suite retirement, and Sprint 21 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 20 Persistent Cache review` |
+
+```text
+Committed Sprint 20 planning baseline
+    -> Task 1 Persistent Cache investigation
+    -> Task 2 accepted ADR-0042
+    -> Task 3 versioned complete snapshot codec
+    -> Task 4 deterministic storage and invalidation
+    -> Task 5 Runtime cache lifecycle integration
+    -> Task 6 public production evidence and current-state docs
+    -> Task 7 integration review and conditional Sprint 19 suite retirement
+    -> Sprint 21 planning eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only
+`docs/architecture/persistent-cache-investigation.md`. It records exact
+canonical snapshot content and construction invariants, graph/payload/
+provenance/diagnostic/request/report reconstruction surfaces, validation and
+clean-rebuild equivalence, complete-byte source identity, Runtime configuration
+and service ownership, watcher interactions, filesystem/dependency/platform
+constraints, fixture provenance, consumers, deterministic failure seams, and
+every decision ADR-0042 must make. It selects no format, identity algorithm,
+storage path, migration policy, or production dependency and changes no
+production behavior.
+
+Task 2 creates `docs/adr/0042-persistent-cache.md` and synchronizes only
+planning-level architecture text required by the decision. It fixes semantic
+authority and ownership, exact complete persisted content, schema/build version
+vocabulary, encoding and ordering, cache identity and invalidation inputs,
+path/storage/replacement behavior, hit/miss and typed failure classifications,
+compatibility, clean-rebuild migration, corruption containment, recovery,
+Runtime startup/rebuild/lifecycle/health/observer behavior, deterministic
+testing, dependency policy, first slice, rejected alternatives, and deferred
+scope. It implements no production behavior. If the accepted contract requires
+a new production dependency, Task 3 cannot change a manifest until explicit
+approval is available.
+
+Task 3 implements only the ADR-0042 complete Workspace snapshot codec with
+focused tests. It preserves every accepted configuration record, graph node,
+payload, edge, provenance, diagnostic, reference request/statistic, and report
+observation; reconstructs canonical domain values through checked APIs; rejects
+unknown versions, malformed/partial content, duplicate identities, invalid
+payloads/edges, invalid graphs, and inconsistent reports; and proves stable
+round-trip bytes and clean-build equivalence. It performs no filesystem I/O or
+Runtime publication.
+
+Task 4 implements only the accepted cache identity and filesystem store. It
+derives validity from complete accepted source and semantic-contract inputs,
+contains all paths under the accepted owner, reads only exact candidate entries,
+classifies missing/incompatible/corrupt/unreadable state, writes a complete
+validated entry through the accepted safe replacement procedure, handles
+interruption/failure deterministically, and proves invalidation, cleanup,
+recovery, and fresh repetition. It does not change Runtime startup, publication,
+watching, health, Graph Query, or current-state documentation.
+
+Task 5 connects the committed codec/store to the existing `WorkspaceService`.
+It closes source-scan/load/build/write races exactly as ADR-0042 accepts,
+publishes only a validated exact cache hit or complete clean build, writes after
+successful initial and replacement builds, preserves the last valid snapshot
+across recoverable cache/write/rebuild failures as accepted, keeps watcher
+coalescing and Graph Query single-snapshot observation stable, and preserves
+lifecycle-derived health and shutdown cleanup. It adds focused orchestration
+evidence but no HTTP or CLI cache surface.
+
+Task 6 exercises the public production boundary through tracked temporary EDT
+and Designer XML inputs, production source observation, cache load/write,
+Workspace publication, File Watching rebuilds, Graph Query API, and Runtime
+shutdown. It proves cold miss/write, warm hit without semantic adapter rebuild,
+source and semantic-version invalidation, incompatible/corrupt/partial entry
+handling, write failure, clean-build recovery, exact graph/evidence/query
+equivalence, cache replacement after change, cleanup, and equal fresh runs. It
+synchronizes README, Architecture, and Semantic Model current-state text but
+does not complete the sprint.
+
+Task 7 reviews the planning-through-Task-6 range and creates
+`docs/reviews/sprint-20-persistent-cache.md` only for `pass` or `pass with
+non-blocking follow-ups` after all focused and full validation succeeds. That
+decision transitions Sprint 20 to `completed`, makes Sprint 21 CLI Client the
+unique `next` target, and atomically retires the exact Sprint 19 suite in the
+same review commit. An inventory mismatch, endangered untracked file, or
+retained link dependency blocks retirement and the final commit. The review
+never silently fixes code.
+
+##### Sprint 20 state gates and completion criteria
+
+Sprint 20 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-6, accepted ADR-0042, one
+versioned source-neutral persisted-state authority below canonical
+`WorkspaceSnapshot`, complete deterministic encoding and validated
+reconstruction, exact validity and invalidation inputs, safe complete storage
+replacement, typed incompatibility/corruption/recovery behavior, startup and
+watch-rebuild integration, valid-hit and clean-build equivalence, public
+cross-platform production evidence, preserved graph/adapter/query/health
+semantics, explicit deferred scope, the complete workspace gate, and a
+non-blocking Task 7 decision. A blocked review keeps Sprint 20 incomplete,
+preserves the Sprint 19 suite, and leaves Sprint 21 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 20 Persistent Cache
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

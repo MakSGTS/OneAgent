@@ -142,6 +142,14 @@ Owns orchestration:
 * incremental rebuilds;
 * API exposure.
 
+ADR-0037 further assigns the accepted Sprint 15 long-running execution boundary
+to `oneagent-runtime`: the composition root registers uniquely named services,
+the application owns one built container, and the running container owns every
+top-level task and per-service cancellation source through deterministic reverse
+shutdown and complete join. This is an accepted implementation target, not a
+current support claim. It does not move graph meaning or source ingestion into
+Runtime, and it does not define the Sprint 16 HTTP health/readiness contract.
+
 ## Core principles
 
 ### Unified semantics

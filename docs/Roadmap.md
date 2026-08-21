@@ -29,7 +29,7 @@ The v0.2 boundary is closed with a `pass` decision in the
 [v0.2 release review](reviews/v0.2-release-review.md).
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
-Container is the unique `next` planning target.
+Container is `active`; no later sprint is eligible until its integration review.
 
 ## Roadmap reconciliation
 
@@ -215,7 +215,8 @@ Sprint 13 is completed under
 `pass` decision in the
 [Sprint 14 integration review](reviews/sprint-14-designer-xml-adapter.md). The
 [v0.3 release review](reviews/v0.3-release-review.md) also records `pass`, so
-Sprint 15 Runtime Service Container is the unique `next` planning target.
+Sprint 15 Runtime Service Container entered execution as the unique eligible
+target and is now `active`.
 
 #### Post-Sprint 13 correction — multiple Web Service XDTO packages
 
@@ -3797,7 +3798,7 @@ Plan Sprint 14 Designer XML adapter
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 15 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | next |
+| Sprint 15 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | active |
 | Sprint 16 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | planned |
 | Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | planned |
 | Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | planned |
@@ -3811,10 +3812,10 @@ The v0.4 release integration review follows Sprint 21.
 
 Sprint 15 is planned from committed readiness head
 `bac838be07bbf9b9686e60419397e91e702adec1`. The
-[v0.3 release review](reviews/v0.3-release-review.md) records `pass`, Sprint 15
-is the unique `next` target, and the required Runtime Services and APIs Codex
-Framework stage is committed. Sprint 16 remains ineligible until Sprint 15
-completes with a non-blocking integration review.
+[v0.3 release review](reviews/v0.3-release-review.md) records `pass`; Sprint 15
+was the unique `next` target at planning time, and the required Runtime Services
+and APIs Codex Framework stage is committed. Sprint 16 remains ineligible until
+Sprint 15 completes with a non-blocking integration review.
 
 The current `oneagent-runtime` is a binary-only composition foundation. ADR-0002
 assigns construction to `AppBuilder`, immutable shared state to `AppState`, and
@@ -3833,6 +3834,13 @@ contracts, cover every planned task. No further framework change is planned.
 Repository code, locked dependencies, macOS/Windows CI, and deterministic
 in-memory probe services provide sufficient data and test oracles; no external
 service, socket, fixture, or new dependency is required.
+
+Task 1 evidence is committed, and
+[ADR-0037](adr/0037-runtime-service-container.md) accepts the bounded service
+identity, ownership, startup, rollback, cancellation, shutdown, failure,
+lifecycle, public-library, and deterministic-test contracts. Sprint 15 is
+`active` but remains incomplete until Tasks 3-5 implement and prove the contract
+and Task 6 records a non-blocking integration review.
 
 ##### Sprint 15 objective
 

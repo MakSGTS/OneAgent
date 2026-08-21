@@ -47,3 +47,25 @@ The roadmap assigns future boundaries explicitly:
 
 Detailed accepted decisions live in `docs/adr`. The dependency-ordered delivery
 sequence and status live only in `docs/Roadmap.md`.
+
+## Accepted Runtime service-container boundary
+
+[ADR-0037](adr/0037-runtime-service-container.md) accepts the Sprint 15 target
+without claiming it is implemented yet. `oneagent-runtime` remains the
+composition root and will expose a transport-independent library boundary.
+`AppBuilder` owns ordered, uniquely named service registration; `App` owns the
+built container and lifecycle; the running container owns every service task
+handle and per-service cancellation source until all handles terminate.
+
+Services start sequentially in registration order and acknowledge startup by
+returning their owned task. Partial startup rolls acknowledged services back in
+reverse order. A requested shutdown, unexpected exit, service error, or task
+join failure triggers reverse cooperative cancellation and complete joining;
+the application reaches `Stopped` before returning its terminal result. The
+first slice has no detached tasks, global registry, new dependency, or bounded
+shutdown timeout.
+
+The public Runtime lifecycle and deterministic in-memory probe boundary are not
+an HTTP health/readiness contract. HTTP routes, schemas, status mapping, and
+client compatibility remain Sprint 16 work; workspace, graph, watcher,
+persistence, and CLI services remain Sprints 17-21.

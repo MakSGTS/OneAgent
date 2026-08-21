@@ -26,5 +26,6 @@ pub use workspace::{
     GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
     GraphQueryTraversalResult, GraphQueryWorkspaceFormat, WorkspaceBuildError,
     WorkspaceBuildErrorKind, WorkspaceConfigurationSnapshot, WorkspaceService, WorkspaceSnapshot,
-    WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
+    WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver, WorkspaceUpdateFailureKind,
+    WorkspaceUpdateObserver, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
 };

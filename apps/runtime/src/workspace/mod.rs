@@ -34,10 +34,16 @@ use tokio::sync::watch;
 use tokio::task::JoinError;
 
 use crate::{BoxError, RuntimeService, ServiceContext, ServiceStartFuture, ServiceTask};
+use change::{
+    RunningWorkspaceChangeSource, WorkspaceChangeOutcome, WorkspaceChangeSource,
+    WorkspaceChangeSourceError, WorkspaceFileState,
+};
 
 /// Stable source-neutral category for an initial Workspace build failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceBuildErrorKind {
+    /// The configured root could not be observed completely.
+    ObservationFailed,
     /// The configured root could not be discovered.
     DiscoveryFailed,
     /// A detector returned a source format outside the accepted first slice.
@@ -57,6 +63,13 @@ pub enum WorkspaceBuildErrorKind {
 /// Source-neutral error produced while constructing a complete Workspace snapshot.
 #[derive(Debug)]
 pub enum WorkspaceBuildError {
+    /// Filesystem observation failed for the configured root.
+    Observation {
+        /// Configured Workspace root.
+        root_path: PathBuf,
+        /// Original observation error.
+        source: BoxError,
+    },
     /// Discovery failed for the configured root.
     Discovery {
         /// Configured Workspace root.
@@ -121,6 +134,7 @@ impl WorkspaceBuildError {
     #[must_use]
     pub const fn kind(&self) -> WorkspaceBuildErrorKind {
         match self {
+            Self::Observation { .. } => WorkspaceBuildErrorKind::ObservationFailed,
             Self::Discovery { .. } => WorkspaceBuildErrorKind::DiscoveryFailed,
             Self::UnsupportedFormat { .. } => WorkspaceBuildErrorKind::UnsupportedFormat,
             Self::SemanticBuild { .. } => WorkspaceBuildErrorKind::SemanticBuildFailed,
@@ -139,7 +153,8 @@ impl WorkspaceBuildError {
     #[must_use]
     pub fn root_path(&self) -> &Path {
         match self {
-            Self::Discovery { root_path, .. }
+            Self::Observation { root_path, .. }
+            | Self::Discovery { root_path, .. }
             | Self::UnsupportedFormat { root_path, .. }
             | Self::SemanticBuild { root_path, .. }
             | Self::GraphValidation { root_path, .. }
@@ -157,7 +172,8 @@ impl WorkspaceBuildError {
             | Self::SemanticBuild { format, .. }
             | Self::GraphValidation { format, .. }
             | Self::InvalidConfigurationCardinality { format, .. } => Some(*format),
-            Self::Discovery { .. }
+            Self::Observation { .. }
+            | Self::Discovery { .. }
             | Self::DuplicateConfigurationIdentity { .. }
             | Self::BuildTask { .. } => None,
         }
@@ -187,6 +203,11 @@ impl WorkspaceBuildError {
 impl Display for WorkspaceBuildError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Observation { root_path, source } => write!(
+                formatter,
+                "Workspace observation failed for {}: {source}",
+                root_path.display()
+            ),
             Self::Discovery { root_path, source } => write!(
                 formatter,
                 "Workspace discovery failed for {}: {source}",
@@ -247,6 +268,7 @@ impl Display for WorkspaceBuildError {
 impl Error for WorkspaceBuildError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Observation { source, .. } => Some(source.as_ref()),
             Self::Discovery { source, .. } | Self::SemanticBuild { source, .. } => {
                 Some(source.as_ref())
             }
@@ -256,6 +278,125 @@ impl Error for WorkspaceBuildError {
             | Self::InvalidConfigurationCardinality { .. }
             | Self::DuplicateConfigurationIdentity { .. } => None,
         }
+    }
+}
+
+/// Stable transport-neutral phase of Runtime Workspace update orchestration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceUpdatePhase {
+    /// Initial observation and complete build have not finished.
+    Starting,
+    /// The latest complete build is published and filesystem changes are observed.
+    Watching,
+    /// A complete replacement build is running.
+    Rebuilding,
+    /// The latest observation or rebuild attempt failed recoverably.
+    Failed,
+    /// Runtime-owned observation and publication have stopped.
+    Stopped,
+}
+
+/// Stable source-neutral category for a recoverable Workspace update failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceUpdateFailureKind {
+    /// A complete filesystem observation failed.
+    Observation,
+    /// Workspace discovery failed.
+    Discovery,
+    /// Discovery returned an unsupported format.
+    UnsupportedFormat,
+    /// A production semantic build failed.
+    SemanticBuild,
+    /// A graph failed validation.
+    GraphValidation,
+    /// A graph had invalid Configuration cardinality.
+    InvalidConfigurationCardinality,
+    /// Two roots produced the same Configuration identity.
+    DuplicateConfigurationIdentity,
+    /// A blocking complete-build task failed to join.
+    BuildTask,
+}
+
+impl From<WorkspaceBuildErrorKind> for WorkspaceUpdateFailureKind {
+    fn from(kind: WorkspaceBuildErrorKind) -> Self {
+        match kind {
+            WorkspaceBuildErrorKind::ObservationFailed => Self::Observation,
+            WorkspaceBuildErrorKind::DiscoveryFailed => Self::Discovery,
+            WorkspaceBuildErrorKind::UnsupportedFormat => Self::UnsupportedFormat,
+            WorkspaceBuildErrorKind::SemanticBuildFailed => Self::SemanticBuild,
+            WorkspaceBuildErrorKind::GraphValidationFailed => Self::GraphValidation,
+            WorkspaceBuildErrorKind::InvalidConfigurationCardinality => {
+                Self::InvalidConfigurationCardinality
+            }
+            WorkspaceBuildErrorKind::DuplicateConfigurationIdentity => {
+                Self::DuplicateConfigurationIdentity
+            }
+            WorkspaceBuildErrorKind::BuildTaskFailed => Self::BuildTask,
+        }
+    }
+}
+
+/// Immutable observable state of Runtime Workspace update orchestration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorkspaceUpdateStatus {
+    attempt: u64,
+    published: u64,
+    phase: WorkspaceUpdatePhase,
+    failure: Option<WorkspaceUpdateFailureKind>,
+}
+
+impl WorkspaceUpdateStatus {
+    const fn starting() -> Self {
+        Self {
+            attempt: 0,
+            published: 0,
+            phase: WorkspaceUpdatePhase::Starting,
+            failure: None,
+        }
+    }
+
+    /// Returns the number of started initial or replacement build attempts.
+    #[must_use]
+    pub const fn attempt(self) -> u64 {
+        self.attempt
+    }
+
+    /// Returns the number of complete snapshots published by this service.
+    #[must_use]
+    pub const fn published(self) -> u64 {
+        self.published
+    }
+
+    /// Returns the current update phase.
+    #[must_use]
+    pub const fn phase(self) -> WorkspaceUpdatePhase {
+        self.phase
+    }
+
+    /// Returns the latest recoverable failure kind only while the phase is `Failed`.
+    #[must_use]
+    pub const fn failure(self) -> Option<WorkspaceUpdateFailureKind> {
+        self.failure
+    }
+}
+
+/// Cloneable transport-neutral observation of Workspace update status.
+#[derive(Debug, Clone)]
+pub struct WorkspaceUpdateObserver {
+    status: watch::Receiver<WorkspaceUpdateStatus>,
+}
+
+impl WorkspaceUpdateObserver {
+    /// Returns the current immutable update status.
+    #[must_use]
+    pub fn status(&self) -> WorkspaceUpdateStatus {
+        *self.status.borrow()
+    }
+
+    /// Creates an owned subscription to future update status changes.
+    #[must_use]
+    pub fn subscribe(&self) -> watch::Receiver<WorkspaceUpdateStatus> {
+        self.status.clone()
     }
 }
 
@@ -284,6 +425,9 @@ impl WorkspaceSnapshotObserver {
 pub struct WorkspaceService<D = FileSystemWorkspaceDetector> {
     builder: WorkspaceSnapshotBuilder<D>,
     snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
+    updates: watch::Sender<WorkspaceUpdateStatus>,
+    #[cfg(test)]
+    controlled_change_ticks: Option<tokio::sync::mpsc::Receiver<tokio::sync::oneshot::Sender<()>>>,
 }
 
 impl WorkspaceService<FileSystemWorkspaceDetector> {
@@ -297,7 +441,14 @@ impl WorkspaceService<FileSystemWorkspaceDetector> {
 impl<D> WorkspaceService<D> {
     fn with_builder(builder: WorkspaceSnapshotBuilder<D>) -> Self {
         let (snapshot, _receiver) = watch::channel(None);
-        Self { builder, snapshot }
+        let (updates, _receiver) = watch::channel(WorkspaceUpdateStatus::starting());
+        Self {
+            builder,
+            snapshot,
+            updates,
+            #[cfg(test)]
+            controlled_change_ticks: None,
+        }
     }
 
     /// Creates a cloneable observer before this service is registered.
@@ -306,6 +457,23 @@ impl<D> WorkspaceService<D> {
         WorkspaceSnapshotObserver {
             snapshot: self.snapshot.subscribe(),
         }
+    }
+
+    /// Creates a cloneable update-status observer before this service is registered.
+    #[must_use]
+    pub fn update_observer(&self) -> WorkspaceUpdateObserver {
+        WorkspaceUpdateObserver {
+            status: self.updates.subscribe(),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_controlled_change_ticks(
+        mut self,
+        ticks: tokio::sync::mpsc::Receiver<tokio::sync::oneshot::Sender<()>>,
+    ) -> Self {
+        self.controlled_change_ticks = Some(ticks);
+        self
     }
 }
 
@@ -317,7 +485,7 @@ impl Default for WorkspaceService<FileSystemWorkspaceDetector> {
 
 impl<D> RuntimeService for WorkspaceService<D>
 where
-    D: WorkspaceDetector + Send + 'static,
+    D: WorkspaceDetector + Clone + Send + 'static,
 {
     fn start(self: Box<Self>, context: ServiceContext) -> ServiceStartFuture {
         Box::pin(async move {
@@ -326,26 +494,262 @@ where
                 .configuration()
                 .workspace_root()
                 .to_path_buf();
+            let WorkspaceService {
+                builder,
+                snapshot,
+                updates,
+                #[cfg(test)]
+                controlled_change_ticks,
+            } = *self;
+            updates.send_replace(WorkspaceUpdateStatus {
+                attempt: 1,
+                published: 0,
+                phase: WorkspaceUpdatePhase::Starting,
+                failure: None,
+            });
+
+            let initial_root = root_path.clone();
+            let initial_builder = builder.clone();
             let error_root = root_path.clone();
-            let builder = self.builder;
-            let snapshot = tokio::task::spawn_blocking(move || builder.build(&root_path))
+            let (baseline_state, initial_snapshot, post_build_state) =
+                tokio::task::spawn_blocking(move || {
+                    let baseline_state = WorkspaceFileState::scan(&initial_root);
+                    let snapshot = initial_builder.build(&initial_root)?;
+                    let baseline_state =
+                        baseline_state.map_err(|source| WorkspaceBuildError::Observation {
+                            root_path: initial_root.clone(),
+                            source: Box::new(source),
+                        })?;
+                    let post_build_state = observe_workspace(&initial_root)?;
+                    Ok::<_, WorkspaceBuildError>((baseline_state, snapshot, post_build_state))
+                })
                 .await
                 .map_err(|source| WorkspaceBuildError::BuildTask {
                     root_path: error_root,
                     source,
                 })?
                 .map_err(|error| Box::new(error) as BoxError)?;
-            self.snapshot.send_replace(Some(Arc::new(snapshot)));
+            snapshot.send_replace(Some(Arc::new(initial_snapshot)));
+            updates.send_replace(WorkspaceUpdateStatus {
+                attempt: 1,
+                published: 1,
+                phase: WorkspaceUpdatePhase::Watching,
+                failure: None,
+            });
 
-            let mut cancellation = context.cancellation();
-            let snapshot = self.snapshot;
+            #[cfg(test)]
+            let source = if let Some(ticks) = controlled_change_ticks {
+                WorkspaceChangeSource::with_controlled_ticks(
+                    root_path.clone(),
+                    post_build_state.clone(),
+                    ticks,
+                )
+            } else {
+                WorkspaceChangeSource::new(root_path.clone(), post_build_state.clone())
+            };
+            #[cfg(not(test))]
+            let source = WorkspaceChangeSource::new(root_path.clone(), post_build_state.clone());
+
+            let cancellation = context.cancellation();
+            let source = source
+                .with_initial_change(baseline_state != post_build_state)
+                .start(cancellation.clone());
+
             let task: ServiceTask = Box::pin(async move {
-                cancellation.cancelled().await;
-                snapshot.send_replace(None);
-                Ok(())
+                run_workspace_updates(builder, root_path, snapshot, updates, cancellation, source)
+                    .await
+                    .map_err(|error| Box::new(error) as BoxError)
             });
             Ok(task)
         })
+    }
+}
+
+fn observe_workspace(root_path: &Path) -> Result<WorkspaceFileState, WorkspaceBuildError> {
+    WorkspaceFileState::scan(root_path).map_err(|source| WorkspaceBuildError::Observation {
+        root_path: root_path.to_path_buf(),
+        source: Box::new(source),
+    })
+}
+
+#[derive(Debug)]
+enum WorkspaceUpdateRuntimeError {
+    ChangeSourceStopped,
+    ChangeSource(WorkspaceChangeSourceError),
+    ChangeSourceTask(JoinError),
+    StatusCounterOverflow,
+}
+
+impl Display for WorkspaceUpdateRuntimeError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ChangeSourceStopped => {
+                formatter.write_str("Workspace change source stopped before cancellation")
+            }
+            Self::ChangeSource(error) => {
+                write!(formatter, "Workspace change source failed: {error}")
+            }
+            Self::ChangeSourceTask(error) => {
+                write!(formatter, "Workspace change source task failed: {error}")
+            }
+            Self::StatusCounterOverflow => {
+                formatter.write_str("Workspace update status counter overflowed")
+            }
+        }
+    }
+}
+
+impl Error for WorkspaceUpdateRuntimeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::ChangeSource(error) => Some(error),
+            Self::ChangeSourceTask(error) => Some(error),
+            Self::ChangeSourceStopped | Self::StatusCounterOverflow => None,
+        }
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the select loop keeps source, build, cancellation, and publication ownership together"
+)]
+async fn run_workspace_updates<D>(
+    builder: WorkspaceSnapshotBuilder<D>,
+    root_path: PathBuf,
+    snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
+    updates: watch::Sender<WorkspaceUpdateStatus>,
+    mut cancellation: crate::Cancellation,
+    source: RunningWorkspaceChangeSource,
+) -> Result<(), WorkspaceUpdateRuntimeError>
+where
+    D: WorkspaceDetector + Clone + Send + 'static,
+{
+    let (mut observations, mut source_task) = source.into_parts();
+    let mut processed_revision = 0_u64;
+    let mut status = *updates.borrow();
+
+    loop {
+        let observation = *observations.borrow_and_update();
+        if observation.revision() > processed_revision {
+            processed_revision = observation.revision();
+            match observation.outcome() {
+                Some(WorkspaceChangeOutcome::Changed) => {
+                    status.attempt = status
+                        .attempt
+                        .checked_add(1)
+                        .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
+                    status.phase = WorkspaceUpdatePhase::Rebuilding;
+                    status.failure = None;
+                    updates.send_replace(status);
+
+                    let build_root = root_path.clone();
+                    let build_builder = builder.clone();
+                    let mut build =
+                        tokio::task::spawn_blocking(move || build_builder.build(&build_root));
+                    let build_result = tokio::select! {
+                        biased;
+                        () = cancellation.cancelled() => {
+                            let _ = (&mut build).await;
+                            let source_result = source_task.await;
+                            return finish_workspace_updates(
+                                &snapshot,
+                                &updates,
+                                source_result,
+                                true,
+                            );
+                        }
+                        source_result = &mut source_task => {
+                            let _ = (&mut build).await;
+                            return finish_workspace_updates(
+                                &snapshot,
+                                &updates,
+                                source_result,
+                                false,
+                            );
+                        }
+                        result = &mut build => result,
+                    };
+
+                    match build_result {
+                        Ok(Ok(rebuilt)) => {
+                            snapshot.send_replace(Some(Arc::new(rebuilt)));
+                            status.published = status
+                                .published
+                                .checked_add(1)
+                                .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
+                            status.phase = WorkspaceUpdatePhase::Watching;
+                            status.failure = None;
+                        }
+                        Ok(Err(error)) => {
+                            status.phase = WorkspaceUpdatePhase::Failed;
+                            status.failure = Some(error.kind().into());
+                        }
+                        Err(_) => {
+                            status.phase = WorkspaceUpdatePhase::Failed;
+                            status.failure = Some(WorkspaceUpdateFailureKind::BuildTask);
+                        }
+                    }
+                    updates.send_replace(status);
+                    continue;
+                }
+                Some(WorkspaceChangeOutcome::ObservationFailed(_)) => {
+                    status.phase = WorkspaceUpdatePhase::Failed;
+                    status.failure = Some(WorkspaceUpdateFailureKind::Observation);
+                    updates.send_replace(status);
+                    continue;
+                }
+                None => {}
+            }
+        }
+
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => {
+                let source_result = source_task.await;
+                return finish_workspace_updates(&snapshot, &updates, source_result, true);
+            }
+            source_result = &mut source_task => {
+                return finish_workspace_updates(
+                    &snapshot,
+                    &updates,
+                    source_result,
+                    false,
+                );
+            }
+            changed = observations.changed() => {
+                if changed.is_err() {
+                    let source_result = source_task.await;
+                    return finish_workspace_updates(
+                        &snapshot,
+                        &updates,
+                        source_result,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn finish_workspace_updates(
+    snapshot: &watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
+    updates: &watch::Sender<WorkspaceUpdateStatus>,
+    source_result: Result<Result<(), WorkspaceChangeSourceError>, JoinError>,
+    expected_stop: bool,
+) -> Result<(), WorkspaceUpdateRuntimeError> {
+    snapshot.send_replace(None);
+    let status = *updates.borrow();
+    updates.send_replace(WorkspaceUpdateStatus {
+        phase: WorkspaceUpdatePhase::Stopped,
+        failure: None,
+        ..status
+    });
+
+    match source_result {
+        Ok(Ok(())) if expected_stop => Ok(()),
+        Ok(Ok(())) => Err(WorkspaceUpdateRuntimeError::ChangeSourceStopped),
+        Ok(Err(error)) => Err(WorkspaceUpdateRuntimeError::ChangeSource(error)),
+        Err(error) => Err(WorkspaceUpdateRuntimeError::ChangeSourceTask(error)),
     }
 }
 
@@ -661,18 +1065,21 @@ mod tests {
     use std::fs;
     use std::future::pending;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use oneagent_workspace::WorkspaceFormat;
     use tempfile::tempdir;
-    use tokio::sync::{oneshot, watch};
+    use tokio::sync::{mpsc, oneshot, watch};
     use tokio::time::timeout;
 
     use crate::{App, ConfigurationProvider, LifecycleState, RuntimeConfig, RuntimeErrorKind};
 
     use super::{
         DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceDetector, WorkspaceService,
-        WorkspaceSnapshot, WorkspaceSnapshotBuilder,
+        WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
+        WorkspaceUpdatePhase, WorkspaceUpdateStatus,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -697,6 +1104,13 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     struct PanickingDetector;
 
+    #[derive(Debug, Clone)]
+    struct GatedDetector {
+        calls: Arc<AtomicUsize>,
+        second_started: std::sync::mpsc::Sender<()>,
+        second_release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
+    }
+
     impl WorkspaceDetector for PanickingDetector {
         fn discover(
             &self,
@@ -714,6 +1128,27 @@ mod tests {
         ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
         {
             Ok(self.projects.clone())
+        }
+    }
+
+    impl WorkspaceDetector for GatedDetector {
+        fn discover(
+            &self,
+            _root: &std::path::Path,
+        ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
+        {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+            if call == 2 {
+                self.second_started
+                    .send(())
+                    .expect("second build start must be observed");
+                self.second_release
+                    .lock()
+                    .expect("build release lock must remain available")
+                    .recv()
+                    .expect("second build must be released");
+            }
+            Ok(Vec::new())
         }
     }
 
@@ -751,6 +1186,34 @@ mod tests {
                 .expect("lifecycle wait must not hang")
                 .expect("Runtime must retain lifecycle ownership");
         }
+    }
+
+    async fn wait_for_update(
+        updates: &mut watch::Receiver<WorkspaceUpdateStatus>,
+        predicate: impl Fn(WorkspaceUpdateStatus) -> bool,
+    ) -> WorkspaceUpdateStatus {
+        loop {
+            let status = *updates.borrow_and_update();
+            if predicate(status) {
+                return status;
+            }
+            timeout(Duration::from_secs(1), updates.changed())
+                .await
+                .expect("Workspace update wait must not hang")
+                .expect("Workspace service must retain update ownership");
+        }
+    }
+
+    async fn scan_once(ticks: &mpsc::Sender<oneshot::Sender<()>>) {
+        let (acknowledgement, acknowledged) = oneshot::channel();
+        ticks
+            .send(acknowledgement)
+            .await
+            .expect("controlled Workspace scan must be accepted");
+        timeout(Duration::from_secs(1), acknowledged)
+            .await
+            .expect("controlled Workspace scan must not hang")
+            .expect("controlled Workspace scan must acknowledge completion");
     }
 
     fn edt_configuration(id: &str, name: &str) -> String {
@@ -1053,5 +1516,222 @@ mod tests {
         assert_eq!(source.kind(), WorkspaceBuildErrorKind::BuildTaskFailed);
         assert!(std::error::Error::source(source).is_some());
         assert!(observer.snapshot().is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_service_rebuilds_on_changes_and_ignores_confirmed_directories() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        fs::create_dir(root.path().join(".git")).expect("ignored directory must be created");
+        fs::write(root.path().join(".git/transient"), b"initial")
+            .expect("ignored source must be created");
+        let (ticks, controlled_ticks) = mpsc::channel(8);
+        let service = WorkspaceService::new().with_controlled_change_ticks(controlled_ticks);
+        let observer = service.snapshot_observer();
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+
+        let initial = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching
+        })
+        .await;
+        assert_eq!(initial.attempt(), 1);
+        assert_eq!(initial.published(), 1);
+        assert_eq!(initial.failure(), None);
+
+        fs::write(root.path().join("changed.bsl"), b"first")
+            .expect("relevant source must be created");
+        scan_once(&ticks).await;
+        let rebuilt = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 2
+        })
+        .await;
+        assert_eq!(rebuilt.attempt(), 2);
+        assert_eq!(
+            observer
+                .snapshot()
+                .expect("snapshot must remain published")
+                .len(),
+            0
+        );
+
+        let before_ignored_change = updates.status();
+        fs::write(root.path().join(".git/transient"), b"ignored")
+            .expect("ignored source must be created");
+        scan_once(&ticks).await;
+        assert_eq!(updates.status(), before_ignored_change);
+
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+        assert_eq!(updates.status().phase(), WorkspaceUpdatePhase::Stopped);
+        assert!(observer.snapshot().is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_service_retains_valid_snapshot_and_recovers_after_invalid_build() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let edt = root.path().join("edt");
+        let configuration_id = "11111111-0000-0000-0000-000000000000";
+        write_edt(&edt, configuration_id, "Initial");
+        let (ticks, controlled_ticks) = mpsc::channel(8);
+        let service = WorkspaceService::new().with_controlled_change_ticks(controlled_ticks);
+        let observer = service.snapshot_observer();
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+        wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching
+        })
+        .await;
+        let initial = observer
+            .snapshot()
+            .expect("initial snapshot must be published");
+        assert_eq!(
+            initial.configurations()[0].configuration_name().as_str(),
+            "Initial"
+        );
+
+        fs::write(edt.join("src/Configuration/Configuration.mdo"), "<broken>")
+            .expect("invalid source must be written");
+        scan_once(&ticks).await;
+        let failed = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Failed
+        })
+        .await;
+        assert_eq!(failed.attempt(), 2);
+        assert_eq!(failed.published(), 1);
+        assert_eq!(
+            failed.failure(),
+            Some(WorkspaceUpdateFailureKind::SemanticBuild)
+        );
+        assert_eq!(
+            observer
+                .snapshot()
+                .expect("valid snapshot must be retained")
+                .configurations()[0]
+                .configuration_name()
+                .as_str(),
+            "Initial"
+        );
+
+        write_edt(&edt, configuration_id, "Recovered");
+        scan_once(&ticks).await;
+        let recovered = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 2
+        })
+        .await;
+        assert_eq!(recovered.attempt(), 3);
+        assert_eq!(recovered.failure(), None);
+        assert_eq!(
+            observer
+                .snapshot()
+                .expect("recovered snapshot must be published")
+                .configurations()[0]
+                .configuration_name()
+                .as_str(),
+            "Recovered"
+        );
+
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+    }
+
+    #[tokio::test]
+    async fn workspace_service_coalesces_changes_during_one_serialized_build() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (second_started_sender, second_started) = std::sync::mpsc::channel();
+        let (second_release, second_release_receiver) = std::sync::mpsc::channel();
+        let detector = GatedDetector {
+            calls: Arc::clone(&calls),
+            second_started: second_started_sender,
+            second_release: Arc::new(Mutex::new(second_release_receiver)),
+        };
+        let (ticks, controlled_ticks) = mpsc::channel(8);
+        let service =
+            WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(detector))
+                .with_controlled_change_ticks(controlled_ticks);
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+        wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching
+        })
+        .await;
+
+        fs::write(root.path().join("first.bsl"), b"first").expect("first change must be written");
+        scan_once(&ticks).await;
+        timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || second_started.recv()),
+        )
+        .await
+        .expect("second build must start")
+        .expect("second-build observer must join")
+        .expect("second-build start must be observed");
+
+        fs::write(root.path().join("second.bsl"), b"second")
+            .expect("second change must be written");
+        scan_once(&ticks).await;
+        fs::write(root.path().join("third.bsl"), b"third").expect("third change must be written");
+        scan_once(&ticks).await;
+        second_release
+            .send(())
+            .expect("second build must be released");
+
+        let coalesced = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 3
+        })
+        .await;
+        assert_eq!(coalesced.attempt(), 3);
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
     }
 }

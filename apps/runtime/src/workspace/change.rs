@@ -1,10 +1,5 @@
 //! Runtime-owned portable Workspace filesystem change observation.
 
-#![allow(
-    dead_code,
-    reason = "the accepted source boundary is consumed by the following rebuild task"
-)]
-
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -255,6 +250,7 @@ pub(super) struct WorkspaceChangeSource {
     root_path: PathBuf,
     state: WorkspaceFileState,
     ticks: ScanTicks,
+    initial_change: bool,
 }
 
 impl WorkspaceChangeSource {
@@ -265,11 +261,42 @@ impl WorkspaceChangeSource {
             root_path,
             state,
             ticks: ScanTicks::Interval(interval),
+            initial_change: false,
+        }
+    }
+
+    pub(super) const fn with_initial_change(mut self, initial_change: bool) -> Self {
+        self.initial_change = initial_change;
+        self
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_controlled_ticks(
+        root_path: PathBuf,
+        state: WorkspaceFileState,
+        ticks: tokio::sync::mpsc::Receiver<tokio::sync::oneshot::Sender<()>>,
+    ) -> Self {
+        Self {
+            root_path,
+            state,
+            ticks: ScanTicks::Controlled {
+                ticks,
+                acknowledgement: None,
+            },
+            initial_change: false,
         }
     }
 
     pub(super) fn start(self, mut cancellation: Cancellation) -> RunningWorkspaceChangeSource {
-        let (observations, receiver) = watch::channel(WorkspaceChangeObservation::initial());
+        let initial_observation = if self.initial_change {
+            WorkspaceChangeObservation {
+                revision: 1,
+                outcome: Some(WorkspaceChangeOutcome::Changed),
+            }
+        } else {
+            WorkspaceChangeObservation::initial()
+        };
+        let (observations, receiver) = watch::channel(initial_observation);
         let task = tokio::spawn(async move {
             self.run(async move { cancellation.cancelled().await }, observations)
                 .await
@@ -289,7 +316,7 @@ impl WorkspaceChangeSource {
         F: Future<Output = ()>,
     {
         tokio::pin!(shutdown);
-        let mut revision = 0_u64;
+        let mut revision = u64::from(self.initial_change);
         let mut failed = false;
 
         loop {
@@ -338,14 +365,13 @@ pub(super) struct RunningWorkspaceChangeSource {
 }
 
 impl RunningWorkspaceChangeSource {
-    pub(super) fn observations(&self) -> watch::Receiver<WorkspaceChangeObservation> {
-        self.observations.clone()
-    }
-
-    pub(super) async fn join(
+    pub(super) fn into_parts(
         self,
-    ) -> Result<Result<(), WorkspaceChangeSourceError>, tokio::task::JoinError> {
-        self.task.await
+    ) -> (
+        watch::Receiver<WorkspaceChangeObservation>,
+        JoinHandle<Result<(), WorkspaceChangeSourceError>>,
+    ) {
+        (self.observations, self.task)
     }
 }
 
@@ -416,6 +442,7 @@ mod tests {
                     ticks: receiver,
                     acknowledgement: None,
                 },
+                initial_change: false,
             },
             ticks,
         )

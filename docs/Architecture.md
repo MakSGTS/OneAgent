@@ -31,9 +31,11 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      propagation. Its Runtime-owned Workspace service performs one configured
      production discovery/build, publishes separate immutable
      per-configuration semantic snapshots, and clears them during owned
-     shutdown. Its Axum service still exposes only HTTP liveness and
-     lifecycle-derived readiness probes; graph-query transport remains
-     unimplemented.
+     shutdown. Its sole Axum service exposes HTTP liveness and
+     lifecycle-derived readiness probes plus the versioned read-only Graph
+     Query route set. A transport-neutral observer-backed query component owns
+     exact configuration, node, direct-relation, and bounded-traversal
+     operations without becoming a background service.
    - `oneagent-cli` is a package placeholder and is not yet a supported client.
    - `oneagent-protocol` is a package foundation and does not yet expose HTTP,
      MCP, or LSP contracts.
@@ -48,8 +50,8 @@ Index remain read-only views over graph snapshots.
 
 The roadmap assigns future boundaries explicitly:
 
-- Graph-query Runtime APIs, file watching, persistence, and the supported CLI
-  remain assigned to Sprints 18–21.
+- Graph-query Runtime APIs are implemented in Sprint 18. File watching,
+  persistence, and the supported CLI remain assigned to Sprints 19–21.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -96,6 +98,48 @@ methods return `405` with `Allow: GET`, and unknown exact paths return `404`.
 The listener binds before startup acknowledgement, bind errors remain named
 service-start failures, and graceful shutdown releases the listener only after
 the Runtime-owned HTTP task completes.
+
+## Accepted Graph Query API boundary
+
+[ADR-0040](adr/0040-graph-query-api.md) governs the implemented Sprint 18
+boundary. Production composition constructs one Workspace observer, injects it
+into one transport-neutral `GraphQueryService`, and gives that component to the
+existing `HttpService`; `http` still starts before `workspace`, and
+`HttpService::new()` remains a health-only compatible construction path.
+
+The query-enabled listener registers exactly four GET routes:
+
+- `/api/v1/configurations` lists separate published configurations;
+- `/api/v1/graph/node` selects one exact node in one exact configuration;
+- `/api/v1/graph/relations` returns direct incoming or outgoing edges with an
+  optional one-kind filter;
+- `/api/v1/graph/traverse` performs deterministic breadth-first traversal with
+  mandatory depth and result bounds.
+
+Each request observes one immutable Workspace snapshot. The HTTP adapter first
+validates the closed query syntax and values, then requires canonical Runtime
+readiness, and finally delegates to the transport-neutral component. Results
+use owned payload-free projections, limits default to 50 and cannot exceed 100,
+traversal depth cannot exceed 4, and truncation is explicit. Exact stable JSON
+errors distinguish lifecycle, snapshot, selection, identifier, syntax,
+vocabulary, boolean, and bound failures without exposing internal diagnostics.
+Health routes remain the sole liveness/readiness authority and retain their
+Sprint 16 wire contract.
+
+### Sprint 18 public evidence matrix
+
+The public `apps/runtime/tests/graph_query_api.rs` target uses raw Tokio
+loopback HTTP and the tracked Sprint 17 provenance fixture through production
+filesystem discovery and both production builders.
+
+| Contract | Public evidence |
+| --- | --- |
+| Separate production graphs | Configuration listing preserves exact Designer XML and EDT identities, formats, counts, and canonical order; node queries select facts from each graph without merging. |
+| Four accepted operations | Exact node, outgoing/incoming direct relation, filtered relation, empty relation, bounded traversal, included start, and empty depth-zero results are asserted through public HTTP. |
+| Bounds and closed errors | Defaults, truncation, unknown configuration/node, invalid identifier/query/encoding, unsupported direction/edge kind, limit/depth bounds, invalid boolean, and unavailable snapshot map to exact status/code/message rows. |
+| Route compatibility | Every registered route is GET-only; HEAD/POST return `405` with `Allow: GET`; unknown and trailing-slash paths retain empty `404`; JSON is returned independently of `Accept`. |
+| Lifecycle authority | Published snapshots remain query-inaccessible during gated `Initializing` and `Stopping`, become available only in `Running`, and absent snapshots are distinct from lifecycle readiness. |
+| Ownership and determinism | Two fresh production runs return equal wire observations, clear snapshot/address watches, join all owned work, release the listener, and permit immediate rebind. |
 
 ## Accepted Workspace service boundary
 
@@ -171,4 +215,5 @@ records `pass` for the owned HTTP and public health/readiness boundary; Sprint
 17 implementation and public production evidence are completed with a `pass`
 decision in the
 [Sprint 17 integration review](reviews/sprint-17-workspace-service.md). Sprint
-18 Graph Query API is the unique next target.
+18 Graph Query API implementation and public evidence are complete; its
+integration review and roadmap transition remain pending.

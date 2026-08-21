@@ -169,12 +169,26 @@ reference ledgers/statistics, and reports. Public integration evidence proves
 both production formats, deterministic fresh runs, empty discovery, invalid and
 conflicting roots, duplicate identity, later adapter failure atomicity,
 lifecycle-derived readiness, reverse cleanup, and closed observation. Runtime
-does not merge graphs or become a semantic contributor. Graph-query transport,
-rebuild watching, cache/persistence, and supported CLI behavior remain deferred
-to Sprints 18–21. The
+does not merge graphs or become a semantic contributor. Rebuild watching,
+cache/persistence, and supported CLI behavior remain deferred to Sprints 19–21.
+The
 [Sprint 17 integration review](../reviews/sprint-17-workspace-service.md)
-records `pass`; Sprint 17 is completed and Sprint 18 Graph Query API is the
-unique next target.
+records `pass`; Sprint 17 is completed.
+
+ADR-0040 governs the implemented Sprint 18 Graph Query API without changing
+`SemanticGraph` authority. One observer-backed transport-neutral Runtime
+component obtains exactly one immutable Workspace snapshot per call and exposes
+only configuration listing, exact node lookup, direct incoming/outgoing
+relations, and bounded breadth-first traversal. The existing Runtime-owned HTTP
+listener maps those operations to four exact `/api/v1` GET routes, lifecycle
+and snapshot availability, closed enum vocabularies, bounded owned projections,
+and stable JSON success/error schemas. Payloads, provenance, diagnostics,
+reports, mutation, arbitrary query languages, and aggregate graphs are not
+exposed. Public raw-loopback evidence exercises both production formats,
+selection and ordering, the complete first-slice error/method/path matrix,
+`Initializing`/`Running`/`Stopping`, snapshot and listener cleanup, and equal
+fresh runs. Sprint 18 remains incomplete until its integration review and
+roadmap transition.
 
 ## Core principles
 
@@ -2696,9 +2710,9 @@ deny, inheritance, and effective authorization; semantic meaning for
 and contradictory-source recovery; and reference-request migration for BSL
 calls, Writes targets, protected resources, Subsystem content, and extension
 targets. Query sources have completed public request migration for the accepted
-direct-source boundary. Serialization, graph-query transport, rebuild and
-persistence, supported CLI behavior, and quality percentages also remain
-outside the implemented boundary.
+direct-source boundary. Graph-query transport now exposes only the bounded
+ADR-0040 projections; broader serialization, rebuild and persistence, supported
+CLI behavior, and quality percentages remain outside the implemented boundary.
 
 ## Definition of done for Semantic Model 2.0 core
 

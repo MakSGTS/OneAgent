@@ -210,6 +210,24 @@ the
 `pass`. Sprint 19 is completed and Sprint 20 Persistent Cache is the unique
 `next` target.
 
+ADR-0042 governs the implemented Sprint 20 Persistent Cache boundary without
+changing graph, adapter, health, or Graph Query authority. Runtime persists only
+complete validated `WorkspaceSnapshot` state in one private versioned
+Workspace-local entry keyed by exact complete source state and explicit schema
+and semantic-build versions. A candidate is reconstructed through checked domain
+APIs and complete validation before publication; missing, changed,
+incompatible, corrupt, or unavailable state falls back to a clean production
+build. Stable initial and File Watching builds replace the cache before immutable
+publication, while write failure or unstable-source skip remains recoverable.
+Cache-owned paths are excluded from observation, and shutdown closes typed cache
+status observation while preserving the complete entry for a fresh process.
+Public mixed EDT/Designer evidence proves cold/write, warm-hit complete-state and
+query equivalence, version/source invalidation, corruption and write-failure
+recovery, watched replacement, lifecycle/health compatibility, cleanup, and
+fresh reuse. The implementation and public evidence are complete; Sprint 20
+remains the unique `next` target pending its integration review, and supported
+CLI behavior remains deferred to Sprint 21.
+
 ## Core principles
 
 ### Unified semantics

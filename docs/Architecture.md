@@ -32,9 +32,12 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      production discovery/build, observes subsequent file changes, serializes
      complete rebuilds, publishes separate immutable per-configuration semantic
      snapshots, retains the last valid publication across failed rebuilds, and
-     clears the snapshot during owned shutdown. A public status observer reports
-     rebuild phase, attempts, publications, and failures. Its sole Axum service
-     exposes HTTP liveness and
+     clears the snapshot during owned shutdown. It also owns one fixed
+     Workspace-local complete-snapshot cache, exact validity checks, safe
+     replacement, and typed cache observation without making persisted bytes a
+     semantic authority. Public status observers report rebuild phase, attempts,
+     publications, failures, and the latest cache load/write outcomes. Its sole
+     Axum service exposes HTTP liveness and
      lifecycle-derived readiness probes plus the versioned read-only Graph
      Query route set. A transport-neutral observer-backed query component owns
      exact configuration, node, direct-relation, and bounded-traversal
@@ -54,8 +57,9 @@ Index remain read-only views over graph snapshots.
 The roadmap assigns future boundaries explicitly:
 
 - Graph-query Runtime APIs are implemented in Sprint 18, and Sprint 19 File
-  Watching is completed with a `pass` integration review. Persistence is the
-  unique Sprint 20 `next` target; the supported CLI remains Sprint 21.
+  Watching is completed with a `pass` integration review. Sprint 20 Persistent
+  Cache implementation and public evidence are complete; it remains the unique
+  `next` target pending integration review. The supported CLI remains Sprint 21.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -225,6 +229,52 @@ authority.
 | Observation failure and readiness | Removing the watched root reports `Observation`, retains the queryable snapshot and exact ready health response, and publishes one recovered rebuild when the root returns. |
 | Status and ownership | Public update status proves attempts, publications, phases, failure classification, recovery, terminal `Stopped`, closed snapshot/update receivers, listener release, and equal fresh-run observations. |
 
+## Accepted Persistent Cache boundary
+
+[ADR-0042](adr/0042-persistent-cache.md) governs the implemented Sprint 20
+baseline without changing `SemanticGraph`, source adapters, Runtime lifecycle,
+health, or Graph Query authority. `WorkspaceService` owns source observation,
+cache orchestration, complete clean builds, immutable publication, cancellation,
+and cleanup. The cache is a private versioned representation of one complete
+validated `WorkspaceSnapshot`; decoded content is reconstructed through checked
+domain APIs and passes complete build validation before it can be published.
+
+The fixed entry is `.oneagent/cache/workspace-v1.json` under the configured
+Workspace root, with one bounded temporary replacement file. Exact complete
+source state plus explicit schema and semantic-build versions determine validity.
+Startup performs scan/load/scan before accepting a hit, otherwise runs one clean
+build, closes the build race with a final scan, and writes only stable state.
+File Watching rebuilds use the same pre/build/post stability rule and finish
+cache work before atomically publishing a valid replacement. Cache-owned paths
+are excluded from source observation, so replacement cannot create a watcher
+feedback loop.
+
+Missing, changed, incompatible, corrupt, or unavailable entries clean-build
+instead of becoming semantic authority. Failed writes and unstable-source skips
+do not reject a valid snapshot. Public cloneable cache observation exposes only
+the closed latest load and write outcomes; it does not add HTTP, CLI, readiness,
+or protocol state. Shutdown joins current blocking cache/build work, closes cache
+observation with the other Workspace observers, and preserves the complete cache
+entry for a fresh process.
+
+### Sprint 20 public evidence matrix
+
+The public `apps/runtime/tests/persistent_cache.rs` target imports only the
+`oneagent_runtime` library surface, copies the tracked Sprint 17 mixed EDT and
+Designer XML provenance fixture into disposable roots, and exercises production
+source scans, cache storage, both clean builders, Workspace/File Watching,
+Graph Query, health, cancellation, and shutdown. Watches are synchronization;
+five-second timeouts are hang guards, not polling-duration evidence.
+
+| Contract | Public evidence |
+| --- | --- |
+| Cold and warm completeness | A cold missing entry clean-builds both production formats and writes once; a fresh exact hit performs no write and restores equal graphs, payloads, provenance, diagnostics, reference evidence, statistics, reports, transport-neutral queries, and HTTP results. |
+| Identity and compatibility | Complete source changes produce `SourceChanged`; older and newer schema and semantic-build versions produce `Incompatible`; every case clean-builds and replaces current state. |
+| Corruption containment | Malformed, truncated, partial, checksum-invalid, and checksum-valid semantically invalid entries produce `Corrupt`, publish no persisted partial state, and recover through equal complete clean builds. |
+| Storage failure and repair | A publicly constructible wrong-kind cache owner produces `Unavailable`/`Failed` while the valid Workspace remains ready and queryable; removing the obstacle permits missing/write recovery followed by a warm hit. |
+| Watched replacement and reuse | Production EDT and Designer changes publish complete immutable replacements, preserve held older snapshots, replace cache bytes, ignore cache-owned probe state in the source identity, and restore the latest replacement on a fresh hit. |
+| Lifecycle and cleanup | Cache work completes before `Running` or replacement publication; health and Graph Query contracts remain exact; shutdown clears snapshots, publishes terminal update state, closes snapshot/update/cache watches, releases listeners, leaves no temporary file, and preserves only reusable complete cache state. |
+
 ### Sprint 16 public evidence matrix
 
 The public `apps/runtime/tests/http_health.rs` target imports only the
@@ -268,4 +318,5 @@ decision in the
 [Sprint 18 integration review](reviews/sprint-18-graph-query-api.md). Sprint 19
 File Watching is completed with a `pass` decision in the
 [Sprint 19 integration review](reviews/sprint-19-file-watching.md). Sprint 20
-Persistent Cache is the unique `next` target.
+Persistent Cache implementation and public production evidence are complete;
+Sprint 20 remains the unique `next` target pending integration review.

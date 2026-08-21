@@ -20,6 +20,11 @@ pub use service::{
 };
 pub use state::AppState;
 pub use workspace::{
-    WorkspaceBuildError, WorkspaceBuildErrorKind, WorkspaceConfigurationSnapshot, WorkspaceService,
-    WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
+    GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
+    GraphQueryError, GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth,
+    GraphQueryMetadataKind, GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult,
+    GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
+    GraphQueryTraversalResult, GraphQueryWorkspaceFormat, WorkspaceBuildError,
+    WorkspaceBuildErrorKind, WorkspaceConfigurationSnapshot, WorkspaceService, WorkspaceSnapshot,
+    WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
 };

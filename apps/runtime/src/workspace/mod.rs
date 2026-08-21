@@ -1,5 +1,15 @@
 //! Immutable Workspace semantic snapshots and deterministic initial builds.
 
+mod graph_query;
+
+pub use graph_query::{
+    GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
+    GraphQueryError, GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth,
+    GraphQueryMetadataKind, GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult,
+    GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
+    GraphQueryTraversalResult, GraphQueryWorkspaceFormat,
+};
+
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};

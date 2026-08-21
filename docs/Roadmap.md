@@ -4169,6 +4169,201 @@ and unrelated-change absence. Suggested planning commit message:
 Plan Sprint 16 HTTP API and health
 ```
 
+#### Sprint 17 Workspace Service execution plan
+
+Sprint 17 is planned from committed readiness head
+`dd08923a54f5eacf5aad5a3cbc1a16267dadaa21`. The
+[Sprint 16 integration review](reviews/sprint-16-http-api-health.md) records
+`pass`, Sprint 16 is `completed`, and Sprint 17 is the unique `next` target.
+
+The live repository provides sufficient production and test evidence for a
+bounded sprint. `oneagent-workspace` owns configuration and discovery ports;
+`oneagent-workspace-fs` deterministically discovers EDT and Designer XML roots;
+the EDT and Designer XML adapters expose production semantic graph builders;
+`oneagent-graph` owns canonical graph state; and `oneagent-runtime` exposes a
+public long-running service container, lifecycle-derived readiness, owned HTTP
+service, deterministic cancellation, shutdown, and public integration seams.
+Repository-owned fixtures cover both supported formats, discovery errors,
+semantic builds, repeated construction, and cross-adapter conformance without
+an external service or ignored local corpus requirement.
+
+Architecture is not yet sufficient to implement the service directly. Existing
+ADRs assign composition, discovery, adapter, graph, lifecycle, and health
+ownership, but do not decide Workspace root configuration, multi-configuration
+result shape, build dispatch, publication atomicity, duplicate/collision policy,
+startup acknowledgement, readiness, or build-task ownership. Task 1 records
+the live boundary and test oracles; Task 2 accepts ADR-0039 before production
+behavior changes.
+
+The committed Runtime Service, Investigation, Architecture, and Review profiles,
+their task templates, and the sequential sprint workflow express every planned
+evidence, ownership, validation, and reporting contract. No reusable Codex
+Framework gap exists and no framework change or post-sprint framework audit is
+planned.
+
+##### Sprint 17 objective
+
+Add the first Runtime-owned Workspace lifecycle and semantic-build orchestration
+service for repository-owned EDT and Designer XML inputs, with deterministic
+configuration and discovery, immutable published semantic state, truthful
+readiness, explicit failure and cancellation behavior, and public integration
+evidence, without pulling graph-query APIs, file watching, persistence, or
+supported CLI behavior forward.
+
+##### Included scope
+
+- exact investigation of current workspace/discovery, EDT and Designer XML
+  builders, graph/result contracts, Runtime configuration/state/lifecycle,
+  consumers, errors, dependencies, fixtures, and deterministic testability;
+- accepted ADR-0039 for ownership and dependency direction, root configuration,
+  discovery/build dispatch, supported formats, immutable snapshot/result shape,
+  identity and ordering, diagnostics, atomicity, duplicates/collisions, startup,
+  readiness, errors, cancellation, shutdown, observability, first slice, and
+  deferred scope;
+- the accepted source-neutral immutable Workspace snapshot and semantic-build
+  dispatch boundary with focused deterministic evidence;
+- one Runtime-owned Workspace service with configured discovery, initial builds,
+  atomic snapshot publication, lifecycle/readiness integration, typed failures,
+  cooperative cancellation, cleanup, and thin composition-root registration;
+- public integration evidence through the real filesystem detector and both
+  production builders over provenance-backed repository-owned inputs, including
+  positive, empty/multiple, failure, ordering, atomicity, readiness, shutdown,
+  cleanup, and repeated fresh-run cases;
+- current-state documentation, complete workspace validation, integration
+  review, and conditional Sprint 16 prompt-suite retirement.
+
+##### Excluded scope
+
+- graph and semantic query endpoints owned by Sprint 18;
+- file watching and rebuild triggers owned by Sprint 19, persistent cache owned
+  by Sprint 20, and supported CLI behavior owned by Sprint 21;
+- HTTP Workspace routes, MCP, LSP, IDE, AI, authentication, authorization,
+  TLS, metrics, tracing export, streaming, request bodies, and domain error wire
+  mapping;
+- graph semantic/model changes, adapter parser changes, source-format expansion,
+  partial/incremental builds not already accepted by ADR-0039, dynamic service
+  registration, global mutable state, detached tasks, retries, restart, forced
+  termination, a new timeout, external services, ignored local corpus runtime
+  dependencies, arbitrary-sleep evidence, new external production dependencies,
+  packaging, benchmarks, and unsupported performance claims.
+
+##### Sprint 17 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 17 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-17-workspace-service/`. Every dependent task requires
+the preceding committed outcome. Stored prompts do not authorize commits;
+authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-16-http-api-health/`, with these seven tracked files:
+`00-sprint-16-execution-loop.md`,
+`01-investigate-http-api-health-boundary.md`,
+`02-define-http-api-health-contract.md`,
+`03-implement-runtime-health-state.md`,
+`04-implement-http-service.md`,
+`05-complete-http-api-health-evidence.md`, and
+`06-sprint-16-integration-review.md`. The tracked and filesystem inventories
+match and contain no untracked file at planning time. The suite remains
+untouched through Task 5. Only Task 6 may retire this exact inventory after a
+non-blocking review and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Workspace service boundary. | Investigation / investigation | Current discovery, builders, graph/result, Runtime state/lifecycle, consumer, failure, dependency, fixture, and deterministic-test evidence with explicit ADR questions. | Accepted Sprint 17 planning baseline. | `Investigate Sprint 17 Workspace service` |
+| 2 | Define the Workspace service contract. | Architecture / architecture | Accepted ADR-0039 ownership, configuration, discovery/build, snapshot, atomicity, ordering, lifecycle/readiness, failure, cancellation, shutdown, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 17 Workspace service contract` |
+| 3 | Implement the immutable Workspace snapshot. | Runtime Service / runtime service | Source-neutral immutable Workspace snapshot and supported semantic-build dispatch boundary with focused evidence. | Task 2. | `Implement Sprint 17 Workspace snapshot` |
+| 4 | Implement and compose the Workspace service. | Runtime Service / runtime service | Runtime-owned configured discovery/build service, snapshot publication, lifecycle/readiness, failure, cancellation, shutdown, and composition. | Task 3. | `Implement Sprint 17 Workspace service` |
+| 5 | Complete public Workspace service evidence. | Runtime Service / runtime service | Public production EDT/Designer XML orchestration matrix, atomicity/cleanup/repeated-run evidence, and synchronized current-state docs. | Task 4. | `Complete Sprint 17 Workspace service evidence` |
+| 6 | Review the integrated Sprint 17 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 16 suite retirement, and Sprint 18 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 17 Workspace service review` |
+
+```text
+Committed Sprint 17 planning baseline
+    -> Task 1 Workspace service investigation
+    -> Task 2 accepted ADR-0039
+    -> Task 3 immutable Workspace snapshot and build dispatch
+    -> Task 4 Runtime-owned Workspace service and composition
+    -> Task 5 public production evidence and current-state docs
+    -> Task 6 integration review and conditional Sprint 16 suite retirement
+    -> Sprint 18 planning eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only
+`docs/architecture/workspace-service-investigation.md`. It records exact
+definitions, dependency and consumer boundaries, supported builder contracts,
+result/diagnostic differences, fixtures, CI constraints, lifecycle/readiness,
+failure and cancellation questions, candidate snapshot/public-test seams, and
+decision readiness. It selects no architecture and changes no production
+behavior.
+
+Task 2 creates `docs/adr/0039-workspace-service.md` and synchronizes only
+planning-level architecture text required by the decision. It fixes composition
+and dependency direction, root configuration, deterministic discovery and
+format dispatch, canonical snapshot/result authority, ordering and identity,
+diagnostics, publication atomicity, duplicates/collisions, startup and readiness,
+blocking-work ownership, errors, cancellation, shutdown, observability,
+deterministic testing, first slice, rejected alternatives, migration, and
+deferred scope. It implements no production behavior.
+
+Task 3 implements only the ADR-0039 source-neutral immutable snapshot and build
+dispatch boundary with focused tests. It does not register a Runtime service,
+change App lifecycle/readiness, add transport behavior, or choose later rebuild
+and persistence semantics.
+
+Task 4 composes the committed Task 3 boundary into one ADR-0037 Runtime service.
+It implements configured discovery and initial builds, atomic snapshot
+publication, accepted readiness, named startup/runtime failures, cancellation,
+shutdown, cleanup, and production registration. All blocking work and channels
+remain owned; no graph or Workspace endpoint, watcher, cache, or supported CLI
+behavior is added.
+
+Task 5 exercises the public Runtime boundary through the real filesystem
+detector and both production format builders. It proves the accepted positive,
+empty/multiple, invalid/failing, atomicity, lifecycle/readiness, shutdown,
+cleanup, ordering, and repeated fresh-run matrix with provenance-backed
+cross-platform inputs and no arbitrary sleeps. It synchronizes README,
+Architecture, and Semantic Model current-state text but does not complete the
+sprint.
+
+Task 6 reviews the planning-through-Task-5 range and creates
+`docs/reviews/sprint-17-workspace-service.md` only for `pass` or `pass with
+non-blocking follow-ups` after all focused and full validation succeeds. That
+decision transitions Sprint 17 to `completed`, makes Sprint 18 Graph Query API
+the unique `next` target, and atomically retires the exact Sprint 16 suite in
+the same review commit. An inventory mismatch, endangered untracked file, or
+retained link dependency blocks retirement and the final commit. The review
+never silently fixes code.
+
+##### Sprint 17 state gates and completion criteria
+
+Sprint 17 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-5, accepted ADR-0039, one
+canonical immutable published Workspace snapshot boundary, deterministic
+supported-format discovery/build orchestration, truthful lifecycle/readiness,
+atomic failures, complete task/resource ownership, public production evidence
+for EDT and Designer XML, preserved graph and adapter authority, explicit
+deferred scope, the complete workspace gate, and a non-blocking Task 6 decision.
+A blocked review keeps Sprint 17 incomplete, preserves the Sprint 16 suite, and
+leaves Sprint 18 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 17 Workspace service
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

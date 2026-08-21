@@ -7,6 +7,7 @@ mod health;
 mod http;
 mod service;
 mod state;
+mod workspace;
 
 pub use app::{App, AppBuilder, Lifecycle, LifecycleState};
 pub use config::{ConfigurationProvider, DefaultConfigurationProvider, RuntimeConfig};
@@ -18,3 +19,7 @@ pub use service::{
     ServiceContext, ServiceStartFuture, ServiceTask,
 };
 pub use state::AppState;
+pub use workspace::{
+    WorkspaceBuildError, WorkspaceBuildErrorKind, WorkspaceConfigurationSnapshot,
+    WorkspaceSnapshot, WorkspaceSnapshotBuilder,
+};

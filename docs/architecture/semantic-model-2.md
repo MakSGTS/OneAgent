@@ -171,7 +171,10 @@ conflicting roots, duplicate identity, later adapter failure atomicity,
 lifecycle-derived readiness, reverse cleanup, and closed observation. Runtime
 does not merge graphs or become a semantic contributor. Graph-query transport,
 rebuild watching, cache/persistence, and supported CLI behavior remain deferred
-to Sprints 18–21. Sprint 17 completion still requires its integration review.
+to Sprints 18–21. The
+[Sprint 17 integration review](../reviews/sprint-17-workspace-service.md)
+records `pass`; Sprint 17 is completed and Sprint 18 Graph Query API is the
+unique next target.
 
 ## Core principles
 

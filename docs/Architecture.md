@@ -168,5 +168,7 @@ The [Sprint 15 integration review](reviews/sprint-15-runtime-service-container.m
 records `pass` after the focused and complete workspace gates. Sprint 15 is
 completed. The [Sprint 16 integration review](reviews/sprint-16-http-api-health.md)
 records `pass` for the owned HTTP and public health/readiness boundary; Sprint
-17 implementation and public production evidence are present, but Sprint 17
-remains incomplete until its independent integration review records a decision.
+17 implementation and public production evidence are completed with a `pass`
+decision in the
+[Sprint 17 integration review](reviews/sprint-17-workspace-service.md). Sprint
+18 Graph Query API is the unique next target.

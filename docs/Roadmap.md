@@ -30,9 +30,9 @@ The v0.2 boundary is closed with a `pass` decision in the
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
 Container and Sprint 16 HTTP API and Health are completed with `pass`
-decisions. Sprint 17 Workspace Service, Sprint 18 Graph Query API, and Sprint 19
-File Watching are completed with `pass` decisions; Sprint 20 Persistent Cache is
-the unique `next` target.
+decisions. Sprint 17 Workspace Service, Sprint 18 Graph Query API, Sprint 19
+File Watching, and Sprint 20 Persistent Cache are completed with `pass`
+decisions; Sprint 21 CLI Client is the unique `next` target.
 
 ## Roadmap reconciliation
 
@@ -3821,8 +3821,8 @@ Plan Sprint 14 Designer XML adapter
 | Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | completed |
 | Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | completed |
 | Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | completed |
-| Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | next |
-| Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | planned |
+| Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | completed |
+| Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | next |
 
 The v0.4 release integration review follows Sprint 21.
 
@@ -5010,6 +5010,17 @@ and unrelated-change absence. Suggested planning commit message:
 ```text
 Plan Sprint 20 Persistent Cache
 ```
+
+##### Sprint 20 completed state
+
+Tasks 1-6 are committed in dependency order. The
+[Sprint 20 integration review](reviews/sprint-20-persistent-cache.md) records
+`pass` after the focused Runtime matrix and complete workspace gate. Sprint 20
+is `completed`, Sprint 21 CLI Client is the unique `next` target, and the exact
+verified Sprint 19 prompt suite is retired in the review commit. ADR-0042,
+canonical semantic authority, complete validated snapshot caching, deterministic
+invalidation, Runtime/File Watching/Graph Query/health compatibility, public
+mixed EDT/Designer evidence, and deferred-scope boundaries remain authoritative.
 
 #### v0.5 — AI Integration
 

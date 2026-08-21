@@ -224,9 +224,10 @@ status observation while preserving the complete entry for a fresh process.
 Public mixed EDT/Designer evidence proves cold/write, warm-hit complete-state and
 query equivalence, version/source invalidation, corruption and write-failure
 recovery, watched replacement, lifecycle/health compatibility, cleanup, and
-fresh reuse. The implementation and public evidence are complete; Sprint 20
-remains the unique `next` target pending its integration review, and supported
-CLI behavior remains deferred to Sprint 21.
+fresh reuse. The
+[Sprint 20 integration review](../reviews/sprint-20-persistent-cache.md) records
+`pass`; Sprint 20 is completed and Sprint 21 CLI Client is the unique `next`
+target.
 
 ## Core principles
 

@@ -22,8 +22,10 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-workspace-fs` discovers supported workspaces through the
      filesystem boundary.
 4. **Applications and protocol foundation**
-   - `oneagent-runtime` contains composition, configuration, state, and lifecycle
-     foundations. It is not yet the long-running Runtime API described for v0.4.
+   - `oneagent-runtime` exposes the long-running composition root as a reusable
+     library. It owns ordered service startup, rollback, task handles,
+     per-service cancellation, reverse shutdown, lifecycle, and terminal error
+     propagation. It does not yet expose an HTTP or workspace/graph service.
    - `oneagent-cli` is a package placeholder and is not yet a supported client.
    - `oneagent-protocol` is a package foundation and does not yet expose HTTP,
      MCP, or LSP contracts.
@@ -38,9 +40,8 @@ Index remain read-only views over graph snapshots.
 
 The roadmap assigns future boundaries explicitly:
 
-- Designer XML ingestion extends the source-adapter layer in Sprint 14.
-- Runtime services, HTTP, persistence, and the supported CLI arrive in Sprints
-  15–21.
+- HTTP, workspace/graph Runtime services, file watching, persistence, and the
+  supported CLI arrive in Sprints 16–21.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -50,9 +51,9 @@ sequence and status live only in `docs/Roadmap.md`.
 
 ## Accepted Runtime service-container boundary
 
-[ADR-0037](adr/0037-runtime-service-container.md) accepts the Sprint 15 target
-without claiming it is implemented yet. `oneagent-runtime` remains the
-composition root and will expose a transport-independent library boundary.
+[ADR-0037](adr/0037-runtime-service-container.md) governs the implemented Sprint
+15 boundary. `oneagent-runtime` remains the composition root and exposes a
+transport-independent library boundary.
 `AppBuilder` owns ordered, uniquely named service registration; `App` owns the
 built container and lifecycle; the running container owns every service task
 handle and per-service cancellation source until all handles terminate.
@@ -69,3 +70,22 @@ The public Runtime lifecycle and deterministic in-memory probe boundary are not
 an HTTP health/readiness contract. HTTP routes, schemas, status mapping, and
 client compatibility remain Sprint 16 work; workspace, graph, watcher,
 persistence, and CLI services remain Sprints 17-21.
+
+### Sprint 15 public evidence matrix
+
+The public `apps/runtime/tests/service_container.rs` target imports only the
+`oneagent_runtime` library surface. Its deterministic in-memory probes use
+channels as acknowledgements and timeouts only as hang guards.
+
+| Contract | Public evidence |
+| --- | --- |
+| Genuinely long-running execution | The App remains pending after ordered startup until injected shutdown is released. |
+| Requested shutdown | Services observe receiver-only cancellation and terminate in reverse registration order before `Stopped`. |
+| Partial startup failure | A later named start error rolls the earlier acknowledged task back and closes every probe sender. |
+| Running-service failure | The named error reaches the App caller after reverse sibling cleanup. |
+| Unexpected exit and join panic | Early `Ok` and task panic retain distinct `RuntimeErrorKind` classifications. |
+| Shutdown-source error | The source failure remains primary while the worker is cancelled and joined. |
+| Fresh repetition and no detached work | Two separately built apps produce equal start/stop behavior; event-channel closure proves no probe task survives `App::run`. |
+
+Sprint 15 remains active until its integration review reruns the full gate and
+records a non-blocking decision.

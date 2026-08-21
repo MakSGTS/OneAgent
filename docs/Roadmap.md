@@ -3817,14 +3817,13 @@ was the unique `next` target at planning time, and the required Runtime Services
 and APIs Codex Framework stage is committed. Sprint 16 remains ineligible until
 Sprint 15 completes with a non-blocking integration review.
 
-The current `oneagent-runtime` is a binary-only composition foundation. ADR-0002
-assigns construction to `AppBuilder`, immutable shared state to `AppState`, and
-explicit transitions to `Lifecycle`. The production `App::run` is synchronous,
-prints one banner, and immediately transitions through running and shutdown; no
-service registry, owned background task, cancellation source, long-running wait,
-public library boundary, or injected shutdown oracle exists. Tokio, Axum,
-Tracing, and Serde dependencies are already locked, but only configuration,
-builder, and lifecycle behavior is exercised by five Runtime tests.
+At the planning baseline, `oneagent-runtime` was a binary-only composition
+foundation. ADR-0002 assigned construction to `AppBuilder`, immutable shared
+state to `AppState`, and explicit transitions to `Lifecycle`; synchronous
+`App::run` printed one banner and immediately shut down. Tasks 3-5 have since
+implemented the public library, ordered service container, owned tasks,
+per-service cancellation, asynchronous App lifecycle, injected shutdown, and
+deterministic public evidence without adding a dependency.
 
 The committed [Runtime Service profile](codex/profiles/runtime-service-implementation.md),
 [workflow](codex/workflows/runtime-service.md), and
@@ -3838,9 +3837,11 @@ service, socket, fixture, or new dependency is required.
 Task 1 evidence is committed, and
 [ADR-0037](adr/0037-runtime-service-container.md) accepts the bounded service
 identity, ownership, startup, rollback, cancellation, shutdown, failure,
-lifecycle, public-library, and deterministic-test contracts. Sprint 15 is
-`active` but remains incomplete until Tasks 3-5 implement and prove the contract
-and Task 6 records a non-blocking integration review.
+lifecycle, public-library, and deterministic-test contracts. Tasks 3 and 4
+implement the container and asynchronous App lifecycle. Task 5 adds the
+six-test public `service_container` integration target and synchronizes current
+state. Sprint 15 is `active` and remains incomplete until Task 6 records a
+non-blocking integration review.
 
 ##### Sprint 15 objective
 

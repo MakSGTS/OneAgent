@@ -205,7 +205,10 @@ closing status observation. Public production evidence covers EDT and Designer
 XML modifications, removal and addition/rename-equivalent changes, immutable
 replacement, query visibility, failure retention and recovery, fresh runs, and
 complete cleanup. Sprint 19 implementation and public evidence are complete;
-Sprint 19 remains the unique `next` target pending integration review.
+the
+[Sprint 19 integration review](../reviews/sprint-19-file-watching.md) records
+`pass`. Sprint 19 is completed and Sprint 20 Persistent Cache is the unique
+`next` target.
 
 ## Core principles
 

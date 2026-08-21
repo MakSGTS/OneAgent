@@ -30,9 +30,9 @@ The v0.2 boundary is closed with a `pass` decision in the
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
 Container and Sprint 16 HTTP API and Health are completed with `pass`
-decisions. Sprint 17 Workspace Service and Sprint 18 Graph Query API are
-completed with `pass` decisions; Sprint 19 File Watching is the unique `next`
-target.
+decisions. Sprint 17 Workspace Service, Sprint 18 Graph Query API, and Sprint 19
+File Watching are completed with `pass` decisions; Sprint 20 Persistent Cache is
+the unique `next` target.
 
 ## Roadmap reconciliation
 
@@ -3807,8 +3807,8 @@ Plan Sprint 14 Designer XML adapter
 | Sprint 16 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | completed |
 | Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | completed |
 | Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | completed |
-| Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | next |
-| Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | planned |
+| Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | completed |
+| Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | next |
 | Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | planned |
 
 The v0.4 release integration review follows Sprint 21.
@@ -4762,6 +4762,12 @@ canonical graph and adapter semantics, explicit deferred scope, the complete
 workspace gate, and a non-blocking Task 6 decision. A blocked review keeps
 Sprint 19 incomplete, preserves the Sprint 18 suite, and leaves Sprint 20
 ineligible.
+
+The [Sprint 19 integration review](reviews/sprint-19-file-watching.md) records
+`pass` against corrective evidence head
+`cadc4b9f3e20e4da94df3ec91223c98f60255385`. Sprint 19 is `completed`, Sprint
+20 Persistent Cache is the unique `next` target, and the exact verified Sprint
+18 prompt suite is retired in the atomic review commit.
 
 Planning validation covers Markdown links and structure, prompt numbering,
 manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,

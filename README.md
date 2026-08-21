@@ -7,8 +7,8 @@ Sprint 15 long-running Runtime service container, and the Sprint 16 HTTP API
 and Health boundary. The Sprint 17 Workspace Service implementation and public
 production evidence are completed with a `pass` integration review. Sprint 18
 Graph Query API is also completed with a `pass` integration review. Sprint 19
-File Watching implementation and public production evidence are complete;
-Sprint 19 remains the unique next target pending integration review. See
+File Watching is completed with a `pass` integration review. Sprint 20
+Persistent Cache is the unique next target. See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
 ## Workspace

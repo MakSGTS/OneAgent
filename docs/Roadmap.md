@@ -4583,6 +4583,195 @@ and unrelated-change absence. Suggested planning commit message:
 Plan Sprint 18 Graph Query API
 ```
 
+#### Sprint 19 File Watching execution plan
+
+Sprint 19 is planned from committed readiness head
+`ee0be7b4803651a6631c80493aa841b7b14e5e41`. The Sprint 18 integration
+review records `pass`, Sprint 19 is the unique `next` target, the working tree
+is clean, and the tracked Runtime fixture plus deterministic temporary copies
+provide repository-owned sources for add, modify, remove, rename, burst,
+invalid-build, recovery, shutdown, cleanup, and repeated-run evidence. No
+accepted decision currently defines watcher technology, normalized change
+semantics, coalescing, rebuild scheduling, failure publication, or recovery, so
+investigation and ADR acceptance precede implementation. The existing Runtime
+Service profile, workflow, and template already cover service ownership,
+concurrency, cancellation, shutdown, health, observability, and public Runtime
+integration; no Codex Framework change is required. A new production
+dependency is not selected by planning and still requires explicit approval if
+the accepted architecture proves one necessary.
+
+##### Objective
+
+Detect relevant changes under the configured Workspace root and connect them
+to deterministic Runtime-owned rebuild orchestration so that complete valid
+immutable snapshots replace the previous publication atomically, readers
+never observe a partial build, lifecycle and health contracts remain truthful,
+and failure, recovery, shutdown, cleanup, and repeated fresh runs have public
+cross-platform evidence.
+
+##### Included scope
+
+- repository-backed investigation of filesystem observation, Workspace build,
+  snapshot publication, Runtime service ordering, graph-query observation,
+  dependencies, platform constraints, fixtures, and deterministic test seams;
+- an accepted ADR defining watcher ownership, watched boundary, normalized
+  change vocabulary, relevance, coalescing, scheduling, serialization,
+  publication, failure and recovery, lifecycle, shutdown, observability,
+  compatibility, dependency, first-slice, and deferred-scope contracts;
+- one Runtime-owned file-change observation boundary with deterministic
+  normalization, bounded coordination, cancellation, terminal cleanup, and
+  focused positive/negative/burst evidence;
+- serialized complete Workspace rebuild orchestration using the existing
+  production detector and EDT/Designer XML builders, atomic valid publication,
+  stable snapshot observation, failure retention or clearing exactly as
+  accepted, recovery, and focused integration evidence;
+- public production evidence for relevant and irrelevant changes, add/modify/
+  remove/rename-equivalent source transitions, burst coalescing, invalid build
+  and recovery, graph-query visibility, shutdown, cleanup, and equal fresh
+  runs without arbitrary sleeps;
+- current-state documentation, complete workspace validation, integration
+  review, and conditional Sprint 18 prompt-suite retirement.
+
+##### Excluded scope
+
+- graph node, edge, identity, query, resolution, validation, Diff, Impact,
+  report, provenance, source-parser, source-format, or Coverage semantics;
+- incremental graph or Semantic Index mutation, partial snapshot publication,
+  per-file semantic repair, persistent cache owned by Sprint 20, and supported
+  CLI behavior owned by Sprint 21;
+- Git change ingestion, remote/network workspaces, symlink policy expansion,
+  OS-specific public APIs, filesystem writes, edit transactions, watch-control
+  HTTP routes, streaming, subscriptions, progress APIs, dynamic configuration,
+  retries outside the accepted change/recovery loop, restart, forced
+  termination, authentication, authorization, metrics/tracing export,
+  benchmarks, and unsupported performance or security claims.
+
+##### Sprint 19 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 19 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-19-file-watching/`. Every dependent task requires the
+preceding committed outcome. Stored prompts do not authorize commits;
+authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-18-graph-query-api/`, with these seven tracked files:
+`00-sprint-18-execution-loop.md`,
+`01-investigate-graph-query-api-boundary.md`,
+`02-define-graph-query-api-contract.md`,
+`03-implement-graph-query-service.md`,
+`04-implement-graph-query-http-api.md`,
+`05-complete-graph-query-api-evidence.md`, and
+`06-sprint-18-integration-review.md`. The tracked and filesystem inventories
+match and contain no untracked file at planning time. The suite remains
+untouched through Task 5. Only Task 6 may retire this exact inventory after a
+non-blocking review and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the File Watching boundary. | Investigation / investigation | Current filesystem, Workspace build/publication, Runtime lifecycle, consumer, dependency, platform, fixture, and deterministic-test evidence with explicit ADR questions. | Accepted Sprint 19 planning baseline. | `Investigate Sprint 19 File Watching` |
+| 2 | Define the File Watching contract. | Architecture / architecture | Accepted ADR-0041 watcher ownership, change, relevance, coalescing, rebuild, publication, failure/recovery, lifecycle, dependency, compatibility, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 19 File Watching contract` |
+| 3 | Implement file-change watching. | Runtime Service / runtime service | Accepted Runtime-owned observation boundary, normalized relevant change signals, bounded coordination, cancellation, cleanup, and focused evidence. | Task 2. | `Implement Sprint 19 file change watching` |
+| 4 | Integrate Workspace rebuild orchestration. | Runtime Service / runtime service | Serialized complete rebuilds, atomic valid snapshot replacement, accepted failure/recovery behavior, lifecycle preservation, and focused evidence. | Task 3. | `Integrate Sprint 19 Workspace rebuilds` |
+| 5 | Complete public File Watching evidence. | Runtime Service / runtime service | Public production change/rebuild/query/failure/recovery/shutdown matrix and synchronized current-state docs. | Task 4. | `Complete Sprint 19 File Watching evidence` |
+| 6 | Review the integrated Sprint 19 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 18 suite retirement, and Sprint 20 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 19 File Watching review` |
+
+```text
+Committed Sprint 19 planning baseline
+    -> Task 1 File Watching investigation
+    -> Task 2 accepted ADR-0041
+    -> Task 3 Runtime-owned file-change watching
+    -> Task 4 serialized Workspace rebuild orchestration
+    -> Task 5 public production evidence and current-state docs
+    -> Task 6 integration review and conditional Sprint 18 suite retirement
+    -> Sprint 20 planning eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only
+`docs/architecture/file-watching-investigation.md`. It records exact current
+filesystem discovery and read behavior, Workspace builder/publication and
+observer contracts, Runtime service ordering and cancellation, graph-query
+consumer visibility, dependency and platform constraints, fixture provenance,
+deterministic test seams, relevant/irrelevant change candidates, and every
+decision ADR-0041 must make. It selects no architecture, adds no dependency,
+and changes no production behavior.
+
+Task 2 creates `docs/adr/0041-file-watching.md` and synchronizes only
+planning-level architecture text required by the decision. It fixes ownership
+and dependency direction, watched roots and relevance, normalized change and
+overflow/error vocabulary, event coalescing and scheduling, build
+serialization, snapshot publication and reader consistency, failure retention
+or clearing, recovery, lifecycle/readiness, cancellation/shutdown,
+observability, deterministic testing, dependency policy, migration, first
+slice, rejected alternatives, and deferred scope. It implements no production
+behavior. If the accepted contract requires a new production dependency, Task
+3 cannot change a manifest until explicit approval is available.
+
+Task 3 implements only the ADR-0041 file-change observation boundary with
+focused tests. It owns every watcher task, channel, timer, and native or
+portable resource; emits only the accepted normalized relevant signal; applies
+the accepted bounded coalescing policy; terminates through Runtime cancellation;
+and proves ignored changes, burst behavior, failure propagation, cleanup, and
+fresh repetition. It does not rebuild or publish semantic snapshots.
+
+Task 4 connects the committed Task 3 boundary to the existing complete
+`WorkspaceSnapshotBuilder`. It serializes rebuilds, prevents partial
+publication, atomically replaces only complete valid immutable snapshots,
+implements exactly the accepted failure/recovery policy, preserves graph-query
+single-snapshot observation and lifecycle-derived health, and adds focused
+orchestration evidence. It does not add watch-control routes, persistence,
+incremental semantic mutation, or new graph facts.
+
+Task 5 exercises the public production boundary through real filesystem
+observation, production EDT and Designer XML builders, Workspace publication,
+Graph Query API observation, and Runtime shutdown. It proves relevant and
+irrelevant changes, add/modify/remove/rename-equivalent transitions, burst
+coalescing, invalid build and recovery, atomic visibility, deterministic
+ordering, cancellation, resource cleanup, and equal fresh runs with tracked
+provenance-backed inputs and event acknowledgements rather than arbitrary
+sleeps. It synchronizes README, Architecture, and Semantic Model current-state
+text but does not complete the sprint.
+
+Task 6 reviews the planning-through-Task-5 range and creates
+`docs/reviews/sprint-19-file-watching.md` only for `pass` or `pass with
+non-blocking follow-ups` after all focused and full validation succeeds. That
+decision transitions Sprint 19 to `completed`, makes Sprint 20 Persistent Cache
+the unique `next` target, and atomically retires the exact Sprint 18 suite in
+the same review commit. An inventory mismatch, endangered untracked file, or
+retained link dependency blocks retirement and the final commit. The review
+never silently fixes code.
+
+##### Sprint 19 state gates and completion criteria
+
+Sprint 19 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-5, accepted ADR-0041, one
+owned change-observation authority, deterministic relevant-change coalescing,
+serialized complete rebuilds, atomic valid snapshot replacement, explicit
+failure and recovery behavior, truthful lifecycle and health behavior, stable
+Graph Query observation, public cross-platform production evidence, preserved
+canonical graph and adapter semantics, explicit deferred scope, the complete
+workspace gate, and a non-blocking Task 6 decision. A blocked review keeps
+Sprint 19 incomplete, preserves the Sprint 18 suite, and leaves Sprint 20
+ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 19 File Watching
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

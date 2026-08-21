@@ -157,8 +157,21 @@ stable liveness and lifecycle-derived readiness probes, and retains listener,
 connection, cancellation, and task lifetimes under ADR-0037. Public raw-loopback
 tests prove the exact wire matrix across `Initializing`, `Running`, and
 `Stopping`, named bind failure, graceful shutdown, listener release, and fresh
-repetition. Workspace orchestration and graph query APIs remain deferred to
-Sprints 17 and 18.
+repetition.
+
+ADR-0039 governs the implemented Sprint 17 initial Workspace orchestration
+boundary without changing graph authority. Runtime owns one configured root,
+runs the production filesystem detector and EDT/Designer builders in one joined
+blocking task, validates every configuration, and atomically publishes an
+immutable source-neutral snapshot. The snapshot retains separate graphs ordered
+by Configuration identity plus exact names, source roots/formats, diagnostics,
+reference ledgers/statistics, and reports. Public integration evidence proves
+both production formats, deterministic fresh runs, empty discovery, invalid and
+conflicting roots, duplicate identity, later adapter failure atomicity,
+lifecycle-derived readiness, reverse cleanup, and closed observation. Runtime
+does not merge graphs or become a semantic contributor. Graph-query transport,
+rebuild watching, cache/persistence, and supported CLI behavior remain deferred
+to Sprints 18–21. Sprint 17 completion still requires its integration review.
 
 ## Core principles
 
@@ -2513,10 +2526,10 @@ records `pass` against committed Task 7 head
 review-time production, public API, Coverage, or deferred-scope change. The
 [v0.3 release integration review](../reviews/v0.3-release-review.md) records
 `pass` against committed Sprint 14 review head
-`8dbb09a2c085c990308fa57621b510150be6c9a2`. The v0.3 boundary is complete,
-and Sprint 15 Runtime Service Container is the unique `next` planning target.
-Its kickoff retains the planned Runtime Services and APIs framework-readiness
-gate and must revalidate the live Runtime baseline.
+`8dbb09a2c085c990308fa57621b510150be6c9a2`. The v0.3 boundary is complete. At
+that committed release boundary Sprint 15 Runtime Service Container was the
+unique next planning target; current Runtime delivery state is governed by
+ADR-0037 through ADR-0039 and the live roadmap.
 
 Metadata members, specialized Role/Subsystem/Event/DCS/XDTO/service semantics,
 Form/Command/configuration/register module roles, semantic references and other
@@ -2680,8 +2693,9 @@ deny, inheritance, and effective authorization; semantic meaning for
 and contradictory-source recovery; and reference-request migration for BSL
 calls, Writes targets, protected resources, Subsystem content, and extension
 targets. Query sources have completed public request migration for the accepted
-direct-source boundary. Serialization, CLI, runtime product work, and quality
-percentages also remain outside the implemented boundary.
+direct-source boundary. Serialization, graph-query transport, rebuild and
+persistence, supported CLI behavior, and quality percentages also remain
+outside the implemented boundary.
 
 ## Definition of done for Semantic Model 2.0 core
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:v8="http://v8.1c.ru/8.1/data/core" version="2.20">
+  <CommonModule uuid="dc24575c-a787-411d-93bd-494271291d73">
+    <Properties>
+      <Name>DynamicSecurityOverridable</Name>
+      <Synonym><v8:item><v8:lang>ru</v8:lang><v8:content>Dynamic security overridable</v8:content></v8:item></Synonym>
+      <Global>false</Global>
+      <ClientManagedApplication>false</ClientManagedApplication>
+      <Server>true</Server>
+      <ExternalConnection>true</ExternalConnection>
+      <ClientOrdinaryApplication>true</ClientOrdinaryApplication>
+      <ServerCall>false</ServerCall>
+      <Privileged>false</Privileged>
+    </Properties>
+  </CommonModule>
+</MetaDataObject>

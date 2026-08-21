@@ -19,14 +19,20 @@ product adapters so that roadmap intent is not mistaken for available behavior.
 3. **Source adapters**
    - `oneagent-edt` reads supported EDT artifacts and contributes facts to the
      canonical semantic graph.
+   - `oneagent-designer-xml` reads accepted hierarchical Designer XML artifacts
+     and contributes the same source-independent graph kinds without replacing
+     EDT semantics.
    - `oneagent-workspace-fs` discovers supported workspaces through the
      filesystem boundary.
 4. **Applications and protocol foundation**
    - `oneagent-runtime` exposes the long-running composition root as a reusable
      library. It owns ordered service startup, rollback, task handles,
      per-service cancellation, reverse shutdown, lifecycle, and terminal error
-     propagation. Its Runtime-owned Axum service exposes only HTTP liveness and
-     lifecycle-derived readiness probes; workspace and graph services remain
+     propagation. Its Runtime-owned Workspace service performs one configured
+     production discovery/build, publishes separate immutable
+     per-configuration semantic snapshots, and clears them during owned
+     shutdown. Its Axum service still exposes only HTTP liveness and
+     lifecycle-derived readiness probes; graph-query transport remains
      unimplemented.
    - `oneagent-cli` is a package placeholder and is not yet a supported client.
    - `oneagent-protocol` is a package foundation and does not yet expose HTTP,
@@ -42,8 +48,8 @@ Index remain read-only views over graph snapshots.
 
 The roadmap assigns future boundaries explicitly:
 
-- Workspace/graph Runtime services, file watching, persistence, and the
-  supported CLI arrive in Sprints 17–21.
+- Graph-query Runtime APIs, file watching, persistence, and the supported CLI
+  remain assigned to Sprints 18–21.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -91,6 +97,41 @@ The listener binds before startup acknowledgement, bind errors remain named
 service-start failures, and graceful shutdown releases the listener only after
 the Runtime-owned HTTP task completes.
 
+## Accepted Workspace service boundary
+
+[ADR-0039](adr/0039-workspace-service.md) governs the implemented Sprint 17
+initial-build slice. `RuntimeConfig` owns one Workspace root, and production
+composition starts HTTP before one uniquely named `workspace` service. That
+service moves the configured path and complete snapshot builder into exactly one
+owned blocking task, runs filesystem discovery once, dispatches EDT and
+Designer XML builds sequentially, validates every graph, rejects unsupported or
+colliding configurations, and publishes only one complete immutable snapshot.
+
+The snapshot keeps configurations as separate graphs ordered by canonical
+Configuration identity. Each record preserves its detected root and format,
+exact Configuration name and ID, canonical graph, diagnostics, reference
+ledger/statistics, and report. A valid empty root publishes an empty snapshot;
+any discovery, adapter, validation, cardinality, duplicate-identity, or blocking
+task failure publishes nothing and becomes a named Workspace startup failure.
+Cancellation clears the snapshot before the owned service task returns. Runtime
+readiness remains derived only from lifecycle, so snapshot presence is not an
+independently mutable health label.
+
+### Sprint 17 public evidence matrix
+
+The public `apps/runtime/tests/workspace_service.rs` target uses only production
+discovery/build paths and public Runtime observation. Its bounded tracked EDT
+and Designer inputs have an explicit provenance and SHA-256 inventory.
+
+| Contract | Public evidence |
+| --- | --- |
+| Both production formats | One mixed root builds exact EDT and complete Designer graphs, preserves their distinct evidence, and orders them by Configuration ID. |
+| Determinism and fresh ownership | Repeated fresh applications publish equal observations and close every snapshot sender after `App::run`. |
+| Empty and invalid roots | Empty readable roots publish an empty snapshot; missing and non-directory roots return named startup failures without publication. |
+| Discovery and atomic failure | Conflicting markers, duplicate Configuration identity, and a later fatal adapter input reject the entire snapshot. |
+| Readiness authority | With a deterministic later startup/cleanup gate, real health requests remain not-ready in `Initializing` and `Stopping`, become ready only in `Running`, and retain the Sprint 16 wire vocabulary. |
+| Shutdown cleanup | Reverse cancellation keeps the complete snapshot available until the Workspace service is reached, then clears it and closes observation before terminal `Stopped`. |
+
 ### Sprint 16 public evidence matrix
 
 The public `apps/runtime/tests/http_health.rs` target imports only the
@@ -127,4 +168,5 @@ The [Sprint 15 integration review](reviews/sprint-15-runtime-service-container.m
 records `pass` after the focused and complete workspace gates. Sprint 15 is
 completed. The [Sprint 16 integration review](reviews/sprint-16-http-api-health.md)
 records `pass` for the owned HTTP and public health/readiness boundary; Sprint
-17 Workspace Service is the unique next target.
+17 implementation and public production evidence are present, but Sprint 17
+remains incomplete until its independent integration review records a decision.

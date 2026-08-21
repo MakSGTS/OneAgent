@@ -1,5 +1,6 @@
 //! Immutable Workspace semantic snapshots and deterministic initial builds.
 
+mod change;
 mod graph_query;
 
 pub use graph_query::{

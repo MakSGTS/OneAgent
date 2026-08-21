@@ -1,6 +1,8 @@
 //! Private deterministic codec for complete Workspace cache snapshots.
 
 use std::fmt::{Display, Formatter};
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
 use oneagent_common::{EntityId, EntityName};
@@ -24,13 +26,22 @@ use oneagent_metadata::{
 use oneagent_workspace::WorkspaceFormat;
 use serde::{Deserialize, Serialize};
 
+use super::change::{WorkspaceFileEntry, WorkspaceFileState};
 use super::{WorkspaceConfigurationSnapshot, WorkspaceSnapshot, snapshot_from_parts};
 
 const CACHE_FORMAT: &str = "oneagent.workspace-cache";
+// Review and bump this whenever persisted fields or closed vocabularies change.
 const SCHEMA_VERSION: u32 = 1;
+// Bump this in the same logical change as any behavior that can change a
+// complete snapshot for equal source state; package and Git versions do not
+// replace this manual compatibility boundary.
 const SEMANTIC_VERSION: u32 = 1;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
+const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
+const CACHE_DIRECTORY: &str = "cache";
+const CACHE_FILE: &str = "workspace-v1.json";
+const CACHE_TEMPORARY_FILE: &str = "workspace-v1.tmp";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum WorkspaceCacheCodecErrorKind {
@@ -96,6 +107,44 @@ pub(super) enum WorkspaceCacheSourceEntryKind {
     Other,
 }
 
+impl TryFrom<&WorkspaceFileState> for WorkspaceCacheSource {
+    type Error = WorkspaceCacheCodecError;
+
+    fn try_from(value: &WorkspaceFileState) -> Result<Self, Self::Error> {
+        let entries = value
+            .entries()
+            .map(|(path, entry)| {
+                let path = path
+                    .components()
+                    .map(|component| match component {
+                        Component::Normal(value) => value
+                            .to_str()
+                            .map(ToOwned::to_owned)
+                            .ok_or_else(|| invalid("workspace cache source path is not UTF-8")),
+                        _ => Err(invalid(
+                            "workspace cache source path contains a non-relative component",
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let (kind, bytes) = match entry {
+                    WorkspaceFileEntry::Directory => {
+                        (WorkspaceCacheSourceEntryKind::Directory, None)
+                    }
+                    WorkspaceFileEntry::RegularFile(bytes) => (
+                        WorkspaceCacheSourceEntryKind::RegularFile,
+                        Some(bytes.clone()),
+                    ),
+                    WorkspaceFileEntry::Other => (WorkspaceCacheSourceEntryKind::Other, None),
+                };
+                Ok(WorkspaceCacheSourceEntry { path, kind, bytes })
+            })
+            .collect::<Result<Vec<_>, WorkspaceCacheCodecError>>()?;
+        let source = Self { entries };
+        validate_source(&source)?;
+        Ok(source)
+    }
+}
+
 pub(super) struct WorkspaceCacheCodec;
 
 impl WorkspaceCacheCodec {
@@ -157,6 +206,290 @@ impl WorkspaceCacheCodec {
         }
         envelope.workspace.into_snapshot(workspace_root)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WorkspaceCacheLoadOutcome {
+    NotAttempted,
+    Hit,
+    Missing,
+    SourceChanged,
+    Incompatible,
+    Corrupt,
+    Unavailable,
+}
+
+#[derive(Debug)]
+pub(super) struct WorkspaceCacheLoad {
+    outcome: WorkspaceCacheLoadOutcome,
+    snapshot: Option<WorkspaceSnapshot>,
+}
+
+impl WorkspaceCacheLoad {
+    pub(super) const fn outcome(&self) -> WorkspaceCacheLoadOutcome {
+        self.outcome
+    }
+
+    pub(super) fn into_snapshot(self) -> Option<WorkspaceSnapshot> {
+        self.snapshot
+    }
+
+    const fn without_snapshot(outcome: WorkspaceCacheLoadOutcome) -> Self {
+        Self {
+            outcome,
+            snapshot: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WorkspaceCacheWriteOutcome {
+    NotAttempted,
+    Succeeded,
+    SkippedUnstableSource,
+    Failed,
+}
+
+#[derive(Debug)]
+pub(super) struct WorkspaceCacheStore {
+    workspace_root: PathBuf,
+    #[cfg(test)]
+    failure: Option<WorkspaceCacheFailurePoint>,
+}
+
+impl WorkspaceCacheStore {
+    pub(super) fn new(workspace_root: PathBuf) -> Self {
+        Self {
+            workspace_root,
+            #[cfg(test)]
+            failure: None,
+        }
+    }
+
+    pub(super) fn load(&self, state: &WorkspaceFileState) -> WorkspaceCacheLoad {
+        let Ok(source) = WorkspaceCacheSource::try_from(state) else {
+            return WorkspaceCacheLoad::without_snapshot(WorkspaceCacheLoadOutcome::Unavailable);
+        };
+        let owner = self.workspace_root.join(CACHE_OWNER_DIRECTORY);
+        let cache = owner.join(CACHE_DIRECTORY);
+        for directory in [&owner, &cache] {
+            match existing_real_directory(directory) {
+                Ok(true) => {}
+                Ok(false) => {
+                    return WorkspaceCacheLoad::without_snapshot(
+                        WorkspaceCacheLoadOutcome::Missing,
+                    );
+                }
+                Err(_) => {
+                    return WorkspaceCacheLoad::without_snapshot(
+                        WorkspaceCacheLoadOutcome::Unavailable,
+                    );
+                }
+            }
+        }
+
+        let candidate = cache.join(CACHE_FILE);
+        match existing_regular_file(&candidate) {
+            Ok(true) => {}
+            Ok(false) => {
+                return WorkspaceCacheLoad::without_snapshot(WorkspaceCacheLoadOutcome::Missing);
+            }
+            Err(_) => {
+                return WorkspaceCacheLoad::without_snapshot(
+                    WorkspaceCacheLoadOutcome::Unavailable,
+                );
+            }
+        }
+        let Ok(bytes) = fs::read(candidate) else {
+            return WorkspaceCacheLoad::without_snapshot(WorkspaceCacheLoadOutcome::Unavailable);
+        };
+        match WorkspaceCacheCodec::decode(&bytes, &source, &self.workspace_root) {
+            Ok(snapshot) => WorkspaceCacheLoad {
+                outcome: WorkspaceCacheLoadOutcome::Hit,
+                snapshot: Some(snapshot),
+            },
+            Err(error) => WorkspaceCacheLoad::without_snapshot(match error.kind() {
+                WorkspaceCacheCodecErrorKind::Incompatible => {
+                    WorkspaceCacheLoadOutcome::Incompatible
+                }
+                WorkspaceCacheCodecErrorKind::SourceMismatch => {
+                    WorkspaceCacheLoadOutcome::SourceChanged
+                }
+                WorkspaceCacheCodecErrorKind::Malformed
+                | WorkspaceCacheCodecErrorKind::Partial
+                | WorkspaceCacheCodecErrorKind::Duplicate
+                | WorkspaceCacheCodecErrorKind::Unsupported
+                | WorkspaceCacheCodecErrorKind::NonCanonical
+                | WorkspaceCacheCodecErrorKind::ChecksumMismatch
+                | WorkspaceCacheCodecErrorKind::Invalid
+                | WorkspaceCacheCodecErrorKind::Inconsistent => WorkspaceCacheLoadOutcome::Corrupt,
+            }),
+        }
+    }
+
+    pub(super) fn write(
+        &self,
+        state: &WorkspaceFileState,
+        snapshot: &WorkspaceSnapshot,
+    ) -> WorkspaceCacheWriteOutcome {
+        let result = self.write_inner(state, snapshot);
+        if result.is_err() {
+            self.cleanup_temporary();
+            WorkspaceCacheWriteOutcome::Failed
+        } else {
+            WorkspaceCacheWriteOutcome::Succeeded
+        }
+    }
+
+    fn write_inner(
+        &self,
+        state: &WorkspaceFileState,
+        snapshot: &WorkspaceSnapshot,
+    ) -> Result<(), WorkspaceCacheStoreError> {
+        let source =
+            WorkspaceCacheSource::try_from(state).map_err(WorkspaceCacheStoreError::Codec)?;
+        let bytes = WorkspaceCacheCodec::encode(&source, &self.workspace_root, snapshot)
+            .map_err(WorkspaceCacheStoreError::Codec)?;
+        WorkspaceCacheCodec::decode(&bytes, &source, &self.workspace_root)
+            .map_err(WorkspaceCacheStoreError::Codec)?;
+
+        let owner = self.workspace_root.join(CACHE_OWNER_DIRECTORY);
+        let cache = owner.join(CACHE_DIRECTORY);
+        ensure_real_directory(&owner).map_err(WorkspaceCacheStoreError::Io)?;
+        ensure_real_directory(&cache).map_err(WorkspaceCacheStoreError::Io)?;
+
+        let temporary = cache.join(CACHE_TEMPORARY_FILE);
+        remove_existing_regular_file(&temporary).map_err(WorkspaceCacheStoreError::Io)?;
+        #[cfg(test)]
+        self.inject(WorkspaceCacheFailurePoint::CreateTemporary)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(WorkspaceCacheStoreError::Io)?;
+        #[cfg(test)]
+        self.inject(WorkspaceCacheFailurePoint::WriteTemporary)?;
+        file.write_all(&bytes)
+            .map_err(WorkspaceCacheStoreError::Io)?;
+        #[cfg(test)]
+        self.inject(WorkspaceCacheFailurePoint::SyncTemporary)?;
+        file.sync_all().map_err(WorkspaceCacheStoreError::Io)?;
+        drop(file);
+
+        #[cfg(test)]
+        self.inject(WorkspaceCacheFailurePoint::ReadBackTemporary)?;
+        let read_back = fs::read(&temporary).map_err(WorkspaceCacheStoreError::Io)?;
+        WorkspaceCacheCodec::decode(&read_back, &source, &self.workspace_root)
+            .map_err(WorkspaceCacheStoreError::Codec)?;
+        if read_back != bytes {
+            return Err(WorkspaceCacheStoreError::Verification);
+        }
+
+        let candidate = cache.join(CACHE_FILE);
+        #[cfg(test)]
+        self.inject(WorkspaceCacheFailurePoint::RemoveCurrent)?;
+        remove_existing_regular_file(&candidate).map_err(WorkspaceCacheStoreError::Io)?;
+        #[cfg(test)]
+        self.inject(WorkspaceCacheFailurePoint::RenameTemporary)?;
+        fs::rename(&temporary, &candidate).map_err(WorkspaceCacheStoreError::Io)?;
+        Ok(())
+    }
+
+    fn cleanup_temporary(&self) {
+        let owner = self.workspace_root.join(CACHE_OWNER_DIRECTORY);
+        if !existing_real_directory(&owner).is_ok_and(|exists| exists) {
+            return;
+        }
+        let cache = owner.join(CACHE_DIRECTORY);
+        if !existing_real_directory(&cache).is_ok_and(|exists| exists) {
+            return;
+        }
+        let temporary = cache.join(CACHE_TEMPORARY_FILE);
+        if existing_regular_file(&temporary).is_ok_and(|exists| exists) {
+            let _ = fs::remove_file(temporary);
+        }
+    }
+
+    #[cfg(test)]
+    fn inject(&self, point: WorkspaceCacheFailurePoint) -> Result<(), WorkspaceCacheStoreError> {
+        if self.failure == Some(point) {
+            Err(WorkspaceCacheStoreError::Injected(point))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    fn with_failure(mut self, failure: WorkspaceCacheFailurePoint) -> Self {
+        self.failure = Some(failure);
+        self
+    }
+}
+
+#[derive(Debug)]
+enum WorkspaceCacheStoreError {
+    Io(io::Error),
+    Codec(WorkspaceCacheCodecError),
+    Verification,
+    #[cfg(test)]
+    Injected(WorkspaceCacheFailurePoint),
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkspaceCacheFailurePoint {
+    CreateTemporary,
+    WriteTemporary,
+    SyncTemporary,
+    ReadBackTemporary,
+    RemoveCurrent,
+    RenameTemporary,
+}
+
+fn existing_real_directory(path: &Path) -> io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(true),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "workspace cache path component is not a real directory",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn existing_regular_file(path: &Path) -> io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => Ok(true),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "workspace cache candidate is not a regular file",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn ensure_real_directory(path: &Path) -> io::Result<()> {
+    if existing_real_directory(path)? {
+        return Ok(());
+    }
+    fs::create_dir(path)?;
+    if existing_real_directory(path)? {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "created workspace cache path is not a real directory",
+        ))
+    }
+}
+
+fn remove_existing_regular_file(path: &Path) -> io::Result<()> {
+    if existing_regular_file(path)? {
+        fs::remove_file(path)?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -683,15 +1016,16 @@ fn inconsistent(message: impl Into<String>) -> WorkspaceCacheCodecError {
 }
 
 fn validate_source(source: &WorkspaceCacheSource) -> Result<(), WorkspaceCacheCodecError> {
-    let mut previous: Option<&[String]> = None;
+    let mut previous: Option<PathBuf> = None;
     for entry in &source.entries {
         validate_components(&entry.path)?;
-        if previous.is_some_and(|path| path >= entry.path.as_slice()) {
+        let path = components_path(&entry.path);
+        if previous.as_ref().is_some_and(|previous| previous >= &path) {
             return Err(inconsistent(
                 "workspace cache source entries are not in unique canonical order",
             ));
         }
-        previous = Some(&entry.path);
+        previous = Some(path);
         match (entry.kind, entry.bytes.is_some()) {
             (WorkspaceCacheSourceEntryKind::RegularFile, true)
             | (
@@ -706,6 +1040,14 @@ fn validate_source(source: &WorkspaceCacheSource) -> Result<(), WorkspaceCacheCo
         }
     }
     Ok(())
+}
+
+fn components_path(components: &[String]) -> PathBuf {
+    let mut path = PathBuf::new();
+    for component in components {
+        path.push(component);
+    }
+    path
 }
 
 fn validate_components(components: &[String]) -> Result<(), WorkspaceCacheCodecError> {
@@ -752,11 +1094,7 @@ fn relative_components(root: &Path, path: &Path) -> Result<Vec<String>, Workspac
 
 fn joined_path(root: &Path, components: &[String]) -> Result<PathBuf, WorkspaceCacheCodecError> {
     validate_root_components(components)?;
-    let mut path = root.to_path_buf();
-    for component in components {
-        path.push(component);
-    }
-    Ok(path)
+    Ok(root.join(components_path(components)))
 }
 
 fn entity_id(value: String) -> Result<EntityId, WorkspaceCacheCodecError> {
@@ -1830,6 +2168,7 @@ impl ConfigurationDto {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::{Path, PathBuf};
 
     use oneagent_common::EntityName;
@@ -1850,15 +2189,18 @@ mod tests {
         MetadataRegisterRecord, MetadataSpecificPayload, WebServiceMetadataPayload,
         WebServiceXdtoPackage, XdtoPackageMetadataPayload,
     };
+    use tempfile::tempdir;
 
     use super::{
         AccessRightPayloadDto, ConfidenceDto, DataSetKindDto, DiagnosticCodeDto, DiagnosticKindDto,
         EdgeKindDto, EnvelopeDto, FactOriginDto, MetadataKindDto, NodeKindDto, NodePayloadDto,
         ReferenceCategoryDto, ReferenceDto, ReferenceRequestOutcomeDto, ResolutionStateDto,
         WebServiceParameterDirectionDto, WorkspaceCacheCodec, WorkspaceCacheCodecErrorKind,
-        WorkspaceCacheSource, WorkspaceCacheSourceEntry, WorkspaceCacheSourceEntryKind,
-        WorkspaceDto, XdtoTypeKindDto, content_checksum,
+        WorkspaceCacheFailurePoint, WorkspaceCacheLoadOutcome, WorkspaceCacheSource,
+        WorkspaceCacheSourceEntry, WorkspaceCacheSourceEntryKind, WorkspaceCacheStore,
+        WorkspaceCacheWriteOutcome, WorkspaceDto, XdtoTypeKindDto, content_checksum,
     };
+    use crate::workspace::change::WorkspaceFileState;
     use crate::workspace::{WorkspaceSnapshot, WorkspaceSnapshotBuilder, snapshot_from_parts};
 
     fn name(value: &str) -> EntityName {
@@ -1900,10 +2242,56 @@ mod tests {
             .expect("tracked EDT and Designer XML fixtures must build")
     }
 
+    fn diagnostic_snapshot(root: &Path) -> WorkspaceSnapshot {
+        let configuration_root = root.join("configuration");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            oneagent_common::EntityId::new("configuration:test")
+                .expect("configuration ID must be valid"),
+            name("Test"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let diagnostic = SemanticDiagnostic::new(
+            SemanticDiagnosticCode::ReferenceMalformedFormat,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::MalformedReferenceFormat,
+            "malformed cached reference",
+            SemanticReference::Raw("broken".to_owned()),
+        );
+        let mut statistics = SemanticReferenceStatistics::new();
+        statistics.record(SemanticReferenceOutcome::MalformedFormat, false);
+        let report = SemanticGraphReport::from_graph_diagnostics_and_references(
+            &graph,
+            std::slice::from_ref(&diagnostic),
+            statistics,
+        );
+        let configuration = snapshot_from_parts(
+            &configuration_root,
+            oneagent_workspace::WorkspaceFormat::Edt,
+            graph,
+            vec![diagnostic],
+            SemanticReferenceRequestLedger::new(),
+            statistics,
+            report,
+        )
+        .expect("diagnostic-rich snapshot must be valid");
+        WorkspaceSnapshot {
+            configurations: vec![configuration],
+        }
+    }
+
     fn canonical_bytes(envelope: &mut EnvelopeDto) -> Vec<u8> {
         envelope.content_checksum = content_checksum(&envelope.source, &envelope.workspace)
             .expect("test checksum must encode");
         serde_json::to_vec(envelope).expect("test envelope must encode")
+    }
+
+    fn cache_file(root: &Path) -> PathBuf {
+        root.join(".oneagent/cache/workspace-v1.json")
+    }
+
+    fn temporary_file(root: &Path) -> PathBuf {
+        root.join(".oneagent/cache/workspace-v1.tmp")
     }
 
     #[test]
@@ -2008,41 +2396,8 @@ mod tests {
     #[test]
     fn diagnostic_and_legacy_reference_evidence_round_trips() {
         let root = Path::new("/workspace");
-        let configuration_root = root.join("configuration");
-        let mut graph = SemanticGraph::new();
-        graph.insert_node(GraphNode::new(
-            oneagent_common::EntityId::new("configuration:test")
-                .expect("configuration ID must be valid"),
-            name("Test"),
-            NodeKind::Metadata(MetadataKind::Configuration),
-        ));
-        let diagnostic = SemanticDiagnostic::new(
-            SemanticDiagnosticCode::ReferenceMalformedFormat,
-            SemanticDiagnosticSeverity::Error,
-            SemanticDiagnosticKind::MalformedReferenceFormat,
-            "malformed cached reference",
-            SemanticReference::Raw("broken".to_owned()),
-        );
-        let mut statistics = SemanticReferenceStatistics::new();
-        statistics.record(SemanticReferenceOutcome::MalformedFormat, false);
-        let report = SemanticGraphReport::from_graph_diagnostics_and_references(
-            &graph,
-            std::slice::from_ref(&diagnostic),
-            statistics,
-        );
-        let configuration = snapshot_from_parts(
-            &configuration_root,
-            oneagent_workspace::WorkspaceFormat::Edt,
-            graph,
-            vec![diagnostic],
-            SemanticReferenceRequestLedger::new(),
-            statistics,
-            report,
-        )
-        .expect("diagnostic-rich snapshot must be valid");
-        let snapshot = WorkspaceSnapshot {
-            configurations: vec![configuration],
-        };
+        let snapshot = diagnostic_snapshot(root);
+        let statistics = snapshot.configurations()[0].reference_statistics();
         let source = source();
 
         let bytes = WorkspaceCacheCodec::encode(&source, root, &snapshot)
@@ -2580,6 +2935,358 @@ mod tests {
                 .expect_err("semantic normalization must not silently repair cache data")
                 .kind(),
             WorkspaceCacheCodecErrorKind::Inconsistent
+        );
+    }
+
+    #[test]
+    fn store_missing_write_hit_cleanup_and_repetition_are_deterministic() {
+        let root = tempdir().expect("temporary Workspace must be created");
+        fs::write(root.path().join("source.txt"), b"stable").expect("source file must be created");
+        let state = WorkspaceFileState::scan(root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(root.path());
+        let store = WorkspaceCacheStore::new(root.path().to_path_buf());
+
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Missing
+        );
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+        assert!(cache_file(root.path()).is_file());
+        assert!(!temporary_file(root.path()).exists());
+        assert_eq!(
+            WorkspaceFileState::scan(root.path()).expect("post-write scan must succeed"),
+            state,
+            "cache-owned content must not contaminate source identity"
+        );
+
+        let loaded = store.load(&state);
+        assert_eq!(loaded.outcome(), WorkspaceCacheLoadOutcome::Hit);
+        let loaded = loaded.into_snapshot().expect("hit must retain a snapshot");
+        assert_eq!(
+            WorkspaceDto::from_snapshot(root.path(), &snapshot)
+                .expect("clean snapshot DTO must build"),
+            WorkspaceDto::from_snapshot(root.path(), &loaded)
+                .expect("loaded snapshot DTO must build")
+        );
+
+        fs::write(temporary_file(root.path()), b"stale")
+            .expect("stale temporary file must be created");
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+        assert!(!temporary_file(root.path()).exists());
+        assert_eq!(store.load(&state).outcome(), WorkspaceCacheLoadOutcome::Hit);
+    }
+
+    #[test]
+    fn store_identity_tracks_every_source_change_and_ignores_enumeration_order() {
+        let root = tempdir().expect("temporary Workspace must be created");
+        let source_file = root.path().join("source.txt");
+        fs::write(&source_file, b"stable").expect("source file must be created");
+        let baseline = WorkspaceFileState::scan(root.path()).expect("baseline scan must succeed");
+        let snapshot = diagnostic_snapshot(root.path());
+        let store = WorkspaceCacheStore::new(root.path().to_path_buf());
+        assert_eq!(
+            store.write(&baseline, &snapshot),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+
+        fs::write(&source_file, b"changed").expect("source content must change");
+        let modified = WorkspaceFileState::scan(root.path()).expect("modified scan must succeed");
+        assert_eq!(
+            store.load(&modified).outcome(),
+            WorkspaceCacheLoadOutcome::SourceChanged
+        );
+        fs::write(&source_file, b"stable").expect("source content must recover");
+        assert_eq!(
+            store
+                .load(&WorkspaceFileState::scan(root.path()).expect("recovery scan must succeed"))
+                .outcome(),
+            WorkspaceCacheLoadOutcome::Hit
+        );
+
+        let added_file = root.path().join("added.txt");
+        fs::write(&added_file, b"added").expect("source file must be added");
+        assert_eq!(
+            store
+                .load(&WorkspaceFileState::scan(root.path()).expect("addition scan must succeed"))
+                .outcome(),
+            WorkspaceCacheLoadOutcome::SourceChanged
+        );
+        fs::remove_file(&added_file).expect("added source must be removed");
+
+        let renamed_file = root.path().join("renamed.txt");
+        fs::rename(&source_file, &renamed_file).expect("source file must be renamed");
+        assert_eq!(
+            store
+                .load(&WorkspaceFileState::scan(root.path()).expect("rename scan must succeed"))
+                .outcome(),
+            WorkspaceCacheLoadOutcome::SourceChanged
+        );
+        fs::rename(&renamed_file, &source_file).expect("source rename must recover");
+        fs::remove_file(&source_file).expect("source file must be removed");
+        assert_eq!(
+            store
+                .load(&WorkspaceFileState::scan(root.path()).expect("removal scan must succeed"))
+                .outcome(),
+            WorkspaceCacheLoadOutcome::SourceChanged
+        );
+
+        let first = tempdir().expect("first enumeration root must be created");
+        let second = tempdir().expect("second enumeration root must be created");
+        for (root, paths) in [
+            (first.path(), ["a.txt", "z.txt"]),
+            (second.path(), ["z.txt", "a.txt"]),
+        ] {
+            for path in paths {
+                fs::write(root.join(path), path.as_bytes())
+                    .expect("enumeration source must be created");
+            }
+        }
+        assert_eq!(
+            WorkspaceCacheSource::try_from(
+                &WorkspaceFileState::scan(first.path()).expect("first scan must succeed")
+            )
+            .expect("first source identity must build"),
+            WorkspaceCacheSource::try_from(
+                &WorkspaceFileState::scan(second.path()).expect("second scan must succeed")
+            )
+            .expect("second source identity must build")
+        );
+    }
+
+    #[test]
+    fn store_classifies_incompatible_corrupt_and_unavailable_candidates() {
+        let root = tempdir().expect("temporary Workspace must be created");
+        fs::write(root.path().join("source.txt"), b"stable").expect("source file must be created");
+        let state = WorkspaceFileState::scan(root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(root.path());
+        let store = WorkspaceCacheStore::new(root.path().to_path_buf());
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+
+        let bytes = fs::read(cache_file(root.path())).expect("cache file must be readable");
+        let mut envelope: EnvelopeDto =
+            serde_json::from_slice(&bytes).expect("cache envelope must parse");
+        envelope.semantic_version += 1;
+        fs::write(
+            cache_file(root.path()),
+            serde_json::to_vec(&envelope).expect("future envelope must encode"),
+        )
+        .expect("future cache must be written");
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Incompatible
+        );
+
+        let mut envelope: EnvelopeDto =
+            serde_json::from_slice(&bytes).expect("cache envelope must parse again");
+        envelope.schema_version += 1;
+        fs::write(
+            cache_file(root.path()),
+            serde_json::to_vec(&envelope).expect("future schema envelope must encode"),
+        )
+        .expect("future schema cache must be written");
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Incompatible
+        );
+
+        fs::write(cache_file(root.path()), b"{").expect("truncated cache must be written");
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Corrupt
+        );
+        fs::write(cache_file(root.path()), b"not-json").expect("malformed cache must be written");
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Corrupt
+        );
+
+        fs::remove_file(cache_file(root.path())).expect("cache file must be removed");
+        fs::create_dir(cache_file(root.path())).expect("wrong-kind cache must be created");
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Unavailable
+        );
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Failed
+        );
+    }
+
+    #[test]
+    fn store_rejects_wrong_kind_components_and_temporary_entries() {
+        let owner_root = tempdir().expect("owner test root must be created");
+        fs::write(owner_root.path().join("source.txt"), b"stable")
+            .expect("source file must be created");
+        let state = WorkspaceFileState::scan(owner_root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(owner_root.path());
+        fs::write(owner_root.path().join(".oneagent"), b"wrong kind")
+            .expect("wrong-kind owner must be created");
+        let store = WorkspaceCacheStore::new(owner_root.path().to_path_buf());
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Unavailable
+        );
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Failed
+        );
+
+        let temporary_root = tempdir().expect("temporary entry root must be created");
+        fs::write(temporary_root.path().join("source.txt"), b"stable")
+            .expect("source file must be created");
+        let state =
+            WorkspaceFileState::scan(temporary_root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(temporary_root.path());
+        let store = WorkspaceCacheStore::new(temporary_root.path().to_path_buf());
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+        let current =
+            fs::read(cache_file(temporary_root.path())).expect("current cache must be readable");
+        fs::create_dir(temporary_file(temporary_root.path()))
+            .expect("wrong-kind temporary entry must be created");
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Failed
+        );
+        assert_eq!(
+            fs::read(cache_file(temporary_root.path())).expect("current cache must remain"),
+            current
+        );
+    }
+
+    #[test]
+    fn replacement_failures_cleanup_partial_temporary_state_and_recover() {
+        let root = tempdir().expect("temporary Workspace must be created");
+        fs::write(root.path().join("source.txt"), b"stable").expect("source file must be created");
+        let state = WorkspaceFileState::scan(root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(root.path());
+        let store = WorkspaceCacheStore::new(root.path().to_path_buf());
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+
+        for point in [
+            WorkspaceCacheFailurePoint::CreateTemporary,
+            WorkspaceCacheFailurePoint::WriteTemporary,
+            WorkspaceCacheFailurePoint::SyncTemporary,
+            WorkspaceCacheFailurePoint::ReadBackTemporary,
+            WorkspaceCacheFailurePoint::RemoveCurrent,
+            WorkspaceCacheFailurePoint::RenameTemporary,
+        ] {
+            assert_eq!(
+                store.write(&state, &snapshot),
+                WorkspaceCacheWriteOutcome::Succeeded,
+                "each failure case must start with a current cache"
+            );
+            let current =
+                fs::read(cache_file(root.path())).expect("current cache must be readable");
+            let failing = WorkspaceCacheStore::new(root.path().to_path_buf()).with_failure(point);
+            assert_eq!(
+                failing.write(&state, &snapshot),
+                WorkspaceCacheWriteOutcome::Failed
+            );
+            assert!(!temporary_file(root.path()).exists());
+            if point == WorkspaceCacheFailurePoint::RenameTemporary {
+                assert!(!cache_file(root.path()).exists());
+            } else {
+                assert_eq!(
+                    fs::read(cache_file(root.path())).expect("current cache must be preserved"),
+                    current
+                );
+            }
+            assert_eq!(
+                store.write(&state, &snapshot),
+                WorkspaceCacheWriteOutcome::Succeeded
+            );
+            assert_eq!(store.load(&state).outcome(), WorkspaceCacheLoadOutcome::Hit);
+        }
+    }
+
+    #[test]
+    fn load_and_write_outcome_vocabularies_include_deferred_runtime_states() {
+        assert_eq!(
+            WorkspaceCacheLoadOutcome::NotAttempted,
+            WorkspaceCacheLoadOutcome::NotAttempted
+        );
+        assert_eq!(
+            WorkspaceCacheWriteOutcome::NotAttempted,
+            WorkspaceCacheWriteOutcome::NotAttempted
+        );
+        assert_eq!(
+            WorkspaceCacheWriteOutcome::SkippedUnstableSource,
+            WorkspaceCacheWriteOutcome::SkippedUnstableSource
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn store_never_follows_cache_owner_or_candidate_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let owner_root = tempdir().expect("owner symlink root must be created");
+        let external = tempdir().expect("external root must be created");
+        fs::write(owner_root.path().join("source.txt"), b"stable")
+            .expect("source file must be created");
+        let state = WorkspaceFileState::scan(owner_root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(owner_root.path());
+        fs::create_dir(external.path().join("cache"))
+            .expect("external cache-shaped directory must be created");
+        let external_temporary = external.path().join("cache/workspace-v1.tmp");
+        fs::write(&external_temporary, b"external temporary")
+            .expect("external temporary file must be created");
+        symlink(external.path(), owner_root.path().join(".oneagent"))
+            .expect("owner symlink must be created");
+        let store = WorkspaceCacheStore::new(owner_root.path().to_path_buf());
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Unavailable
+        );
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Failed
+        );
+        assert!(!external.path().join("cache/workspace-v1.json").exists());
+        assert_eq!(
+            fs::read(&external_temporary).expect("external temporary file must remain"),
+            b"external temporary"
+        );
+
+        let candidate_root = tempdir().expect("candidate symlink root must be created");
+        let external_file = external.path().join("external.json");
+        fs::write(&external_file, b"external").expect("external file must be created");
+        fs::write(candidate_root.path().join("source.txt"), b"stable")
+            .expect("source file must be created");
+        let state =
+            WorkspaceFileState::scan(candidate_root.path()).expect("source scan must succeed");
+        let snapshot = diagnostic_snapshot(candidate_root.path());
+        fs::create_dir_all(candidate_root.path().join(".oneagent/cache"))
+            .expect("cache directories must be created");
+        symlink(&external_file, cache_file(candidate_root.path()))
+            .expect("candidate symlink must be created");
+        let store = WorkspaceCacheStore::new(candidate_root.path().to_path_buf());
+        assert_eq!(
+            store.load(&state).outcome(),
+            WorkspaceCacheLoadOutcome::Unavailable
+        );
+        assert_eq!(
+            store.write(&state, &snapshot),
+            WorkspaceCacheWriteOutcome::Failed
+        );
+        assert_eq!(
+            fs::read(external_file).expect("external file must remain readable"),
+            b"external"
         );
     }
 }

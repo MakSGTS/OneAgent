@@ -38,10 +38,16 @@ impl WorkspaceFileState {
         scan_directory(root, root, &mut entries)?;
         Ok(Self { entries })
     }
+
+    pub(super) fn entries(&self) -> impl Iterator<Item = (&Path, &WorkspaceFileEntry)> {
+        self.entries
+            .iter()
+            .map(|(path, entry)| (path.as_path(), entry))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum WorkspaceFileEntry {
+pub(super) enum WorkspaceFileEntry {
     Directory,
     RegularFile(Vec<u8>),
     Other,
@@ -70,6 +76,9 @@ fn scan_directory(
             .strip_prefix(root)
             .expect("scanned entry must remain below the Workspace root")
             .to_path_buf();
+        if relative_path == Path::new(".oneagent") {
+            continue;
+        }
         let file_type =
             child
                 .file_type()
@@ -418,6 +427,7 @@ impl ScanTicks {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::Path;
     use std::time::Duration;
 
     use tempfile::tempdir;
@@ -518,6 +528,30 @@ mod tests {
             fs::write(root.path().join(directory).join("transient.tmp"), b"second")
                 .expect("ignored file must be changed");
         }
+        let changed = WorkspaceFileState::scan(root.path()).expect("second scan must succeed");
+
+        assert_eq!(first, changed);
+    }
+
+    #[test]
+    fn scan_excludes_the_reserved_cache_directory_and_its_own_entry() {
+        let root = tempdir().expect("temporary Workspace must be created");
+        fs::write(root.path().join("module.bsl"), b"stable").expect("source file must be created");
+        let cache = root.path().join(".oneagent/cache");
+        fs::create_dir_all(&cache).expect("cache directory must be created");
+        fs::write(cache.join("workspace-v1.json"), b"first").expect("cache file must be created");
+
+        let first = WorkspaceFileState::scan(root.path()).expect("first scan must succeed");
+        assert!(!first.entries.contains_key(Path::new(".oneagent")));
+        assert!(
+            first
+                .entries()
+                .all(|(path, _)| !path.starts_with(Path::new(".oneagent")))
+        );
+
+        fs::write(cache.join("workspace-v1.json"), b"second").expect("cache file must change");
+        fs::write(cache.join("workspace-v1.tmp"), b"temporary")
+            .expect("temporary cache file must be created");
         let changed = WorkspaceFileState::scan(root.path()).expect("second scan must succeed");
 
         assert_eq!(first, changed);

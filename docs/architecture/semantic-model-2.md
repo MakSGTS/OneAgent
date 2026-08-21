@@ -169,8 +169,8 @@ reference ledgers/statistics, and reports. Public integration evidence proves
 both production formats, deterministic fresh runs, empty discovery, invalid and
 conflicting roots, duplicate identity, later adapter failure atomicity,
 lifecycle-derived readiness, reverse cleanup, and closed observation. Runtime
-does not merge graphs or become a semantic contributor. Rebuild watching,
-cache/persistence, and supported CLI behavior remain deferred to Sprints 19–21.
+does not merge graphs or become a semantic contributor. Cache/persistence and
+supported CLI behavior remain deferred to Sprints 20–21.
 The
 [Sprint 17 integration review](../reviews/sprint-17-workspace-service.md)
 records `pass`; Sprint 17 is completed.
@@ -189,8 +189,23 @@ selection and ordering, the complete first-slice error/method/path matrix,
 `Initializing`/`Running`/`Stopping`, snapshot and listener cleanup, and equal
 fresh runs. The
 [Sprint 18 integration review](../reviews/sprint-18-graph-query-api.md) records
-`pass`; Sprint 18 is completed and Sprint 19 File Watching is the unique `next`
-target.
+`pass`; Sprint 18 is completed.
+
+ADR-0041 governs the implemented Sprint 19 File Watching boundary without
+changing graph or adapter authority. After the initial Workspace build, one
+Runtime-owned polling source compares normalized recursive scans containing
+complete file bytes and ignores confirmed tool/cache directories. The Workspace
+service serializes complete production rebuilds, coalesces changes during a
+build, and atomically replaces the published immutable snapshot only after a
+valid all-or-nothing result. Failed observation or rebuild attempts retain the
+last valid snapshot and become public update status; a later change can recover.
+Existing health/readiness and Graph Query wire contracts remain unchanged, and
+shutdown joins observation and build work before clearing the snapshot and
+closing status observation. Public production evidence covers EDT and Designer
+XML modifications, removal and addition/rename-equivalent changes, immutable
+replacement, query visibility, failure retention and recovery, fresh runs, and
+complete cleanup. Sprint 19 implementation and public evidence are complete;
+Sprint 19 remains the unique `next` target pending integration review.
 
 ## Core principles
 

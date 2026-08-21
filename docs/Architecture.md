@@ -28,10 +28,13 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-runtime` exposes the long-running composition root as a reusable
      library. It owns ordered service startup, rollback, task handles,
      per-service cancellation, reverse shutdown, lifecycle, and terminal error
-     propagation. Its Runtime-owned Workspace service performs one configured
-     production discovery/build, publishes separate immutable
-     per-configuration semantic snapshots, and clears them during owned
-     shutdown. Its sole Axum service exposes HTTP liveness and
+     propagation. Its Runtime-owned Workspace service performs configured
+     production discovery/build, observes subsequent file changes, serializes
+     complete rebuilds, publishes separate immutable per-configuration semantic
+     snapshots, retains the last valid publication across failed rebuilds, and
+     clears the snapshot during owned shutdown. A public status observer reports
+     rebuild phase, attempts, publications, and failures. Its sole Axum service
+     exposes HTTP liveness and
      lifecycle-derived readiness probes plus the versioned read-only Graph
      Query route set. A transport-neutral observer-backed query component owns
      exact configuration, node, direct-relation, and bounded-traversal
@@ -50,8 +53,9 @@ Index remain read-only views over graph snapshots.
 
 The roadmap assigns future boundaries explicitly:
 
-- Graph-query Runtime APIs are implemented in Sprint 18. File watching,
-  persistence, and the supported CLI remain assigned to Sprints 19–21.
+- Graph-query Runtime APIs are implemented in Sprint 18. Sprint 19 File Watching
+  implementation and public evidence are complete pending integration review;
+  persistence and the supported CLI remain assigned to Sprints 20–21.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -176,6 +180,44 @@ and Designer inputs have an explicit provenance and SHA-256 inventory.
 | Readiness authority | With a deterministic later startup/cleanup gate, real health requests remain not-ready in `Initializing` and `Stopping`, become ready only in `Running`, and retain the Sprint 16 wire vocabulary. |
 | Shutdown cleanup | Reverse cancellation keeps the complete snapshot available until the Workspace service is reached, then clears it and closes observation before terminal `Stopped`. |
 
+## Accepted File Watching boundary
+
+[ADR-0041](adr/0041-file-watching.md) governs the implemented Sprint 19
+boundary. After the startup build, one Runtime-owned source recursively scans
+the configured Workspace root every 250 milliseconds using normalized relative
+paths, entry kinds, and complete regular-file bytes. Descendants of `.git`,
+`.idea`, `.vscode`, `target`, and `node_modules` are excluded; source extensions
+are not filtered. The source emits only the latest opaque revision through a
+private single-value channel.
+
+The Workspace service remains the sole rebuild owner. It closes the startup
+scan/build race with before/build/after scans, serializes complete rebuilds,
+coalesces changes that arrive during a build, and atomically replaces the
+published `Arc` only after a valid all-or-nothing build. A post-start observation
+or semantic-build failure retains the last valid snapshot and becomes public
+update status instead of terminating Runtime; a later change can recover.
+Health/readiness and Graph Query wire contracts remain unchanged. Shutdown
+cancels and joins the change source and any in-flight build, prevents a
+post-cancellation publication, clears the snapshot, and publishes terminal
+`Stopped` update status.
+
+### Sprint 19 public evidence matrix
+
+The public `apps/runtime/tests/file_watching.rs` target imports only the
+`oneagent_runtime` library surface, copies the tracked Sprint 17 fixture into
+fresh temporary roots, uses production polling/discovery/build paths, and
+queries the existing Graph Query API over raw Tokio loopback HTTP. Event watches
+are the asserted synchronization mechanism; five-second timeouts are hang
+guards rather than timing evidence.
+
+| Contract | Public evidence |
+| --- | --- |
+| Both production formats | Exact EDT and Designer XML name changes trigger complete production rebuilds and become visible in separate snapshots and Graph Query responses. |
+| Atomic immutable replacement | A held pre-change `Arc` remains unchanged while later observations receive one valid replacement; Graph Query requests observe only complete published snapshots. |
+| Add/remove/rename-equivalent changes | Moving a Designer root outside the watched Workspace and back under a different root name proves removal and addition detection without a native rename event contract. |
+| Failure retention and recovery | Corrupt EDT input reports a semantic-build failure while the last valid snapshot and query result remain available; a later repair publishes a recovered snapshot. |
+| Status and ownership | Public update status proves attempts, publications, phases, failure classification, recovery, terminal `Stopped`, snapshot cleanup, listener release, and equal fresh-run observations. |
+
 ### Sprint 16 public evidence matrix
 
 The public `apps/runtime/tests/http_health.rs` target imports only the
@@ -217,4 +259,5 @@ decision in the
 [Sprint 17 integration review](reviews/sprint-17-workspace-service.md). Sprint
 18 Graph Query API is completed with a `pass` decision in the
 [Sprint 18 integration review](reviews/sprint-18-graph-query-api.md). Sprint 19
-File Watching is the unique `next` target.
+File Watching implementation and public production evidence are complete;
+Sprint 19 remains the unique `next` target pending integration review.

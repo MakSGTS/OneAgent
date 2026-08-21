@@ -208,14 +208,22 @@ impl WorkspaceCacheCodec {
     }
 }
 
+/// Closed outcome of the latest persistent Workspace cache load attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum WorkspaceCacheLoadOutcome {
+pub enum WorkspaceCacheLoadOutcome {
+    /// No load has been attempted by this service.
     NotAttempted,
+    /// A complete compatible snapshot matched the observed source exactly.
     Hit,
+    /// No cache candidate exists at the fixed Workspace-local location.
     Missing,
+    /// The candidate describes a different complete source state.
     SourceChanged,
+    /// The candidate uses an unsupported cache format or semantic version.
     Incompatible,
+    /// The candidate is malformed, incomplete, noncanonical, or semantically invalid.
     Corrupt,
+    /// The candidate could not be accessed safely or completely.
     Unavailable,
 }
 
@@ -234,7 +242,15 @@ impl WorkspaceCacheLoad {
         self.snapshot
     }
 
-    const fn without_snapshot(outcome: WorkspaceCacheLoadOutcome) -> Self {
+    #[cfg(test)]
+    pub(super) const fn hit(snapshot: WorkspaceSnapshot) -> Self {
+        Self {
+            outcome: WorkspaceCacheLoadOutcome::Hit,
+            snapshot: Some(snapshot),
+        }
+    }
+
+    pub(super) const fn without_snapshot(outcome: WorkspaceCacheLoadOutcome) -> Self {
         Self {
             outcome,
             snapshot: None,
@@ -242,12 +258,27 @@ impl WorkspaceCacheLoad {
     }
 }
 
+/// Closed outcome of the latest persistent Workspace cache write decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum WorkspaceCacheWriteOutcome {
+pub enum WorkspaceCacheWriteOutcome {
+    /// No write has been attempted or skipped by this service.
     NotAttempted,
+    /// A complete validated snapshot replaced the current cache entry.
     Succeeded,
+    /// The source changed during the build, so no cache entry was written.
     SkippedUnstableSource,
+    /// The cache entry could not be replaced safely and completely.
     Failed,
+}
+
+pub(super) trait WorkspaceCacheStorage: Send + Sync {
+    fn load(&self, state: &WorkspaceFileState) -> WorkspaceCacheLoad;
+
+    fn write(
+        &self,
+        state: &WorkspaceFileState,
+        snapshot: &WorkspaceSnapshot,
+    ) -> WorkspaceCacheWriteOutcome;
 }
 
 #[derive(Debug)]
@@ -426,6 +457,20 @@ impl WorkspaceCacheStore {
     }
 }
 
+impl WorkspaceCacheStorage for WorkspaceCacheStore {
+    fn load(&self, state: &WorkspaceFileState) -> WorkspaceCacheLoad {
+        Self::load(self, state)
+    }
+
+    fn write(
+        &self,
+        state: &WorkspaceFileState,
+        snapshot: &WorkspaceSnapshot,
+    ) -> WorkspaceCacheWriteOutcome {
+        Self::write(self, state, snapshot)
+    }
+}
+
 #[derive(Debug)]
 enum WorkspaceCacheStoreError {
     Io(io::Error),
@@ -433,6 +478,34 @@ enum WorkspaceCacheStoreError {
     Verification,
     #[cfg(test)]
     Injected(WorkspaceCacheFailurePoint),
+}
+
+impl Display for WorkspaceCacheStoreError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(formatter, "workspace cache I/O failed: {error}"),
+            Self::Codec(error) => write!(formatter, "workspace cache codec failed: {error}"),
+            Self::Verification => {
+                formatter.write_str("workspace cache read-back verification failed")
+            }
+            #[cfg(test)]
+            Self::Injected(point) => {
+                write!(formatter, "workspace cache failure injected at {point:?}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for WorkspaceCacheStoreError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::Codec(error) => Some(error),
+            Self::Verification => None,
+            #[cfg(test)]
+            Self::Injected(_) => None,
+        }
+    }
 }
 
 #[cfg(test)]

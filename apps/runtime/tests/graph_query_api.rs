@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use oneagent_runtime::{
     WorkspaceService, WorkspaceSnapshot,
 };
 use serde_json::{Value, json};
+use tempfile::tempdir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, watch};
@@ -45,6 +47,33 @@ struct RawResponse {
 
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service")
+}
+
+fn copy_tree(source: &Path, destination: &Path) {
+    fs::create_dir_all(destination).expect("fixture destination must be created");
+    let mut entries = fs::read_dir(source)
+        .expect("fixture source must be readable")
+        .map(|entry| entry.expect("fixture entry must be readable"))
+        .collect::<Vec<_>>();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in entries {
+        let destination = destination.join(entry.file_name());
+        if entry
+            .file_type()
+            .expect("fixture entry type must be readable")
+            .is_dir()
+        {
+            copy_tree(&entry.path(), &destination);
+        } else {
+            fs::copy(entry.path(), destination).expect("fixture file must be copied");
+        }
+    }
+}
+
+fn copy_fixture() -> tempfile::TempDir {
+    let temporary = tempdir().expect("temporary Workspace root must be created");
+    copy_tree(&fixture_root(), temporary.path());
+    temporary
 }
 
 fn configured_builder(root: impl Into<PathBuf>) -> AppBuilder {
@@ -201,13 +230,14 @@ fn startup_gate(
 }
 
 async fn run_production_operations_once() -> Vec<Value> {
+    let root = copy_fixture();
     let workspace = WorkspaceService::new();
     let observer = workspace.snapshot_observer();
     let mut snapshot_changes = observer.subscribe();
     let graph_query = GraphQueryService::new(observer.clone());
     let http = HttpService::with_graph_query(graph_query);
     let mut address_changes = http.subscribe_bound_address();
-    let app = configured_builder(fixture_root())
+    let app = configured_builder(root.path())
         .register_service("http", http)
         .expect("HTTP service must register")
         .register_service("workspace", workspace)
@@ -379,11 +409,12 @@ async fn public_graph_query_api_keeps_both_production_graphs_exact_and_repeatabl
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn public_graph_query_api_enforces_the_complete_wire_and_error_matrix() {
+    let root = copy_fixture();
     let workspace = WorkspaceService::new();
     let graph_query = GraphQueryService::new(workspace.snapshot_observer());
     let http = HttpService::with_graph_query(graph_query);
     let mut address_changes = http.subscribe_bound_address();
-    let app = configured_builder(fixture_root())
+    let app = configured_builder(root.path())
         .register_service("http", http)
         .expect("HTTP service must register")
         .register_service("workspace", workspace)
@@ -617,6 +648,7 @@ async fn public_graph_query_api_enforces_the_complete_wire_and_error_matrix() {
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn public_graph_query_api_is_lifecycle_gated_and_releases_all_resources() {
+    let root = copy_fixture();
     let workspace = WorkspaceService::new();
     let observer = workspace.snapshot_observer();
     let mut snapshot_changes = observer.subscribe();
@@ -633,7 +665,7 @@ async fn public_graph_query_api_is_lifecycle_gated_and_releases_all_resources() 
         stopping_sender,
         stop_release,
     );
-    let app = configured_builder(fixture_root())
+    let app = configured_builder(root.path())
         .register_service("http", http)
         .expect("HTTP service must register")
         .register_service("workspace", workspace)

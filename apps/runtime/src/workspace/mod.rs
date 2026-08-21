@@ -1,9 +1,10 @@
 //! Immutable Workspace semantic snapshots and deterministic initial builds.
 
-#[allow(dead_code)] // Task 4 integrates the completed private codec with storage.
 mod cache;
 mod change;
 mod graph_query;
+
+pub use cache::{WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome};
 
 pub use graph_query::{
     GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
@@ -36,6 +37,7 @@ use tokio::sync::watch;
 use tokio::task::JoinError;
 
 use crate::{BoxError, RuntimeService, ServiceContext, ServiceStartFuture, ServiceTask};
+use cache::{WorkspaceCacheStorage, WorkspaceCacheStore};
 use change::{
     RunningWorkspaceChangeSource, WorkspaceChangeOutcome, WorkspaceChangeSource,
     WorkspaceChangeSourceError, WorkspaceFileState,
@@ -402,6 +404,54 @@ impl WorkspaceUpdateObserver {
     }
 }
 
+/// Immutable transport-neutral state of persistent Workspace cache activity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorkspaceCacheStatus {
+    load: WorkspaceCacheLoadOutcome,
+    write: WorkspaceCacheWriteOutcome,
+}
+
+impl WorkspaceCacheStatus {
+    const fn starting() -> Self {
+        Self {
+            load: WorkspaceCacheLoadOutcome::NotAttempted,
+            write: WorkspaceCacheWriteOutcome::NotAttempted,
+        }
+    }
+
+    /// Returns the latest cache load outcome.
+    #[must_use]
+    pub const fn load(self) -> WorkspaceCacheLoadOutcome {
+        self.load
+    }
+
+    /// Returns the latest cache write outcome.
+    #[must_use]
+    pub const fn write(self) -> WorkspaceCacheWriteOutcome {
+        self.write
+    }
+}
+
+/// Cloneable transport-neutral observation of persistent Workspace cache status.
+#[derive(Debug, Clone)]
+pub struct WorkspaceCacheObserver {
+    status: watch::Receiver<WorkspaceCacheStatus>,
+}
+
+impl WorkspaceCacheObserver {
+    /// Returns the current immutable cache status.
+    #[must_use]
+    pub fn status(&self) -> WorkspaceCacheStatus {
+        *self.status.borrow()
+    }
+
+    /// Creates an owned subscription to future cache status changes.
+    #[must_use]
+    pub fn subscribe(&self) -> watch::Receiver<WorkspaceCacheStatus> {
+        self.status.clone()
+    }
+}
+
 /// Cloneable transport-neutral observation of the published Workspace snapshot.
 #[derive(Debug, Clone)]
 pub struct WorkspaceSnapshotObserver {
@@ -422,10 +472,38 @@ impl WorkspaceSnapshotObserver {
     }
 }
 
+enum WorkspaceCacheBackend {
+    Production,
+    #[cfg(test)]
+    Controlled(Arc<dyn WorkspaceCacheStorage>),
+}
+
+impl WorkspaceCacheBackend {
+    fn open(self, workspace_root: PathBuf) -> Arc<dyn WorkspaceCacheStorage> {
+        match self {
+            Self::Production => Arc::new(WorkspaceCacheStore::new(workspace_root)),
+            #[cfg(test)]
+            Self::Controlled(storage) => storage,
+        }
+    }
+}
+
+impl std::fmt::Debug for WorkspaceCacheBackend {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Production => formatter.write_str("Production"),
+            #[cfg(test)]
+            Self::Controlled(_) => formatter.write_str("Controlled"),
+        }
+    }
+}
+
 /// Runtime-owned service for one complete initial Workspace build.
 #[derive(Debug)]
 pub struct WorkspaceService<D = FileSystemWorkspaceDetector> {
     builder: WorkspaceSnapshotBuilder<D>,
+    cache_backend: WorkspaceCacheBackend,
+    cache_status: watch::Sender<WorkspaceCacheStatus>,
     snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
     updates: watch::Sender<WorkspaceUpdateStatus>,
     #[cfg(test)]
@@ -442,14 +520,25 @@ impl WorkspaceService<FileSystemWorkspaceDetector> {
 
 impl<D> WorkspaceService<D> {
     fn with_builder(builder: WorkspaceSnapshotBuilder<D>) -> Self {
+        let (cache_status, _receiver) = watch::channel(WorkspaceCacheStatus::starting());
         let (snapshot, _receiver) = watch::channel(None);
         let (updates, _receiver) = watch::channel(WorkspaceUpdateStatus::starting());
         Self {
             builder,
+            cache_backend: WorkspaceCacheBackend::Production,
+            cache_status,
             snapshot,
             updates,
             #[cfg(test)]
             controlled_change_ticks: None,
+        }
+    }
+
+    /// Creates a cloneable cache-status observer before this service is registered.
+    #[must_use]
+    pub fn cache_observer(&self) -> WorkspaceCacheObserver {
+        WorkspaceCacheObserver {
+            status: self.cache_status.subscribe(),
         }
     }
 
@@ -477,6 +566,12 @@ impl<D> WorkspaceService<D> {
         self.controlled_change_ticks = Some(ticks);
         self
     }
+
+    #[cfg(test)]
+    fn with_cache_storage(mut self, storage: Arc<dyn WorkspaceCacheStorage>) -> Self {
+        self.cache_backend = WorkspaceCacheBackend::Controlled(storage);
+        self
+    }
 }
 
 impl Default for WorkspaceService<FileSystemWorkspaceDetector> {
@@ -498,11 +593,14 @@ where
                 .to_path_buf();
             let WorkspaceService {
                 builder,
+                cache_backend,
+                cache_status,
                 snapshot,
                 updates,
                 #[cfg(test)]
                 controlled_change_ticks,
             } = *self;
+            let cache = cache_backend.open(root_path.clone());
             updates.send_replace(WorkspaceUpdateStatus {
                 attempt: 1,
                 published: 0,
@@ -512,26 +610,24 @@ where
 
             let initial_root = root_path.clone();
             let initial_builder = builder.clone();
+            let initial_cache = Arc::clone(&cache);
+            let initial_cache_status = cache_status.clone();
             let error_root = root_path.clone();
-            let (baseline_state, initial_snapshot, post_build_state) =
-                tokio::task::spawn_blocking(move || {
-                    let baseline_state = WorkspaceFileState::scan(&initial_root);
-                    let snapshot = initial_builder.build(&initial_root)?;
-                    let baseline_state =
-                        baseline_state.map_err(|source| WorkspaceBuildError::Observation {
-                            root_path: initial_root.clone(),
-                            source: Box::new(source),
-                        })?;
-                    let post_build_state = observe_workspace(&initial_root)?;
-                    Ok::<_, WorkspaceBuildError>((baseline_state, snapshot, post_build_state))
-                })
-                .await
-                .map_err(|source| WorkspaceBuildError::BuildTask {
-                    root_path: error_root,
-                    source,
-                })?
-                .map_err(|error| Box::new(error) as BoxError)?;
-            snapshot.send_replace(Some(Arc::new(initial_snapshot)));
+            let initial = tokio::task::spawn_blocking(move || {
+                initialize_workspace(
+                    &initial_builder,
+                    &initial_root,
+                    initial_cache.as_ref(),
+                    &initial_cache_status,
+                )
+            })
+            .await
+            .map_err(|source| WorkspaceBuildError::BuildTask {
+                root_path: error_root,
+                source,
+            })?
+            .map_err(|error| Box::new(error) as BoxError)?;
+            snapshot.send_replace(Some(Arc::new(initial.snapshot)));
             updates.send_replace(WorkspaceUpdateStatus {
                 attempt: 1,
                 published: 1,
@@ -543,28 +639,98 @@ where
             let source = if let Some(ticks) = controlled_change_ticks {
                 WorkspaceChangeSource::with_controlled_ticks(
                     root_path.clone(),
-                    post_build_state.clone(),
+                    initial.source_state.clone(),
                     ticks,
                 )
             } else {
-                WorkspaceChangeSource::new(root_path.clone(), post_build_state.clone())
+                WorkspaceChangeSource::new(root_path.clone(), initial.source_state.clone())
             };
             #[cfg(not(test))]
-            let source = WorkspaceChangeSource::new(root_path.clone(), post_build_state.clone());
+            let source =
+                WorkspaceChangeSource::new(root_path.clone(), initial.source_state.clone());
 
             let cancellation = context.cancellation();
             let source = source
-                .with_initial_change(baseline_state != post_build_state)
+                .with_initial_change(initial.follow_up_required)
                 .start(cancellation.clone());
 
             let task: ServiceTask = Box::pin(async move {
-                run_workspace_updates(builder, root_path, snapshot, updates, cancellation, source)
-                    .await
-                    .map_err(|error| Box::new(error) as BoxError)
+                run_workspace_updates(
+                    builder,
+                    root_path,
+                    cache,
+                    cache_status,
+                    snapshot,
+                    updates,
+                    cancellation,
+                    source,
+                )
+                .await
+                .map_err(|error| Box::new(error) as BoxError)
             });
             Ok(task)
         })
     }
+}
+
+struct WorkspaceInitialization {
+    snapshot: WorkspaceSnapshot,
+    source_state: WorkspaceFileState,
+    follow_up_required: bool,
+}
+
+fn initialize_workspace<D>(
+    builder: &WorkspaceSnapshotBuilder<D>,
+    root_path: &Path,
+    cache: &dyn WorkspaceCacheStorage,
+    cache_status: &watch::Sender<WorkspaceCacheStatus>,
+) -> Result<WorkspaceInitialization, WorkspaceBuildError>
+where
+    D: WorkspaceDetector,
+{
+    let initial_state = observe_workspace(root_path)?;
+    let loaded = cache.load(&initial_state);
+    publish_cache_load(cache_status, loaded.outcome());
+    let accepted_state = observe_workspace(root_path)?;
+
+    if initial_state == accepted_state
+        && loaded.outcome() == WorkspaceCacheLoadOutcome::Hit
+        && let Some(snapshot) = loaded.into_snapshot()
+    {
+        return Ok(WorkspaceInitialization {
+            snapshot,
+            source_state: accepted_state,
+            follow_up_required: false,
+        });
+    }
+
+    let snapshot = builder.build(root_path)?;
+    let final_state = observe_workspace(root_path)?;
+    let write = if accepted_state == final_state {
+        cache.write(&final_state, &snapshot)
+    } else {
+        WorkspaceCacheWriteOutcome::SkippedUnstableSource
+    };
+    publish_cache_write(cache_status, write);
+    Ok(WorkspaceInitialization {
+        snapshot,
+        follow_up_required: accepted_state != final_state,
+        source_state: final_state,
+    })
+}
+
+fn publish_cache_load(
+    cache_status: &watch::Sender<WorkspaceCacheStatus>,
+    load: WorkspaceCacheLoadOutcome,
+) {
+    cache_status.send_modify(|status| status.load = load);
+}
+
+fn publish_cache_write(
+    cache_status: &watch::Sender<WorkspaceCacheStatus>,
+    write: WorkspaceCacheWriteOutcome,
+) {
+    cache_status.send_modify(|status| status.write = write);
 }
 
 fn observe_workspace(root_path: &Path) -> Result<WorkspaceFileState, WorkspaceBuildError> {
@@ -612,12 +778,15 @@ impl Error for WorkspaceUpdateRuntimeError {
 }
 
 #[allow(
+    clippy::too_many_arguments,
     clippy::too_many_lines,
     reason = "the select loop keeps source, build, cancellation, and publication ownership together"
 )]
 async fn run_workspace_updates<D>(
     builder: WorkspaceSnapshotBuilder<D>,
     root_path: PathBuf,
+    cache: Arc<dyn WorkspaceCacheStorage>,
+    cache_status: watch::Sender<WorkspaceCacheStatus>,
     snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
     updates: watch::Sender<WorkspaceUpdateStatus>,
     mut cancellation: crate::Cancellation,
@@ -646,8 +815,10 @@ where
 
                     let build_root = root_path.clone();
                     let build_builder = builder.clone();
-                    let mut build =
-                        tokio::task::spawn_blocking(move || build_builder.build(&build_root));
+                    let build_cache = Arc::clone(&cache);
+                    let mut build = tokio::task::spawn_blocking(move || {
+                        rebuild_workspace(&build_builder, &build_root, build_cache.as_ref())
+                    });
                     let build_result = tokio::select! {
                         biased;
                         () = cancellation.cancelled() => {
@@ -674,7 +845,8 @@ where
 
                     match build_result {
                         Ok(Ok(rebuilt)) => {
-                            snapshot.send_replace(Some(Arc::new(rebuilt)));
+                            publish_cache_write(&cache_status, rebuilt.write);
+                            snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
                             status.published = status
                                 .published
                                 .checked_add(1)
@@ -731,6 +903,31 @@ where
             }
         }
     }
+}
+
+#[derive(Debug)]
+struct WorkspaceRebuild {
+    snapshot: WorkspaceSnapshot,
+    write: WorkspaceCacheWriteOutcome,
+}
+
+fn rebuild_workspace<D>(
+    builder: &WorkspaceSnapshotBuilder<D>,
+    root_path: &Path,
+    cache: &dyn WorkspaceCacheStorage,
+) -> Result<WorkspaceRebuild, WorkspaceBuildError>
+where
+    D: WorkspaceDetector,
+{
+    let initial_state = observe_workspace(root_path)?;
+    let snapshot = builder.build(root_path)?;
+    let final_state = observe_workspace(root_path)?;
+    let write = if initial_state == final_state {
+        cache.write(&final_state, &snapshot)
+    } else {
+        WorkspaceCacheWriteOutcome::SkippedUnstableSource
+    };
+    Ok(WorkspaceRebuild { snapshot, write })
 }
 
 fn finish_workspace_updates(
@@ -1066,6 +1263,7 @@ mod tests {
     use std::convert::Infallible;
     use std::fs;
     use std::future::pending;
+    use std::io;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -1078,10 +1276,12 @@ mod tests {
 
     use crate::{App, ConfigurationProvider, LifecycleState, RuntimeConfig, RuntimeErrorKind};
 
+    use super::cache::{WorkspaceCacheLoad, WorkspaceCacheStorage};
     use super::{
-        DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceDetector, WorkspaceService,
+        DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
+        WorkspaceCacheWriteOutcome, WorkspaceDetector, WorkspaceFileState, WorkspaceService,
         WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
-        WorkspaceUpdatePhase, WorkspaceUpdateStatus,
+        WorkspaceUpdatePhase, WorkspaceUpdateStatus, initialize_workspace, rebuild_workspace,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -1111,6 +1311,77 @@ mod tests {
         calls: Arc<AtomicUsize>,
         second_started: std::sync::mpsc::Sender<()>,
         second_release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct CountingDetector {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct MutatingDetector {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct FailingDetector {
+        calls: Arc<AtomicUsize>,
+    }
+
+    struct ControlledCacheStorage {
+        load: WorkspaceCacheLoadOutcome,
+        snapshot: Option<WorkspaceSnapshot>,
+        write: WorkspaceCacheWriteOutcome,
+        loads: AtomicUsize,
+        writes: AtomicUsize,
+    }
+
+    impl ControlledCacheStorage {
+        fn new(
+            load: WorkspaceCacheLoadOutcome,
+            snapshot: Option<WorkspaceSnapshot>,
+            write: WorkspaceCacheWriteOutcome,
+        ) -> Self {
+            Self {
+                load,
+                snapshot,
+                write,
+                loads: AtomicUsize::new(0),
+                writes: AtomicUsize::new(0),
+            }
+        }
+
+        fn loads(&self) -> usize {
+            self.loads.load(Ordering::SeqCst)
+        }
+
+        fn writes(&self) -> usize {
+            self.writes.load(Ordering::SeqCst)
+        }
+    }
+
+    impl WorkspaceCacheStorage for ControlledCacheStorage {
+        fn load(&self, _state: &WorkspaceFileState) -> WorkspaceCacheLoad {
+            self.loads.fetch_add(1, Ordering::SeqCst);
+            if self.load == WorkspaceCacheLoadOutcome::Hit {
+                WorkspaceCacheLoad::hit(
+                    self.snapshot
+                        .clone()
+                        .expect("controlled cache hit must contain a snapshot"),
+                )
+            } else {
+                WorkspaceCacheLoad::without_snapshot(self.load)
+            }
+        }
+
+        fn write(
+            &self,
+            _state: &WorkspaceFileState,
+            _snapshot: &WorkspaceSnapshot,
+        ) -> WorkspaceCacheWriteOutcome {
+            self.writes.fetch_add(1, Ordering::SeqCst);
+            self.write
+        }
     }
 
     impl WorkspaceDetector for PanickingDetector {
@@ -1151,6 +1422,40 @@ mod tests {
                     .expect("second build must be released");
             }
             Ok(Vec::new())
+        }
+    }
+
+    impl WorkspaceDetector for CountingDetector {
+        fn discover(
+            &self,
+            _root: &std::path::Path,
+        ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
+        {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(Vec::new())
+        }
+    }
+
+    impl WorkspaceDetector for MutatingDetector {
+        fn discover(
+            &self,
+            root: &std::path::Path,
+        ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
+        {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+            fs::write(root.join("changed-during-build.bsl"), call.to_string())?;
+            Ok(Vec::new())
+        }
+    }
+
+    impl WorkspaceDetector for FailingDetector {
+        fn discover(
+            &self,
+            _root: &std::path::Path,
+        ) -> Result<Vec<DiscoveredConfiguration>, Box<dyn std::error::Error + Send + Sync>>
+        {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Err(Box::new(io::Error::other("controlled discovery failure")))
         }
     }
 
@@ -1216,6 +1521,18 @@ mod tests {
             .await
             .expect("controlled Workspace scan must not hang")
             .expect("controlled Workspace scan must acknowledge completion");
+    }
+
+    async fn wait_for_watch_closed<T>(receiver: &mut watch::Receiver<T>) {
+        loop {
+            match timeout(Duration::from_secs(1), receiver.changed())
+                .await
+                .expect("watch closure wait must not hang")
+            {
+                Ok(()) => {}
+                Err(_) => return,
+            }
+        }
     }
 
     fn edt_configuration(id: &str, name: &str) -> String {
@@ -1411,6 +1728,348 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn workspace_cache_warm_hit_skips_build_and_closes_status_on_shutdown() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let storage = Arc::new(ControlledCacheStorage::new(
+            WorkspaceCacheLoadOutcome::Hit,
+            Some(WorkspaceSnapshot::default()),
+            WorkspaceCacheWriteOutcome::Succeeded,
+        ));
+        let service = WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(
+            CountingDetector {
+                calls: Arc::clone(&calls),
+            },
+        ))
+        .with_cache_storage(storage.clone());
+        let snapshot = service.snapshot_observer();
+        let mut snapshot_changes = snapshot.subscribe();
+        let cache = service.cache_observer();
+        let mut cache_changes = cache.subscribe();
+        assert_eq!(
+            cache.status().load(),
+            WorkspaceCacheLoadOutcome::NotAttempted
+        );
+        assert_eq!(
+            cache.status().write(),
+            WorkspaceCacheWriteOutcome::NotAttempted
+        );
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+
+        wait_for_snapshot(&mut snapshot_changes).await;
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(storage.loads(), 1);
+        assert_eq!(storage.writes(), 0);
+        assert_eq!(cache.status().load(), WorkspaceCacheLoadOutcome::Hit);
+        assert_eq!(
+            cache.status().write(),
+            WorkspaceCacheWriteOutcome::NotAttempted
+        );
+
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+        wait_for_watch_closed(&mut cache_changes).await;
+    }
+
+    #[tokio::test]
+    async fn workspace_cache_rejected_loads_build_once_and_write_stable_snapshot() {
+        for load in [
+            WorkspaceCacheLoadOutcome::Missing,
+            WorkspaceCacheLoadOutcome::Corrupt,
+            WorkspaceCacheLoadOutcome::Unavailable,
+        ] {
+            let root = tempdir().expect("temporary Workspace root must be created");
+            let calls = Arc::new(AtomicUsize::new(0));
+            let storage = Arc::new(ControlledCacheStorage::new(
+                load,
+                None,
+                WorkspaceCacheWriteOutcome::Succeeded,
+            ));
+            let service = WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(
+                CountingDetector {
+                    calls: Arc::clone(&calls),
+                },
+            ))
+            .with_cache_storage(storage.clone());
+            let snapshot = service.snapshot_observer();
+            let mut snapshot_changes = snapshot.subscribe();
+            let cache = service.cache_observer();
+            let provider = TestConfigurationProvider {
+                workspace_root: root.path().to_path_buf(),
+            };
+            let app = App::builder()
+                .configure(&provider)
+                .expect("test configuration must load")
+                .register_service("workspace", service)
+                .expect("Workspace service must register")
+                .build()
+                .expect("application must build");
+            let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+            let run = tokio::spawn(app.run(shutdown));
+
+            wait_for_snapshot(&mut snapshot_changes).await;
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            assert_eq!(storage.loads(), 1);
+            assert_eq!(storage.writes(), 1);
+            assert_eq!(cache.status().load(), load);
+            assert_eq!(
+                cache.status().write(),
+                WorkspaceCacheWriteOutcome::Succeeded
+            );
+
+            shutdown_sender.send(()).expect("shutdown must be observed");
+            timeout(Duration::from_secs(1), run)
+                .await
+                .expect("Workspace shutdown must not hang")
+                .expect("Workspace task must join")
+                .expect("requested shutdown must succeed");
+        }
+    }
+
+    #[tokio::test]
+    async fn workspace_cache_write_failure_is_nonfatal_and_snapshot_is_published() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (ticks, controlled_ticks) = mpsc::channel(8);
+        let storage = Arc::new(ControlledCacheStorage::new(
+            WorkspaceCacheLoadOutcome::Missing,
+            None,
+            WorkspaceCacheWriteOutcome::Failed,
+        ));
+        let service = WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(
+            CountingDetector {
+                calls: Arc::clone(&calls),
+            },
+        ))
+        .with_cache_storage(storage.clone())
+        .with_controlled_change_ticks(controlled_ticks);
+        let snapshot = service.snapshot_observer();
+        let mut snapshot_changes = snapshot.subscribe();
+        let cache = service.cache_observer();
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let mut lifecycle = app.subscribe_lifecycle();
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+
+        wait_for_lifecycle(&mut lifecycle, LifecycleState::Running).await;
+        wait_for_snapshot(&mut snapshot_changes).await;
+        assert!(snapshot.snapshot().is_some());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(storage.writes(), 1);
+        assert_eq!(cache.status().write(), WorkspaceCacheWriteOutcome::Failed);
+
+        fs::write(root.path().join("changed.bsl"), b"changed")
+            .expect("relevant source must be written");
+        scan_once(&ticks).await;
+        let rebuilt = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 2
+        })
+        .await;
+        assert_eq!(rebuilt.failure(), None);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(storage.writes(), 2);
+        assert!(snapshot.snapshot().is_some());
+        assert_eq!(cache.status().write(), WorkspaceCacheWriteOutcome::Failed);
+
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+    }
+
+    #[tokio::test]
+    async fn workspace_cache_persists_across_fresh_runtime_runs() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let first = WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(
+            CountingDetector {
+                calls: Arc::clone(&calls),
+            },
+        ));
+        let first_snapshot = first.snapshot_observer();
+        let mut first_changes = first_snapshot.subscribe();
+        let first_cache = first.cache_observer();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let first_app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", first)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (first_shutdown_sender, first_shutdown) = oneshot::channel::<()>();
+        let first_run = tokio::spawn(first_app.run(first_shutdown));
+        wait_for_snapshot(&mut first_changes).await;
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            first_cache.status().load(),
+            WorkspaceCacheLoadOutcome::Missing
+        );
+        assert_eq!(
+            first_cache.status().write(),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+        first_shutdown_sender
+            .send(())
+            .expect("first shutdown must be observed");
+        timeout(Duration::from_secs(1), first_run)
+            .await
+            .expect("first Workspace shutdown must not hang")
+            .expect("first Workspace task must join")
+            .expect("first requested shutdown must succeed");
+
+        let cache_path = root.path().join(".oneagent/cache/workspace-v1.json");
+        assert!(cache_path.is_file());
+        let second = WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(
+            PanickingDetector,
+        ));
+        let second_snapshot = second.snapshot_observer();
+        let mut second_changes = second_snapshot.subscribe();
+        let second_cache = second.cache_observer();
+        let second_app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", second)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (second_shutdown_sender, second_shutdown) = oneshot::channel::<()>();
+        let second_run = tokio::spawn(second_app.run(second_shutdown));
+        wait_for_snapshot(&mut second_changes).await;
+        assert_eq!(second_cache.status().load(), WorkspaceCacheLoadOutcome::Hit);
+        assert_eq!(
+            second_cache.status().write(),
+            WorkspaceCacheWriteOutcome::NotAttempted
+        );
+        second_shutdown_sender
+            .send(())
+            .expect("second shutdown must be observed");
+        timeout(Duration::from_secs(1), second_run)
+            .await
+            .expect("second Workspace shutdown must not hang")
+            .expect("second Workspace task must join")
+            .expect("second requested shutdown must succeed");
+        assert!(cache_path.is_file());
+    }
+
+    #[test]
+    fn workspace_cache_builds_write_only_complete_stable_results() {
+        let stable_root = tempdir().expect("stable Workspace root must be created");
+        let stable_storage = ControlledCacheStorage::new(
+            WorkspaceCacheLoadOutcome::NotAttempted,
+            None,
+            WorkspaceCacheWriteOutcome::Succeeded,
+        );
+        let stable = rebuild_workspace(
+            &WorkspaceSnapshotBuilder::with_detector(CountingDetector {
+                calls: Arc::new(AtomicUsize::new(0)),
+            }),
+            stable_root.path(),
+            &stable_storage,
+        )
+        .expect("stable rebuild must succeed");
+        assert_eq!(stable.write, WorkspaceCacheWriteOutcome::Succeeded);
+        assert_eq!(stable_storage.writes(), 1);
+
+        let unstable_root = tempdir().expect("unstable Workspace root must be created");
+        let unstable_storage = ControlledCacheStorage::new(
+            WorkspaceCacheLoadOutcome::NotAttempted,
+            None,
+            WorkspaceCacheWriteOutcome::Succeeded,
+        );
+        let unstable = rebuild_workspace(
+            &WorkspaceSnapshotBuilder::with_detector(MutatingDetector {
+                calls: Arc::new(AtomicUsize::new(0)),
+            }),
+            unstable_root.path(),
+            &unstable_storage,
+        )
+        .expect("unstable semantic rebuild remains valid");
+        assert_eq!(
+            unstable.write,
+            WorkspaceCacheWriteOutcome::SkippedUnstableSource
+        );
+        assert_eq!(unstable_storage.writes(), 0);
+
+        let failed_root = tempdir().expect("failed Workspace root must be created");
+        let failed_calls = Arc::new(AtomicUsize::new(0));
+        let failed_storage = ControlledCacheStorage::new(
+            WorkspaceCacheLoadOutcome::NotAttempted,
+            None,
+            WorkspaceCacheWriteOutcome::Succeeded,
+        );
+        let error = rebuild_workspace(
+            &WorkspaceSnapshotBuilder::with_detector(FailingDetector {
+                calls: Arc::clone(&failed_calls),
+            }),
+            failed_root.path(),
+            &failed_storage,
+        )
+        .expect_err("failed semantic build must retain the prior publication");
+        assert_eq!(error.kind(), WorkspaceBuildErrorKind::DiscoveryFailed);
+        assert_eq!(failed_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(failed_storage.writes(), 0);
+    }
+
+    #[test]
+    fn workspace_cache_startup_marks_unstable_source_for_follow_up() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let storage = ControlledCacheStorage::new(
+            WorkspaceCacheLoadOutcome::Missing,
+            None,
+            WorkspaceCacheWriteOutcome::Succeeded,
+        );
+        let (cache_status, _receiver) = watch::channel(super::WorkspaceCacheStatus::starting());
+        let initialized = initialize_workspace(
+            &WorkspaceSnapshotBuilder::with_detector(MutatingDetector {
+                calls: Arc::new(AtomicUsize::new(0)),
+            }),
+            root.path(),
+            &storage,
+            &cache_status,
+        )
+        .expect("unstable startup build remains valid");
+
+        assert!(initialized.follow_up_required);
+        assert_eq!(storage.loads(), 1);
+        assert_eq!(storage.writes(), 0);
+        assert_eq!(
+            cache_status.borrow().write(),
+            WorkspaceCacheWriteOutcome::SkippedUnstableSource
+        );
+    }
+
+    #[tokio::test]
     async fn workspace_service_publishes_for_running_and_clears_on_shutdown() {
         let root = tempdir().expect("temporary Workspace root must be created");
         let service = WorkspaceService::new();
@@ -1480,7 +2139,7 @@ mod tests {
         let source = std::error::Error::source(&error)
             .and_then(|source| source.downcast_ref::<super::WorkspaceBuildError>())
             .expect("Workspace startup error must preserve the build classification");
-        assert_eq!(source.kind(), WorkspaceBuildErrorKind::DiscoveryFailed);
+        assert_eq!(source.kind(), WorkspaceBuildErrorKind::ObservationFailed);
         assert!(observer.snapshot().is_none());
     }
 
@@ -1529,6 +2188,7 @@ mod tests {
         let (ticks, controlled_ticks) = mpsc::channel(8);
         let service = WorkspaceService::new().with_controlled_change_ticks(controlled_ticks);
         let observer = service.snapshot_observer();
+        let cache = service.cache_observer();
         let updates = service.update_observer();
         let mut update_changes = updates.subscribe();
         let provider = TestConfigurationProvider {
@@ -1551,6 +2211,13 @@ mod tests {
         assert_eq!(initial.attempt(), 1);
         assert_eq!(initial.published(), 1);
         assert_eq!(initial.failure(), None);
+        assert_eq!(cache.status().load(), WorkspaceCacheLoadOutcome::Missing);
+        assert_eq!(
+            cache.status().write(),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
+        let cache_path = root.path().join(".oneagent/cache/workspace-v1.json");
+        let initial_cache = fs::read(&cache_path).expect("initial cache entry must exist");
 
         fs::write(root.path().join("changed.bsl"), b"first")
             .expect("relevant source must be created");
@@ -1567,12 +2234,22 @@ mod tests {
                 .len(),
             0
         );
+        let rebuilt_cache = fs::read(&cache_path).expect("rebuilt cache entry must exist");
+        assert_ne!(rebuilt_cache, initial_cache);
+        assert_eq!(
+            cache.status().write(),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
 
         let before_ignored_change = updates.status();
         fs::write(root.path().join(".git/transient"), b"ignored")
             .expect("ignored source must be created");
         scan_once(&ticks).await;
         assert_eq!(updates.status(), before_ignored_change);
+        assert_eq!(
+            fs::read(&cache_path).expect("cache entry must remain readable"),
+            rebuilt_cache
+        );
 
         shutdown_sender.send(()).expect("shutdown must be observed");
         timeout(Duration::from_secs(1), run)
@@ -1593,6 +2270,7 @@ mod tests {
         let (ticks, controlled_ticks) = mpsc::channel(8);
         let service = WorkspaceService::new().with_controlled_change_ticks(controlled_ticks);
         let observer = service.snapshot_observer();
+        let cache = service.cache_observer();
         let updates = service.update_observer();
         let mut update_changes = updates.subscribe();
         let provider = TestConfigurationProvider {
@@ -1618,6 +2296,8 @@ mod tests {
             initial.configurations()[0].configuration_name().as_str(),
             "Initial"
         );
+        let cache_path = root.path().join(".oneagent/cache/workspace-v1.json");
+        let initial_cache = fs::read(&cache_path).expect("initial cache entry must exist");
 
         fs::write(edt.join("src/Configuration/Configuration.mdo"), "<broken>")
             .expect("invalid source must be written");
@@ -1641,6 +2321,14 @@ mod tests {
                 .as_str(),
             "Initial"
         );
+        assert_eq!(
+            fs::read(&cache_path).expect("last valid cache entry must remain readable"),
+            initial_cache
+        );
+        assert_eq!(
+            cache.status().write(),
+            WorkspaceCacheWriteOutcome::Succeeded
+        );
 
         write_edt(&edt, configuration_id, "Recovered");
         scan_once(&ticks).await;
@@ -1658,6 +2346,10 @@ mod tests {
                 .configuration_name()
                 .as_str(),
             "Recovered"
+        );
+        assert_ne!(
+            fs::read(&cache_path).expect("recovered cache entry must exist"),
+            initial_cache
         );
 
         shutdown_sender.send(()).expect("shutdown must be observed");
@@ -1735,5 +2427,77 @@ mod tests {
             .expect("Workspace shutdown must not hang")
             .expect("Workspace task must join")
             .expect("requested shutdown must succeed");
+    }
+
+    #[tokio::test]
+    async fn workspace_service_cancellation_joins_blocking_rebuild_and_closes_observers() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (second_started_sender, second_started) = std::sync::mpsc::channel();
+        let (second_release, second_release_receiver) = std::sync::mpsc::channel();
+        let detector = GatedDetector {
+            calls: Arc::clone(&calls),
+            second_started: second_started_sender,
+            second_release: Arc::new(Mutex::new(second_release_receiver)),
+        };
+        let (ticks, controlled_ticks) = mpsc::channel(8);
+        let service =
+            WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(detector))
+                .with_controlled_change_ticks(controlled_ticks);
+        let snapshots = service.snapshot_observer();
+        let mut snapshot_changes = snapshots.subscribe();
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let cache = service.cache_observer();
+        let mut cache_changes = cache.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let mut run = tokio::spawn(app.run(shutdown));
+        wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching
+        })
+        .await;
+
+        fs::write(root.path().join("changed.bsl"), b"changed")
+            .expect("relevant source must be written");
+        scan_once(&ticks).await;
+        timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || second_started.recv()),
+        )
+        .await
+        .expect("replacement build must start")
+        .expect("replacement observer must join")
+        .expect("replacement build start must be observed");
+
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        assert!(
+            timeout(Duration::from_millis(50), &mut run).await.is_err(),
+            "shutdown must wait for the owned blocking rebuild"
+        );
+        assert!(snapshots.snapshot().is_some());
+        second_release
+            .send(())
+            .expect("blocking rebuild must be released");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang after release")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+
+        wait_for_snapshot_clear(&mut snapshot_changes).await;
+        wait_for_watch_closed(&mut cache_changes).await;
+        assert!(snapshots.snapshot().is_none());
+        assert_eq!(updates.status().phase(), WorkspaceUpdatePhase::Stopped);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }

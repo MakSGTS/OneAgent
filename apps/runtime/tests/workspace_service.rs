@@ -240,6 +240,12 @@ fn copy_tree(source: &Path, destination: &Path) {
     }
 }
 
+fn copy_fixture() -> tempfile::TempDir {
+    let temporary = tempdir().expect("temporary Workspace root must be created");
+    copy_tree(&fixture_root(), temporary.path());
+    temporary
+}
+
 fn workspace_source(error: &RuntimeError) -> &WorkspaceBuildError {
     std::error::Error::source(error)
         .and_then(|source| source.downcast_ref::<WorkspaceBuildError>())
@@ -272,10 +278,11 @@ async fn assert_workspace_start_failure(root: &Path, expected: WorkspaceBuildErr
 }
 
 async fn run_mixed_workspace_once() -> SnapshotObservation {
+    let root = copy_fixture();
     let service = WorkspaceService::new();
     let observer = service.snapshot_observer();
     let mut snapshot_changes = observer.subscribe();
-    let app = configured_builder(fixture_root())
+    let app = configured_builder(root.path())
         .register_service("workspace", service)
         .expect("Workspace service must register")
         .build()
@@ -372,11 +379,11 @@ async fn public_workspace_accepts_empty_root_and_repeats_fresh_runs() {
 async fn public_workspace_rejects_invalid_roots_and_conflicting_markers() {
     let parent = tempdir().expect("temporary parent must be created");
     let missing = parent.path().join("missing");
-    assert_workspace_start_failure(&missing, WorkspaceBuildErrorKind::DiscoveryFailed).await;
+    assert_workspace_start_failure(&missing, WorkspaceBuildErrorKind::ObservationFailed).await;
 
     let file = parent.path().join("not-a-directory");
     fs::write(&file, "not a Workspace").expect("non-directory root must be created");
-    assert_workspace_start_failure(&file, WorkspaceBuildErrorKind::DiscoveryFailed).await;
+    assert_workspace_start_failure(&file, WorkspaceBuildErrorKind::ObservationFailed).await;
 
     let conflict = parent.path().join("conflicting-workspace");
     copy_tree(&fixture_root().join("designer"), &conflict);
@@ -436,6 +443,7 @@ async fn public_workspace_keeps_later_adapter_failure_atomic() {
 
 #[tokio::test]
 async fn public_workspace_snapshot_and_health_follow_owned_lifecycle() {
+    let root = copy_fixture();
     let http = HttpService::new();
     let mut address = http.subscribe_bound_address();
     let workspace = WorkspaceService::new();
@@ -451,7 +459,7 @@ async fn public_workspace_snapshot_and_health_follow_owned_lifecycle() {
         stopping_sender,
         stop_release,
     );
-    let app = configured_builder(fixture_root())
+    let app = configured_builder(root.path())
         .register_service("http", http)
         .expect("HTTP service must register")
         .register_service("workspace", workspace)

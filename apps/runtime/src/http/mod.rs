@@ -153,10 +153,12 @@ async fn readiness_response(State(state): State<HttpRouterState>) -> impl IntoRe
 mod tests {
     use std::collections::BTreeMap;
     use std::convert::Infallible;
+    use std::fs;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
+    use tempfile::tempdir;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
     use tokio::sync::{oneshot, watch};
@@ -275,6 +277,23 @@ mod tests {
         }
     }
 
+    fn copy_tree(source: &Path, destination: &Path) {
+        fs::create_dir_all(destination).expect("fixture destination must be created");
+        for entry in fs::read_dir(source).expect("fixture directory must be readable") {
+            let entry = entry.expect("fixture entry must be readable");
+            let destination = destination.join(entry.file_name());
+            if entry
+                .file_type()
+                .expect("fixture entry type must be readable")
+                .is_dir()
+            {
+                copy_tree(&entry.path(), &destination);
+            } else {
+                fs::copy(entry.path(), destination).expect("fixture file must be copied");
+            }
+        }
+    }
+
     #[tokio::test]
     async fn http_service_publishes_address_serves_health_and_releases_listener() {
         let service = HttpService::new();
@@ -370,14 +389,18 @@ mod tests {
     async fn query_enabled_http_serves_all_routes_through_the_owned_listener() {
         const CONFIGURATION_ID: &str = "408a41e7-907a-4fb3-8999-83d1e8b6e093";
 
+        let root = tempdir().expect("temporary Workspace root must be created");
+        copy_tree(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service"),
+            root.path(),
+        );
         let workspace = WorkspaceService::new();
         let graph_query = GraphQueryService::new(workspace.snapshot_observer());
         let http = HttpService::with_graph_query(graph_query);
         let mut address = http.subscribe_bound_address();
         let provider = QueryConfigurationProvider {
             address: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-            workspace_root: Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/workspace_service"),
+            workspace_root: root.path().to_path_buf(),
         };
         let app = App::builder()
             .configure(&provider)

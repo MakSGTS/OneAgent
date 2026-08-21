@@ -3989,6 +3989,184 @@ and unrelated-change absence. Suggested planning commit message:
 Plan Sprint 15 Runtime service container
 ```
 
+#### Sprint 16 HTTP API and Health execution plan
+
+Sprint 16 is planned from committed readiness head
+`8ca1c0ce3c83dae8bb76fa52a40423bead693f40`. The
+[Sprint 15 integration review](reviews/sprint-15-runtime-service-container.md)
+records `pass`, so Sprint 16 is the unique `next` target. The committed Runtime
+Service profile, workflow, and template cover transport ownership, lifecycle,
+health, readiness, cancellation, shutdown, compatibility, and public
+client/server evidence; the framework readiness audit found no reusable gap.
+
+The live Runtime already exposes a public, long-running service container,
+transport-neutral lifecycle observation, deterministic shutdown injection, and
+distinct startup and task failures. Its locked dependency surface includes
+Axum 0.8.9, Tokio 1.53.0, Serde, and Serde JSON. Repository code, locally
+available locked dependency sources, macOS/Windows CI, loopback sockets, and
+bounded channel coordination provide sufficient investigation data and test
+oracles without an external service, remote fixture, arbitrary sleep, or new
+production dependency.
+
+Task 1 records the exact HTTP, configuration, lifecycle, failure, ownership,
+wire, and test boundary. Task 2 accepts ADR-0038 before production behavior is
+implemented. Task 3 adds only transport-neutral lifecycle-derived health state.
+Task 4 implements and composes the owned HTTP service and accepted probe routes.
+Task 5 completes public loopback client/server, failure, shutdown, repeated-run,
+and current-state evidence. Task 6 performs the integration review, state
+transition, and conditional Sprint 15 prompt-suite retirement.
+
+##### Sprint 16 objective
+
+Expose the long-running Runtime through the first owned HTTP listener with
+stable liveness and lifecycle-derived readiness probes, deterministic startup
+failure and graceful shutdown, and public cross-platform client/server evidence,
+without pulling workspace, graph-query, watcher, cache, or supported CLI
+capabilities forward.
+
+##### Included scope
+
+- exact investigation of the existing Runtime, locked HTTP APIs, configuration,
+  listener ownership, lifecycle observation, failures, consumers, wire choices,
+  and deterministic cross-platform testability;
+- an accepted ADR for bind configuration, route and method matrix, response
+  schema, liveness/readiness semantics, status codes, compatibility boundary,
+  ownership, startup acknowledgement, cancellation, shutdown, errors,
+  observability, first slice, and deferred scope;
+- one transport-neutral health snapshot derived from owned Runtime lifecycle
+  state, with no independently mutable readiness label;
+- one Runtime-owned Axum service with explicit listener ownership, accepted
+  liveness/readiness routes, startup failure propagation, cooperative graceful
+  shutdown, and thin composition-root registration;
+- public loopback HTTP evidence for the accepted wire contract, lifecycle
+  transitions, negative routes and methods, bind failure, shutdown, listener
+  release, and repeated fresh runs;
+- current-state documentation, complete workspace validation, integration
+  review, and conditional Sprint 15 prompt-suite retirement.
+
+##### Excluded scope
+
+- workspace lifecycle and semantic-build orchestration owned by Sprint 17;
+- graph and semantic query endpoints owned by Sprint 18;
+- file watching, persistent cache, supported CLI behavior, MCP, LSP, IDE, AI,
+  TLS, authentication, authorization, CORS, compression, metrics, tracing
+  export, API version negotiation, OpenAPI, streaming, request bodies, and
+  domain error mapping;
+- semantic graph or adapter changes, dynamic service registration, restart,
+  retries, forced termination, a newly selected shutdown timeout, global mutable
+  health state, detached tasks, external services, arbitrary-sleep evidence,
+  platform-specific socket assumptions, packaging, and performance claims.
+
+##### Sprint 16 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 16 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-16-http-api-health/`. Every dependent task requires
+the preceding committed outcome. Stored prompts do not authorize commits;
+authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-15-runtime-service-container/`, with these seven
+tracked files: `00-sprint-15-execution-loop.md`,
+`01-investigate-runtime-service-container.md`,
+`02-define-runtime-service-container-contract.md`,
+`03-implement-runtime-service-container.md`,
+`04-integrate-runtime-application-lifecycle.md`,
+`05-complete-runtime-service-container-evidence.md`, and
+`06-sprint-15-integration-review.md`. It remains untouched through Task 5. Only
+Task 6 may retire this exact inventory after a non-blocking review and successful
+complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the HTTP API and health boundary. | Investigation / investigation | Current Runtime, Axum/Tokio, configuration, endpoint, wire, ownership, lifecycle, failure, consumer, and public-test evidence with explicit decision questions. | Accepted Sprint 16 planning baseline. | `Investigate Sprint 16 HTTP API and health` |
+| 2 | Define the HTTP API and health contract. | Architecture / architecture | Accepted ADR-0038 listener, configuration, route, method, schema, liveness, readiness, status, lifecycle, ownership, failure, shutdown, compatibility, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 16 HTTP API and health contract` |
+| 3 | Implement lifecycle-derived Runtime health state. | Runtime Service / runtime service | Transport-neutral health snapshot derived only from canonical lifecycle state, with focused transition and repeated-run evidence. | Task 2. | `Implement Sprint 16 Runtime health state` |
+| 4 | Implement and compose the HTTP service. | Runtime Service / runtime service | Runtime-owned listener, accepted Axum routes and schema, bind/start failure propagation, cancellation-driven graceful shutdown, and production registration. | Task 3. | `Implement Sprint 16 HTTP service` |
+| 5 | Complete public HTTP and health evidence. | Runtime Service / runtime service | Public loopback wire matrix, lifecycle/readiness transitions, negative requests, bind failure, cleanup/rebind, repeated-run evidence, and synchronized current-state docs. | Task 4. | `Complete Sprint 16 HTTP API and health evidence` |
+| 6 | Review the integrated Sprint 16 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 15 suite retirement, and Sprint 17 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 16 HTTP API and health review` |
+
+```text
+Committed Sprint 16 planning baseline
+    -> Task 1 HTTP and health investigation
+    -> Task 2 accepted ADR-0038
+    -> Task 3 lifecycle-derived Runtime health state
+    -> Task 4 owned HTTP service and composition
+    -> Task 5 public client/server evidence and current-state docs
+    -> Task 6 integration review and conditional Sprint 15 suite retirement
+    -> Sprint 17 planning eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only `docs/architecture/http-api-health-investigation.md`. It
+records exact Runtime and dependency APIs, configuration and listener choices,
+endpoint candidates, lifecycle evidence, failure and ownership questions,
+compatibility-sensitive behavior, a raw loopback test oracle, and decision
+readiness. It selects no architecture and changes no production behavior.
+
+Task 2 creates `docs/adr/0038-http-api-health.md` and synchronizes only the
+planning-level architecture text required by the decision. It fixes the public
+bind/configuration contract, exact route/method/status/schema matrix, liveness
+and readiness meaning, lifecycle derivation, listener and connection ownership,
+startup and runtime failures, cancellation and graceful shutdown, observability,
+compatibility, first slice, rejected alternatives, and deferred scope. It
+implements no production behavior.
+
+Task 3 implements only the accepted transport-neutral health model and focused
+tests. Health must be a deterministic projection of the canonical lifecycle,
+must not report ready before `Running` or after `Stopping`, and must not create a
+second mutable state authority. It changes no HTTP listener or production route.
+
+Task 4 implements the accepted HTTP service and composition boundary. The
+listener is acquired during service startup, its task is Runtime-owned, and
+Runtime cancellation drives graceful server completion. The accepted routes
+read only shared state and expose no workspace or graph behavior. Focused and
+complete workspace validation are required.
+
+Task 5 exercises the public production boundary over loopback TCP using actual
+HTTP requests. It proves the exact success and negative wire matrix, readiness
+changes from lifecycle evidence, named bind failure, cancellation and listener
+release, and equal fresh runs without arbitrary sleeps. It synchronizes README,
+Architecture, and Semantic Model current-state text but does not complete the
+sprint.
+
+Task 6 reviews the planning-through-Task-5 range and creates
+`docs/reviews/sprint-16-http-api-health.md` only for `pass` or `pass with
+non-blocking follow-ups` after all focused and full validation succeeds. That
+decision transitions Sprint 16 to `completed`, makes Sprint 17 Workspace Service
+the unique `next` target, and atomically retires the exact Sprint 15 suite in the
+same review commit. An inventory mismatch, endangered untracked file, or
+retained link dependency blocks retirement and the final commit. The review
+never silently fixes code.
+
+##### Sprint 16 state gates and completion criteria
+
+Sprint 16 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-5, accepted ADR-0038, one owned
+HTTP listener, stable liveness and lifecycle-derived readiness behavior, exact
+wire compatibility, deterministic startup failure and cancellation-driven
+shutdown, no detached listener or task, public cross-platform loopback evidence,
+preserved deferred scope, the complete workspace gate, and a non-blocking Task
+6 decision. A blocked review keeps Sprint 16 incomplete, preserves the Sprint 15
+suite, and leaves Sprint 17 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 16 HTTP API and health
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

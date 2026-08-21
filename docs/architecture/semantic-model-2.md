@@ -187,8 +187,10 @@ reports, mutation, arbitrary query languages, and aggregate graphs are not
 exposed. Public raw-loopback evidence exercises both production formats,
 selection and ordering, the complete first-slice error/method/path matrix,
 `Initializing`/`Running`/`Stopping`, snapshot and listener cleanup, and equal
-fresh runs. Sprint 18 remains incomplete until its integration review and
-roadmap transition.
+fresh runs. The
+[Sprint 18 integration review](../reviews/sprint-18-graph-query-api.md) records
+`pass`; Sprint 18 is completed and Sprint 19 File Watching is the unique `next`
+target.
 
 ## Core principles
 

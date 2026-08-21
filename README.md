@@ -6,8 +6,8 @@ OneAgent has completed the v0.3 source-independent 1C Knowledge Model, the
 Sprint 15 long-running Runtime service container, and the Sprint 16 HTTP API
 and Health boundary. The Sprint 17 Workspace Service implementation and public
 production evidence are completed with a `pass` integration review. Sprint 18
-now has an implemented Graph Query API and public production evidence; its
-integration review remains pending. See
+Graph Query API is also completed with a `pass` integration review. Sprint 19
+File Watching is the unique next target. See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
 ## Workspace

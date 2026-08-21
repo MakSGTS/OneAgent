@@ -215,5 +215,6 @@ records `pass` for the owned HTTP and public health/readiness boundary; Sprint
 17 implementation and public production evidence are completed with a `pass`
 decision in the
 [Sprint 17 integration review](reviews/sprint-17-workspace-service.md). Sprint
-18 Graph Query API implementation and public evidence are complete; its
-integration review and roadmap transition remain pending.
+18 Graph Query API is completed with a `pass` decision in the
+[Sprint 18 integration review](reviews/sprint-18-graph-query-api.md). Sprint 19
+File Watching is the unique `next` target.

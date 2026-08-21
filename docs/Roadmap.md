@@ -30,8 +30,9 @@ The v0.2 boundary is closed with a `pass` decision in the
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
 Container and Sprint 16 HTTP API and Health are completed with `pass`
-decisions. Sprint 17 Workspace Service is completed with a `pass` decision;
-Sprint 18 Graph Query API is the unique `next` target.
+decisions. Sprint 17 Workspace Service and Sprint 18 Graph Query API are
+completed with `pass` decisions; Sprint 19 File Watching is the unique `next`
+target.
 
 ## Roadmap reconciliation
 
@@ -3805,8 +3806,8 @@ Plan Sprint 14 Designer XML adapter
 | Sprint 15 — Runtime Service Container | Establish the long-running runtime composition and service lifecycle. | completed |
 | Sprint 16 — HTTP API and Health | Expose the runtime through an HTTP API with health and readiness behavior. | completed |
 | Sprint 17 — Workspace Service | Add workspace lifecycle and semantic-build orchestration services. | completed |
-| Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | next |
-| Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | planned |
+| Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | completed |
+| Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | next |
 | Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | planned |
 | Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | planned |
 
@@ -4566,6 +4567,12 @@ XML configurations, preserved canonical graph semantics and health routes,
 explicit deferred scope, the complete workspace gate, and a non-blocking Task 6
 decision. A blocked review keeps Sprint 18 incomplete, preserves the Sprint 17
 suite, and leaves Sprint 19 ineligible.
+
+The [Sprint 18 integration review](reviews/sprint-18-graph-query-api.md) records
+`pass` against committed Task 5 head
+`d7ba04bc6a4b0e18d46d051419809c2e0756fce7`. Sprint 18 is `completed`, Sprint
+19 File Watching is the unique `next` target, and the exact verified Sprint 17
+prompt suite is retired in the atomic review commit.
 
 Planning validation covers Markdown links and structure, prompt numbering,
 manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,

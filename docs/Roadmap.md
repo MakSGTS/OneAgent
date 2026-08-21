@@ -4371,6 +4371,211 @@ and unrelated-change absence. Suggested planning commit message:
 Plan Sprint 17 Workspace service
 ```
 
+#### Sprint 18 Graph Query API execution plan
+
+Sprint 18 is planned from committed readiness head
+`dac86be41eed3356e230079ab2607503a85f5b87`. The
+[Sprint 17 integration review](reviews/sprint-17-workspace-service.md) records
+`pass`, Sprint 17 is `completed`, and Sprint 18 is the unique `next` target.
+
+The live repository provides sufficient production and test evidence for a
+bounded sprint. `oneagent-graph` exposes deterministic read-only node, edge,
+containment, dependency, usage, and bounded traversal queries over canonical
+immutable graphs. ADR-0039 and `oneagent-runtime` expose separate immutable
+per-configuration graph snapshots through a cloneable observer. ADR-0038 and
+the Runtime HTTP service provide an owned Axum listener, exact method and
+fallback behavior, lifecycle-derived readiness, loopback integration seams,
+and cooperative shutdown. Repository-owned Runtime fixtures build real EDT and
+Designer XML graphs and already prove multi-configuration selection,
+deterministic ordering, negative startup behavior, and repeated fresh runs.
+
+Architecture is not yet sufficient to implement the API directly. Existing
+ADRs do not decide the transport-neutral query boundary, configuration and node
+selection, bounded first-slice operations, owned response projection, versioned
+routes, request limits, status/error mapping, wire schemas, compatibility, or
+HTTP access to Workspace observation. Task 1 records the live query, snapshot,
+transport, consumer, dependency, and test oracles; Task 2 accepts ADR-0040
+before production behavior changes. Planning does not invent route names,
+serialized fields, or unsupported query semantics.
+
+The committed Runtime Service, Investigation, Architecture, Implementation, and
+Review profiles, their task templates, and the sequential sprint workflow
+express every planned evidence, compatibility, ownership, validation, and
+reporting contract. The Runtime Services and APIs readiness stage explicitly
+covers Sprints 15-19. No reusable Codex Framework gap exists and no framework
+change or post-sprint framework audit is planned.
+
+##### Sprint 18 objective
+
+Expose the first stable bounded graph and semantic query API over one selected
+published Workspace configuration, with deterministic transport-neutral
+results, exact HTTP compatibility, truthful lifecycle behavior, explicit
+limits and errors, and public production evidence, without changing semantic
+facts or pulling file watching, persistence, or the supported CLI forward.
+
+##### Included scope
+
+- exact investigation of existing graph queries, identifiers, payload and
+  provenance surfaces, Workspace observation, configuration selection, Runtime
+  HTTP state, consumers, dependencies, compatibility constraints, fixtures,
+  and deterministic cross-platform testability;
+- accepted ADR-0040 for ownership and dependency direction, snapshot and
+  configuration selection, first-slice operations, request bounds, stable
+  owned result projection, missing/invalid state, route and method matrix,
+  status/error/schema mapping, compatibility, cancellation, shutdown,
+  observability, deterministic testing, and deferred scope;
+- one transport-neutral Runtime graph-query boundary over immutable selected
+  configuration snapshots, preserving canonical graph authority and exact
+  deterministic ordering with focused positive and negative evidence;
+- one versioned Runtime-owned HTTP graph-query surface that maps only the
+  accepted operations and failures, shares the existing listener and lifecycle,
+  and preserves the Sprint 16 health contract;
+- public loopback evidence over real production EDT and Designer XML builds for
+  configuration and node selection, accepted graph operations, bounded inputs,
+  exact success and error wire contracts, ordering, lifecycle/shutdown,
+  cleanup, and repeated fresh runs;
+- current-state documentation, complete workspace validation, integration
+  review, and conditional Sprint 17 prompt-suite retirement.
+
+##### Excluded scope
+
+- new graph node, edge, identity, query, resolution, validation, diff, Impact,
+  report, provenance, or Coverage semantics;
+- file watching, rebuild triggers, stale-snapshot or invalidation policy owned
+  by Sprint 19; persistent cache owned by Sprint 20; supported CLI client owned
+  by Sprint 21;
+- aggregate or merged cross-configuration graphs, cross-configuration
+  traversal, mutation, write routes, batch requests, streaming, subscriptions,
+  pagination beyond an explicitly accepted bounded first slice, fuzzy or
+  full-text search, shortest path, unbounded closure, source-fragment download,
+  and arbitrary query languages;
+- MCP, LSP, IDE, AI/context, authentication, authorization, TLS, CORS,
+  compression, rate limiting, request IDs, metrics/tracing export, OpenAPI,
+  general version negotiation, retries, restart, forced termination, new
+  external production dependencies, packaging, benchmarks, and unsupported
+  performance or security claims.
+
+##### Sprint 18 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 18 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-18-graph-query-api/`. Every dependent task requires
+the preceding committed outcome. Stored prompts do not authorize commits;
+authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-17-workspace-service/`, with these seven tracked
+files: `00-sprint-17-execution-loop.md`,
+`01-investigate-workspace-service-boundary.md`,
+`02-define-workspace-service-contract.md`,
+`03-implement-workspace-snapshot.md`,
+`04-implement-workspace-service.md`,
+`05-complete-workspace-service-evidence.md`, and
+`06-sprint-17-integration-review.md`. The tracked and filesystem inventories
+match and contain no untracked file at planning time. The suite remains
+untouched through Task 5. Only Task 6 may retire this exact inventory after a
+non-blocking review and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Graph Query API boundary. | Investigation / investigation | Current graph-query, snapshot, Runtime HTTP, consumer, compatibility, dependency, fixture, and deterministic-test evidence with explicit ADR questions. | Accepted Sprint 18 planning baseline. | `Investigate Sprint 18 Graph Query API` |
+| 2 | Define the Graph Query API contract. | Architecture / architecture | Accepted ADR-0040 ownership, selection, operation, bounds, result, route, method, schema, error, compatibility, lifecycle, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 18 Graph Query API contract` |
+| 3 | Implement the transport-neutral Graph Query service. | Runtime Service / runtime service | Read-only selected-snapshot query boundary, owned deterministic results, stable errors, limits, and focused evidence. | Task 2. | `Implement Sprint 18 Graph Query service` |
+| 4 | Implement and compose the Graph Query HTTP API. | Runtime Service / runtime service | Accepted versioned routes, exact request/response and error mapping, Workspace observation wiring, lifecycle preservation, and focused HTTP evidence. | Task 3. | `Implement Sprint 18 Graph Query HTTP API` |
+| 5 | Complete public Graph Query API evidence. | Runtime Service / runtime service | Public production EDT/Designer XML loopback matrix, bounds/errors/cleanup/repeated-run evidence, and synchronized current-state docs. | Task 4. | `Complete Sprint 18 Graph Query API evidence` |
+| 6 | Review the integrated Sprint 18 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 17 suite retirement, and Sprint 19 hand-off. | Task 5 and all implementation validation. | `Complete Sprint 18 Graph Query API review` |
+
+```text
+Committed Sprint 18 planning baseline
+    -> Task 1 Graph Query API investigation
+    -> Task 2 accepted ADR-0040
+    -> Task 3 transport-neutral Graph Query service
+    -> Task 4 versioned Graph Query HTTP API and composition
+    -> Task 5 public production evidence and current-state docs
+    -> Task 6 integration review and conditional Sprint 17 suite retirement
+    -> Sprint 19 planning eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only
+`docs/architecture/graph-query-api-investigation.md`. It records exact public
+query definitions and results, stable identifiers and value vocabularies,
+snapshot/configuration selection, Runtime and HTTP ownership, current consumers,
+dependency constraints, fixtures, CI constraints, compatibility-sensitive
+health behavior, candidate bounded operations, public test seams, and every
+decision ADR-0040 must make. It selects no architecture and changes no
+production behavior.
+
+Task 2 creates `docs/adr/0040-graph-query-api.md` and synchronizes only
+planning-level architecture text required by the decision. It fixes semantic
+authority and dependency direction, immutable snapshot selection, exact bounded
+operation and limit policy, owned response projection, stable identifiers and
+ordering, missing/invalid state, versioned route/method/status/schema matrix,
+error mapping, compatibility, lifecycle, cancellation/shutdown, observability,
+deterministic testing, first slice, migration, rejected alternatives, and
+deferred scope. It implements no production behavior.
+
+Task 3 implements only the ADR-0040 transport-neutral query boundary with
+focused tests. It consumes immutable Workspace observation, selects exactly one
+configuration, delegates to existing canonical graph queries, returns owned
+deterministic results and typed failures, and enforces accepted bounds. It does
+not add routes, change graph semantics, rebuild snapshots, or select a second
+wire or protocol authority.
+
+Task 4 maps the committed Task 3 boundary through the existing Runtime-owned
+HTTP listener. It implements only the accepted exact versioned route, method,
+status, JSON, and error matrix; wires Workspace observation at the composition
+root; preserves health probes and lifecycle-derived readiness; and adds focused
+handler and loopback evidence without a new listener, background task, semantic
+query language, or external production dependency.
+
+Task 5 exercises the public production boundary through the real filesystem
+detector, EDT and Designer XML builders, immutable Workspace publication,
+transport-neutral query service, and loopback HTTP server. It proves the
+accepted success, multi-configuration selection, missing/invalid input,
+operation bounds, deterministic ordering, lifecycle/shutdown, cleanup, and
+fresh repetition matrix with provenance-backed cross-platform inputs and no
+arbitrary sleeps. It synchronizes README, Architecture, and Semantic Model
+current-state text but does not complete the sprint.
+
+Task 6 reviews the planning-through-Task-5 range and creates
+`docs/reviews/sprint-18-graph-query-api.md` only for `pass` or `pass with
+non-blocking follow-ups` after all focused and full validation succeeds. That
+decision transitions Sprint 18 to `completed`, makes Sprint 19 File Watching
+the unique `next` target, and atomically retires the exact Sprint 17 suite in
+the same review commit. An inventory mismatch, endangered untracked file, or
+retained link dependency blocks retirement and the final commit. The review
+never silently fixes code.
+
+##### Sprint 18 state gates and completion criteria
+
+Sprint 18 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-5, accepted ADR-0040, one
+transport-neutral selected-snapshot query authority, deterministic owned
+results and limits, exact versioned HTTP compatibility and error mapping,
+truthful lifecycle behavior, public production evidence for EDT and Designer
+XML configurations, preserved canonical graph semantics and health routes,
+explicit deferred scope, the complete workspace gate, and a non-blocking Task 6
+decision. A blocked review keeps Sprint 18 incomplete, preserves the Sprint 17
+suite, and leaves Sprint 19 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 18 Graph Query API
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

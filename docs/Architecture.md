@@ -87,5 +87,6 @@ channels as acknowledgements and timeouts only as hang guards.
 | Shutdown-source error | The source failure remains primary while the worker is cancelled and joined. |
 | Fresh repetition and no detached work | Two separately built apps produce equal start/stop behavior; event-channel closure proves no probe task survives `App::run`. |
 
-Sprint 15 remains active until its integration review reruns the full gate and
-records a non-blocking decision.
+The [Sprint 15 integration review](reviews/sprint-15-runtime-service-container.md)
+records `pass` after the focused and complete workspace gates. Sprint 15 is
+completed; Sprint 16 owns the next HTTP and public health/readiness boundary.

@@ -101,6 +101,7 @@ docs/codex/
     graph-emission.md
     graph-model.md
     implementation.md
+    llm-provider.md
     parser.md
     persistent-state.md
     review.md
@@ -114,6 +115,7 @@ docs/codex/
     graph-implementation.md
     implementation.md
     investigation.md
+    llm-provider-implementation.md
     parser-implementation.md
     persistent-state-implementation.md
     review.md
@@ -127,6 +129,7 @@ docs/codex/
     graph-model-task.md
     implementation-task.md
     investigation-task.md
+    llm-provider-task.md
     parser-task.md
     persistent-state-task.md
     review-task.md
@@ -219,6 +222,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 - Use `docs/codex/profiles/context-engine-implementation.md` for deterministic
   semantic context selection, budgeting, assembly, explanation, rendering, and
   reproducible evaluation tasks.
+- Use `docs/codex/profiles/llm-provider-implementation.md` for provider-neutral
+  LLM contracts, capability discovery, provider adapters, secrets, execution
+  policy, error mapping, and provider conformance tasks.
 - Use `docs/codex/profiles/parser-implementation.md` for real source parser
   tasks.
 - Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
@@ -250,6 +256,9 @@ module composition.
   incremental Semantic Index work.
 - Use `docs/codex/templates/context-engine-task.md` for semantic context request,
   selection, budget, truncation, provenance, rendering, or evaluation work.
+- Use `docs/codex/templates/llm-provider-task.md` for provider-neutral LLM
+  contracts, model/capability discovery, provider adapters, or provider
+  conformance evidence.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
   adapter ingestion or cross-adapter conformance.

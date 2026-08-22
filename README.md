@@ -8,13 +8,14 @@ and Health boundary. The Sprint 17 Workspace Service implementation and public
 production evidence are completed with a `pass` integration review. Sprint 18
 Graph Query API is also completed with a `pass` integration review. Sprint 19
 File Watching and Sprint 20 Persistent Cache are completed with `pass`
-integration reviews. Sprint 21 CLI Client is the unique next target. See
+integration reviews. Sprint 21 CLI Client implementation and public production
+evidence are complete and await the integration review. See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
 ## Workspace
 
 - `apps/runtime` — long-running Runtime composition, owned service lifecycle, cancellation, shutdown, EDT/Designer Workspace discovery and file-change rebuilds, validated persistent snapshot caching, immutable semantic snapshots, public update/cache observation, HTTP liveness/readiness, and the versioned read-only Graph Query API
-- `apps/cli` — CLI package placeholder; supported client behavior is planned for Sprint 21
+- `apps/cli` — supported dependency-free CLI client for Runtime health, Workspace configuration listing, exact node lookup, direct relations, and bounded traversal
 - `crates/common` — shared primitives
 - `crates/workspace` — project and workspace model
 - `crates/metadata` — typed 1C metadata model
@@ -45,10 +46,14 @@ closed typed in-process cache status without changing readiness or query wires.
 Runtime exposes exact read-only configuration listing, node lookup, direct
 relation, and bounded traversal operations through `GET /api/v1/...`, with
 lifecycle/snapshot gating, bounded deterministic results, and closed JSON
-success/error schemas. The supported CLI, Git, MCP, LSP, VS Code, and AI-provider
-integration remain planned capabilities with explicit sprint ownership. Health
-remains available through exact `GET /health/live` and `GET /health/ready`
-probes.
+success/error schemas. The supported CLI maps its exact commands to those health
+and Graph Query GET routes through one bounded HTTP/1.1 connection, preserves
+Runtime JSON, and distinguishes usage, transport, server, protocol, and output
+failures with stable exit codes. Runtime process management, endpoint discovery,
+configuration files, richer output, alternate transports, packaging, Git, MCP,
+LSP, VS Code, and AI-provider integration remain planned capabilities with
+explicit ownership. Health remains available through exact `GET /health/live`
+and `GET /health/ready` probes.
 
 ## Verify
 

@@ -229,6 +229,20 @@ fresh reuse. The
 `pass`; Sprint 20 is completed and Sprint 21 CLI Client is the unique `next`
 target.
 
+ADR-0043 governs the implemented Sprint 21 CLI Client without changing graph,
+Runtime, HTTP, Workspace, watcher, cache, adapter, or protocol authority. The
+dependency-free client maps exact health, configuration-listing, node,
+direct-relation, and bounded-traversal commands to the accepted GET routes over
+one bounded blocking HTTP/1.1 connection. It validates the closed local grammar,
+numeric endpoint, query values and encoding, response framing and media type,
+then preserves Runtime JSON without semantic interpretation. Stable stdout/
+stderr and exit contracts distinguish usage, transport, server, protocol, and
+output failures. Public real-executable evidence over the tracked mixed EDT and
+Designer fixture proves lifecycle gating, every supported operation, bounds,
+domain and malformed-response failures, shutdown cleanup, listener release, and
+equal fresh runs. Sprint 21 implementation and public evidence are complete and
+await integration review.
+
 ## Core principles
 
 ### Unified semantics

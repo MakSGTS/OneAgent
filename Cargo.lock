@@ -347,6 +347,12 @@ dependencies = [
 [[package]]
 name = "oneagent-cli"
 version = "0.1.0"
+dependencies = [
+ "oneagent-runtime",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "oneagent-common"

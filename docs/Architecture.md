@@ -42,7 +42,11 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      Query route set. A transport-neutral observer-backed query component owns
      exact configuration, node, direct-relation, and bounded-traversal
      operations without becoming a background service.
-   - `oneagent-cli` is a package placeholder and is not yet a supported client.
+   - `oneagent-cli` is the supported dependency-free client for the accepted
+     Runtime health and Graph Query HTTP/1.1 surface. It owns a closed command
+     grammar, local validation, bounded one-request socket lifecycle, exact
+     query encoding, opaque Runtime JSON presentation, and stable failure/exit
+     classification without becoming protocol or semantic authority.
    - `oneagent-protocol` is a package foundation and does not yet expose HTTP,
      MCP, or LSP contracts.
 
@@ -58,7 +62,8 @@ The roadmap assigns future boundaries explicitly:
 
 - Graph-query Runtime APIs are implemented in Sprint 18, and Sprint 19 File
   Watching and Sprint 20 Persistent Cache are completed with `pass` integration
-  reviews. Sprint 21 CLI Client is the unique `next` target.
+  reviews. Sprint 21 CLI Client implementation and public evidence are complete
+  and await integration review.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -274,6 +279,38 @@ five-second timeouts are hang guards, not polling-duration evidence.
 | Watched replacement and reuse | Production EDT and Designer changes publish complete immutable replacements, preserve held older snapshots, replace cache bytes, ignore cache-owned probe state in the source identity, and restore the latest replacement on a fresh hit. |
 | Lifecycle and cleanup | Cache work completes before `Running` or replacement publication; health and Graph Query contracts remain exact; shutdown clears snapshots, publishes terminal update state, closes snapshot/update/cache watches, releases listeners, leaves no temporary file, and preserves only reusable complete cache state. |
 
+## Accepted CLI Client boundary
+
+[ADR-0043](adr/0043-cli-client.md) governs the implemented Sprint 21 client
+without changing Runtime or semantic authority. `oneagent-cli` exposes exact
+health, configurations, node, relations, and traverse commands over one numeric
+`SocketAddr`, validates the closed local grammar and server bounds, emits exact
+percent-encoded GET targets, and owns one blocking `TcpStream` per invocation.
+
+The dependency-free HTTP/1.1 executor uses fixed connection/read/write timeouts,
+bounded response head/body sizes, connection-close framing, exact JSON media
+validation, and no retry, pooling, redirect, DNS, TLS, or background task. It
+passes complete Runtime JSON through without interpretation, writes success to
+stdout and server errors to stderr, and distinguishes usage, transport, server,
+protocol, and output failure through stable exit codes. `oneagent-protocol`
+remains inactive.
+
+### Sprint 21 public evidence matrix
+
+The public `apps/cli/tests/runtime_client.rs` target invokes the built CLI
+executable and a real query-enabled Runtime over port-zero loopback. It copies
+the tracked mixed EDT/Designer fixture into fresh temporary roots, gates Runtime
+startup through public lifecycle seams, and uses timeouts only as hang guards.
+
+| Contract | Public evidence |
+| --- | --- |
+| Executable boundary | Exact help, version, usage, transport, and malformed-protocol paths prove stdout/stderr and exits through the real binary. |
+| Lifecycle and health | CLI liveness succeeds during `Initializing`; readiness and Graph Query return exact Runtime `503` JSON before `Running`; readiness succeeds after complete startup. |
+| Both production formats | Configuration listing preserves canonical Designer/EDT order, and exact node commands return both Configuration identities and names. |
+| Graph operations | Direct outgoing `contains` relations and bounded traversal with edge filter, include-start, depth, and limit preserve Runtime JSON and order. |
+| Bounds and domain failures | Limit `1` reports truncation; an unknown Configuration preserves the exact Runtime error envelope and server exit. |
+| Cleanup and repetition | Shutdown releases the Runtime listener, every child process and connection terminates, and two fresh mixed-fixture runs return equal observations. |
+
 ### Sprint 16 public evidence matrix
 
 The public `apps/runtime/tests/http_health.rs` target imports only the
@@ -319,4 +356,5 @@ File Watching is completed with a `pass` decision in the
 [Sprint 19 integration review](reviews/sprint-19-file-watching.md). Sprint 20
 Persistent Cache is completed with a `pass` decision in the
 [Sprint 20 integration review](reviews/sprint-20-persistent-cache.md). Sprint 21
-CLI Client is the unique `next` target.
+CLI Client implementation and public evidence are complete and await the
+integration review.

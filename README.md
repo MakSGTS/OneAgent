@@ -2,14 +2,12 @@
 
 AI Development Platform for 1C:Enterprise.
 
-OneAgent has completed the v0.3 source-independent 1C Knowledge Model, the
-Sprint 15 long-running Runtime service container, and the Sprint 16 HTTP API
-and Health boundary. The Sprint 17 Workspace Service implementation and public
-production evidence are completed with a `pass` integration review. Sprint 18
-Graph Query API is also completed with a `pass` integration review. Sprint 19
-File Watching, Sprint 20 Persistent Cache, and Sprint 21 CLI Client are
-completed with `pass` integration reviews. The v0.4 release integration review
-is the unique next gate. See
+OneAgent has completed the v0.3 source-independent 1C Knowledge Model and the
+v0.4 Runtime API boundary with `pass` release integration reviews. v0.4
+includes the long-running Runtime, HTTP health, Workspace lifecycle, Graph Query
+API, File Watching, Persistent Cache, and supported CLI Client delivered by
+Sprints 15–21. Sprint 22 Context Engine is the unique `next` planning target.
+See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
 ## Workspace

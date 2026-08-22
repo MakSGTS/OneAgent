@@ -242,8 +242,10 @@ Designer fixture proves lifecycle gating, every supported operation, bounds,
 domain and malformed-response failures, shutdown cleanup, listener release, and
 equal fresh runs. The
 [Sprint 21 integration review](../reviews/sprint-21-cli-client.md) records
-`pass`; Sprint 21 is completed and the v0.4 release integration review is the
-unique next gate.
+`pass`; Sprint 21 is completed. The
+[v0.4 release integration review](../reviews/v0.4-release-review.md) also records
+`pass`, completes the Runtime API boundary without changing canonical semantic
+authority, and makes Sprint 22 Context Engine the unique `next` planning target.
 
 ## Core principles
 

@@ -15,7 +15,7 @@ boundaries; they do not define a second task sequence.
 | v0.1 — Foundation | Workspace, Runtime foundation, discovery, EDT reader, and base metadata model | Sprint 1 | completed |
 | v0.2 — Semantic Core | Typed semantic graph, semantic index, and deterministic incremental indexing | Sprints 2–5 | completed |
 | v0.3 — 1C Knowledge Model | Broader metadata semantics and Designer XML ingestion | Sprints 6–14 | completed |
-| v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | planned |
+| v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | completed |
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | planned |
 | v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | planned |
 | v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | planned |
@@ -28,12 +28,10 @@ or override the dependency order recorded in the sprint tables.
 The v0.2 boundary is closed with a `pass` decision in the
 [v0.2 release review](reviews/v0.2-release-review.md).
 The v0.3 boundary is closed with a `pass` decision in the
-[v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
-Container and Sprint 16 HTTP API and Health are completed with `pass`
-decisions. Sprint 17 Workspace Service, Sprint 18 Graph Query API, Sprint 19
-File Watching, Sprint 20 Persistent Cache, and Sprint 21 CLI Client are
-completed with `pass` decisions; the v0.4 release integration review is the
-unique next gate.
+[v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
+closed with a `pass` decision in the
+[v0.4 release review](reviews/v0.4-release-review.md). Sprint 22 Context Engine
+is the unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -3825,7 +3823,9 @@ Plan Sprint 14 Designer XML adapter
 | Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | completed |
 | Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | completed |
 
-The v0.4 release integration review is the unique next gate.
+The [v0.4 release integration review](reviews/v0.4-release-review.md) records
+`pass`; the v0.4 boundary is complete and Sprint 22 Context Engine is the unique
+`next` planning target.
 
 #### Sprint 15 Runtime Service Container execution plan
 
@@ -5210,18 +5210,30 @@ Plan Sprint 21 CLI Client
 Tasks 1-5 are committed in dependency order. The
 [Sprint 21 integration review](reviews/sprint-21-cli-client.md) records `pass`
 after the focused CLI/Runtime matrix and complete workspace gate. Sprint 21 is
-`completed`, the v0.4 release integration review is the unique next gate, and
-the exact verified Sprint 20 prompt suite is retired in the review commit.
+`completed`, and the exact verified Sprint 20 prompt suite is retired in its
+review commit. The subsequent
+[v0.4 release review](reviews/v0.4-release-review.md) records `pass` and makes
+Sprint 22 Context Engine the unique `next` planning target.
 ADR-0043, Runtime and semantic authority, exact CLI command/request/output/exit
 contracts, public mixed EDT/Designer executable evidence, compatibility with
 health, Graph Query, Workspace, File Watching, and Persistent Cache behavior,
 and deferred-scope boundaries remain authoritative.
 
+##### v0.4 completed state
+
+The [v0.4 release review](reviews/v0.4-release-review.md) records `pass` against
+the committed Sprint 21 review head
+`a05e6977cc36757a18e250c174192e7eaba4cd48`. Sprints 15–21 and the v0.4 Runtime
+API boundary are complete. Sprint 22 Context Engine is the unique `next`
+planning target and retains its planned Codex Framework readiness gate. The
+Sprint 21 prompt suite remains unchanged; release review does not retire a
+prompt suite.
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 22 — Context Engine | Build deterministic semantic context selection and assembly. | planned |
+| Sprint 22 — Context Engine | Build deterministic semantic context selection and assembly. | next |
 | Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | planned |
 | Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | planned |
 | Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | planned |

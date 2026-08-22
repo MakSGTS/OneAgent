@@ -113,7 +113,7 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — Source Adapter Ingestion | Sprint 14 | Multi-artifact source discovery and parsing, partial and malformed input, canonical identity equivalence across adapters, and end-to-end adapter conformance implemented by the [Source Adapter profile](codex/profiles/source-adapter-implementation.md), [Source Adapter workflow](codex/workflows/source-adapter.md), and [Source Adapter template](codex/templates/source-adapter-task.md). | Sprint 14 | completed |
 | Task prompt template update completed — Runtime Services and APIs | Sprint 15 | Long-running service lifecycle, ownership, concurrency, cancellation, shutdown, health, transport compatibility, observability, and client/server integration evidence implemented by the [Runtime Service profile](codex/profiles/runtime-service-implementation.md), [Runtime Service workflow](codex/workflows/runtime-service.md), and [Runtime Service template](codex/templates/runtime-service-task.md). | Sprints 15–19 and 21; baseline for Sprints 28 and 32 | completed |
 | Task prompt template update completed — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence implemented by the [Persistent State profile](codex/profiles/persistent-state-implementation.md), [Persistent State workflow](codex/workflows/persistent-state.md), and [Persistent State template](codex/templates/persistent-state-task.md). | Sprint 20 | completed |
-| Task prompt template update required — Context Engine | Sprint 22 | Deterministic context selection, provenance, budgets, truncation, relevance evidence, reproducible evaluation, and data-boundary rules. | Sprints 22 and 33 | planned |
+| Task prompt template update completed — Context Engine | Sprint 22 | Deterministic context selection, provenance, budgets, truncation, relevance evidence, reproducible evaluation, and data-boundary rules implemented by the [Context Engine profile](codex/profiles/context-engine-implementation.md), [Context Engine workflow](codex/workflows/context-engine.md), and [Context Engine template](codex/templates/context-engine-task.md). | Sprints 22 and 33 | completed |
 | Task prompt template update required — LLM Providers | Sprint 23 | Provider capabilities, request/response compatibility, discovery, secrets, timeouts, retries, cancellation, error taxonomy, and contract tests. | Sprints 23–26 | planned |
 | Task prompt template update required — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests. | Sprints 27, 29, and 33 | planned |
 | Task prompt template update required — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence. | Sprints 28–29 and 35; protocol baseline for Sprint 32 | planned |
@@ -125,6 +125,18 @@ kickoff because distant scope remains provisional.
 | Task prompt template update required — Performance and Security | Sprint 44 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 44 | planned |
 | Task prompt template update required — Documentation and Examples | Sprint 45 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 45 | planned |
 | Task prompt template update required — Release | Sprint 46 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 46 | planned |
+
+The Context Engine audit at committed v0.4 release head
+`b47e6ff493a5db2b1188761bc7b7bab362e511ca` found that the generic
+implementation contract does not require deterministic seed resolution,
+relevance ordering, budget admission and truncation, per-item provenance and
+explanations, or repository-owned reproducible evaluation. The Context Engine
+modules add only those reusable execution and evidence requirements. They do
+not select request types, seed vocabulary, traversal policy, scoring formula,
+budget unit, source-fragment contract, rendering format, or Runtime surface;
+those remain Sprint 22 investigation and architecture decisions. Sprint 22
+remains `next` while its detailed kickoff is prepared from the committed
+framework prerequisite.
 
 The Source Adapter audit at committed baseline
 `80c25a69e50a572220d4c1380ee15934792b68b8` found that the existing parser

@@ -41,6 +41,7 @@ technical workflows:
 
 - architecture;
 - implementation;
+- context engine;
 - graph model;
 - graph emission;
 - semantic index;
@@ -96,6 +97,7 @@ docs/codex/
     validation.md
   workflows/
     architecture.md
+    context-engine.md
     graph-emission.md
     graph-model.md
     implementation.md
@@ -108,6 +110,7 @@ docs/codex/
     source-adapter.md
   profiles/
     architecture.md
+    context-engine-implementation.md
     graph-implementation.md
     implementation.md
     investigation.md
@@ -119,6 +122,7 @@ docs/codex/
     source-adapter-implementation.md
   templates/
     architecture-task.md
+    context-engine-task.md
     graph-emission-task.md
     graph-model-task.md
     implementation-task.md
@@ -212,6 +216,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
   emission implementation tasks.
 - Use `docs/codex/profiles/semantic-index-implementation.md` for repeated
   complete-snapshot or incremental Semantic Index implementation tasks.
+- Use `docs/codex/profiles/context-engine-implementation.md` for deterministic
+  semantic context selection, budgeting, assembly, explanation, rendering, and
+  reproducible evaluation tasks.
 - Use `docs/codex/profiles/parser-implementation.md` for real source parser
   tasks.
 - Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
@@ -241,6 +248,8 @@ module composition.
   emission.
 - Use `docs/codex/templates/semantic-index-task.md` for complete-snapshot or
   incremental Semantic Index work.
+- Use `docs/codex/templates/context-engine-task.md` for semantic context request,
+  selection, budget, truncation, provenance, rendering, or evaluation work.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
   adapter ingestion or cross-adapter conformance.
@@ -296,6 +305,10 @@ edges. They must preserve provenance, determinism, and Coverage evidence.
 Semantic Index tasks build deterministic derived views without creating a
 second semantic authority. They must define lifecycle, staleness, compatibility,
 ordering, and equivalence with canonical query or full-rebuild behavior.
+
+Context Engine tasks select and assemble deterministic, budget-bounded context
+without creating semantic facts. They must define seed resolution, relevance
+ordering, provenance, explanations, truncation, and reproducible evaluation.
 
 Review tasks inspect existing work. They may create explicitly authorized review
 artifacts and Roadmap state transitions, but they do not modify implementation

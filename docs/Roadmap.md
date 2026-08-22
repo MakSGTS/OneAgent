@@ -5254,6 +5254,224 @@ prompt suite.
 
 The v0.5 release integration review follows Sprint 27.
 
+#### Sprint 22 Context Engine execution plan
+
+Sprint 22 is planned from committed framework baseline
+`b364805a857d076ab8e7a42e435d3d2c0017d687`. The
+[v0.4 release review](reviews/v0.4-release-review.md) records `pass`, so Sprint
+22 is the unique `next` target. The required Context Engine Codex Framework
+stage is committed through the
+[profile](codex/profiles/context-engine-implementation.md),
+[workflow](codex/workflows/context-engine.md), and
+[template](codex/templates/context-engine-task.md); the existing investigation,
+architecture, review, sprint-planning, and sequential-execution contracts cover
+the remaining task families without another framework change.
+
+The live source-independent baseline provides deterministic `SemanticGraph` and
+`SemanticGraphQuery` node, edge, ownership, dependency, usage, and bounded
+traversal access plus node/edge provenance. `oneagent-analysis` is an existing
+public library crate over `oneagent-graph`, and its focused target passes with
+four non-zero tests. No Context Engine API, tokenizer, source-range/content
+store, renderer, Runtime context route, or Context Coverage capability exists.
+These absences bound the first slice instead of becoming invented inputs.
+
+Repository-owned constructed graphs and the existing production analysis
+pipeline can provide exact deterministic request, selection, budget, rendering,
+and repetition oracles without an external model, service, network, ignored
+corpus, or new production dependency. Task 1 must still inventory the exact
+semantic-query, provenance, budget, truncation, evaluation, consumer, and
+compatibility baseline before ADR-0044 selects the contract.
+
+##### Sprint 22 objective
+
+Build the first source-independent deterministic semantic Context Engine over
+one immutable canonical graph snapshot: resolve accepted seeds, select and order
+bounded relevant graph context, admit exact semantic fragments under an explicit
+budget, preserve provenance, explain inclusion and omission, render a stable
+bundle, and prove reproducible evaluation without invoking an LLM or introducing
+a second semantic authority.
+
+##### Included scope
+
+- exact investigation of current graph/query/provenance, analysis-crate,
+  consumer, dependency, budget, truncation, rendering, and testability evidence;
+- accepted ADR-0044 request, seed, policy, snapshot, error, selection, relevance,
+  ordering, deduplication, budget, truncation, provenance, explanation,
+  rendering, evaluation, compatibility, and first-slice contracts;
+- public source-independent Context Engine request and seed-resolution boundary
+  in `oneagent-analysis`;
+- deterministic bounded candidate traversal, filtering, relevance comparison,
+  tie-breaking, and deduplication over accepted graph query interfaces;
+- exact budget admission, explicit omissions/truncation, provenance-backed
+  bundle assembly, deterministic semantic rendering, and explanations;
+- public repository-owned evaluation evidence, current-state documentation,
+  complete workspace validation, integration review, and conditional Sprint 21
+  prompt-suite retirement.
+
+##### Excluded scope
+
+- EDT, Designer XML, BSL, filesystem, editor, Runtime transport, HTTP, CLI, MCP,
+  LSP, or IDE-specific Context Engine authority;
+- source-text extraction, public source ranges, arbitrary filesystem reads,
+  embeddings, vector search, learned or floating-point scoring, external data,
+  and quality/performance claims without a reproducible accepted oracle;
+- LLM provider requests, prompt/model execution, streaming, conversation state,
+  tool execution or authorization, secrets, retries, and provider capabilities
+  owned by Sprints 23–27;
+- graph mutation, new semantic nodes or edges, persisted context bundles,
+  incremental context repair, cache integration, Runtime routes, protocol
+  activation, UI, MCP, and IDE integrations owned by later sprints;
+- new production dependencies without separate explicit approval.
+
+##### Readiness and framework decision
+
+The mandatory data/testability gate passes for planning because the canonical
+graph/query/provenance APIs, public analysis crate, deterministic ordered
+collections, constructed semantic graphs, and existing executable tests provide
+repository-owned inputs and oracles. Missing source content and tokenizer state
+are explicit first-slice exclusions. If Task 1 finds that no bounded budget or
+relevance contract can be evaluated from repository-owned evidence, Task 2 is
+blocked and later tasks do not start.
+
+The generic implementation framework was insufficient for deterministic
+selection, provenance explanations, budget/truncation, data-boundary rules, and
+reproducible relevance evidence. The committed Context Engine modules close
+that concrete reusable gap without choosing Sprint-specific architecture. No
+additional framework task is planned.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / Template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Context Engine boundary. | Investigation / investigation | Verified graph/query/provenance, analysis, consumer, dependency, request, seed, selection, budget, rendering, evaluation, fixture, platform, and compatibility evidence plus ADR questions. | Sprint 22 planning baseline. | `Investigate Sprint 22 Context Engine` |
+| 2 | Define the Context Engine contract. | Architecture / architecture | Accepted ADR-0044 for canonical authority, request/seed/policy, selection, budget, bundle, provenance, explanation, rendering, evaluation, compatibility, and deferred scope. | Task 1 evidence. | `Define Sprint 22 Context Engine contract` |
+| 3 | Implement the context request boundary. | Context Engine / context engine | Public request/policy/budget/bundle domain boundary, validation, accepted seed resolution, typed failures, and focused deterministic evidence. | Accepted ADR-0044. | `Implement Sprint 22 context request boundary` |
+| 4 | Implement deterministic context selection. | Context Engine / context engine | Accepted candidate traversal/filtering, relevance comparison, tie-breaking, bounds, deduplication, provenance paths, and focused evidence. | Task 3. | `Implement Sprint 22 deterministic context selection` |
+| 5 | Implement budgeted context assembly. | Context Engine / context engine | Accepted cost/admission policy, explicit omission/truncation, provenance/explanations, bundle assembly, stable semantic rendering, and focused evidence. | Task 4. | `Implement Sprint 22 budgeted context assembly` |
+| 6 | Complete Context Engine evidence. | Context Engine / context engine | Public repository-owned evaluation matrix, compatibility/regression evidence, and truthful current-state documentation. | Task 5. | `Complete Sprint 22 Context Engine evidence` |
+| 7 | Review the integrated Sprint 22 baseline. | Review / review | Findings, complete validation evidence, sprint decision, Sprint 21 suite retirement, and Sprint 23 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 22 Context Engine review` |
+
+```text
+Committed Sprint 22 planning baseline
+    -> Task 1 investigation
+    -> Task 2 ADR-0044
+    -> Task 3 request and seed boundary
+    -> Task 4 deterministic selection
+    -> Task 5 budgeted assembly and rendering
+    -> Task 6 public evaluation evidence and docs
+    -> Task 7 integration review and state transition
+```
+
+##### Task boundaries and acceptance evidence
+
+Task 1 creates
+`docs/architecture/context-engine-investigation.md`. It must separate confirmed
+repository evidence, accepted constraints, compatibility-sensitive behavior,
+unsupported inputs, and unresolved decisions. It inventories exact graph/query
+and provenance capabilities, analysis ownership and consumers, viable request
+and seed inputs, selection and relevance inputs, budget/cost choices, truncation
+and rendering feasibility, deterministic fixtures/oracles, dependency impact,
+platform behavior, and the complete ADR-0044 decision matrix. It changes no
+production, manifest, Roadmap-state, current-state, or prompt file.
+
+Task 2 creates `docs/adr/0044-context-engine.md` and accepts the smallest
+complete implementable contract grounded in Task 1. It must define canonical
+snapshot authority, crate ownership, closed request/seed/policy and failure
+vocabularies, resolution precedence, allowed graph relations, candidate bounds,
+relevance comparison and ties, deduplication, budget unit and cost, admission
+and truncation, bundle identities and order, provenance and explanations,
+rendering, deterministic evaluation, consumer compatibility, dependencies,
+first slice, rejected alternatives, and deferred scope. It implements no Rust
+and leaves Sprint 22 `next`.
+
+Task 3 implements only the accepted public request and seed-resolution
+boundary in `oneagent-analysis`, with minimum module/export changes and focused
+tests. Invalid, empty, duplicate, missing, ambiguous, incompatible, and
+boundary values follow ADR-0044 exactly. The task does not implement candidate
+ranking, budget admission, rendering, Runtime transport, graph mutation, or
+source extraction.
+
+Task 4 implements only accepted deterministic candidate discovery and ordering
+over the canonical immutable graph query. It proves traversal direction/depth,
+allowed kinds, confidence and derived-fact policy where accepted, maximum
+candidates, cycle containment, duplicate paths, relevance ordering, stable
+tie-breaking, provenance path retention, input/insertion reordering, and
+repeated requests. It does not admit rendered fragments under a budget.
+
+Task 5 implements only accepted budgeted bundle assembly and stable semantic
+rendering from Task 4 candidates. It proves exact costs, reserved overhead,
+minimum/boundary/over-budget behavior, deterministic admission, explicit
+omissions and truncation, overlap/deduplication, per-item provenance and
+explanations, output order, exact rendering, and repeated equality. It adds no
+source text or provider/model behavior.
+
+Task 6 adds a non-zero public `oneagent-analysis` evaluation target over
+repository-owned provenance-backed graphs and the production analysis boundary.
+The matrix covers accepted positive, empty, invalid, missing, ambiguous,
+incompatible, duplicate, reordered, cyclic, candidate-bound, exact-budget,
+over-budget, provenance, explanation, omission, rendering, and repeated cases
+as applicable. It synchronizes only `README.md`, `docs/Architecture.md`, and
+`docs/architecture/semantic-model-2.md` with implemented truth. It does not fix
+production behavior, mark Sprint 22 completed, or claim source text, model,
+transport, quality, or performance support.
+
+Task 7 reviews the exact planning-through-Task-6 range without fixing findings.
+Only `pass` or `pass with non-blocking follow-ups` after focused and complete
+validation may create `docs/reviews/sprint-22-context-engine.md`, transition
+Sprint 22 to `completed`, make Sprint 23 LLM Provider Abstraction the unique
+`next` target, synchronize minimal hand-off text when required, and atomically
+retire the exact tracked Sprint 21 prompt suite.
+
+##### State and failure gates
+
+Sprint 22 remains `next` during planning and becomes `active` only after the
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence plus all required focused
+and complete validation proves every acceptance criterion; no empty commit is
+created. Missing investigation evidence, an unimplementable ADR, zero matched
+tests, failed validation, incompatible public behavior, or a staging/commit
+failure stops the sprint immediately and leaves dependent tasks `not_started`.
+
+Sprint 22 may transition to `completed` only when Tasks 1–6 are committed or
+proven `already_complete`, their required validation succeeds, and Task 7 issues
+a non-blocking decision. A blocked review preserves Sprint 22 as incomplete and
+keeps the Sprint 21 prompt suite. A non-blocking review makes Sprint 23 the
+unique `next` planning target and retires only
+`docs/codex/prompts/sprint-21-cli-client/` in the final review commit.
+
+##### Validation plan
+
+Documentation-only Tasks 1–2 run link/decision consistency and
+`git diff --check`. Production Tasks 3–6 run non-zero focused
+`oneagent-analysis` tests, affected graph or consumer tests, and the canonical
+full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Task 7 reruns the complete focused evaluation matrix and full workspace gate,
+audits the exact commit/path range, verifies accepted versus deferred scope and
+current-state documentation, and revalidates the Sprint 21 tracked/filesystem/
+untracked prompt inventory before any explicit deletion.
+
+##### Planning validation
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 21 retirement inventory, `git diff --check`, and unrelated-change
+absence. Suggested planning commit message:
+
+```text
+Plan Sprint 22 Context Engine
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

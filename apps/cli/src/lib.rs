@@ -4,6 +4,10 @@ use std::ffi::OsString;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+mod http;
+
+pub use http::HttpExecutor;
+
 /// Successful invocation exit code.
 pub const EXIT_SUCCESS: u8 = 0;
 /// Invalid command-line exit code.

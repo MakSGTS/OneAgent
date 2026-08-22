@@ -7,8 +7,10 @@ v0.4 Runtime API boundary with `pass` release integration reviews. v0.4
 includes the long-running Runtime, HTTP health, Workspace lifecycle, Graph Query
 API, File Watching, Persistent Cache, and supported CLI Client delivered by
 Sprints 15–21. The source-independent Context Engine delivered by Sprint 22 is
-also complete with a `pass` integration review. Sprint 23 LLM Provider
-Abstraction is the unique `next` planning target.
+also complete with a `pass` integration review. The provider-neutral Sprint 23
+LLM Provider Abstraction first slice and its public conformance evidence are
+implemented; Sprint 23 remains the unique `next` roadmap item pending its
+integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -22,6 +24,7 @@ See
 - `crates/graph` — canonical semantic graph, query, validation, diff, impact, coverage, and resolution APIs
 - `crates/bsl` — BSL lexical and syntax analysis
 - `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
+- `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/protocol` — protocol package foundation; transport contracts are not implemented yet
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
@@ -63,6 +66,16 @@ budget omissions are reported separately, and exact two-line item fragments
 make the result reproducible. Source text/ranges, tokenizers, providers/models,
 Runtime or protocol routes, persistence, MCP, and IDE integration remain
 deferred.
+
+The additive std-only `oneagent-llm` crate owns provider-scoped identities,
+canonical model catalogs, the closed `TextGeneration` capability, bounded
+owned text requests and responses, redacted secret/error values, represented
+timeout with no automatic retry, cooperative cancellation, and an object-safe
+asynchronous provider seam. Public repository-owned fakes prove discovery,
+generation, error, cancellation, cleanup, and provider substitution without
+network, credentials, Runtime, or Context Engine coupling. Concrete provider
+adapters, wire protocols, live configuration/discovery, Runtime exposure,
+prompt/tool policy, streaming, MCP, and IDE integration remain deferred.
 
 ## Verify
 

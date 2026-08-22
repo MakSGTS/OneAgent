@@ -124,6 +124,21 @@ deterministic semantic bundle. It does not mutate graph facts, read source
 files, call providers/models, or own Runtime, persistence, protocol, MCP, or IDE
 state.
 
+### `oneagent-llm`
+
+Owns the additive provider-neutral LLM boundary accepted by ADR-0045:
+
+* bounded provider/model identities and canonical model catalogs;
+* the closed text-generation capability and validated owned requests;
+* request-bound terminal responses, local UTF-8 byte usage, and finish reasons;
+* redacted secret, diagnostic, and error values;
+* represented timeout, no automatic retry, cooperative cancellation, and the
+  object-safe asynchronous provider seam.
+
+It is std-only and does not depend on the Knowledge Graph, Context Engine,
+Runtime, protocol, provider wire schemas, configuration sources, or transports.
+Provider results do not create or mutate graph facts.
+
 ### `oneagent-edt`
 
 Owns EDT-specific loading and conversion:
@@ -256,8 +271,9 @@ equal fresh runs. The
 `pass`, completes the Runtime API boundary without changing canonical semantic
 authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
-`pass`; Sprint 22 is completed and Sprint 23 LLM Provider Abstraction is the
-unique `next` planning target.
+`pass`; Sprint 22 is completed. The provider-neutral Sprint 23 first slice and
+public conformance evidence are implemented; Sprint 23 remains the unique
+`next` roadmap item pending integration review.
 
 ## Core principles
 
@@ -1164,6 +1180,12 @@ Knowledge Graph through its query interface. ADR-0044 assigns ownership to
 `oneagent-analysis`; the graph remains canonical authority. The engine has no
 dependency on EDT structures, parser internals, filesystem source reads,
 providers/models, Runtime, persistence, protocols, MCP, or IDE state.
+
+The independent `oneagent-llm` boundary may accept an explicitly copied
+`ContextBundle::rendered()` string as ordinary request text, but it assigns no
+prompt, role, source-text, tokenizer, provider-selection, tool, or conversation
+semantics to that content. Concrete provider adapters and Runtime integration
+remain deferred, and provider output never becomes Knowledge Graph authority.
 
 ## Context request
 

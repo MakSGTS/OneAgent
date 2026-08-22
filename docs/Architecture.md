@@ -11,6 +11,9 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-metadata` owns the typed 1C metadata model.
    - `oneagent-workspace` owns workspace and project abstractions.
    - `oneagent-bsl` owns BSL lexical and syntax analysis.
+   - `oneagent-llm` owns the std-only provider-neutral identity, model,
+     capability, request, response, policy, cancellation, error, and
+     asynchronous provider contracts.
 2. **Semantic core**
    - `oneagent-graph` owns canonical semantic nodes, edges, provenance,
      validation, query, diff, impact, coverage, and resolution APIs.
@@ -68,8 +71,9 @@ The roadmap assigns future boundaries explicitly:
   reviews. Sprint 21 CLI Client is also completed with a `pass` integration
   review. The [v0.4 release review](reviews/v0.4-release-review.md) records
   `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
-  also records `pass`; Sprint 23 LLM Provider Abstraction is the unique `next`
-  planning target.
+  also records `pass`. The Sprint 23 provider-neutral first slice and public
+  conformance evidence are implemented; Sprint 23 remains the unique `next`
+  roadmap item pending integration review.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -120,7 +124,48 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 
 The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused and complete workspace gates. Sprint 22 is completed;
-Sprint 23 LLM Provider Abstraction is the unique `next` planning target.
+Sprint 23 remains the unique `next` roadmap item pending integration review.
+
+## Accepted LLM Provider abstraction boundary
+
+[ADR-0045](adr/0045-llm-provider-abstraction.md) governs the implemented Sprint
+23 provider-neutral first slice. The additive std-only `oneagent-llm` crate owns
+bounded provider/model identity, canonical provider-scoped model catalogs, the
+single closed `TextGeneration` capability, owned bounded text requests and
+terminal responses, local UTF-8 byte usage, closed finish and error kinds,
+redacted secrets/diagnostics, represented timeout with `RetryPolicy::Never`,
+receiver-only cooperative cancellation, and an object-safe standard-library
+future/provider seam.
+
+Request construction validates exact text and output-byte bounds before model
+compatibility and retains neither provider configuration nor the full model
+descriptor. Response construction is bound to the originating request and
+cannot supply arbitrary identity or usage. Provider implementations return one
+owned catalog or terminal response, perform at most one attempt, and observe
+cancellation cooperatively; the shared crate owns no executor, clock, retry
+loop, task, transport, cache, or global registry.
+
+### Sprint 23 public evidence matrix
+
+The public `crates/llm/tests/provider_contract.rs` target imports only the
+exported `oneagent-llm` surface. It uses standard-library deterministic fakes,
+explicit state and wakers, synthetic sentinels, and exact values without
+network, filesystem, environment, credentials, sleeps, or developer-local
+services.
+
+| Contract | Public evidence |
+| --- | --- |
+| Identity, capability, and discovery | Exact identity and catalog bounds, provider scoping, duplicate capability canonicalization, empty discovery, reordered models, duplicates, mismatches, and repeated equality are asserted. |
+| Request and response | Exact UTF-8 byte bounds and precedence, preserved whitespace/Unicode, capability rejection, reordered equivalence, request-bound output, local usage, both finish reasons, and empty/over-bound failures are asserted. |
+| Secrets and errors | Secret and diagnostic bounds, the complete closed error taxonomy, retry classification, and sentinel absence from implicit formatting prove the accepted redaction boundary. |
+| Execution policy | Optional timeout bounds, `RetryPolicy::Never`, and exactly one maximum attempt prove representation without a hidden clock, delay, or replay. |
+| Provider substitution and cleanup | Independent providers work through `&dyn LlmProvider`; canonical/empty discovery, repeated generation, typed failures, provider mismatch, cancellation before/during work, and zero surviving active state are exact oracles. |
+| Compatibility | `oneagent-analysis` and `oneagent-runtime` remain unchanged and independently validated; neither depends on `oneagent-llm`, and Context text receives no prompt semantics. |
+
+Sprint 23 is not complete until its integration review. Concrete provider
+adapters and wire formats, live configuration/discovery, Runtime/CLI/protocol
+exposure, prompt/tool policy, tokenization, streaming, conversations, MCP, and
+IDE integration remain deferred.
 
 ## Accepted Runtime service-container boundary
 
@@ -412,5 +457,6 @@ CLI Client is completed with a `pass` decision in the
 [v0.4 release integration review](reviews/v0.4-release-review.md) also records
 `pass` and completes the Runtime API boundary. The subsequent
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
-records `pass`; Sprint 23 LLM Provider Abstraction is the unique `next` planning
-target.
+records `pass`. The Sprint 23 provider-neutral first slice and public evidence
+are implemented; Sprint 23 remains the unique `next` roadmap item pending its
+integration review.

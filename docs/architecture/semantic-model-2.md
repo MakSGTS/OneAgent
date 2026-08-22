@@ -254,9 +254,10 @@ equal fresh runs. The
 `pass`; Sprint 21 is completed. The
 [v0.4 release integration review](../reviews/v0.4-release-review.md) also records
 `pass`, completes the Runtime API boundary without changing canonical semantic
-authority. Sprint 22 Context Engine implementation and repository-owned public
-evidence are present; Sprint 22 remains the unique `next` target pending its
-integration review.
+authority. The subsequent
+[Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
+`pass`; Sprint 22 is completed and Sprint 23 LLM Provider Abstraction is the
+unique `next` planning target.
 
 ## Core principles
 

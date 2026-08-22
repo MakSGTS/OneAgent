@@ -30,8 +30,10 @@ The v0.2 boundary is closed with a `pass` decision in the
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
-[v0.4 release review](reviews/v0.4-release-review.md). Sprint 22 Context Engine
-is the unique `next` planning target.
+[v0.4 release review](reviews/v0.4-release-review.md). The
+[Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) records
+`pass`; Sprint 22 is completed and Sprint 23 LLM Provider Abstraction is the
+unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -134,9 +136,9 @@ explanations, or repository-owned reproducible evaluation. The Context Engine
 modules add only those reusable execution and evidence requirements. They do
 not select request types, seed vocabulary, traversal policy, scoring formula,
 budget unit, source-fragment contract, rendering format, or Runtime surface;
-those remain Sprint 22 investigation and architecture decisions. Sprint 22
-remains `next` while its detailed kickoff is prepared from the committed
-framework prerequisite.
+those remain Sprint 22 investigation and architecture decisions. The framework
+prerequisite subsequently governed the completed Sprint 22 implementation; the
+[integration review](reviews/sprint-22-context-engine.md) records `pass`.
 
 The Source Adapter audit at committed baseline
 `80c25a69e50a572220d4c1380ee15934792b68b8` found that the existing parser
@@ -3836,8 +3838,10 @@ Plan Sprint 14 Designer XML adapter
 | Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | completed |
 
 The [v0.4 release integration review](reviews/v0.4-release-review.md) records
-`pass`; the v0.4 boundary is complete and Sprint 22 Context Engine is the unique
-`next` planning target.
+`pass`; the v0.4 boundary is complete. The subsequent
+[Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
+records `pass`, so Sprint 23 LLM Provider Abstraction is the unique `next`
+planning target.
 
 #### Sprint 15 Runtime Service Container execution plan
 
@@ -5236,17 +5240,18 @@ and deferred-scope boundaries remain authoritative.
 The [v0.4 release review](reviews/v0.4-release-review.md) records `pass` against
 the committed Sprint 21 review head
 `a05e6977cc36757a18e250c174192e7eaba4cd48`. Sprints 15–21 and the v0.4 Runtime
-API boundary are complete. Sprint 22 Context Engine is the unique `next`
-planning target and retains its planned Codex Framework readiness gate. The
-Sprint 21 prompt suite remains unchanged; release review does not retire a
-prompt suite.
+API boundary were complete, making Sprint 22 Context Engine the next planning
+target at that release boundary. The later
+[Sprint 22 review](reviews/sprint-22-context-engine.md) records `pass`, makes
+Sprint 23 the unique `next` target, and retires the Sprint 21 prompt suite; the
+v0.4 release review itself did not retire a prompt suite.
 
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 22 — Context Engine | Build deterministic semantic context selection and assembly. | next |
-| Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | planned |
+| Sprint 22 — Context Engine | Build deterministic semantic context selection and assembly. | completed |
+| Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | next |
 | Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | planned |
 | Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | planned |
 | Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | planned |
@@ -5258,9 +5263,9 @@ The v0.5 release integration review follows Sprint 27.
 
 Sprint 22 is planned from committed framework baseline
 `b364805a857d076ab8e7a42e435d3d2c0017d687`. The
-[v0.4 release review](reviews/v0.4-release-review.md) records `pass`, so Sprint
-22 is the unique `next` target. The required Context Engine Codex Framework
-stage is committed through the
+[v0.4 release review](reviews/v0.4-release-review.md) recorded `pass`, so Sprint
+22 was the unique `next` target at planning time. The required Context Engine
+Codex Framework stage is committed through the
 [profile](codex/profiles/context-engine-implementation.md),
 [workflow](codex/workflows/context-engine.md), and
 [template](codex/templates/context-engine-task.md); the existing investigation,
@@ -5438,6 +5443,20 @@ a non-blocking decision. A blocked review preserves Sprint 22 as incomplete and
 keeps the Sprint 21 prompt suite. A non-blocking review makes Sprint 23 the
 unique `next` planning target and retires only
 `docs/codex/prompts/sprint-21-cli-client/` in the final review commit.
+
+##### Sprint 22 completed state
+
+Tasks 1–6 are committed in dependency order. The
+[Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
+`pass` after the focused request/selection/assembly/public evaluation matrix and
+the complete workspace gate. Sprint 22 is `completed`, Sprint 23 LLM Provider
+Abstraction is the unique `next` planning target, and the exact verified Sprint
+21 prompt suite is retired in the review commit.
+
+ADR-0044, canonical graph authority, the additive source-independent request,
+selection, provenance, explanation, UTF-8 budget, omission, bundle, and exact
+rendering contracts, production-analysis compatibility, and explicit deferred
+source/provider/Runtime/MCP/IDE scope remain authoritative.
 
 ##### Validation plan
 

@@ -67,9 +67,9 @@ The roadmap assigns future boundaries explicitly:
   Watching and Sprint 20 Persistent Cache are completed with `pass` integration
   reviews. Sprint 21 CLI Client is also completed with a `pass` integration
   review. The [v0.4 release review](reviews/v0.4-release-review.md) records
-  `pass`. Sprint 22 Context Engine implementation and public evidence are
-  present; Sprint 22 remains the unique `next` target pending integration
-  review.
+  `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
+  also records `pass`; Sprint 23 LLM Provider Abstraction is the unique `next`
+  planning target.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -118,8 +118,9 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 | Budget and rendering | ASCII/non-ASCII byte lengths, exact and one-byte-short seed budgets, related prefix admission, separate omission counts, exact fragments, and bundle accounting use fixed string oracles. |
 | Production compatibility | The existing production analysis pipeline supplies declaration, containment, call, and provenance facts directly to equal fresh Context evaluations; rendered output contains no fabricated BSL source text. |
 
-Sprint 22 remains incomplete until the dedicated integration review evaluates
-the committed implementation and complete validation evidence.
+The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
+`pass` after the focused and complete workspace gates. Sprint 22 is completed;
+Sprint 23 LLM Provider Abstraction is the unique `next` planning target.
 
 ## Accepted Runtime service-container boundary
 
@@ -409,6 +410,7 @@ Persistent Cache is completed with a `pass` decision in the
 CLI Client is completed with a `pass` decision in the
 [Sprint 21 integration review](reviews/sprint-21-cli-client.md). The
 [v0.4 release integration review](reviews/v0.4-release-review.md) also records
-`pass` and completes the Runtime API boundary. Sprint 22 Context Engine
-implementation and public evidence are present, but Sprint 22 remains the
-unique `next` target pending its dedicated integration review.
+`pass` and completes the Runtime API boundary. The subsequent
+[Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
+records `pass`; Sprint 23 LLM Provider Abstraction is the unique `next` planning
+target.

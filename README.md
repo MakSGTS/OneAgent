@@ -6,9 +6,9 @@ OneAgent has completed the v0.3 source-independent 1C Knowledge Model and the
 v0.4 Runtime API boundary with `pass` release integration reviews. v0.4
 includes the long-running Runtime, HTTP health, Workspace lifecycle, Graph Query
 API, File Watching, Persistent Cache, and supported CLI Client delivered by
-Sprints 15–21. The Sprint 22 source-independent Context Engine implementation
-and repository-owned public evidence are present; Sprint 22 remains the unique
-`next` target pending its integration review.
+Sprints 15–21. The source-independent Context Engine delivered by Sprint 22 is
+also complete with a `pass` integration review. Sprint 23 LLM Provider
+Abstraction is the unique `next` planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

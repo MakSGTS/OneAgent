@@ -5022,6 +5022,188 @@ canonical semantic authority, complete validated snapshot caching, deterministic
 invalidation, Runtime/File Watching/Graph Query/health compatibility, public
 mixed EDT/Designer evidence, and deferred-scope boundaries remain authoritative.
 
+#### Sprint 21 CLI Client execution plan
+
+Sprint 21 is planned from committed readiness head
+`45c4473365a026f2acb83b4a6e9db0d8b2dbe2fb`. The
+[Sprint 20 integration review](reviews/sprint-20-persistent-cache.md) records
+`pass`, Sprint 21 is the unique `next` target, and the working tree is clean.
+The existing Runtime Service Profile, Workflow, and Template cover supported
+client work; no Codex Framework change is required.
+
+The tracked Runtime production fixture, exact health and Graph Query HTTP/1.1
+contracts, raw-loopback test helpers, public Runtime construction seams, and
+macOS/Windows CI provide repository-owned command, request, response, failure,
+cleanup, and repetition oracles. The first slice can remain dependency-free in
+production by treating accepted Runtime JSON as an opaque validated HTTP body;
+planning does not approve a new production dependency.
+
+No accepted decision currently defines CLI command syntax, endpoint discovery,
+HTTP client ownership, response presentation, exit codes, local validation,
+transport failures, help/version behavior, or public client test boundary.
+Investigation and ADR acceptance therefore precede implementation.
+
+##### Objective
+
+Replace the `oneagent-cli` placeholder with the first supported, deterministic
+client for the accepted Runtime health, Workspace configuration-listing, exact
+node, direct-relation, and bounded-traversal operations, preserving every
+Sprint 16-20 lifecycle, HTTP, graph, watcher, cache, and semantic contract.
+
+##### Included scope
+
+- repository-backed investigation of the CLI placeholder, Runtime endpoint and
+  configuration contracts, HTTP/1.1 client feasibility, dependencies, command
+  conventions, output/error streams, exit status, fixtures, public process and
+  library entry points, supported platforms, and deterministic test seams;
+- an accepted ADR defining CLI ownership, command and option grammar, endpoint
+  selection, request encoding, response handling, output and error contracts,
+  exit codes, failure classification, resource lifecycle, compatibility,
+  dependency policy, first slice, and deferred scope;
+- a dependency-free command/configuration boundary with deterministic parsing,
+  validation, help/version output, request construction, diagnostics, and
+  process exit behavior;
+- a bounded synchronous HTTP/1.1 client for the accepted health and `/api/v1`
+  GET routes, exact query encoding, response framing, JSON media-type checks,
+  success/error passthrough, transport failures, connection cleanup, and
+  repeated calls;
+- public integration evidence through the real CLI boundary and production
+  Runtime over tracked EDT and Designer XML inputs, including all commands,
+  invalid invocations, server errors, unavailable transport, deterministic
+  output, shutdown, listener release, and repeated fresh runs;
+- current-state documentation, complete workspace validation, integration
+  review, and conditional Sprint 20 prompt-suite retirement.
+
+##### Excluded scope
+
+- changes to Runtime health or Graph Query routes, methods, parameters, bounds,
+  JSON schemas, statuses, readiness, snapshot consistency, watcher/cache
+  behavior, graph facts, parsers, adapters, or Coverage state;
+- starting, stopping, supervising, discovering, or configuring the Runtime
+  process; Workspace mutation/open/edit commands; cache management; watch
+  subscriptions; streaming; pagination; arbitrary queries; response reformatting
+  or semantic interpretation; shell completion; configuration files or
+  environment variables; and activation of `oneagent-protocol`;
+- DNS, URLs, proxies, redirects, authentication, authorization, TLS, HTTP/2,
+  retries, configurable timeouts, cancellation, packaging/installers, telemetry,
+  benchmarks, and unsupported performance or security claims;
+- any new production dependency without separate explicit user approval, and
+  v0.4 release review or Sprint 22 implementation.
+
+##### Sprint 21 prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 21 planning baseline containing this plan
+and the complete suite under `docs/codex/prompts/sprint-21-cli-client/`. Every
+dependent task requires the preceding committed outcome. Stored prompts do not
+authorize commits; authorization comes only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-20-persistent-cache/`, with these eight tracked files:
+`00-sprint-20-execution-loop.md`,
+`01-investigate-persistent-cache-boundary.md`,
+`02-define-persistent-cache-contract.md`,
+`03-implement-snapshot-cache-codec.md`,
+`04-implement-cache-storage-invalidation.md`,
+`05-integrate-runtime-cache-lifecycle.md`,
+`06-complete-persistent-cache-evidence.md`, and
+`07-sprint-20-integration-review.md`. The tracked and filesystem inventories
+match and contain no untracked file at planning time. The suite remains
+untouched through Task 5. Only Task 6 may retire this exact inventory after a
+non-blocking review and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the CLI Client boundary. | Investigation / investigation | Current CLI, Runtime routes/configuration, command/output/error/exit expectations, HTTP feasibility, dependency, fixture, platform, consumer, and deterministic-test evidence with explicit ADR questions. | Accepted Sprint 21 planning baseline. | `Investigate Sprint 21 CLI Client` |
+| 2 | Define the CLI Client contract. | Architecture / architecture | Accepted ADR-0043 ownership, grammar, endpoint, request, response, output, error, exit, resource, compatibility, dependency, first-slice, and deferred-scope contract. | Task 1. | `Define Sprint 21 CLI Client contract` |
+| 3 | Implement the CLI command boundary. | Runtime Service / runtime service | Accepted command/option parsing, local validation, help/version, request model, diagnostics, output routing, and exit classification with focused evidence. | Task 2. | `Implement Sprint 21 CLI command boundary` |
+| 4 | Implement the Runtime HTTP client. | Runtime Service / runtime service | Accepted bounded HTTP/1.1 connection, request encoding, response framing/validation, JSON passthrough, transport/server failure behavior, cleanup, and focused client evidence. | Task 3. | `Implement Sprint 21 Runtime HTTP client` |
+| 5 | Complete public CLI Client evidence. | Runtime Service / runtime service | Public CLI-to-production-Runtime health/configuration/node/relation/traversal, failure, output, exit, shutdown, cleanup, repetition matrix and synchronized current-state docs. | Task 4. | `Complete Sprint 21 CLI Client evidence` |
+| 6 | Review the integrated Sprint 21 baseline. | Review / review | Findings, complete validation, sprint decision, Sprint 20 suite retirement, and v0.4 release-review hand-off. | Task 5 and all implementation validation. | `Complete Sprint 21 CLI Client review` |
+
+```text
+Committed Sprint 21 planning baseline
+    -> Task 1 CLI Client investigation
+    -> Task 2 accepted ADR-0043
+    -> Task 3 CLI command boundary
+    -> Task 4 Runtime HTTP client
+    -> Task 5 public production evidence and current-state docs
+    -> Task 6 integration review and conditional Sprint 20 suite retirement
+    -> v0.4 release review eligibility
+```
+
+##### Task contracts
+
+Task 1 creates only `docs/architecture/cli-client-investigation.md`. It records
+the exact placeholder and binary boundary, accepted Runtime routes and wire
+contracts, endpoint configuration evidence, feasible dependency-free HTTP/1.1
+behavior, argument/stream/exit conventions, public fixtures, process/library
+test seams, consumers, platform constraints, and every decision ADR-0043 must
+make. It selects no production contract and changes no production behavior.
+
+Task 2 creates `docs/adr/0043-cli-client.md` and synchronizes only planning-level
+architecture text required by the decision. It fixes ownership, command and
+option grammar, endpoint input, request encoding, response framing and media
+validation, stdout/stderr and exact exit behavior, local versus server versus
+transport failures, resource cleanup, compatibility, dependency policy, first
+slice, rejected alternatives, tests, and deferred scope. It implements no Rust.
+
+Task 3 replaces the placeholder with only the accepted reusable command
+boundary. It implements deterministic argument parsing, duplicate/unknown/
+missing/value validation, help/version, typed requests, stable local diagnostics,
+stdout/stderr routing, and exit classification, with focused tests. It performs
+no network I/O and changes no Runtime contract.
+
+Task 4 implements only the accepted Runtime HTTP client and connects it to the
+Task 3 command boundary. It opens bounded client-owned connections, percent-
+encodes accepted query values, sends exact GET requests, parses accepted
+HTTP/1.1 framing, validates response status/media/body boundaries, forwards
+exact server JSON to the accepted stream, classifies transport/protocol/server
+failures, closes resources, and proves repeated calls. It adds no Runtime route,
+protocol authority, semantic interpretation, or production dependency.
+
+Task 5 exercises the public CLI boundary against the real production Runtime
+and tracked temporary EDT/Designer inputs. It proves every accepted health,
+configuration, node, relation, traversal, invalid invocation, server-domain,
+not-ready/unavailable, unreachable/malformed-response, output/exit, shutdown,
+cleanup, ordering, and repeated-run row without arbitrary sleeps or external
+services. It synchronizes README, Architecture, and Semantic Model current-state
+text but does not complete the sprint.
+
+Task 6 reviews the planning-through-Task-5 range and creates
+`docs/reviews/sprint-21-cli-client.md` only for `pass` or `pass with non-blocking
+follow-ups` after all focused and full validation succeeds. That decision
+transitions Sprint 21 to `completed`, makes the v0.4 release integration review
+eligible, and atomically retires the exact Sprint 20 suite in the same review
+commit. The review never silently fixes code.
+
+##### Sprint 21 state gates and completion criteria
+
+Sprint 21 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires committed live
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-5, accepted ADR-0043, one
+supported deterministic CLI command boundary, exact client compatibility with
+every accepted health and Graph Query operation, closed local/server/transport
+failure and exit behavior, dependency and resource ownership, public mixed
+EDT/Designer production evidence, preserved Runtime/Workspace/query/watcher/
+cache/semantic behavior, explicit deferred scope, the complete workspace gate,
+and a non-blocking Task 6 decision. A blocked review keeps Sprint 21 incomplete,
+preserves the Sprint 20 suite, and leaves the v0.4 review ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, verified previous-suite inventory, `git diff --check`,
+and unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 21 CLI Client
+```
+
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |

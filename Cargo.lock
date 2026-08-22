@@ -394,6 +394,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "oneagent-llm"
+version = "0.1.0"
+
+[[package]]
 name = "oneagent-metadata"
 version = "0.1.0"
 dependencies = [

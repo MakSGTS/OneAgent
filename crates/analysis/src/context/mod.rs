@@ -1,5 +1,6 @@
 //! Deterministic semantic Context Engine domain and request resolution.
 
+mod assembly;
 mod selection;
 
 use std::collections::BTreeSet;
@@ -884,6 +885,21 @@ impl Display for ContextSeed {
 pub struct ContextEngine;
 
 impl ContextEngine {
+    /// Builds one owned deterministic Context bundle from an immutable graph.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed request, seed-resolution, rendering, or budget error
+    /// without returning a partial bundle.
+    pub fn build(
+        &self,
+        graph: &SemanticGraph,
+        request: &ContextRequest,
+    ) -> Result<ContextBundle, ContextError> {
+        let selection = self.select_candidates(graph, request)?;
+        assembly::assemble(selection)
+    }
+
     /// Resolves a request and selects deterministic candidates before budgeting.
     ///
     /// # Errors

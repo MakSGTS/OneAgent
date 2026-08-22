@@ -271,9 +271,10 @@ equal fresh runs. The
 `pass`, completes the Runtime API boundary without changing canonical semantic
 authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
-`pass`; Sprint 22 is completed. The provider-neutral Sprint 23 first slice and
-public conformance evidence are implemented; Sprint 23 remains the unique
-`next` roadmap item pending integration review.
+`pass`; Sprint 22 is completed. The subsequent
+[Sprint 23 LLM Provider Abstraction review](../reviews/sprint-23-llm-provider-abstraction.md)
+records `pass`; Sprint 23 is completed and Sprint 24 OpenAI-Compatible Provider
+is the unique `next` planning target.
 
 ## Core principles
 

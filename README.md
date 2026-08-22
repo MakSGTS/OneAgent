@@ -8,9 +8,8 @@ includes the long-running Runtime, HTTP health, Workspace lifecycle, Graph Query
 API, File Watching, Persistent Cache, and supported CLI Client delivered by
 Sprints 15–21. The source-independent Context Engine delivered by Sprint 22 is
 also complete with a `pass` integration review. The provider-neutral Sprint 23
-LLM Provider Abstraction first slice and its public conformance evidence are
-implemented; Sprint 23 remains the unique `next` roadmap item pending its
-integration review.
+LLM Provider Abstraction is complete with a `pass` integration review. Sprint
+24 OpenAI-Compatible Provider is the unique `next` planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

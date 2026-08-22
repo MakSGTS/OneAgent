@@ -31,9 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) records
-`pass`; Sprint 22 is completed and Sprint 23 LLM Provider Abstraction is the
-unique `next` planning target.
+[Sprint 23 LLM Provider Abstraction review](reviews/sprint-23-llm-provider-abstraction.md)
+records `pass`; Sprint 23 is completed and Sprint 24 OpenAI-Compatible Provider
+is the unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -150,8 +150,11 @@ evidence without live credentials or network access. The LLM Provider modules
 add only those reusable execution and evidence requirements. They do not select
 a provider SDK, HTTP stack, async trait strategy, configuration source,
 credential store, retry algorithm, tokenizer, streaming protocol, concrete
-request schema, or Sprint 23 first slice; those remain live investigation and
-architecture decisions.
+request schema, or Sprint 23 first slice; those decisions were reserved for
+Sprint 23 investigation and architecture. ADR-0045 subsequently accepted the
+provider-neutral first slice, and the
+[integration review](reviews/sprint-23-llm-provider-abstraction.md) records
+`pass`.
 
 The Source Adapter audit at committed baseline
 `80c25a69e50a572220d4c1380ee15934792b68b8` found that the existing parser
@@ -3853,7 +3856,9 @@ Plan Sprint 14 Designer XML adapter
 The [v0.4 release integration review](reviews/v0.4-release-review.md) records
 `pass`; the v0.4 boundary is complete. The subsequent
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
-records `pass`, so Sprint 23 LLM Provider Abstraction is the unique `next`
+records `pass`. The later
+[Sprint 23 LLM Provider Abstraction review](reviews/sprint-23-llm-provider-abstraction.md)
+records `pass`, so Sprint 24 OpenAI-Compatible Provider is the unique `next`
 planning target.
 
 #### Sprint 15 Runtime Service Container execution plan
@@ -5255,17 +5260,19 @@ the committed Sprint 21 review head
 `a05e6977cc36757a18e250c174192e7eaba4cd48`. Sprints 15–21 and the v0.4 Runtime
 API boundary were complete, making Sprint 22 Context Engine the next planning
 target at that release boundary. The later
-[Sprint 22 review](reviews/sprint-22-context-engine.md) records `pass`, makes
-Sprint 23 the unique `next` target, and retires the Sprint 21 prompt suite; the
-v0.4 release review itself did not retire a prompt suite.
+[Sprint 22 review](reviews/sprint-22-context-engine.md) records `pass`, made
+Sprint 23 the unique `next` target at that hand-off, and retired the Sprint 21
+prompt suite; the v0.4 release review itself did not retire a prompt suite. The
+later [Sprint 23 review](reviews/sprint-23-llm-provider-abstraction.md) records
+`pass` and hands off to Sprint 24.
 
 #### v0.5 — AI Integration
 
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 22 — Context Engine | Build deterministic semantic context selection and assembly. | completed |
-| Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | next |
-| Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | planned |
+| Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | completed |
+| Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | next |
 | Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | planned |
 | Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | planned |
 | Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | planned |
@@ -5463,8 +5470,8 @@ Tasks 1–6 are committed in dependency order. The
 [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused request/selection/assembly/public evaluation matrix and
 the complete workspace gate. Sprint 22 is `completed`, Sprint 23 LLM Provider
-Abstraction is the unique `next` planning target, and the exact verified Sprint
-21 prompt suite is retired in the review commit.
+Abstraction became the unique `next` planning target at that hand-off, and the
+exact verified Sprint 21 prompt suite was retired in the review commit.
 
 ADR-0044, canonical graph authority, the additive source-independent request,
 selection, provenance, explanation, UTF-8 budget, omission, bundle, and exact
@@ -5683,6 +5690,22 @@ a non-blocking decision. A blocked review preserves Sprint 23 as incomplete and
 keeps the Sprint 22 prompt suite. A non-blocking review makes Sprint 24 the
 unique `next` planning target and retires only
 `docs/codex/prompts/sprint-22-context-engine/` in the final review commit.
+
+##### Sprint 23 completed state
+
+Tasks 1–6 are committed in dependency order. The
+[Sprint 23 integration review](reviews/sprint-23-llm-provider-abstraction.md)
+records `pass` after the non-zero provider domain/request/execution/public
+conformance matrix, Context Engine and Runtime compatibility checks, and the
+complete workspace gate. Sprint 23 is `completed`, Sprint 24 OpenAI-Compatible
+Provider is the unique `next` planning target, and the exact verified Sprint 22
+prompt suite is retired in the review commit.
+
+ADR-0045, the additive std-only provider-neutral crate, bounded identity,
+discovery, capability, request/response/usage/finish, secret/redaction, error,
+timeout/no-retry, cancellation, asynchronous substitution, public conformance,
+Context/Runtime compatibility, and explicitly deferred concrete-provider,
+wire, prompt/tool, streaming, MCP, and IDE scope remain authoritative.
 
 ##### Validation plan
 

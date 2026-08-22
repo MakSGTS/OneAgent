@@ -5504,6 +5504,223 @@ absence. Suggested planning commit message:
 Plan Sprint 22 Context Engine
 ```
 
+#### Sprint 23 LLM Provider Abstraction execution plan
+
+Sprint 23 is planned from committed framework baseline
+`b24eae8414cc2d794c4693843f7e0df23acb60a0`. The
+[Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) records
+`pass`, so Sprint 23 is the unique `next` target. The required LLM Provider
+Codex Framework stage is committed through the
+[profile](codex/profiles/llm-provider-implementation.md),
+[workflow](codex/workflows/llm-provider.md), and
+[template](codex/templates/llm-provider-task.md); the existing investigation,
+architecture, review, sprint-planning, and sequential-execution contracts cover
+the remaining task families without another framework change.
+
+The live source-independent baseline provides a deterministic owned
+`ContextBundle` in `oneagent-analysis`; reusable standard-library boxed-future
+patterns, receiver-only cancellation, stable errors, and deterministic fake
+services in `oneagent-runtime`; an empty protocol crate; Rust 1.97.1; and macOS
+and Windows CI. There is no LLM/provider crate, provider/model/request/response/
+capability/error domain, concrete provider, provider wire fixture, provider
+consumer, credential source, tokenizer, streaming contract, or Runtime LLM
+surface. These absences bound the first slice instead of becoming invented
+inputs.
+
+Repository-owned constructed domain values and deterministic fake providers can
+provide exact positive, negative, boundary, incompatible, cancellation,
+redaction, reordered, cleanup, and repeated oracles without external network,
+live credentials, provider-specific payloads, ignored corpora, or developer-
+local services. `cargo test -p oneagent-analysis` passes with 27 unit and 11
+public integration tests. `cargo test -p oneagent-runtime --lib` passes all 78
+tests when the managed sandbox permits the existing local loopback binds; the
+same command without that permission fails four HTTP tests with
+`PermissionDenied` and is not a product failure.
+
+The data and testability gate therefore passes for an investigation-first,
+architecture-gated provider-neutral slice. External provider schemas and live
+service evidence are unnecessary for Sprint 23 and remain owned by Sprints
+24-26. Task 1 must still prove the exact crate/dependency boundary, public
+vocabulary, secret behavior, execution policy, and fake-provider oracle before
+ADR-0045 selects them. A new external production dependency remains prohibited
+without explicit user approval.
+
+##### Sprint 23 objective
+
+Establish the first provider-independent LLM library boundary: accepted
+provider/model identity, capabilities and discovery projections, validated
+bounded text request and response contracts, secret-safe configuration inputs,
+stable error classification, and a substitutable asynchronous provider seam
+with explicit cancellation and timeout/retry policy behavior. Prove it through
+deterministic repository-owned contract evidence while preserving Context
+Engine and Runtime ownership.
+
+Included scope is:
+
+- repository-only provider-boundary investigation and ADR decision;
+- one provider-neutral library crate with accepted public domain values;
+- provider/model identity, discovery projection, capabilities, deterministic
+  ordering, validation, and compatibility;
+- bounded text-only request, response, usage, finish, and error contracts;
+- secret-safe configuration input and bounded/redacted diagnostics;
+- substitutable asynchronous discovery/execution seam with accepted explicit
+  timeout, retry, cancellation, attempt, terminal, and cleanup behavior;
+- deterministic fake-provider unit and public conformance evidence;
+- Context Engine and Runtime compatibility and truthful current-state docs;
+- integration review, state transition, Sprint 24 hand-off, and conditional
+  Sprint 22 prompt-suite retirement.
+
+Excluded scope is:
+
+- concrete OpenAI-compatible, LM Studio, or Ollama adapters and wire schemas;
+- HTTP, JSON, SSE, live discovery/model execution, credentials, environment/file/
+  CLI configuration loading, or external network as required evidence;
+- prompt templates or policy, conversations/history, tokenizers/token counting,
+  streaming, tools, structured output, images, audio, or embeddings;
+- Context Engine behavior changes, Runtime service/HTTP/CLI/protocol exposure,
+  persistence/cache, MCP, LSP, IDE, or UI;
+- unsupported automatic retry/clock/rate-limit/concurrency behavior;
+- latency, cost, quality, performance, security, or broad provider-compatibility
+  claims;
+- Sprint 24-27 implementation and the v0.5 release review.
+
+##### Accepted planning baseline and framework decision
+
+The LLM Provider framework audit found one concrete reusable gap in the generic
+implementation and Runtime contracts: they did not require a provider-neutral
+model/capability/request/response/error boundary, discovery and compatibility,
+secret redaction, explicit timeout/retry/cancellation behavior, or non-network
+provider conformance. Commit `b24eae8414cc2d794c4693843f7e0df23acb60a0`
+closes that prerequisite with only the smallest Profile, Workflow, and Template
+set required for Sprints 23-26. No further framework task is planned.
+
+Architecture remains unresolved for crate ownership, identity and capability
+vocabulary, request/response bounds, secret behavior, async substitution,
+timeout/retry/cancellation policy, error taxonomy, and the exact first slice.
+Task 1 gathers the repository evidence and Task 2 accepts ADR-0045 before any
+production implementation. ADR-0044 remains authoritative for Context Engine
+ownership and explicitly defers all provider behavior.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-23-llm-provider-abstraction/`. The verified
+immediately preceding suite is
+`docs/codex/prompts/sprint-22-context-engine/`, whose eight tracked files exactly
+match its filesystem inventory and have no untracked addition. Only Task 7 may
+conditionally retire that exact suite after a non-blocking decision and
+successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the LLM Provider boundary. | Investigation / investigation | Verified ownership, dependency, Context/Runtime compatibility, provider-neutral vocabulary, secret, execution-policy, fake/oracle, platform, and unresolved-decision evidence. | Sprint 23 planning baseline. | `Investigate Sprint 23 LLM Provider boundary` |
+| 2 | Define the LLM Provider abstraction. | Architecture / architecture | Accepted ADR-0045 for crate ownership, identities, capabilities, request/response, configuration/secrets, execution seam, errors, policy, evidence, compatibility, and deferred scope. | Task 1 evidence. | `Define Sprint 23 LLM Provider abstraction` |
+| 3 | Implement the provider domain model. | LLM Provider / LLM Provider | Provider-neutral crate and public provider/model identity, capability/discovery, secret-safe configuration, policy, response, usage, finish, and error domain values. | Accepted ADR-0045. | `Implement Sprint 23 provider domain model` |
+| 4 | Implement capability-aware requests. | LLM Provider / LLM Provider | Validated bounded text request construction, deterministic capability compatibility, canonical input ordering, typed rejection, and focused evidence. | Task 3. | `Implement Sprint 23 capability-aware requests` |
+| 5 | Implement the provider execution boundary. | LLM Provider / LLM Provider | Substitutable asynchronous provider seam and accepted discovery/execution/cancellation/policy/error terminal behavior with deterministic fake evidence. | Task 4. | `Implement Sprint 23 provider execution boundary` |
+| 6 | Complete LLM Provider evidence. | LLM Provider / LLM Provider | Public repository-owned provider conformance matrix, Context/Runtime compatibility evidence, and current-state docs. | Task 5. | `Complete Sprint 23 LLM Provider evidence` |
+| 7 | Review the integrated Sprint 23 baseline. | Review / review | Findings, complete validation evidence, sprint decision, Sprint 22 suite retirement, and Sprint 24 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 23 LLM Provider review` |
+
+Task 1 creates only
+`docs/architecture/llm-provider-investigation.md`. It records confirmed versus
+absent ownership, dependency, Context/Runtime, provider vocabulary, secret,
+execution-policy, error, platform, consumer, fixture, and deterministic oracle
+evidence. It must not use external provider documentation or live services to
+invent a shared provider schema.
+
+Task 2 creates `docs/adr/0045-llm-provider-abstraction.md` and accepts the
+smallest provider-neutral first slice. It decides crate and dependency ownership,
+identity/discovery/capability, request/response/usage/finish, validation,
+configuration/secrets/redaction, async substitution, timeout/retry/cancellation,
+errors, conformance, compatibility, implementation order, and deferred scope.
+It changes no Rust and leaves Sprint 23 `next`.
+
+Task 3 implements only the accepted provider-neutral crate and public domain
+values. Expected change areas are root workspace membership and the new crate
+under `crates/`; exact crate/module/API names follow ADR-0045 rather than this
+planning document. It implements no request construction or provider execution.
+
+Task 4 adds only validated bounded text request construction and deterministic
+model-capability compatibility to the Task 3 crate. It performs no discovery or
+provider I/O and cannot introduce provider-specific fields, prompt semantics,
+token counting, streaming, tools, or Runtime behavior.
+
+Task 5 implements only the accepted asynchronous provider discovery/execution
+seam, cancellation, execution-policy, terminal-error, and cleanup behavior. It
+uses deterministic fake providers and explicit synchronization, implements no
+concrete provider or transport, and does not silently add timeout/retry behavior
+that ADR-0045 leaves representation-only, disabled, or deferred.
+
+Task 6 adds a non-zero public provider conformance target using repository-owned
+Rust fakes and exact oracles without network, credentials, environment, ignored
+state, or sleeps. It proves Context Engine and Runtime compatibility and
+synchronizes only `README.md`, `docs/Architecture.md`, and
+`docs/architecture/semantic-model-2.md` with implemented truth. It does not fix
+production behavior, mark Sprint 23 completed, or claim concrete provider
+support.
+
+Task 7 reviews the exact planning-through-Task-6 range without fixing findings.
+Only `pass` or `pass with non-blocking follow-ups` after focused and complete
+validation may create `docs/reviews/sprint-23-llm-provider-abstraction.md`,
+transition Sprint 23 to `completed`, make Sprint 24 OpenAI-Compatible Provider
+the unique `next` target, synchronize minimal hand-off text when required, and
+atomically retire the exact tracked Sprint 22 prompt suite.
+
+##### State and failure gates
+
+Sprint 23 remains `next` during planning and becomes `active` only after the
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence plus all required focused
+and complete validation proves every acceptance criterion; no empty commit is
+created. Missing investigation evidence, an unimplementable ADR, an unapproved
+external production dependency, zero matched tests, failed validation, secret
+exposure, incompatible public behavior, or staging/commit failure stops the
+sprint immediately and leaves dependent tasks `not_started`.
+
+Sprint 23 may transition to `completed` only when Tasks 1-6 are committed or
+proven `already_complete`, their required validation succeeds, and Task 7 issues
+a non-blocking decision. A blocked review preserves Sprint 23 as incomplete and
+keeps the Sprint 22 prompt suite. A non-blocking review makes Sprint 24 the
+unique `next` planning target and retires only
+`docs/codex/prompts/sprint-22-context-engine/` in the final review commit.
+
+##### Validation plan
+
+Documentation-only Tasks 1-2 run link/decision consistency and
+`git diff --check`; Task 1 additionally runs the analysis and Runtime library
+baselines required by its evidence contract. Production Tasks 3-6 run non-zero
+focused and public provider-neutral tests, affected Context/Runtime
+compatibility tests, and the
+canonical full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Runtime loopback tests require only the existing managed local-bind permission;
+no validation may access an external service. Task 7 reruns the complete focused
+conformance and full workspace matrix, audits the exact commit/path range,
+verifies accepted versus deferred scope and current-state documentation, and
+revalidates the Sprint 22 tracked/filesystem/untracked prompt inventory before
+any explicit deletion.
+
+##### Planning validation
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 22 retirement inventory, `git diff --check`, and unrelated-change
+absence. Suggested planning commit message:
+
+```text
+Plan Sprint 23 LLM Provider Abstraction
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

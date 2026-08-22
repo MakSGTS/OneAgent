@@ -240,8 +240,10 @@ stderr and exit contracts distinguish usage, transport, server, protocol, and
 output failures. Public real-executable evidence over the tracked mixed EDT and
 Designer fixture proves lifecycle gating, every supported operation, bounds,
 domain and malformed-response failures, shutdown cleanup, listener release, and
-equal fresh runs. Sprint 21 implementation and public evidence are complete and
-await integration review.
+equal fresh runs. The
+[Sprint 21 integration review](../reviews/sprint-21-cli-client.md) records
+`pass`; Sprint 21 is completed and the v0.4 release integration review is the
+unique next gate.
 
 ## Core principles
 

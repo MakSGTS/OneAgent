@@ -31,8 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). Sprint 15 Runtime Service
 Container and Sprint 16 HTTP API and Health are completed with `pass`
 decisions. Sprint 17 Workspace Service, Sprint 18 Graph Query API, Sprint 19
-File Watching, and Sprint 20 Persistent Cache are completed with `pass`
-decisions; Sprint 21 CLI Client is the unique `next` target.
+File Watching, Sprint 20 Persistent Cache, and Sprint 21 CLI Client are
+completed with `pass` decisions; the v0.4 release integration review is the
+unique next gate.
 
 ## Roadmap reconciliation
 
@@ -3822,9 +3823,9 @@ Plan Sprint 14 Designer XML adapter
 | Sprint 18 — Graph Query API | Expose stable graph and semantic query capabilities through the runtime API. | completed |
 | Sprint 19 — File Watching | Detect workspace changes and connect them to runtime update orchestration. | completed |
 | Sprint 20 — Persistent Cache | Persist validated semantic state with deterministic invalidation. | completed |
-| Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | next |
+| Sprint 21 — CLI Client | Replace the CLI placeholder with a supported client for runtime workspace and graph-query operations. | completed |
 
-The v0.4 release integration review follows Sprint 21.
+The v0.4 release integration review is the unique next gate.
 
 #### Sprint 15 Runtime Service Container execution plan
 
@@ -5203,6 +5204,18 @@ and unrelated-change absence. Suggested planning commit message:
 ```text
 Plan Sprint 21 CLI Client
 ```
+
+##### Sprint 21 completed state
+
+Tasks 1-5 are committed in dependency order. The
+[Sprint 21 integration review](reviews/sprint-21-cli-client.md) records `pass`
+after the focused CLI/Runtime matrix and complete workspace gate. Sprint 21 is
+`completed`, the v0.4 release integration review is the unique next gate, and
+the exact verified Sprint 20 prompt suite is retired in the review commit.
+ADR-0043, Runtime and semantic authority, exact CLI command/request/output/exit
+contracts, public mixed EDT/Designer executable evidence, compatibility with
+health, Graph Query, Workspace, File Watching, and Persistent Cache behavior,
+and deferred-scope boundaries remain authoritative.
 
 #### v0.5 — AI Integration
 

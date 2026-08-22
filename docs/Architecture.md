@@ -62,8 +62,8 @@ The roadmap assigns future boundaries explicitly:
 
 - Graph-query Runtime APIs are implemented in Sprint 18, and Sprint 19 File
   Watching and Sprint 20 Persistent Cache are completed with `pass` integration
-  reviews. Sprint 21 CLI Client implementation and public evidence are complete
-  and await integration review.
+  reviews. Sprint 21 CLI Client is also completed with a `pass` integration
+  review; the v0.4 release integration review is the unique next gate.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -356,5 +356,6 @@ File Watching is completed with a `pass` decision in the
 [Sprint 19 integration review](reviews/sprint-19-file-watching.md). Sprint 20
 Persistent Cache is completed with a `pass` decision in the
 [Sprint 20 integration review](reviews/sprint-20-persistent-cache.md). Sprint 21
-CLI Client implementation and public evidence are complete and await the
-integration review.
+CLI Client is completed with a `pass` decision in the
+[Sprint 21 integration review](reviews/sprint-21-cli-client.md). The v0.4
+release integration review is the unique next gate.

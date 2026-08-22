@@ -6,7 +6,9 @@ OneAgent has completed the v0.3 source-independent 1C Knowledge Model and the
 v0.4 Runtime API boundary with `pass` release integration reviews. v0.4
 includes the long-running Runtime, HTTP health, Workspace lifecycle, Graph Query
 API, File Watching, Persistent Cache, and supported CLI Client delivered by
-Sprints 15–21. Sprint 22 Context Engine is the unique `next` planning target.
+Sprints 15–21. The Sprint 22 source-independent Context Engine implementation
+and repository-owned public evidence are present; Sprint 22 remains the unique
+`next` target pending its integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -19,7 +21,7 @@ See
 - `crates/metadata` — typed 1C metadata model
 - `crates/graph` — canonical semantic graph, query, validation, diff, impact, coverage, and resolution APIs
 - `crates/bsl` — BSL lexical and syntax analysis
-- `crates/analysis` — source-independent declaration and call-graph analysis
+- `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
 - `crates/protocol` — protocol package foundation; transport contracts are not implemented yet
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
@@ -52,6 +54,15 @@ configuration files, richer output, alternate transports, packaging, Git, MCP,
 LSP, VS Code, and AI-provider integration remain planned capabilities with
 explicit ownership. Health remains available through exact `GET /health/live`
 and `GET /health/ready` probes.
+
+The additive `oneagent-analysis` Context Engine borrows one immutable
+`SemanticGraph`, resolves exact node-ID or canonical-name seeds, applies bounded
+deterministic graph selection with retained provenance paths, and returns an
+owned semantic-only bundle under an explicit UTF-8 byte budget. Candidate and
+budget omissions are reported separately, and exact two-line item fragments
+make the result reproducible. Source text/ranges, tokenizers, providers/models,
+Runtime or protocol routes, persistence, MCP, and IDE integration remain
+deferred.
 
 ## Verify
 

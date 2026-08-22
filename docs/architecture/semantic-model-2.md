@@ -115,6 +115,15 @@ Owns the generic Knowledge Graph:
 
 It must not parse BSL, read EDT files, or discover the filesystem.
 
+### `oneagent-analysis`
+
+Owns source-independent BSL declaration/call analysis and the additive Context
+Engine derived view. The Context Engine borrows one immutable `SemanticGraph`,
+uses only canonical query facts and provenance, and returns an owned
+deterministic semantic bundle. It does not mutate graph facts, read source
+files, call providers/models, or own Runtime, persistence, protocol, MCP, or IDE
+state.
+
 ### `oneagent-edt`
 
 Owns EDT-specific loading and conversion:
@@ -245,7 +254,9 @@ equal fresh runs. The
 `pass`; Sprint 21 is completed. The
 [v0.4 release integration review](../reviews/v0.4-release-review.md) also records
 `pass`, completes the Runtime API boundary without changing canonical semantic
-authority, and makes Sprint 22 Context Engine the unique `next` planning target.
+authority. Sprint 22 Context Engine implementation and repository-owned public
+evidence are present; Sprint 22 remains the unique `next` target pending its
+integration review.
 
 ## Core principles
 
@@ -1147,32 +1158,33 @@ Provenance is therefore required not only for explanation but also for invalidat
 
 ## AI Context Engine
 
-The AI Context Engine consumes the Knowledge Graph through query interfaces.
-
-It must not depend directly on EDT structures or parser internals.
+The implemented source-independent first slice consumes exactly one immutable
+Knowledge Graph through its query interface. ADR-0044 assigns ownership to
+`oneagent-analysis`; the graph remains canonical authority. The engine has no
+dependency on EDT structures, parser internals, filesystem source reads,
+providers/models, Runtime, persistence, protocols, MCP, or IDE state.
 
 ## Context request
 
-Conceptually:
+The implemented public request retains one closed `Explain` intent, one to
+sixteen seeds, a validated UTF-8 byte budget, and one traversal policy:
 
 ```rust
 pub struct ContextRequest {
-    pub intent: ContextIntent,
-    pub seeds: Vec<ContextSeed>,
-    pub token_budget: TokenBudget,
-    pub policy: ContextPolicy,
+    intent: ContextIntent,
+    seeds: Vec<ContextSeed>,
+    budget: ContextBudget,
+    policy: ContextPolicy,
 }
 ```
 
-Possible seeds:
+Accepted first-slice seeds are:
 
-* node identifier;
-* qualified name;
-* source position;
-* source file;
-* metadata UUID;
-* user-selected text;
-* current editor symbol.
+* an exact stable node identifier with an optional node-kind constraint;
+* an exact case-sensitive canonical name with an optional node-kind constraint.
+
+Qualified/fuzzy names, source positions/files, metadata UUIDs, selected text,
+and editor-symbol seeds remain deferred.
 
 ## Context traversal
 
@@ -1181,70 +1193,60 @@ Traversal policy defines:
 * allowed node kinds;
 * allowed edge kinds;
 * direction;
-* maximum depth;
-* maximum candidates;
-* confidence threshold;
-* whether derived facts are allowed.
+* maximum depth `0..=4`;
+* maximum candidates `1..=128`, including seeds.
 
-## Candidate scoring
+The first slice has no confidence threshold or derived-fact switch.
 
-Candidate score may include:
+## Candidate relevance
+
+Selection retains one best path per distinct node and compares paths
+lexicographically by:
 
 ```text
-semantic distance
-edge importance
-node kind priority
-source proximity
-resolution confidence
-execution reachability
-data dependency relevance
-token cost
+path length
+per-step explicit edge priority
+per-step direction (outgoing before incoming)
+per-step stable edge identity
+seed node identity
 ```
+
+This is a closed deterministic ordering policy, not a learned score,
+probability, confidence, quality, or token-cost claim. Candidate traversal is
+cycle-safe; graph insertion, seed, duplicate-path, and provenance order do not
+change the result. Final candidate order uses stable candidate node identity as
+its last tie-breaker.
 
 ## Context bundle
 
-The output of context selection is a `ContextBundle`.
+The output is an owned `ContextBundle` containing canonical resolved seed IDs,
+admitted items, exact byte accounting, separate candidate/budget omission
+counts, and the concatenated rendering. Each item retains canonical node
+identity/name/kind/provenance, selected seed and depth, its complete selected
+edge path with provenance, a typed `Seed` or `Related` reason, the exact
+fragment, and its UTF-8 byte cost.
 
-Conceptually:
-
-```rust
-pub struct ContextBundle {
-    pub target: Vec<NodeId>,
-    pub included_nodes: Vec<NodeId>,
-    pub included_edges: Vec<EdgeId>,
-    pub source_fragments: Vec<SourceFragment>,
-    pub explanations: Vec<ContextExplanation>,
-}
-```
-
-The bundle must explain why each fragment was included.
+Every mandatory seed fragment must fit or the request returns no partial
+bundle. Related candidates are admitted as a whole-fragment prefix. The first
+non-fitting related item and every lower-ranked item are omitted explicitly.
 
 ## Context rendering
 
-Rendered context should contain semantic summaries in addition to source code.
+The implemented renderer emits exactly two newline-terminated semantic lines
+per item. Identifiers and names use UTF-8 byte-length prefixes; related reasons
+encode the selected seed, depth, and every direction/kind/stable-edge-ID path
+step. The bundle rendering is the byte-for-byte concatenation of admitted item
+fragments with no header, footer, or uncounted separator.
 
-Example:
+Illustrative shape:
 
 ```text
-Target:
-  Document.SalesInvoice.Posting
-
-Semantic role:
-  Posting handler of SalesInvoice
-
-Direct dependencies:
-  - AccumulationRegister.Stock
-  - CommonModule.InventoryManagement
-  - Catalog.Products
-
-Called procedures:
-  - InventoryManagement.ValidateStock
-  - InventoryManagement.WriteMovements
-
-Relevant source:
-  - ObjectModule.bsl:120-198
-  - InventoryManagement.bsl:45-91
+node kind=procedure id=4:Post name=4:Post
+reason seed=4:Post depth=0
 ```
+
+Source fragments, natural-language summaries, token budgeting, learned scoring,
+embeddings, and model/provider output remain deferred.
 
 ## Migration from current graphs
 
@@ -1362,14 +1364,13 @@ SM-7 Derived semantic analysis
     subsystem coupling
 
 SM-8 AI Context Engine
-    seed resolution
-    traversal policies
-    candidate scoring
-    token budgeting
-    source extraction
-    deduplication
-    context bundles
-    context explanations
+    implemented: exact seed resolution
+    implemented: bounded traversal policies
+    implemented: deterministic relevance and deduplication
+    implemented: UTF-8 byte budgeting and semantic bundles
+    implemented: provenance-backed typed explanations
+    deferred: learned scoring and token budgeting
+    deferred: source extraction and provider/model context
 
 SM-9 MCP and IDE integration
     graph queries

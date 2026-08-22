@@ -15,7 +15,9 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-graph` owns canonical semantic nodes, edges, provenance,
      validation, query, diff, impact, coverage, and resolution APIs.
    - `oneagent-analysis` contributes source-independent declaration and call
-     analysis over the BSL and graph contracts.
+     analysis over the BSL and graph contracts. It also owns the additive
+     source-independent Context Engine that derives deterministic budgeted
+     semantic bundles from one borrowed immutable graph.
 3. **Source adapters**
    - `oneagent-edt` reads supported EDT artifacts and contributes facts to the
      canonical semantic graph.
@@ -54,7 +56,8 @@ product adapters so that roadmap intent is not mistaken for available behavior.
 formats and contribute provenance-backed facts, but source-specific identities
 and parser state must not become competing graph truth. Derived facilities such
 as query, resolution, reports, diffs, impact analysis, and the Sprint 4 Semantic
-Index remain read-only views over graph snapshots.
+Index remain read-only views over graph snapshots. Context selection and
+assembly are another read-only derived view and do not become graph authority.
 
 ## Planned boundaries
 
@@ -64,13 +67,59 @@ The roadmap assigns future boundaries explicitly:
   Watching and Sprint 20 Persistent Cache are completed with `pass` integration
   reviews. Sprint 21 CLI Client is also completed with a `pass` integration
   review. The [v0.4 release review](reviews/v0.4-release-review.md) records
-  `pass`; Sprint 22 Context Engine is the unique `next` planning target.
+  `pass`. Sprint 22 Context Engine implementation and public evidence are
+  present; Sprint 22 remains the unique `next` target pending integration
+  review.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
 Detailed accepted decisions live in `docs/adr`. The dependency-ordered delivery
 sequence and status live only in `docs/Roadmap.md`.
+
+## Accepted Context Engine boundary
+
+[ADR-0044](adr/0044-context-engine.md) governs the implemented Sprint 22 first
+slice. One additive stateless `ContextEngine` call accepts a validated
+`ContextRequest`, borrows exactly one immutable `SemanticGraph`, and returns an
+owned `ContextBundle` or one closed typed error. `oneagent-analysis` owns this
+derived semantic view; `oneagent-graph` remains the sole authority for facts,
+identity, kinds, provenance, indexes, and query behavior.
+
+The request supports only `Explain`, exact node-ID and exact canonical-name
+seeds, a closed direction/edge/node filter policy, depth `0..=4`, candidate
+limit `1..=128`, and a rendered UTF-8 byte budget `1..=65_536`. Selection is
+cycle-safe and deterministic across graph insertion and seed order. It retains
+one best provenance-backed path per node using path depth, explicit edge
+priority, outgoing-before-incoming direction, stable edge identity, and seed
+identity. Final candidate order uses stable candidate identity as its last
+tie-breaker.
+
+Assembly first requires every seed fragment to fit, then admits related items
+as a whole-fragment prefix. Every item has an exact two-line length-prefixed
+semantic rendering and checked byte cost. Candidate-limit and budget omissions
+remain distinct and exact; no partial fragment or uncounted overhead exists.
+The first slice reads no source text, invokes no tokenizer/provider/model,
+mutates or persists no graph state, and exposes no Runtime, HTTP, CLI, protocol,
+MCP, or IDE surface.
+
+### Sprint 22 public evidence matrix
+
+The public `crates/analysis/tests/context_engine.rs` target imports only the
+exported `oneagent-analysis`, common, and graph library surfaces. Its checked-in
+Rust graphs and production `SemanticAnalysisPipeline` inputs require no
+filesystem corpus, network, service, clock, or arbitrary ordering oracle.
+
+| Contract | Public evidence |
+| --- | --- |
+| Request and resolution | Exact validation precedence, defaults and limits, both seed variants, deduplication, missing, ambiguous, incompatible, and unique-seed limit outcomes are asserted through public types. |
+| Selection | All eleven edge kinds, three directions, depth zero and maximum, node/edge filters, cycles, alternative seeds, stable ties, candidate omission, and reordered/repeated equality are covered. |
+| Provenance and explanations | Reordered duplicate node/edge provenance canonicalizes without graph mutation; selected seed, depth, direction, edge kind/ID, path provenance, and typed reason remain observable. |
+| Budget and rendering | ASCII/non-ASCII byte lengths, exact and one-byte-short seed budgets, related prefix admission, separate omission counts, exact fragments, and bundle accounting use fixed string oracles. |
+| Production compatibility | The existing production analysis pipeline supplies declaration, containment, call, and provenance facts directly to equal fresh Context evaluations; rendered output contains no fabricated BSL source text. |
+
+Sprint 22 remains incomplete until the dedicated integration review evaluates
+the committed implementation and complete validation evidence.
 
 ## Accepted Runtime service-container boundary
 
@@ -360,5 +409,6 @@ Persistent Cache is completed with a `pass` decision in the
 CLI Client is completed with a `pass` decision in the
 [Sprint 21 integration review](reviews/sprint-21-cli-client.md). The
 [v0.4 release integration review](reviews/v0.4-release-review.md) also records
-`pass`, completes the Runtime API boundary, and makes Sprint 22 Context Engine
-the unique `next` planning target.
+`pass` and completes the Runtime API boundary. Sprint 22 Context Engine
+implementation and public evidence are present, but Sprint 22 remains the
+unique `next` target pending its dedicated integration review.

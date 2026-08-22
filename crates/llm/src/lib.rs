@@ -7,6 +7,7 @@ mod error;
 mod identity;
 mod model;
 mod policy;
+mod request;
 mod response;
 mod secret;
 
@@ -16,6 +17,7 @@ pub use model::{MAX_MODELS_PER_CATALOG, ModelCapability, ModelCatalog, ModelDesc
 pub use policy::{
     MAX_PROVIDER_TIMEOUT, MAX_PROVIDER_TIMEOUT_SECS, ProviderExecutionPolicy, RetryPolicy,
 };
+pub use request::TextGenerationRequest;
 pub use response::{
     FinishReason, MAX_TEXT_INPUT_BYTES, MAX_TEXT_OUTPUT_BYTES, TextGenerationResponse, TextUsage,
 };

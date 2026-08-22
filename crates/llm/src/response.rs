@@ -2,7 +2,7 @@
 
 use std::fmt::{Debug, Formatter};
 
-use crate::{LlmError, LlmErrorKind, ModelIdentity};
+use crate::{LlmError, LlmErrorKind, ModelIdentity, TextGenerationRequest};
 
 /// Maximum accepted request input in UTF-8 bytes.
 pub const MAX_TEXT_INPUT_BYTES: usize = 65_536;
@@ -27,10 +27,6 @@ pub struct TextUsage {
 }
 
 impl TextUsage {
-    #[allow(
-        dead_code,
-        reason = "Task 4 exposes request-bound response construction"
-    )]
     fn new_checked(input_bytes: usize, output_bytes: usize) -> Result<Self, LlmError> {
         let total_bytes = input_bytes.checked_add(output_bytes).ok_or_else(|| {
             LlmError::with_static_diagnostic(
@@ -74,10 +70,26 @@ pub struct TextGenerationResponse {
 }
 
 impl TextGenerationResponse {
-    #[allow(
-        dead_code,
-        reason = "Task 4 exposes request-bound response construction"
-    )]
+    /// Creates a terminal response against its originating validated request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlmErrorKind::InvalidResponse`] when output is empty or exceeds
+    /// the request's explicit UTF-8 byte bound.
+    pub fn new(
+        request: &TextGenerationRequest,
+        output: impl Into<String>,
+        finish: FinishReason,
+    ) -> Result<Self, LlmError> {
+        Self::new_checked(
+            request.model().clone(),
+            request.input().len(),
+            request.max_output_bytes(),
+            output,
+            finish,
+        )
+    }
+
     pub(crate) fn new_checked(
         model: ModelIdentity,
         input_bytes: usize,
@@ -164,13 +176,38 @@ mod tests {
     use super::{
         FinishReason, MAX_TEXT_INPUT_BYTES, MAX_TEXT_OUTPUT_BYTES, TextGenerationResponse,
     };
-    use crate::{LlmErrorKind, ModelId, ModelIdentity, ProviderId};
+    use crate::{
+        LlmErrorKind, ModelCapability, ModelDescriptor, ModelId, ModelIdentity, ProviderId,
+        TextGenerationRequest,
+    };
 
     fn model() -> ModelIdentity {
         ModelIdentity::new(
             ProviderId::new("provider").expect("provider ID must pass"),
             ModelId::new("model").expect("model ID must pass"),
         )
+    }
+
+    fn request(max_output_bytes: usize) -> TextGenerationRequest {
+        let descriptor = ModelDescriptor::new(model(), [ModelCapability::TextGeneration]);
+        TextGenerationRequest::new(&descriptor, "вход", max_output_bytes)
+            .expect("request must pass")
+    }
+
+    #[test]
+    fn public_response_is_bound_to_the_originating_request() {
+        let request = request("ответ".len());
+        let response = TextGenerationResponse::new(&request, "ответ", FinishReason::Completed)
+            .expect("response at the request bound must pass");
+
+        assert_eq!(response.model(), request.model());
+        assert_eq!(response.output(), "ответ");
+        assert_eq!(response.usage().input_bytes(), request.input().len());
+        assert_eq!(response.usage().output_bytes(), "ответ".len());
+
+        let error = TextGenerationResponse::new(&request, "ответ!", FinishReason::Completed)
+            .expect_err("response over the request bound must fail");
+        assert_eq!(error.kind(), LlmErrorKind::InvalidResponse);
     }
 
     #[test]

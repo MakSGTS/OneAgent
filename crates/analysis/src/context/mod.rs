@@ -1,5 +1,7 @@
 //! Deterministic semantic Context Engine domain and request resolution.
 
+mod selection;
+
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 
@@ -395,6 +397,124 @@ impl ContextPathStep {
     }
 }
 
+/// One deterministic pre-budget Context candidate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextCandidate {
+    node_id: NodeId,
+    name: EntityName,
+    kind: NodeKind,
+    provenance: Vec<Provenance>,
+    depth: usize,
+    seed_id: NodeId,
+    path: Vec<ContextPathStep>,
+    reason: ContextInclusionReason,
+}
+
+impl ContextCandidate {
+    /// Returns the canonical candidate node identifier.
+    #[must_use]
+    pub const fn node_id(&self) -> &NodeId {
+        &self.node_id
+    }
+
+    /// Returns the exact canonical node name.
+    #[must_use]
+    pub const fn name(&self) -> &EntityName {
+        &self.name
+    }
+
+    /// Returns the node kind.
+    #[must_use]
+    pub const fn kind(&self) -> NodeKind {
+        self.kind
+    }
+
+    /// Returns canonicalized node provenance.
+    #[must_use]
+    pub fn provenance(&self) -> &[Provenance] {
+        &self.provenance
+    }
+
+    /// Returns the selected graph depth.
+    #[must_use]
+    pub const fn depth(&self) -> usize {
+        self.depth
+    }
+
+    /// Returns the seed that selected this candidate.
+    #[must_use]
+    pub const fn seed_id(&self) -> &NodeId {
+        &self.seed_id
+    }
+
+    /// Returns the deterministic selected path from the seed.
+    #[must_use]
+    pub fn path(&self) -> &[ContextPathStep] {
+        &self.path
+    }
+
+    /// Returns the typed inclusion reason.
+    #[must_use]
+    pub const fn reason(&self) -> ContextInclusionReason {
+        self.reason
+    }
+}
+
+/// Deterministic Context selection before budget admission.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextSelection {
+    intent: ContextIntent,
+    seeds: Vec<NodeId>,
+    candidates: Vec<ContextCandidate>,
+    budget: ContextBudget,
+    policy: ContextPolicy,
+    candidate_omitted: usize,
+}
+
+impl ContextSelection {
+    /// Returns the request intent.
+    #[must_use]
+    pub const fn intent(&self) -> ContextIntent {
+        self.intent
+    }
+
+    /// Returns unique resolved seeds in stable node-ID order.
+    #[must_use]
+    pub fn seeds(&self) -> &[NodeId] {
+        &self.seeds
+    }
+
+    /// Returns selected candidates in deterministic relevance order.
+    #[must_use]
+    pub fn candidates(&self) -> &[ContextCandidate] {
+        &self.candidates
+    }
+
+    /// Returns the validated rendered UTF-8 byte budget.
+    #[must_use]
+    pub const fn budget(&self) -> ContextBudget {
+        self.budget
+    }
+
+    /// Returns the validated selection policy.
+    #[must_use]
+    pub const fn policy(&self) -> &ContextPolicy {
+        &self.policy
+    }
+
+    /// Returns whether candidate-limit truncation occurred.
+    #[must_use]
+    pub const fn candidate_truncated(&self) -> bool {
+        self.candidate_omitted > 0
+    }
+
+    /// Returns the exact candidate-limit omission count.
+    #[must_use]
+    pub const fn candidate_omitted(&self) -> usize {
+        self.candidate_omitted
+    }
+}
+
 /// Typed reason for including a Context item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ContextInclusionReason {
@@ -764,6 +884,20 @@ impl Display for ContextSeed {
 pub struct ContextEngine;
 
 impl ContextEngine {
+    /// Resolves a request and selects deterministic candidates before budgeting.
+    ///
+    /// # Errors
+    ///
+    /// Returns a request or seed-resolution error without partial selection.
+    pub fn select_candidates(
+        &self,
+        graph: &SemanticGraph,
+        request: &ContextRequest,
+    ) -> Result<ContextSelection, ContextError> {
+        let resolved = self.resolve_request(graph, request)?;
+        Ok(selection::select_candidates(graph, &resolved))
+    }
+
     /// Resolves and canonicalizes every request seed against one graph snapshot.
     ///
     /// # Errors

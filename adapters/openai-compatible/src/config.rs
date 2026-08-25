@@ -73,7 +73,6 @@ impl OpenAiCompatibleProvider {
         &self.models_url
     }
 
-    #[allow(dead_code)]
     pub(crate) const fn completions_url(&self) -> &Url {
         &self.completions_url
     }

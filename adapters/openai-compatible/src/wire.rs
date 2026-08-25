@@ -12,7 +12,6 @@ pub(crate) struct ModelEntry {
 }
 
 #[derive(Serialize)]
-#[allow(dead_code)]
 pub(crate) struct CompletionRequest<'a> {
     pub(crate) model: &'a str,
     pub(crate) prompt: &'a str,
@@ -21,7 +20,6 @@ pub(crate) struct CompletionRequest<'a> {
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 pub(crate) struct CompletionResponse {
     pub(crate) object: String,
     pub(crate) model: String,
@@ -29,11 +27,10 @@ pub(crate) struct CompletionResponse {
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 pub(crate) struct CompletionChoice {
     pub(crate) text: String,
     pub(crate) index: usize,
-    pub(crate) finish_reason: Option<String>,
+    pub(crate) finish_reason: serde_json::Value,
 }
 
 #[cfg(test)]
@@ -97,9 +94,15 @@ mod tests {
         assert_eq!(response.model, "model-a");
         assert_eq!(response.choices[0].text, "synthetic output");
         assert_eq!(response.choices[0].index, 0);
-        assert_eq!(response.choices[0].finish_reason.as_deref(), Some("stop"));
+        assert_eq!(response.choices[0].finish_reason, json!("stop"));
 
         let missing: Value = json!({"object": "text_completion", "model": "model-a"});
         assert!(serde_json::from_value::<CompletionResponse>(missing).is_err());
+        let missing_finish = json!({
+            "object": "text_completion",
+            "model": "model-a",
+            "choices": [{"text": "output", "index": 0}]
+        });
+        assert!(serde_json::from_value::<CompletionResponse>(missing_finish).is_err());
     }
 }

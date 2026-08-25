@@ -50,10 +50,7 @@ impl LlmProvider for OpenAiCompatibleProvider {
                     "provider operation was cancelled",
                 ));
             }
-            Err(adapter_error(
-                LlmErrorKind::Internal,
-                "text generation is not implemented",
-            ))
+            run_with_context(context, self.execute_generation(request)).await
         })
     }
 }

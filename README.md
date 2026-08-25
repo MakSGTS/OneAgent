@@ -27,6 +27,7 @@ See
 - `crates/protocol` — protocol package foundation; transport contracts are not implemented yet
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
+- `adapters/openai-compatible` — implemented explicit bounded OpenAI-compatible `/v1/models` and non-streaming `/v1/completions` provider adapter
 - `adapters/filesystem` — implemented filesystem workspace discovery adapter
 - `extensions` — reserved for future IDE extensions; currently empty
 - `docs/adr` — architecture decision records
@@ -72,9 +73,16 @@ owned text requests and responses, redacted secret/error values, represented
 timeout with no automatic retry, cooperative cancellation, and an object-safe
 asynchronous provider seam. Public repository-owned fakes prove discovery,
 generation, error, cancellation, cleanup, and provider substitution without
-network, credentials, Runtime, or Context Engine coupling. Concrete provider
-adapters, wire protocols, live configuration/discovery, Runtime exposure,
-prompt/tool policy, streaming, MCP, and IDE integration remain deferred.
+network, credentials, Runtime, or Context Engine coupling. The additive
+`oneagent-openai-compatible` adapter implements ADR-0046 through
+one explicit HTTP/HTTPS server-root URL and optional bearer credential. It
+performs fresh bounded `/v1/models` discovery and one strict non-streaming
+`/v1/completions` attempt with exact model identity, local UTF-8 byte usage,
+no redirect/proxy/retry/fallback, total timeout, cooperative cancellation, and
+redacted typed failures. Repository acceptance uses controlled loopback only;
+Runtime configuration/exposure, live-provider acceptance, prompt/tool policy,
+chat/Responses APIs, streaming, additional providers, MCP, and IDE integration
+remain deferred. Sprint 24 remains pending integration review.
 
 ## Verify
 

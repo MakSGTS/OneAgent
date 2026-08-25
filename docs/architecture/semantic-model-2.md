@@ -139,6 +139,18 @@ It is std-only and does not depend on the Knowledge Graph, Context Engine,
 Runtime, protocol, provider wire schemas, configuration sources, or transports.
 Provider results do not create or mutate graph facts.
 
+### `oneagent-openai-compatible`
+
+Owns the concrete ADR-0046 leaf adapter behind `LlmProvider`. It validates one
+explicit server-root URL and optional bearer credential, performs fresh bounded
+`/v1/models` discovery and one strict non-streaming `/v1/completions` attempt,
+and maps only accepted provider wire values into `oneagent-llm`. Exact response
+model identity, local UTF-8 output bounds and usage, no retry/redirect/proxy/
+fallback, total timeout, cooperative cancellation, redacted errors, and
+complete temporary-state cleanup are enforced through controlled-loopback
+evidence. It does not depend on or mutate the Knowledge Graph, Context Engine,
+Runtime, protocol, configuration sources, persistence, MCP, or IDE state.
+
 ### `oneagent-edt`
 
 Owns EDT-specific loading and conversion:

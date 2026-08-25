@@ -29,6 +29,8 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      EDT semantics.
    - `oneagent-workspace-fs` discovers supported workspaces through the
      filesystem boundary.
+   - `oneagent-openai-compatible` implements the bounded concrete ADR-0046
+     provider adapter without changing provider-neutral or Runtime ownership.
 4. **Applications and protocol foundation**
    - `oneagent-runtime` exposes the long-running composition root as a reusable
      library. It owns ordered service startup, rollback, task handles,
@@ -167,10 +169,36 @@ services.
 
 The [Sprint 23 integration review](reviews/sprint-23-llm-provider-abstraction.md)
 records `pass`. Sprint 23 is completed and Sprint 24 OpenAI-Compatible Provider
-is the unique `next` planning target. Concrete provider adapters and wire
-formats, live configuration/discovery, Runtime/CLI/protocol exposure,
-prompt/tool policy, tokenization, streaming, conversations, MCP, and IDE
-integration remain deferred.
+remains the unique `next` target pending its integration review.
+
+## Accepted OpenAI-compatible provider boundary
+
+[ADR-0046](adr/0046-openai-compatible-provider.md) governs the implemented
+concrete `oneagent-openai-compatible` leaf adapter. Construction consumes one
+exact `openai-compatible` provider configuration, one explicit HTTP/HTTPS
+server-root URL, and an optional bearer secret. Reqwest defaults are disabled;
+redirects and implicit proxies are disabled; Rust TLS uses platform roots.
+
+Each discovery call performs one bounded `GET /v1/models`, strictly maps the
+list IDs to a canonical text-capable `ModelCatalog`, and retains no provider
+metadata. Each generation call performs one non-streaming
+`POST /v1/completions` with only `model`, `prompt`, `max_tokens`, and
+`stream=false`, requires exact response model identity and one index-zero
+choice, maps only `stop` and `length`, and constructs local request-bound byte
+usage. Successful bodies are incrementally bounded to 1 MiB for discovery and
+512 KiB for completion. Status, transport, protocol, response, timeout, and
+cancellation outcomes are typed and redacted; no operation retries, redirects,
+falls back, caches, or leaves background work.
+
+The public `adapters/openai-compatible/tests/conformance.rs` target uses only
+exported adapter and `oneagent-llm` APIs plus deterministic loopback servers. It
+proves explicit construction/redaction, exact authenticated wires, canonical
+discovery, both terminal mappings, local usage, fallback/malformed/bound/status/
+redirect rejection, timeout/cancellation precedence, one attempt, cleanup, and
+fresh repetition without live services or credentials. Runtime composition,
+configuration sources, Context prompt semantics, chat/Responses APIs,
+streaming, tools, provider usage authority, and additional providers remain
+deferred. Sprint 24 remains incomplete pending integration review.
 
 ## Accepted Runtime service-container boundary
 

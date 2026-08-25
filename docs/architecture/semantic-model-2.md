@@ -284,9 +284,9 @@ equal fresh runs. The
 authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
 `pass`; Sprint 22 is completed. The subsequent
-[Sprint 23 LLM Provider Abstraction review](../reviews/sprint-23-llm-provider-abstraction.md)
-records `pass`; Sprint 23 is completed and Sprint 24 OpenAI-Compatible Provider
-is the unique `next` planning target.
+[Sprint 24 OpenAI-Compatible Provider review](../reviews/sprint-24-openai-compatible-provider.md)
+records `pass with non-blocking follow-ups`; Sprint 24 is completed and Sprint
+25 LM Studio Integration is the unique `next` planning target.
 
 ## Core principles
 
@@ -1197,8 +1197,9 @@ providers/models, Runtime, persistence, protocols, MCP, or IDE state.
 The independent `oneagent-llm` boundary may accept an explicitly copied
 `ContextBundle::rendered()` string as ordinary request text, but it assigns no
 prompt, role, source-text, tokenizer, provider-selection, tool, or conversation
-semantics to that content. Concrete provider adapters and Runtime integration
-remain deferred, and provider output never becomes Knowledge Graph authority.
+semantics to that content. The bounded OpenAI-compatible adapter is implemented;
+Runtime integration and additional provider adapters remain deferred, and
+provider output never becomes Knowledge Graph authority.
 
 ## Context request
 

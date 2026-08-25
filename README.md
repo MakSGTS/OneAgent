@@ -8,8 +8,10 @@ includes the long-running Runtime, HTTP health, Workspace lifecycle, Graph Query
 API, File Watching, Persistent Cache, and supported CLI Client delivered by
 Sprints 15–21. The source-independent Context Engine delivered by Sprint 22 is
 also complete with a `pass` integration review. The provider-neutral Sprint 23
-LLM Provider Abstraction is complete with a `pass` integration review. Sprint
-24 OpenAI-Compatible Provider is the unique `next` planning target.
+LLM Provider Abstraction is complete with a `pass` integration review. The
+bounded Sprint 24 OpenAI-Compatible Provider is complete with a
+`pass with non-blocking follow-ups` integration review. Sprint 25 LM Studio
+Integration is the unique `next` planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -82,7 +84,7 @@ no redirect/proxy/retry/fallback, total timeout, cooperative cancellation, and
 redacted typed failures. Repository acceptance uses controlled loopback only;
 Runtime configuration/exposure, live-provider acceptance, prompt/tool policy,
 chat/Responses APIs, streaming, additional providers, MCP, and IDE integration
-remain deferred. Sprint 24 remains pending integration review.
+remain deferred. Sprint 24 is complete; Sprint 25 is the next planning target.
 
 ## Verify
 

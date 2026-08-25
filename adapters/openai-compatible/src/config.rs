@@ -12,7 +12,6 @@ use crate::{COMPLETIONS_PATH, MAX_BASE_URL_BYTES, MODELS_PATH, PROVIDER_ID, USER
 /// Construction is deterministic and performs no network I/O. The value owns
 /// no implicit configuration source and intentionally exposes neither its
 /// endpoint URLs nor its optional authorization header.
-#[allow(dead_code)]
 pub struct OpenAiCompatibleProvider {
     id: ProviderId,
     client: Client,
@@ -66,12 +65,10 @@ impl OpenAiCompatibleProvider {
         &self.id
     }
 
-    #[allow(dead_code)]
     pub(crate) const fn client(&self) -> &Client {
         &self.client
     }
 
-    #[allow(dead_code)]
     pub(crate) const fn models_url(&self) -> &Url {
         &self.models_url
     }
@@ -81,7 +78,6 @@ impl OpenAiCompatibleProvider {
         &self.completions_url
     }
 
-    #[allow(dead_code)]
     pub(crate) const fn authorization(&self) -> Option<&HeaderValue> {
         self.authorization.as_ref()
     }
@@ -155,7 +151,6 @@ fn authorization_header(secret: &str) -> Result<HeaderValue, LlmError> {
     Ok(header)
 }
 
-#[allow(dead_code)]
 pub(crate) fn apply_authorization(
     request: reqwest::RequestBuilder,
     authorization: Option<&HeaderValue>,

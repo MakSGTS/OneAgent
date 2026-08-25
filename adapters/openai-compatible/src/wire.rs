@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -14,6 +12,7 @@ pub(crate) struct ModelEntry {
 }
 
 #[derive(Serialize)]
+#[allow(dead_code)]
 pub(crate) struct CompletionRequest<'a> {
     pub(crate) model: &'a str,
     pub(crate) prompt: &'a str,
@@ -22,6 +21,7 @@ pub(crate) struct CompletionRequest<'a> {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub(crate) struct CompletionResponse {
     pub(crate) object: String,
     pub(crate) model: String,
@@ -29,6 +29,7 @@ pub(crate) struct CompletionResponse {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub(crate) struct CompletionChoice {
     pub(crate) text: String,
     pub(crate) index: usize,

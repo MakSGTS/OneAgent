@@ -5,7 +5,12 @@
 //! discovery and generation operations are implemented.
 
 mod config;
+mod discovery;
+mod execution;
 mod wire;
+
+#[cfg(test)]
+mod test_support;
 
 pub use config::OpenAiCompatibleProvider;
 
@@ -17,7 +22,6 @@ const USER_AGENT: &str = "oneagent-openai-compatible/0.1.0";
 const MAX_BASE_URL_BYTES: usize = 2_048;
 #[allow(dead_code)]
 const MAX_COMPLETION_REQUEST_BODY_BYTES: usize = 512 * 1_024;
-#[allow(dead_code)]
 const MAX_MODELS_RESPONSE_BODY_BYTES: usize = 1_024 * 1_024;
 #[allow(dead_code)]
 const MAX_COMPLETION_RESPONSE_BODY_BYTES: usize = 512 * 1_024;

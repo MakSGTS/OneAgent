@@ -5744,6 +5744,233 @@ absence. Suggested planning commit message:
 Plan Sprint 23 LLM Provider Abstraction
 ```
 
+#### Sprint 24 OpenAI-Compatible Provider execution plan
+
+Sprint 24 is planned from committed repository-boundary baseline
+`c9166974a66bc8f8de419cec821f966e0d68db80`. The
+[Sprint 23 LLM Provider Abstraction review](reviews/sprint-23-llm-provider-abstraction.md)
+records `pass`, so Sprint 24 is the unique `next` target. The completed LLM
+Provider framework stage already covers concrete adapters through the
+[profile](codex/profiles/llm-provider-implementation.md),
+[workflow](codex/workflows/llm-provider.md), and
+[template](codex/templates/llm-provider-task.md); the existing investigation,
+architecture, review, sprint-planning, and sequential-execution contracts cover
+the remaining task families. No framework change is required.
+
+The live baseline contains the std-only provider-neutral `oneagent-llm` crate
+accepted by ADR-0045 and no concrete adapter, HTTP client, provider wire type,
+base-URL contract, or Runtime consumer. A user-authorized read-only audit of
+`192.168.0.176` on 2026-08-25 verified llama.cpp build 10485 at pinned commit
+`1511ce3bc3f087376c8526b4ad07100bfabb277f`, one loopback-only
+`127.0.0.1:8080` service, successful `/health`, `/v1/models`, and
+`/v1/completions` responses, and exact malformed and missing-input errors. The
+source README and server routing/response code at that commit define the
+observed non-streaming first-slice wire vocabulary.
+
+The live oracle also proves an incompatibility case that the adapter must close:
+single-model llama.cpp accepts an unknown request `model` but returns the loaded
+model identity. The adapter must reject that terminal identity mismatch rather
+than silently accepting provider fallback. Live service access is investigation
+evidence only; repository acceptance must use checked-in synthetic wire values
+and controlled loopback servers without credentials or external network.
+
+The data and testability gate passes for an investigation-first,
+architecture-gated slice. Exact positive, empty, missing, malformed, unknown,
+duplicate, reordered, identity-mismatch, status, redaction, timeout,
+cancellation, body-bound, and repeated cases can be produced deterministically.
+Task 2 must resolve crate/dependency ownership, URL and transport policy, wire
+mapping, byte-bound versus token-bound behavior, redirect/proxy policy,
+authentication, status/error mapping, cancellation, timeout, response limits,
+and the exact first slice before implementation. Adding any production HTTP or
+serialization dependency remains prohibited until the user explicitly approves
+the exact dependency set selected by ADR-0046.
+
+##### Sprint 24 objective
+
+Implement the first concrete OpenAI-compatible provider adapter for the
+provider-neutral `TextGeneration` contract: validated construction from one
+explicit base URL and optional bearer credential, fresh model discovery through
+`GET /v1/models`, one non-streaming text generation attempt through
+`POST /v1/completions`, strict provider/model identity and terminal response
+validation, bounded redacted failures, total timeout and cooperative
+cancellation, and deterministic controlled-loopback conformance evidence.
+
+Included scope is:
+
+- repository and pinned llama.cpp wire/transport investigation plus ADR-0046;
+- one concrete adapter crate depending inward on `oneagent-llm`;
+- explicit validated HTTP/HTTPS base URL and secret-safe client construction;
+- deterministic `GET /v1/models` discovery mapping to `ModelCatalog`;
+- deterministic non-streaming `POST /v1/completions` request and response
+  mapping for the existing provider-neutral text contract;
+- bearer authentication when explicitly configured, disabled implicit redirects
+  and configuration sources, bounded bodies and diagnostics;
+- exact HTTP status, transport, protocol, timeout, cancellation, finish, output,
+  and identity mappings accepted by ADR-0046;
+- repository-owned fixtures and controlled loopback conformance without live
+  credentials, remote services, sleeps, or developer-local state;
+- provider-neutral, Context Engine, and Runtime compatibility plus truthful
+  current-state documentation;
+- integration review, Sprint 25 hand-off, and conditional Sprint 23 prompt-suite
+  retirement.
+
+Excluded scope is:
+
+- chat completions, Responses API, streaming/SSE, tools, structured output,
+  reasoning, images, audio, embeddings, reranking, or provider extensions;
+- prompt templates/policy, roles/messages, conversations/history, tokenization,
+  provider-reported usage as shared-domain authority, or quality evaluation;
+- automatic retry, backoff, rate limiting, concurrency pools, catalog cache,
+  refresh, fallback, aliases, or model selection;
+- environment/file/CLI/keychain configuration loading or implicit proxy policy;
+- Runtime service registration, Runtime/HTTP/CLI/protocol exposure, Context-to-
+  prompt orchestration, persistence, MCP, LSP, IDE, or UI;
+- live-service availability as CI evidence, real credentials, broad OpenAI or
+  third-party compatibility, latency, cost, performance, or security claims;
+- Sprint 25-27 implementation and the v0.5 release review.
+
+##### Accepted planning baseline and framework decision
+
+ADR-0045 remains authoritative for provider-neutral identity, capabilities,
+request/response byte bounds, secret handling, errors, no retry, cancellation,
+and the `LlmProvider` seam. It explicitly assigns wire mapping and transport to
+future concrete adapters. The LLM Provider framework already requires exact
+wire contracts, configuration and redaction, timeout/retry/cancellation,
+bounded failures, and provider conformance, so no Profile, Workflow, Template,
+or Core update is justified for Sprint 24.
+
+Architecture is unresolved only for the concrete adapter boundary. Task 1
+registers verified repository, live, and pinned-source facts; Task 2 accepts
+ADR-0046 before Cargo or production Rust changes. Task 3 cannot start until the
+exact selected production dependency set receives explicit user approval.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-24-openai-compatible-provider/`. The verified
+immediately preceding suite is
+`docs/codex/prompts/sprint-23-llm-provider-abstraction/`, whose eight tracked
+files exactly match its filesystem inventory and have no untracked addition.
+Only Task 7 may conditionally retire that exact suite after a non-blocking
+decision and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the OpenAI-compatible provider boundary. | Investigation / investigation | Verified provider-neutral, pinned llama.cpp, live wire, transport/dependency, URL/auth, mapping, error, cancellation, body-bound, consumer, and deterministic-oracle evidence. | Sprint 24 planning baseline. | `Investigate Sprint 24 OpenAI-compatible provider` |
+| 2 | Define the OpenAI-compatible provider contract. | Architecture / architecture | Accepted ADR-0046 for ownership, dependencies, construction, URL/auth, discovery/generation wire mapping, bounds, identity, errors, timeout/cancellation, conformance, and deferred scope. | Task 1 evidence. | `Define Sprint 24 OpenAI-compatible provider` |
+| 3 | Implement the OpenAI-compatible client foundation. | LLM Provider / LLM Provider | Concrete adapter crate, approved dependencies, validated secret-safe construction, bounded HTTP client policy, wire values, and deterministic construction/redaction evidence. | Accepted ADR-0046 and explicit user approval for its production dependencies. | `Implement Sprint 24 OpenAI-compatible client` |
+| 4 | Implement OpenAI-compatible model discovery. | LLM Provider / LLM Provider | Fresh `/v1/models` execution and strict canonical model/catalog mapping with bounded status, transport, protocol, cancellation, and timeout behavior. | Task 3. | `Implement Sprint 24 model discovery` |
+| 5 | Implement OpenAI-compatible text generation. | LLM Provider / LLM Provider | One non-streaming `/v1/completions` attempt with exact request, finish, output, identity, error, timeout, cancellation, and cleanup mapping. | Task 4. | `Implement Sprint 24 text generation` |
+| 6 | Complete OpenAI-compatible provider evidence. | LLM Provider / LLM Provider | Public controlled-loopback conformance matrix, provider-neutral/Context/Runtime compatibility evidence, and current-state docs. | Task 5. | `Complete Sprint 24 OpenAI-compatible evidence` |
+| 7 | Review the integrated Sprint 24 baseline. | Review / review | Findings, complete validation evidence, sprint decision, Sprint 23 suite retirement, and Sprint 25 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 24 OpenAI-compatible review` |
+
+Task 1 creates only
+`docs/architecture/openai-compatible-provider-investigation.md`. It records the
+exact pinned llama.cpp commit/build/source paths, sanitized live request and
+response shapes, provider-neutral compatibility, existing dependencies and
+consumers, URL/auth/transport choices, negative cases, unresolved decisions,
+and repository-owned oracle design. It stores no credential, unrestricted
+prompt/response body, dynamic timing payload, server configuration, or claim
+that live availability is reproducible acceptance evidence.
+
+Task 2 creates `docs/adr/0046-openai-compatible-provider.md`. It accepts the
+smallest concrete first slice and exact dependency set, crate ownership,
+construction inputs, URL validation and normalization, redirect/proxy/TLS
+policy, bearer behavior, request and response fields, discovery mapping,
+byte/token bound treatment, body limits, identity validation, error/status/
+timeout/cancellation precedence, conformance, compatibility, implementation
+order, and deferred scope. It changes no Rust or Cargo file.
+
+Task 3 creates only the concrete adapter foundation accepted by ADR-0046. It
+adds the workspace member and explicitly approved production dependencies,
+secret-safe validated construction, bounded HTTP client configuration, and
+private or public wire values exactly as accepted. It performs no model
+discovery or generation call.
+
+Task 4 implements only fresh model discovery. It maps the exact OpenAI
+`object=list`, `data[].id` projection to provider-scoped text-capable
+descriptors and canonical `ModelCatalog`, rejects missing/invalid/duplicate/
+over-limit shapes atomically, and applies accepted authentication, response
+body, status, transport, timeout, cancellation, redaction, and cleanup policy.
+
+Task 5 implements only one non-streaming text completion attempt. It maps the
+validated request to the accepted `model`, `prompt`, `max_tokens`, and
+`stream=false` wire fields; requires one accepted choice, exact request model,
+known `stop` or `length` finish, and locally bounded non-empty output; and
+returns one typed terminal outcome without retry, fallback, streaming, or
+provider usage authority.
+
+Task 6 adds a public non-zero controlled-loopback conformance target and
+repository-owned synthetic fixtures for positive, negative, malformed,
+duplicate, reordered, unknown-field, status, response-bound, identity-mismatch,
+finish, timeout, cancellation, redirect, auth/redaction, cleanup, and repeated
+cases. It synchronizes only `README.md`, `docs/Architecture.md`, and
+`docs/architecture/semantic-model-2.md` with implemented truth. It does not fix
+production behavior or mark Sprint 24 completed.
+
+Task 7 reviews the exact planning-through-Task-6 range without fixing findings.
+Only `pass` or `pass with non-blocking follow-ups` after focused and complete
+validation may create
+`docs/reviews/sprint-24-openai-compatible-provider.md`, transition Sprint 24 to
+`completed`, make Sprint 25 LM Studio Integration the unique `next` target,
+synchronize minimal hand-off text when required, and atomically retire the
+exact tracked Sprint 23 prompt suite.
+
+##### State and failure gates
+
+Sprint 24 remains `next` during planning and becomes `active` only after the
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing pinned/live evidence, an unimplementable ADR, absent explicit dependency
+approval, zero matched tests, unbounded response handling, credential or content
+leakage, hidden retry/fallback, failed validation, or staging/commit failure
+stops the sprint immediately and leaves dependent tasks `not_started`.
+
+Sprint 24 may transition to `completed` only when Tasks 1-6 are committed or
+proven `already_complete`, their required validation succeeds, and Task 7 issues
+a non-blocking decision. A blocked review preserves Sprint 24 as incomplete and
+keeps the Sprint 23 prompt suite. A non-blocking review makes Sprint 25 the
+unique `next` target and retires only
+`docs/codex/prompts/sprint-23-llm-provider-abstraction/` in the final review
+commit.
+
+##### Validation plan
+
+Documentation-only Tasks 1-2 run source/decision/link consistency and
+`git diff --check`. Production Tasks 3-6 run non-zero focused and public adapter
+tests, provider-neutral and affected compatibility checks, dependency/redaction
+audits, and the canonical full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Controlled loopback tests may use only sandbox-authorized local binds. No CI or
+completion claim may require `192.168.0.176`, a live provider, a credential,
+environment configuration, ignored state, or external network. Task 7 reruns
+the complete focused conformance and workspace matrix, audits the exact commit/
+path range, verifies accepted versus deferred scope and current-state docs, and
+revalidates the Sprint 23 tracked/filesystem/untracked prompt inventory before
+any explicit deletion.
+
+##### Planning validation
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 23 retirement inventory, `git diff --check`, and unrelated-change
+absence. Suggested planning commit message:
+
+```text
+Plan Sprint 24 OpenAI-Compatible Provider
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

@@ -2,6 +2,7 @@
 /OneAgent_EDTproject/
 /OneAgent_DesignerXML/
 /Retail_edt_project/
+/local-artifacts/
 .DS_Store
 .idea/
 .vscode/*.log

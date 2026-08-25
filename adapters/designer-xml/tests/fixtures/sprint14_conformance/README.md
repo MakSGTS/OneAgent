@@ -7,8 +7,8 @@ immediate ownership facts in EDT and hierarchical Designer XML layouts.
 
 ## Provenance and treatment
 
-The EDT files originate from the registered ignored corpus
-`/Users/maxim_tomshin/Development/1c-ssl-corpus/src/cf/OneAgent_EDTproject`.
+The EDT files originate from the registered repository-local ignored corpus
+`OneAgent_EDTproject/`.
 The Designer files were produced from the registered ignored
 `OneAgent_DesignerXML` corpus through a fresh temporary infobase with 1C:Enterprise
 8.3.27.2214. Import attempt 1 of 2 failed because the source-preserving copy

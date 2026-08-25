@@ -6,6 +6,14 @@ stricter safety policy.
 ## Required safety rules
 
 - Read every applicable `AGENTS.md` before changing files.
+- Resolve the repository root with `git rev-parse --show-toplevel` and keep
+  ordinary investigation, search, reads, writes, moves, and command execution
+  inside that root.
+- Do not inspect parent directories, sibling projects, or another external path
+  unless the current user request explicitly names the exact path and authorizes
+  access. Limit authorized external access to the minimum required operation.
+- Treat external paths recorded in historical documentation, provenance, logs,
+  or examples as evidence only, not as permission to access those paths.
 - Check initial repository state with `git status --short`.
 - Preserve pre-existing user changes, including modified and untracked files.
 - Do not overwrite, discard, or reformat user work unrelated to the task.

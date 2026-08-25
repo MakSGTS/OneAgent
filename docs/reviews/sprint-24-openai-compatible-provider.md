@@ -61,8 +61,9 @@ The manifest and lock state retain those approved versions and features.
 
 1. `adapters/openai-compatible/src/lib.rs` still says discovery and generation
    remain to be implemented. Both operations are implemented and validated.
-   Correct the crate-level Rustdoc in a future implementation/documentation
-   task; review policy does not permit changing a production file here.
+   Review policy did not permit changing a production file in the review
+   commit. The immediate post-review documentation change resolves this finding
+   by describing the implemented bounded operations without changing behavior.
 
 ### Blocking
 
@@ -136,5 +137,5 @@ eight authorized Sprint 23 prompt files and the untracked inventory was empty
 
 Sprint 24 transitions from `next` to `completed`. Sprint 25 LM Studio
 Integration becomes the unique `next` planning target. The next implementation
-task should follow the Sprint 25 plan when created; the Rustdoc wording follow-up
-may be handled separately without reopening ADR-0046 or Sprint 24.
+task should follow the Sprint 25 plan when created. The resolved Rustdoc wording
+follow-up does not reopen ADR-0046 or Sprint 24.

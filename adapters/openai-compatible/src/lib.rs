@@ -1,8 +1,8 @@
 //! Concrete bounded adapter for the accepted OpenAI-compatible HTTP contract.
 //!
 //! The provider-neutral domain remains owned by `oneagent-llm`. This crate owns
-//! only explicit client construction and private provider wire values until the
-//! discovery and generation operations are implemented.
+//! only explicit client construction, private provider wire values, and the
+//! bounded discovery and text-generation operations behind `LlmProvider`.
 
 mod config;
 mod discovery;

@@ -5985,8 +5985,8 @@ bearer construction, fresh bounded discovery, strict single non-streaming text
 generation, response-model fallback rejection, local byte usage, typed redacted
 failures, timeout/cancellation cleanup, controlled-loopback evidence, and
 deferred Runtime/chat/streaming/tool scope remain authoritative. The review's
-non-blocking follow-up is limited to correcting one stale crate-level Rustdoc
-sentence in a future implementation/documentation task.
+only non-blocking follow-up, correction of the stale crate-level Rustdoc
+sentence, is resolved by the immediate post-review documentation change.
 
 #### v0.6 — MCP and IDE
 

@@ -10,9 +10,9 @@ Sprints 15–21. The source-independent Context Engine delivered by Sprint 22 is
 also complete with a `pass` integration review. The provider-neutral Sprint 23
 LLM Provider Abstraction is complete with a `pass` integration review. The
 bounded Sprint 24 OpenAI-Compatible Provider is complete with a
-`pass with non-blocking follow-ups` integration review. The Sprint 25 LM Studio
-leaf adapter and controlled-loopback evidence are implemented; its integration
-review remains pending, so Sprint 25 is still the unique `next` planning target.
+`pass with non-blocking follow-ups` integration review. The bounded Sprint 25
+LM Studio Integration is complete with a `pass` integration review. Sprint 26
+Ollama Integration is the unique `next` planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -91,8 +91,7 @@ one-attempt generation bridge through the unchanged generic
 controlled loopback only. Runtime configuration/exposure, live-provider
 acceptance, model/server lifecycle, prompt/tool policy, chat/Responses APIs,
 streaming, later providers, MCP, and IDE integration remain deferred. Sprint 24
-is complete; Sprint 25 remains the next planning target pending its integration
-review.
+and Sprint 25 are complete; Sprint 26 is the next planning target.
 
 ## Verify
 

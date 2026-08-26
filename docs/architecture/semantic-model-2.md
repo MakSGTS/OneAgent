@@ -298,9 +298,9 @@ equal fresh runs. The
 authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
 `pass`; Sprint 22 is completed. The subsequent
-[Sprint 24 OpenAI-Compatible Provider review](../reviews/sprint-24-openai-compatible-provider.md)
-records `pass with non-blocking follow-ups`; Sprint 24 is completed and Sprint
-25 LM Studio Integration is the unique `next` planning target.
+[Sprint 25 LM Studio Integration review](../reviews/sprint-25-lm-studio-integration.md)
+records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
+unique `next` planning target.
 
 ## Core principles
 

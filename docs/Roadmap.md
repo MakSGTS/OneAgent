@@ -31,9 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 24 OpenAI-Compatible Provider review](reviews/sprint-24-openai-compatible-provider.md)
-records `pass with non-blocking follow-ups`; Sprint 24 is completed and Sprint
-25 LM Studio Integration is the unique `next` planning target.
+[Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
+records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
+unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -5273,8 +5273,8 @@ later [Sprint 23 review](reviews/sprint-23-llm-provider-abstraction.md) records
 | Sprint 22 — Context Engine | Build deterministic semantic context selection and assembly. | completed |
 | Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | completed |
 | Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | completed |
-| Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | next |
-| Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | planned |
+| Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | completed |
+| Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | next |
 | Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | planned |
 
 The v0.5 release integration review follows Sprint 27.
@@ -6192,6 +6192,25 @@ absence. Suggested planning commit message:
 ```text
 Plan Sprint 25 LM Studio Integration
 ```
+
+##### Sprint 25 completed state
+
+Tasks 1-6 are committed in dependency order. The
+[Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
+records `pass` after the exact LM Studio unit/public provider matrix, complete
+generic and provider-neutral regressions, Analysis/Runtime compatibility, and
+the full workspace gate. Sprint 25 is `completed`, Sprint 26 Ollama Integration
+is the unique `next` planning target, and the exact verified Sprint 24 prompt
+suite is retired in the review commit.
+
+ADR-0047, the explicitly approved dependency block, stable `lm-studio`
+identity, explicit/numeric-loopback construction, native type-aware discovery,
+private composition over unchanged OpenAI-compatible generation, bounds,
+redaction, one-attempt timeout/cancellation/cleanup behavior, controlled-
+loopback public evidence, and accepted deferrals remain the current baseline.
+No completion evidence requires installed or running LM Studio, a downloaded
+model, credential, developer-local state, external network, or response-quality
+claim.
 
 #### v0.6 — MCP and IDE
 

@@ -77,9 +77,9 @@ The roadmap assigns future boundaries explicitly:
   review. The [v0.4 release review](reviews/v0.4-release-review.md) records
   `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
   also records `pass`. The later
-  [Sprint 24 OpenAI-Compatible Provider review](reviews/sprint-24-openai-compatible-provider.md)
-  records `pass with non-blocking follow-ups`; Sprint 25 LM Studio Integration
-  is the unique `next` planning target.
+  [Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
+  records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is
+  the unique `next` planning target.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -130,9 +130,9 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 
 The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused and complete workspace gates. Sprint 22 is completed;
-the [Sprint 24 integration review](reviews/sprint-24-openai-compatible-provider.md)
-records `pass with non-blocking follow-ups`; Sprint 25 LM Studio Integration is
-the unique `next` planning target.
+the [Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
+records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
+unique `next` planning target.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -170,9 +170,9 @@ services.
 | Provider substitution and cleanup | Independent providers work through `&dyn LlmProvider`; canonical/empty discovery, repeated generation, typed failures, provider mismatch, cancellation before/during work, and zero surviving active state are exact oracles. |
 | Compatibility | `oneagent-analysis` and `oneagent-runtime` remain unchanged and independently validated; neither depends on `oneagent-llm`, and Context text receives no prompt semantics. |
 
-The [Sprint 24 integration review](reviews/sprint-24-openai-compatible-provider.md)
-records `pass with non-blocking follow-ups`. Sprint 24 is completed and Sprint
-25 LM Studio Integration is the unique `next` planning target.
+The [Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
+records `pass`. Sprint 25 is completed and Sprint 26 Ollama Integration is the
+unique `next` planning target.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -202,8 +202,9 @@ fresh repetition without live services or credentials. Runtime composition,
 configuration sources, Context prompt semantics, chat/Responses APIs,
 streaming, tools, provider usage authority, and additional providers remain
 deferred except for the implemented LM Studio specialization described below.
-The Sprint 24 integration review records
-`pass with non-blocking follow-ups`; Sprint 25 is the next planning target.
+The Sprint 24 integration review records `pass with non-blocking follow-ups`;
+the Sprint 25 integration review records `pass`, and Sprint 26 is the next
+planning target.
 
 ## Accepted LM Studio provider boundary
 
@@ -234,8 +235,8 @@ cancellation, one-attempt behavior, and cleanup without installed LM Studio,
 downloaded models, credentials, or external network. Runtime registration and
 configuration sources, live-provider acceptance, server/model lifecycle,
 chat/template quality, streaming, tools, MCP, and IDE integration remain
-deferred. Sprint 25 remains the unique `next` target until its integration
-review records the sprint decision.
+deferred. The Sprint 25 integration review records `pass`; Sprint 25 is
+completed and Sprint 26 Ollama Integration is the unique `next` target.
 
 ## Accepted Runtime service-container boundary
 
@@ -528,6 +529,6 @@ CLI Client is completed with a `pass` decision in the
 `pass` and completes the Runtime API boundary. The subsequent
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
 records `pass`. The later
-[Sprint 24 OpenAI-Compatible Provider review](reviews/sprint-24-openai-compatible-provider.md)
-records `pass with non-blocking follow-ups`; Sprint 25 LM Studio Integration is
-the unique `next` planning target.
+[Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
+records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
+unique `next` planning target.

@@ -27,6 +27,42 @@ fn request(id: u64, method: &str, fields: &Value) -> String {
     json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()
 }
 
+fn reordered_request(id: u64, method: &str, fields: &Value) -> String {
+    let value = serde_json::from_str::<Value>(&request(id, method, fields))
+        .expect("canonical request must be JSON");
+    let mut output = String::new();
+    encode_reordered(&value, &mut output);
+    output
+}
+
+fn encode_reordered(value: &Value, output: &mut String) {
+    match value {
+        Value::Object(fields) => {
+            output.push('{');
+            for (index, (key, value)) in fields.iter().rev().enumerate() {
+                if index > 0 {
+                    output.push(',');
+                }
+                output.push_str(&serde_json::to_string(key).expect("object key must encode"));
+                output.push(':');
+                encode_reordered(value, output);
+            }
+            output.push('}');
+        }
+        Value::Array(values) => {
+            output.push('[');
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(',');
+                }
+                encode_reordered(value, output);
+            }
+            output.push(']');
+        }
+        _ => output.push_str(&serde_json::to_string(value).expect("scalar must encode")),
+    }
+}
+
 async fn dispatch(server: &McpServer, input: &str) -> Value {
     let response = server
         .dispatch(input)
@@ -104,7 +140,12 @@ fn tool_cases(
         }}),
         json!({"name": "oneagent.query", "arguments": {
             "configurationId": configuration_id, "operation": "relations", "nodeId": node_id,
-            "direction": "both", "limit": 1
+            "direction": "both",
+            "edgeKinds": [
+                "contains", "calls", "references", "reads", "writes", "grants",
+                "includes", "extends", "depends_on", "opens", "triggers"
+            ],
+            "limit": 1
         }}),
         json!({"name": "oneagent.query", "arguments": {
             "configurationId": configuration_id, "operation": "traverse", "nodeId": node_id,
@@ -194,10 +235,23 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
             ),
         )
         .await;
+        let reordered = dispatch(
+            &server,
+            &reordered_request(
+                30 + u64::try_from(offset).expect("small offset"),
+                "tools/call",
+                fields,
+            ),
+        )
+        .await;
         assert!(first["result"].get("isError").is_none());
         assert_eq!(
             first["result"]["structuredContent"],
             repeated["result"]["structuredContent"]
+        );
+        assert_eq!(
+            first["result"]["structuredContent"],
+            reordered["result"]["structuredContent"]
         );
         let text = first["result"]["content"][0]["text"]
             .as_str()
@@ -398,7 +452,7 @@ async fn public_semantic_tools_enforce_exact_and_one_over_bounds() {
 }
 
 #[tokio::test]
-async fn public_semantic_tools_cover_empty_reordered_and_oversized_results() {
+async fn public_semantic_tools_cover_empty_and_oversized_results() {
     let empty = tempdir().expect("empty workspace root");
     let snapshot = WorkspaceSnapshotBuilder::new()
         .build(empty.path())
@@ -415,34 +469,6 @@ async fn public_semantic_tools_cover_empty_reordered_and_oversized_results() {
     .await;
     assert_eq!(graph["result"]["structuredContent"]["total"], 0);
 
-    let snapshot = WorkspaceSnapshotBuilder::new()
-        .build(fixture_root())
-        .expect("mixed fixture must build");
-    let configuration_id = snapshot.configurations()[0]
-        .configuration_id()
-        .as_str()
-        .to_owned();
-    let server = semantic_server(snapshot).expect("fixed semantic server must build");
-    let first = dispatch(
-        &server,
-        &request(
-            51,
-            "tools/call",
-            &json!({"name": "oneagent.graph", "arguments": {
-                "configurationId": configuration_id, "limit": 1
-            }}),
-        ),
-    )
-    .await;
-    let reordered = format!(
-        "{{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"tools/call\",\"params\":{{\"arguments\":{{\"limit\":1,\"configurationId\":\"{configuration_id}\"}},\"name\":\"oneagent.graph\",\"_meta\":{{\"io.modelcontextprotocol/clientCapabilities\":{{}},\"io.modelcontextprotocol/protocolVersion\":\"{PROTOCOL_VERSION}\"}}}}}}"
-    );
-    let reordered = dispatch(&server, &reordered).await;
-    assert_eq!(
-        first["result"]["structuredContent"],
-        reordered["result"]["structuredContent"]
-    );
-
     let large = large_workspace();
     let snapshot = WorkspaceSnapshotBuilder::new()
         .build(large.path())
@@ -451,7 +477,7 @@ async fn public_semantic_tools_cover_empty_reordered_and_oversized_results() {
     let response = dispatch(
         &server,
         &request(
-            53,
+            51,
             "tools/call",
             &json!({"name": "oneagent.graph", "arguments": {"limit": 100}}),
         ),

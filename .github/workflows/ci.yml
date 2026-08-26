@@ -29,3 +29,49 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  vscode:
+    strategy:
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+
+      - name: Build public Runtime
+        run: cargo build -p oneagent-runtime --bin oneagent-mcp
+
+      - name: Install extension dependencies
+        run: pnpm --dir extensions/vscode install --frozen-lockfile
+
+      - name: Typecheck extension
+        run: pnpm --dir extensions/vscode run typecheck
+
+      - name: Test extension
+        run: pnpm --dir extensions/vscode test
+
+      - name: Test public Runtime process
+        env:
+          ONEAGENT_MCP_BIN: ${{ format('{0}/target/debug/oneagent-mcp{1}', github.workspace, runner.os == 'Windows' && '.exe' || '') }}
+        run: pnpm --dir extensions/vscode run test:process
+
+      - name: Audit package inventory
+        run: pnpm --dir extensions/vscode run package:check
+
+      - name: Verify clean VSIX builds
+        run: pnpm --dir extensions/vscode run package:verify
+
+      - name: Audit extension scope and dependencies
+        run: pnpm --dir extensions/vscode run audit

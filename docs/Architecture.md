@@ -70,6 +70,12 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      response, error, discovery, tool catalog/list/call, codec, validation, and
      asynchronous sequential dispatch contracts. It does not own Runtime I/O,
      semantic tool execution, HTTP, or LSP contracts.
+   - `extensions/vscode` is the desktop workspace client for the accepted MCP
+     process boundary. It activates only on its two contributed commands,
+     validates one trusted file-backed workspace and one bounded executable,
+     owns one directly spawned `oneagent-mcp` child, and derives one status bar
+     item from its closed connection state. Its editor adapter does not own MCP
+     semantics, Runtime installation, workspace discovery, or graph behavior.
 
 `SemanticGraph` is the canonical semantic authority. Adapters may observe source
 formats and contribute provenance-backed facts, but source-specific identities
@@ -93,12 +99,15 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
   also records `pass`. The
   [Sprint 28 MCP Server review](reviews/sprint-28-mcp-server.md) records
-  `pass with non-blocking follow-ups`. The Sprint 29 MCP Semantic Tools
-  implementation is present and remains the unique `next` target pending
-  integration review.
-- Semantic MCP tools are implemented in Sprint 29. External-client
-  compatibility, VS Code, LSP, and EDT product integration remain later work
-  in Sprints 30–35.
+  `pass with non-blocking follow-ups`. The
+  [Sprint 29 MCP Semantic Tools review](reviews/sprint-29-mcp-semantic-tools.md)
+  records `pass with non-blocking follow-up`. The Sprint 30 VS Code Extension
+  Foundation implementation and production evidence are present and remain
+  active pending integration review.
+- Semantic MCP tools are implemented in Sprint 29, and the bounded desktop VS
+  Code connection foundation is implemented in Sprint 30. Navigation, symbol
+  search, LSP, chat/context UI, EDT integration, and external-client
+  compatibility remain later work in Sprints 31–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 

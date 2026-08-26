@@ -63,7 +63,9 @@
     "vscode:prepublish": "pnpm run compile",
     "package:vsix": "vsce package --no-dependencies --allow-missing-repository --out oneagent-0.1.0.vsix",
     "package:list": "vsce ls --no-dependencies",
-    "package:check": "node scripts/check-package.mjs"
+    "package:check": "node scripts/check-package.mjs",
+    "package:verify": "node scripts/check-vsix.mjs",
+    "audit": "node scripts/audit.mjs"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

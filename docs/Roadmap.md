@@ -7160,6 +7160,25 @@ contamination, zero matched tests, non-reproducible VSIX contents, failed
 validation/commit, reviewer mutation or incompleteness, unresolved evidence
 disagreement, or failed consistency check stops execution.
 
+##### Sprint 30 implemented evidence
+
+Tasks 1–6 are committed in dependency order. The accepted desktop VS Code
+`1.134.0` workspace extension now has a Node 24/pnpm 11.19.0 lockfile, exact
+manifest and package inventory, demand-only command activation, bounded
+workspace-scoped executable configuration, one owned `oneagent-mcp` stdio
+client, deterministic status and replacement behavior, and awaited
+deactivation cleanup. Pure unit, pinned Extension Host, public Runtime process,
+two-clean-build VSIX, dependency/license, exclusion, and macOS/Windows CI
+evidence cover the implemented boundary without adding a production Node
+dependency or changing Rust behavior.
+
+Sprint 30 remains `active` until Task 7 completes the required independent and
+primary integration reviews, artifact-consistency check, final state
+transition, and conditional Sprint 29 prompt-suite retirement. Navigation,
+symbol search, LSP, diagnostics, chat/context UI, EDT integration, remote/web
+hosts, Runtime installation, Marketplace publication/signing, telemetry, and
+external-client compatibility remain deferred.
+
 Suggested planning commit message:
 
 ```text

@@ -13,6 +13,7 @@ oneagent-edt = { path = "../../adapters/edt" }
 oneagent-graph = { path = "../../crates/graph" }
 oneagent-metadata = { path = "../../crates/metadata" }
 oneagent-protocol = { path = "../../crates/protocol" }
+oneagent-tool-policy = { path = "../../crates/tool-policy" }
 oneagent-workspace = { path = "../../crates/workspace" }
 oneagent-workspace-fs = { path = "../../adapters/filesystem" }
 serde = { version = "1.0.228", features = ["derive"] }

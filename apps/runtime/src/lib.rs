@@ -6,6 +6,7 @@ mod error;
 mod health;
 mod http;
 mod mcp;
+mod mcp_tools;
 mod service;
 mod state;
 mod workspace;
@@ -16,6 +17,7 @@ pub use error::{BoxError, CleanupFailure, RuntimeError, RuntimeErrorKind};
 pub use health::{RuntimeHealth, RuntimeHealthSnapshot};
 pub use http::HttpService;
 pub use mcp::{McpStdioError, McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
+pub use mcp_tools::{McpSemanticServerError, graph_semantic_server};
 pub use service::{
     Cancellation, RunningServices, RuntimeService, ServiceContainer, ServiceContainerBuilder,
     ServiceContext, ServiceStartFuture, ServiceTask,

@@ -94,6 +94,14 @@ fn invalid_identifier_matrix_uses_invalid_request() {
 #[test]
 fn public_identifier_and_json_depth_bounds_are_exact() {
     let exact = "x".repeat(MAX_REQUEST_ID_BYTES);
+    assert_eq!(
+        RequestId::string(exact.clone())
+            .expect("exact public request ID boundary must construct")
+            .as_str()
+            .map(str::len),
+        Some(MAX_REQUEST_ID_BYTES)
+    );
+    assert!(RequestId::string("x".repeat(MAX_REQUEST_ID_BYTES + 1)).is_none());
     let DecodeOutcome::Message(InboundMessage::Request(request)) =
         decode_message(&request(&json!(exact), "server/discover"))
     else {
@@ -266,6 +274,30 @@ fn known_request_metadata_and_client_capability_shapes_match_the_schema() {
 }
 
 #[test]
+fn schema_valid_empty_implementation_strings_are_preserved() {
+    let input = json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "server/discover",
+        "params": {"_meta": {
+            PROTOCOL_VERSION_META_KEY: PROTOCOL_VERSION,
+            CLIENT_CAPABILITIES_META_KEY: {},
+            CLIENT_INFO_META_KEY: {"name": "", "version": ""}
+        }}
+    })
+    .to_string();
+    let DecodeOutcome::Message(InboundMessage::Request(request)) = decode_message(&input) else {
+        panic!("schema-valid empty implementation strings must decode");
+    };
+    let client_info = request
+        .metadata()
+        .client_info()
+        .expect("client information must be retained");
+    assert_eq!(client_info.name(), "");
+    assert_eq!(client_info.version(), "");
+}
+
+#[test]
 fn duplicate_reordered_unicode_and_repeated_inputs_are_deterministic() {
     let duplicate = r#"{"jsonrpc":"2.0","id":1,"method":"x","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"secret":1,"secret":2}}}"#;
     assert_eq!(error(duplicate).code(), ErrorCode::InvalidRequest);
@@ -312,6 +344,30 @@ fn compact_error_serialization_has_exact_closed_shape() {
 }
 
 #[test]
+fn public_error_construction_enforces_request_id_precedence() {
+    assert!(
+        oneagent_protocol::ErrorResponse::new(Some(RequestId::unsigned(1)), ErrorCode::ParseError)
+            .is_err()
+    );
+    assert!(oneagent_protocol::ErrorResponse::new(None, ErrorCode::InvalidRequest).is_ok());
+    assert!(
+        oneagent_protocol::ErrorResponse::new(
+            Some(RequestId::unsigned(1)),
+            ErrorCode::InvalidRequest
+        )
+        .is_ok()
+    );
+    for code in [
+        ErrorCode::MethodNotFound,
+        ErrorCode::InvalidParams,
+        ErrorCode::InternalError,
+    ] {
+        assert!(oneagent_protocol::ErrorResponse::new(None, code).is_err());
+        assert!(oneagent_protocol::ErrorResponse::new(Some(RequestId::unsigned(1)), code).is_ok());
+    }
+}
+
+#[test]
 fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() {
     assert!(
         oneagent_protocol::ErrorResponse::new(None, ErrorCode::UnsupportedProtocolVersion).is_err()
@@ -322,7 +378,7 @@ fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() 
     );
     assert!(
         oneagent_protocol::ErrorResponse::missing_capability(
-            RequestId::Unsigned(1),
+            RequestId::unsigned(1),
             json!({"elicitation": 42})
                 .as_object()
                 .expect("capability object")
@@ -331,7 +387,7 @@ fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() 
     );
     assert!(
         oneagent_protocol::ErrorResponse::unsupported_version(
-            RequestId::Unsigned(1),
+            RequestId::unsigned(1),
             &"x".repeat(MAX_MESSAGE_BYTES)
         )
         .is_err()
@@ -339,7 +395,7 @@ fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() 
 
     let mut baseline_fields = Map::new();
     baseline_fields.insert("payload".to_owned(), json!(""));
-    let baseline = ResultResponse::complete(RequestId::Unsigned(1), baseline_fields)
+    let baseline = ResultResponse::complete(RequestId::unsigned(1), baseline_fields)
         .expect("baseline response must fit");
     let baseline_bytes = encode_response(&Response::Result(baseline))
         .expect("baseline response must encode")
@@ -348,7 +404,7 @@ fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() 
 
     let mut exact_fields = Map::new();
     exact_fields.insert("payload".to_owned(), json!("x".repeat(padding_bytes)));
-    let exact = ResultResponse::complete(RequestId::Unsigned(1), exact_fields)
+    let exact = ResultResponse::complete(RequestId::unsigned(1), exact_fields)
         .expect("exact-bound response must be constructible");
     assert_eq!(
         encode_response(&Response::Result(exact))
@@ -359,13 +415,20 @@ fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() 
 
     let mut oversized_fields = Map::new();
     oversized_fields.insert("payload".to_owned(), json!("x".repeat(padding_bytes + 1)));
-    assert!(ResultResponse::complete(RequestId::Unsigned(1), oversized_fields).is_err());
+    assert!(ResultResponse::complete(RequestId::unsigned(1), oversized_fields).is_err());
 
-    let mut nested = Value::Null;
-    for _ in 0..MAX_JSON_NESTING_DEPTH {
-        nested = Value::Array(vec![nested]);
+    let mut exact_depth = Value::Null;
+    for _ in 0..MAX_JSON_NESTING_DEPTH - 2 {
+        exact_depth = Value::Array(vec![exact_depth]);
     }
-    let mut nested_fields = Map::new();
-    nested_fields.insert("nested".to_owned(), nested);
-    assert!(ResultResponse::complete(RequestId::Unsigned(1), nested_fields).is_err());
+    let mut exact_depth_fields = Map::new();
+    exact_depth_fields.insert("nested".to_owned(), exact_depth.clone());
+    assert!(
+        ResultResponse::complete(RequestId::unsigned(1), exact_depth_fields).is_ok(),
+        "exact outbound nesting boundary must be accepted"
+    );
+
+    let mut over_depth_fields = Map::new();
+    over_depth_fields.insert("nested".to_owned(), Value::Array(vec![exact_depth]));
+    assert!(ResultResponse::complete(RequestId::unsigned(1), over_depth_fields).is_err());
 }

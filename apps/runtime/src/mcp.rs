@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::future::Future;
 
-use oneagent_protocol::{MAX_MESSAGE_BYTES, McpServer, encode_response};
+use oneagent_protocol::{EncodeError, MAX_MESSAGE_BYTES, McpServer, Response, encode_response};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 const READ_SCRATCH_BYTES: usize = 8_192;
@@ -166,15 +166,29 @@ impl McpStdioTransport {
     where
         W: AsyncWrite + Unpin,
     {
+        self.process_frame_with_encoder(frame, writer, encode_response)
+            .await
+    }
+
+    async fn process_frame_with_encoder<W, E>(
+        &self,
+        frame: &[u8],
+        writer: &mut W,
+        encode: E,
+    ) -> Result<(), McpStdioError>
+    where
+        W: AsyncWrite + Unpin,
+        E: FnOnce(&Response) -> Result<Vec<u8>, EncodeError>,
+    {
         let input = std::str::from_utf8(frame)
             .map_err(|_| McpStdioError::new(McpStdioErrorKind::InvalidUtf8))?;
         let Some(response) = self.server.dispatch(input) else {
             return Ok(());
         };
-        let encoded = encode_response(&response)
-            .map_err(|_| McpStdioError::new(McpStdioErrorKind::Encode))?;
+        let payload =
+            encode(&response).map_err(|_| McpStdioError::new(McpStdioErrorKind::Encode))?;
         writer
-            .write_all(&encoded)
+            .write_all(&payload)
             .await
             .map_err(|_| McpStdioError::new(McpStdioErrorKind::Write))?;
         writer
@@ -329,5 +343,18 @@ mod tests {
             .await
             .expect_err("shutdown failure must terminate");
         assert_eq!(failure.kind(), McpStdioErrorKind::Shutdown);
+    }
+
+    #[tokio::test]
+    async fn controlled_encode_failure_is_closed_and_writes_nothing() {
+        let transport = McpStdioTransport::default();
+        let mut output = Vec::new();
+        let failure = transport
+            .process_frame_with_encoder(b"{}", &mut output, |_| Err(oneagent_protocol::EncodeError))
+            .await
+            .expect_err("encode failure must terminate");
+
+        assert_eq!(failure.kind(), McpStdioErrorKind::Encode);
+        assert!(output.is_empty());
     }
 }

@@ -27,79 +27,109 @@ const DEPTH_MARKER: &str = "maximum JSON nesting depth exceeded";
 const PROGRESS_TOKEN_META_KEY: &str = "progressToken";
 const LOG_LEVEL_META_KEY: &str = "io.modelcontextprotocol/logLevel";
 
-/// A JSON-RPC request identifier accepted by MCP.
+/// A bounded JSON-RPC request identifier accepted by MCP.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub enum RequestId {
-    /// A bounded string identifier.
+pub struct RequestId {
+    kind: RequestIdKind,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum RequestIdKind {
     String(String),
-    /// A signed JSON integer identifier.
     Signed(i64),
-    /// An unsigned JSON integer identifier.
     Unsigned(u64),
 }
 
 impl RequestId {
+    /// Creates a bounded string request identifier.
+    ///
+    /// Returns `None` when the UTF-8 value exceeds
+    /// [`MAX_REQUEST_ID_BYTES`].
+    #[must_use]
+    pub fn string(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        (value.len() <= MAX_REQUEST_ID_BYTES).then_some(Self {
+            kind: RequestIdKind::String(value),
+        })
+    }
+
+    /// Creates a signed integer request identifier.
+    #[must_use]
+    pub const fn signed(value: i64) -> Self {
+        Self {
+            kind: RequestIdKind::Signed(value),
+        }
+    }
+
+    /// Creates an unsigned integer request identifier.
+    #[must_use]
+    pub const fn unsigned(value: u64) -> Self {
+        Self {
+            kind: RequestIdKind::Unsigned(value),
+        }
+    }
+
     fn from_value(value: &Value) -> Option<Self> {
         match value {
-            Value::String(value) if value.len() <= MAX_REQUEST_ID_BYTES => {
-                Some(Self::String(value.clone()))
-            }
+            Value::String(value) => Self::string(value.clone()),
             Value::Number(value) => value
                 .as_i64()
-                .map(Self::Signed)
-                .or_else(|| value.as_u64().map(Self::Unsigned)),
+                .map(Self::signed)
+                .or_else(|| value.as_u64().map(Self::unsigned)),
             _ => None,
         }
     }
 
     fn to_value(&self) -> Value {
-        match self {
-            Self::String(value) => Value::String(value.clone()),
-            Self::Signed(value) => Value::Number(Number::from(*value)),
-            Self::Unsigned(value) => Value::Number(Number::from(*value)),
+        match &self.kind {
+            RequestIdKind::String(value) => Value::String(value.clone()),
+            RequestIdKind::Signed(value) => Value::Number(Number::from(*value)),
+            RequestIdKind::Unsigned(value) => Value::Number(Number::from(*value)),
         }
     }
 
     /// Returns the string identifier, when this value is a string.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::String(value) => Some(value),
-            Self::Signed(_) | Self::Unsigned(_) => None,
+        match &self.kind {
+            RequestIdKind::String(value) => Some(value),
+            RequestIdKind::Signed(_) | RequestIdKind::Unsigned(_) => None,
         }
     }
 
     /// Returns the signed integer identifier, when representable as `i64`.
     #[must_use]
     pub fn as_i64(&self) -> Option<i64> {
-        match self {
-            Self::Signed(value) => Some(*value),
-            Self::Unsigned(value) => i64::try_from(*value).ok(),
-            Self::String(_) => None,
+        match &self.kind {
+            RequestIdKind::Signed(value) => Some(*value),
+            RequestIdKind::Unsigned(value) => i64::try_from(*value).ok(),
+            RequestIdKind::String(_) => None,
         }
     }
 
     /// Returns the unsigned integer identifier, when representable as `u64`.
     #[must_use]
     pub fn as_u64(&self) -> Option<u64> {
-        match self {
-            Self::Unsigned(value) => Some(*value),
-            Self::Signed(value) => u64::try_from(*value).ok(),
-            Self::String(_) => None,
+        match &self.kind {
+            RequestIdKind::Unsigned(value) => Some(*value),
+            RequestIdKind::Signed(value) => u64::try_from(*value).ok(),
+            RequestIdKind::String(_) => None,
         }
     }
 }
 
 impl fmt::Debug for RequestId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::String(value) => formatter
+        match &self.kind {
+            RequestIdKind::String(value) => formatter
                 .debug_struct("RequestId")
                 .field("kind", &"string")
                 .field("bytes", &value.len())
                 .finish(),
-            Self::Signed(_) => formatter.write_str("RequestId { kind: signed_integer }"),
-            Self::Unsigned(_) => formatter.write_str("RequestId { kind: unsigned_integer }"),
+            RequestIdKind::Signed(_) => formatter.write_str("RequestId { kind: signed_integer }"),
+            RequestIdKind::Unsigned(_) => {
+                formatter.write_str("RequestId { kind: unsigned_integer }")
+            }
         }
     }
 }
@@ -114,13 +144,11 @@ pub struct Implementation {
 impl Implementation {
     /// Creates an implementation identity.
     ///
-    /// Empty names or versions are rejected.
+    /// Names and versions preserve their exact schema-valid string values,
+    /// including empty strings.
     pub fn new(name: impl Into<String>, version: impl Into<String>) -> Option<Self> {
         let name = name.into();
         let version = version.into();
-        if name.is_empty() || version.is_empty() {
-            return None;
-        }
         Some(Self { name, version })
     }
 
@@ -331,13 +359,21 @@ impl ErrorResponse {
     ///
     /// # Errors
     ///
-    /// Returns [`EncodeError`] when the code requires data or the complete
-    /// response violates an outbound bound.
+    /// Returns [`EncodeError`] when the code requires data, the request-ID
+    /// presence contradicts validation precedence, or the complete response
+    /// violates an outbound bound.
     pub fn new(id: Option<RequestId>, code: ErrorCode) -> Result<Self, EncodeError> {
-        if matches!(
-            code,
-            ErrorCode::MissingRequiredClientCapability | ErrorCode::UnsupportedProtocolVersion
-        ) {
+        let id_is_valid = match code {
+            ErrorCode::ParseError => id.is_none(),
+            ErrorCode::InvalidRequest => true,
+            ErrorCode::MethodNotFound | ErrorCode::InvalidParams | ErrorCode::InternalError => {
+                id.is_some()
+            }
+            ErrorCode::MissingRequiredClientCapability | ErrorCode::UnsupportedProtocolVersion => {
+                false
+            }
+        };
+        if !id_is_valid {
             return Err(EncodeError);
         }
         let response = Self {

@@ -6931,6 +6931,121 @@ current baseline. No completion evidence requires a live MCP client,
 credential, remote transport, fixed port, real signal, semantic tool, graph or
 provider action, or other real effect.
 
+#### Sprint 29 MCP Semantic Tools execution plan
+
+Sprint 29 is planned from committed governance head `6ffe20dd`. The
+[Sprint 28 review](reviews/sprint-28-mcp-server.md) records
+`pass with non-blocking follow-ups`, so Sprint 29 is the unique `next` target.
+The committed MCP Protocol, Runtime Service, AI Tool Policy, investigation,
+architecture, review, planning, and sequential-execution modules cover every
+task; no framework change or post-sprint framework audit is justified.
+
+The live server implements MCP revision `2026-07-28`, `server/discover`, a
+bounded sequential stdio transport, and truthful empty capabilities. Runtime
+already owns immutable workspace snapshots and bounded graph-query
+projections; Graph owns validation and impact; Analysis owns Context Engine;
+Tool Policy owns the mandatory execution gate. The official revision defines
+`tools/list`, `tools/call`, tool schemas, annotations, discovery capability,
+protocol errors, and tool-result errors. Repository fixtures and child-process
+pipes provide deterministic end-to-end evidence without a live MCP client.
+
+##### Sprint 29 objective
+
+Expose six deterministic read-only semantic MCP tools for graph summary,
+query, validation, diagnostics, impact, and context. Every advertised tool must
+have a closed bounded input contract, truthful schema and annotations, stable
+structured/text results, Tool Policy authorization and execution, immutable
+workspace ownership, exact error separation, and repository-owned public
+process evidence.
+
+Included scope is:
+
+- repository/specification investigation and accepted ADR-0051;
+- truthful `tools` discovery capability plus `tools/list` and `tools/call`;
+- a public asynchronous sequential handler boundary required by Tool Policy;
+- exactly six read-only `oneagent.*` tools over existing semantic owners;
+- immutable startup workspace snapshot selected from the process working
+  directory, bounded arguments/results, deterministic ordering, and redaction;
+- Tool Policy evaluation/execution for every known tool call, using only the
+  existing local `oneagent-tool-policy` and `oneagent-analysis` packages;
+- non-zero protocol, library, fixture, transport, and real-process evidence;
+- truthful current-state documentation and independent integration review.
+
+Excluded scope is graph-semantic changes, source-adapter changes, mutation or
+write tools, confirmation UX, filesystem/shell/Git/network/provider effects,
+watching/reload/cache, remote transports, authentication, external-client
+compatibility, prompts/resources/other MCP capabilities, concurrency,
+progress/cancellation notifications, IDE/LSP work, and performance/security
+claims beyond the accepted bounded evidence.
+
+##### Accepted planning baseline and gates
+
+ADR-0040 fixes graph query vocabulary and bounds, ADR-0044 fixes Context Engine
+selection, ADR-0049 requires every executable tool request including read-only
+requests to pass Tool Policy, and ADR-0050 fixes MCP ownership, revision,
+framing, and lifecycle. Task 2 must accept ADR-0051 before Rust or Cargo edits.
+The user instruction to execute the complete sprint authorizes only the two
+planned local Runtime dependency edges to existing workspace packages
+`oneagent-analysis` and `oneagent-tool-policy`; no new third-party dependency
+or version is authorized.
+
+The data/testability gate passes: the official `2026-07-28` schema defines the
+wire contract; existing public graph, validation, impact, diagnostics, context,
+workspace, and Tool Policy APIs provide executable oracles; the tracked mixed
+workspace fixture provides positive and negative semantic cases; process pipes
+prove discovery, list, call, errors, channel purity, EOF, and repetition.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-29-mcp-semantic-tools/`. The immediately preceding
+suite is exactly `docs/codex/prompts/sprint-28-mcp-server/` with nine tracked
+files and no untracked addition. Only Task 8 may retire those exact files after
+a non-blocking independent and primary review and a passing same-reviewer
+artifact-consistency check.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate semantic MCP tools. | Investigation / investigation | Verified official schema, owners, dependencies, tool contracts, errors, bounds, lifecycle, and deterministic oracles. | Sprint 29 planning baseline. | `Investigate Sprint 29 MCP semantic tools` |
+| 2 | Define semantic MCP tools. | Architecture / architecture | Accepted ADR-0051 for catalog, ownership, async dispatch, schemas, policy gate, snapshot, results, failures, compatibility, and deferrals. | Task 1. | `Define Sprint 29 MCP semantic tools` |
+| 3 | Implement MCP tool protocol. | MCP Protocol / MCP Protocol | Truthful capability, bounded `tools/list`/`tools/call`, public async sequential handlers, and protocol conformance. | Accepted ADR-0051. | `Implement Sprint 29 MCP tool protocol` |
+| 4 | Implement graph semantic tools. | MCP Protocol + Runtime Service / MCP Protocol | Graph, query, validation, and diagnostics executors with Tool Policy and focused fixture evidence. | Task 3. | `Implement Sprint 29 semantic graph tools` |
+| 5 | Implement impact and context tools. | MCP Protocol + AI Tool Policy / AI Tool Policy | Bounded impact and context executors over canonical Graph/Analysis owners. | Task 4. | `Implement Sprint 29 impact and context tools` |
+| 6 | Integrate semantic MCP process. | Runtime Service / Runtime Service | Immutable workspace startup composition and real-process list/call/error/lifecycle evidence. | Task 5. | `Integrate Sprint 29 MCP semantic tools` |
+| 7 | Complete semantic-tool evidence. | MCP Protocol / MCP Protocol | Public conformance, compatibility/dependency/scope audits, and current-state docs. | Task 6. | `Complete Sprint 29 MCP semantic tool evidence` |
+| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, decision, Sprint 30 hand-off, and conditional Sprint 28 suite retirement. | Task 7 and all validation. | `Complete Sprint 29 MCP semantic tools review` |
+
+Tasks execute strictly in order. Documentation Tasks 1-2 run evidence, link,
+and `git diff --check` gates. Production Tasks 3-7 run non-zero focused and
+public tests plus the canonical workspace gate. Task 8 reviews the exact
+planning-through-Task-7 range with one fresh-context read-only reviewer, then
+the primary independently validates and reconciles. The same reviewer must
+pass the drafted artifact before any Roadmap transition or prompt deletion.
+
+Sprint 29 remains `next` during planning, becomes `active` when Task 1 starts,
+and may become `completed` only after Task 8. A missing authority, false tool
+advertisement, schema/implementation mismatch, Tool Policy bypass, unbounded or
+path-leaking result, mutable workspace behavior, zero matched test, failed
+validation/commit, reviewer mutation/incompleteness, evidence disagreement, or
+failed consistency check stops execution.
+
+Canonical validation is:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 29 MCP Semantic Tools
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

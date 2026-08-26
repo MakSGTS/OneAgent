@@ -89,6 +89,11 @@ fn invalid_identifier_matrix_uses_invalid_request() {
         assert_eq!(failure.code(), ErrorCode::InvalidRequest);
         assert!(failure.id().is_none());
     }
+
+    let overflow_exponent = r#"{"jsonrpc":"2.0","id":1e400,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}"#;
+    let failure = error(overflow_exponent);
+    assert_eq!(failure.code(), ErrorCode::InvalidRequest);
+    assert!(failure.id().is_none());
 }
 
 #[test]
@@ -295,6 +300,15 @@ fn schema_valid_empty_implementation_strings_are_preserved() {
         .expect("client information must be retained");
     assert_eq!(client_info.name(), "");
     assert_eq!(client_info.version(), "");
+}
+
+#[test]
+fn schema_valid_arbitrary_precision_progress_token_is_accepted() {
+    let input = r#"{"jsonrpc":"2.0","id":9,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"progressToken":1e400}}}"#;
+    assert!(matches!(
+        decode_message(input),
+        DecodeOutcome::Message(InboundMessage::Request(_))
+    ));
 }
 
 #[test]

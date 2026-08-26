@@ -24,6 +24,7 @@ pub const MAX_JSON_NESTING_DEPTH: usize = 128;
 
 const DUPLICATE_KEY_MARKER: &str = "duplicate JSON object key";
 const DEPTH_MARKER: &str = "maximum JSON nesting depth exceeded";
+const ARBITRARY_PRECISION_NUMBER_TOKEN: &str = "$serde_json::private::Number";
 const PROGRESS_TOKEN_META_KEY: &str = "progressToken";
 const LOG_LEVEL_META_KEY: &str = "io.modelcontextprotocol/logLevel";
 
@@ -1006,8 +1007,27 @@ impl<'de> Visitor<'de> for UniqueValueVisitor {
     where
         A: MapAccess<'de>,
     {
+        let Some(first_key) = map.next_key::<String>()? else {
+            self.nested()?;
+            return Ok(Value::Object(Map::new()));
+        };
+        if first_key == ARBITRARY_PRECISION_NUMBER_TOKEN {
+            let number = map.next_value::<String>()?;
+            if map.next_key::<String>()?.is_some() {
+                return Err(<A::Error as de::Error>::custom(
+                    "invalid arbitrary-precision JSON number",
+                ));
+            }
+            return number
+                .parse::<Number>()
+                .map(Value::Number)
+                .map_err(<A::Error as de::Error>::custom);
+        }
+
         let nested = self.nested()?;
         let mut values = Map::new();
+        let first_value = map.next_value_seed(nested)?;
+        values.insert(first_key, first_value);
         while let Some(key) = map.next_key::<String>()? {
             if values.contains_key(&key) {
                 return Err(<A::Error as de::Error>::custom(DUPLICATE_KEY_MARKER));
@@ -1042,5 +1062,13 @@ mod tests {
 
         assert!(parse_unique_value(&accepted).is_ok());
         assert_eq!(parse_unique_value(&rejected), Err(ParseFailure::Depth));
+    }
+
+    #[test]
+    fn duplicate_visitor_preserves_arbitrary_precision_numbers() {
+        let value = parse_unique_value("1e400").expect("valid JSON number must parse");
+
+        assert!(value.is_number());
+        assert_eq!(value.to_string(), "1e+400");
     }
 }

@@ -118,7 +118,7 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — Context Engine | Sprint 22 | Deterministic context selection, provenance, budgets, truncation, relevance evidence, reproducible evaluation, and data-boundary rules implemented by the [Context Engine profile](codex/profiles/context-engine-implementation.md), [Context Engine workflow](codex/workflows/context-engine.md), and [Context Engine template](codex/templates/context-engine-task.md). | Sprints 22 and 33 | completed |
 | Task prompt template update completed — LLM Providers | Sprint 23 | Provider capabilities, request/response compatibility, discovery, secrets, timeouts, retries, cancellation, error taxonomy, and contract tests implemented by the [LLM Provider profile](codex/profiles/llm-provider-implementation.md), [LLM Provider workflow](codex/workflows/llm-provider.md), and [LLM Provider template](codex/templates/llm-provider-task.md). | Sprints 23–26 | completed |
 | Task prompt template update completed — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests implemented by the [AI Tool Policy profile](codex/profiles/ai-tool-policy-implementation.md), [AI Tool Policy workflow](codex/workflows/ai-tool-policy.md), and [AI Tool Policy template](codex/templates/ai-tool-policy-task.md). | Sprints 27, 29, and 33 | completed |
-| Task prompt template update required — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence. | Sprints 28–29 and 35; protocol baseline for Sprint 32 | planned |
+| Task prompt template update completed — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence implemented by the [MCP Protocol profile](codex/profiles/mcp-protocol-implementation.md), [MCP Protocol workflow](codex/workflows/mcp-protocol.md), [MCP Protocol template](codex/templates/mcp-protocol-task.md), existing [Runtime Service modules](codex/profiles/runtime-service-implementation.md), and existing [AI Tool Policy modules](codex/profiles/ai-tool-policy-implementation.md). | Sprints 28–29 and 35; protocol baseline for Sprint 32 | completed |
 | Task prompt template update required — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence. | Sprints 30–34 | planned |
 | Task prompt template update required — Diagnostics and Rules | Sprint 36 | Stable diagnostic identity, severity and configuration, deterministic rule registration and execution, suppression, reporting, and regression evidence. | Sprints 36–37 and 39 | planned |
 | Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
@@ -167,6 +167,22 @@ evidence requirements. They do not select crate ownership, tool or actor
 identity, a rule language, confirmation UX, executor trait, policy storage,
 audit sink, serialization, transport, provider wire mapping, MCP schema, or the
 Sprint 27 first slice; those remain live investigation and architecture
+decisions.
+
+The MCP and Protocol Tools audit at committed Sprint 27 governance head
+`b5ecfd0176446d42a2d3b23a2e0546f25bcc0fcf` found that the Runtime Service
+modules already cover service lifecycle, structured resource ownership,
+cancellation, shutdown, transport integration, and public entry-point evidence,
+while the AI Tool Policy modules already cover authorization and side-effect
+gates. Neither contract requires an authoritative MCP revision and schema;
+JSON-RPC validation and error precedence; capability and method-dispatch
+truthfulness; protocol framing and channel purity; or protocol-specific
+conformance and compatibility evidence. The MCP Protocol modules add only those
+reusable requirements and compose the existing Runtime and Tool Policy modules
+when a task crosses those boundaries. They do not select a protocol revision,
+crate owner, dependency or SDK, capability set, semantic tool catalog,
+transport, Runtime composition, authentication policy, external client, or the
+Sprint 28 first slice; those remain live investigation and architecture
 decisions.
 
 The Source Adapter audit at committed baseline

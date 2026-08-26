@@ -103,6 +103,7 @@ docs/codex/
     graph-model.md
     implementation.md
     llm-provider.md
+    mcp-protocol.md
     parser.md
     persistent-state.md
     review.md
@@ -118,6 +119,7 @@ docs/codex/
     implementation.md
     investigation.md
     llm-provider-implementation.md
+    mcp-protocol-implementation.md
     parser-implementation.md
     persistent-state-implementation.md
     review.md
@@ -133,6 +135,7 @@ docs/codex/
     implementation-task.md
     investigation-task.md
     llm-provider-task.md
+    mcp-protocol-task.md
     parser-task.md
     persistent-state-task.md
     review-task.md
@@ -231,6 +234,8 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 - Use `docs/codex/profiles/llm-provider-implementation.md` for provider-neutral
   LLM contracts, capability discovery, provider adapters, secrets, execution
   policy, error mapping, and provider conformance tasks.
+- Use `docs/codex/profiles/mcp-protocol-implementation.md` for MCP protocol,
+  server, capability, transport, compatibility, and conformance tasks.
 - Use `docs/codex/profiles/parser-implementation.md` for real source parser
   tasks.
 - Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
@@ -268,6 +273,8 @@ module composition.
 - Use `docs/codex/templates/llm-provider-task.md` for provider-neutral LLM
   contracts, model/capability discovery, provider adapters, or provider
   conformance evidence.
+- Use `docs/codex/templates/mcp-protocol-task.md` for MCP messages, protocol
+  versions, capabilities, dispatch, transports, or conformance evidence.
 - Use `docs/codex/templates/parser-task.md` for parser implementation.
 - Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
   adapter ingestion or cross-adapter conformance.
@@ -301,6 +308,12 @@ authorization, side-effect, confirmation, execution-gating, outcome, and audit
 contracts. They do not select a concrete tool schema, transport, executor,
 policy store, or user experience unless accepted architecture explicitly owns
 that scope.
+
+MCP Protocol tasks define or implement versioned JSON-RPC messages, capability
+and method dispatch, transport framing, lifecycle mapping, and conformance
+evidence. They do not select semantic tools, Runtime composition, external
+client support, authentication, or another transport unless accepted
+architecture explicitly owns that scope.
 
 Parser tasks require real source evidence and define source-format behavior.
 They do not emit graph facts unless graph emission is explicitly included.

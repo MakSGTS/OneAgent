@@ -138,9 +138,16 @@ live provider.
 - Exact dependency/redaction audit.
 - Canonical full workspace validation from `docs/codex/core/validation.md`.
 
-## Suggested commit message
+## Required commit
+
+After every task-specific validation command succeeds, stage only the exact
+task-owned paths, create one commit with the exact message below, verify its
+paths and resulting `HEAD`, and continue only from clean task-owned state:
 
 `Implement Sprint 25 LM Studio generation`
+
+Do not commit after failed validation or when unrelated changes cannot be
+excluded.
 
 ## Final report additions
 

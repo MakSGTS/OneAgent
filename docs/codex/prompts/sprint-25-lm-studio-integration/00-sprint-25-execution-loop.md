@@ -48,8 +48,9 @@ claims.
 
 - Resolve mutable state from the live repository and enforce `AGENTS.md`.
 - Require the committed Sprint 25 planning baseline and clean task-owned state.
-- Resolve commit authorization only from the current user instruction. This
-  stored prompt never authorizes staging or committing.
+- This execution suite explicitly requires one separate commit after every
+  successfully validated task. Do not require another user message to stage
+  and commit task-owned paths.
 - Preserve unrelated and ignored local artifacts.
 - Treat the planning-time macOS observations at `127.0.0.1:1234` as sanitized,
   mutable investigation context, not acceptance evidence.
@@ -75,15 +76,15 @@ claims.
 Do not skip, reorder, combine, or partially commit dependent tasks. Read each
 child prompt and all selected modules completely before its task.
 
-## Commit authorization mode
+## Required per-task commit
 
-Resolve commit mode from the current launch instruction:
+After every successfully validated task, stage only its exact task-owned paths,
+create one commit with the exact manifest message, verify the committed paths
+and resulting `HEAD`, and continue only from clean task-owned state. This prompt
+is the explicit commit instruction for all eight Sprint 25 task prompts.
 
-- When it explicitly requests one separate commit after each successful task,
-  stage only task-owned paths, use the exact manifest message, verify the commit
-  and paths, and continue only from clean task-owned state.
-- Otherwise do not stage or commit. Stop when the next prerequisite requires a
-  committed baseline.
+If validation fails, the task outcome is partial, or unrelated changes cannot
+be excluded from staging, do not commit and stop the execution loop.
 
 `already_complete` requires committed evidence and successful validation;
 never create an empty commit.

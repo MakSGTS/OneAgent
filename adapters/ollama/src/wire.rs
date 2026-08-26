@@ -68,11 +68,39 @@ pub(crate) struct ShowResponse {
     pub(crate) capabilities: Vec<String>,
 }
 
+#[derive(Serialize)]
+pub(crate) struct GenerateRequest<'a> {
+    pub(crate) model: &'a str,
+    pub(crate) prompt: &'a str,
+    pub(crate) stream: bool,
+    pub(crate) raw: bool,
+    pub(crate) think: bool,
+    pub(crate) options: GenerationOptions,
+}
+
+#[derive(Serialize)]
+pub(crate) struct GenerationOptions {
+    pub(crate) num_predict: usize,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct GenerateResponse {
+    pub(crate) model: String,
+    pub(crate) response: String,
+    pub(crate) done: bool,
+    pub(crate) done_reason: String,
+    #[serde(default)]
+    pub(crate) thinking: OptionalString,
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
 
-    use super::{OptionalString, ShowRequest, ShowResponse, TagsResponse};
+    use super::{
+        GenerateRequest, GenerateResponse, GenerationOptions, OptionalString, ShowRequest,
+        ShowResponse, TagsResponse,
+    };
 
     #[test]
     fn show_request_serializes_only_the_exact_accepted_fields() {
@@ -148,5 +176,51 @@ mod tests {
         })
         .expect("request must serialize");
         assert_eq!(value, json!({"model": "model-a", "verbose": false}));
+    }
+
+    #[test]
+    fn generate_request_serializes_only_the_exact_native_fields() {
+        let body = serde_json::to_vec(&GenerateRequest {
+            model: "model-a",
+            prompt: "exact prompt",
+            stream: false,
+            raw: true,
+            think: false,
+            options: GenerationOptions { num_predict: 17 },
+        })
+        .expect("generate request must serialize");
+
+        assert_eq!(
+            body,
+            br#"{"model":"model-a","prompt":"exact prompt","stream":false,"raw":true,"think":false,"options":{"num_predict":17}}"#
+        );
+    }
+
+    #[test]
+    fn generate_wire_requires_terminal_fields_and_rejects_null_thinking() {
+        let response: GenerateResponse = serde_json::from_value(json!({
+            "model": "model-a",
+            "response": "output",
+            "done": true,
+            "done_reason": "stop",
+            "future": true
+        }))
+        .expect("accepted generation shape must decode");
+        assert_eq!(response.model, "model-a");
+        assert!(matches!(response.thinking, OptionalString::Missing));
+
+        for invalid in [
+            json!({}),
+            json!({"model": "model-a", "response": "output", "done": true}),
+            json!({
+                "model": "model-a", "response": "output", "done": "true", "done_reason": "stop"
+            }),
+            json!({
+                "model": "model-a", "response": "output", "done": true,
+                "done_reason": "stop", "thinking": null
+            }),
+        ] {
+            assert!(serde_json::from_value::<GenerateResponse>(invalid).is_err());
+        }
     }
 }

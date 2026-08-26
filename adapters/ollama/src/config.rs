@@ -9,27 +9,15 @@ use crate::{
 /// A concrete client foundation for the bounded local Ollama contract.
 ///
 /// Construction is deterministic and performs no network I/O. Model discovery
-/// and text generation are introduced by later Sprint 26 tasks.
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery state is exposed through LlmProvider by Task 5"
-)]
+/// and text generation execute only through `LlmProvider`.
 pub struct OllamaProvider {
     id: ProviderId,
     client: Client,
     tags_url: Url,
     show_url: Url,
-    #[allow(
-        dead_code,
-        reason = "Task 4 retains the generation endpoint consumed by Task 5"
-    )]
     generate_url: Url,
 }
 
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery accessors are exposed through LlmProvider by Task 5"
-)]
 impl OllamaProvider {
     /// Constructs a provider from explicit provider-neutral configuration and
     /// one numeric-loopback Ollama server-origin root URL.
@@ -96,6 +84,10 @@ impl OllamaProvider {
 
     pub(crate) const fn show_url(&self) -> &Url {
         &self.show_url
+    }
+
+    pub(crate) const fn generate_url(&self) -> &Url {
+        &self.generate_url
     }
 }
 

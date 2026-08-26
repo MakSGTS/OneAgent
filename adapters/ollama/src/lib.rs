@@ -1,25 +1,13 @@
 //! Client foundation for the accepted bounded Ollama provider contract.
 //!
 //! The provider-neutral domain remains owned by `oneagent-llm`. This crate owns
-//! deterministic local Ollama client construction, private native endpoint
-//! state, and bounded model discovery. Generation is introduced by a later
-//! Sprint 26 task.
+//! deterministic local Ollama client construction, bounded native model
+//! discovery, and one non-streaming raw text-generation operation.
 
 mod config;
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
-)]
 mod discovery;
-#[allow(
-    dead_code,
-    reason = "Task 4 private execution helpers are exposed through LlmProvider by Task 5"
-)]
 mod execution;
-#[allow(
-    dead_code,
-    reason = "Task 4 private wire values are exposed through LlmProvider by Task 5"
-)]
+mod generation;
 mod wire;
 
 #[cfg(test)]
@@ -35,18 +23,8 @@ const GENERATE_PATH: &str = "api/generate";
 const USER_AGENT: &str = "oneagent-ollama/0.1.0";
 
 const MAX_BASE_URL_BYTES: usize = 2_048;
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
-)]
 const MAX_TAGS_RESPONSE_BODY_BYTES: usize = 1_024 * 1_024;
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
-)]
 const MAX_SHOW_REQUEST_BODY_BYTES: usize = 4 * 1_024;
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
-)]
 const MAX_SHOW_RESPONSE_BODY_BYTES: usize = 1_024 * 1_024;
+const MAX_GENERATE_REQUEST_BODY_BYTES: usize = 512 * 1_024;
+const MAX_GENERATE_RESPONSE_BODY_BYTES: usize = 512 * 1_024;

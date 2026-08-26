@@ -31,9 +31,10 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 28 MCP Server review](reviews/sprint-28-mcp-server.md) records
-`pass with non-blocking follow-ups`; Sprint 28 is completed and Sprint 29 MCP
-Semantic Tools is the unique `next` planning target. The completed
+[Sprint 29 MCP Semantic Tools review](reviews/sprint-29-mcp-semantic-tools.md)
+records `pass with non-blocking follow-up`; Sprint 29 is completed and Sprint
+30 VS Code Extension Foundation is the unique `next` planning target. The
+completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
 re-review with no actionable findings.
@@ -7046,13 +7047,32 @@ Suggested planning commit message:
 Plan Sprint 29 MCP Semantic Tools
 ```
 
+##### Sprint 29 completed state
+
+Tasks 1-7, contract remediation, and evidence remediation are committed in
+dependency order. The
+[Sprint 29 integration review](reviews/sprint-29-mcp-semantic-tools.md) records
+`pass with non-blocking follow-up` after one fresh-context read-only reviewer,
+primary reconciliation, two bounded remediation commits, complete protocol/
+Runtime/process evidence, and the canonical workspace gate. The same reviewer
+passed the final artifact-consistency check before this state transition.
+
+Sprint 29 is `completed`, Sprint 30 VS Code Extension Foundation is the unique
+`next` target, and the exact verified Sprint 28 prompt suite is retired in the
+review commit. ADR-0051, the immutable six-tool catalog, bounded protocol
+list/call boundary, Tool Policy gate, startup workspace snapshot, deterministic
+semantic projections, and repository-owned public evidence remain the current
+baseline. Pinning the investigation's version-specific upstream schema URL
+from mutable GitHub `main` to an immutable commit remains a non-blocking
+documentation follow-up.
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | completed |
-| Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | next |
-| Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | planned |
+| Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
+| Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | next |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | planned |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | planned |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |

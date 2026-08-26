@@ -12,16 +12,24 @@ use crate::{
 /// and text generation are introduced by later Sprint 26 tasks.
 #[allow(
     dead_code,
-    reason = "Task 3 retains private endpoint state consumed by Tasks 4 and 5"
+    reason = "Task 4 private discovery state is exposed through LlmProvider by Task 5"
 )]
 pub struct OllamaProvider {
     id: ProviderId,
     client: Client,
     tags_url: Url,
     show_url: Url,
+    #[allow(
+        dead_code,
+        reason = "Task 4 retains the generation endpoint consumed by Task 5"
+    )]
     generate_url: Url,
 }
 
+#[allow(
+    dead_code,
+    reason = "Task 4 private discovery accessors are exposed through LlmProvider by Task 5"
+)]
 impl OllamaProvider {
     /// Constructs a provider from explicit provider-neutral configuration and
     /// one numeric-loopback Ollama server-origin root URL.
@@ -76,6 +84,18 @@ impl OllamaProvider {
     #[must_use]
     pub const fn id(&self) -> &ProviderId {
         &self.id
+    }
+
+    pub(crate) const fn client(&self) -> &Client {
+        &self.client
+    }
+
+    pub(crate) const fn tags_url(&self) -> &Url {
+        &self.tags_url
+    }
+
+    pub(crate) const fn show_url(&self) -> &Url {
+        &self.show_url
     }
 }
 

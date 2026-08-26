@@ -33,7 +33,10 @@ closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
 [Sprint 28 MCP Server review](reviews/sprint-28-mcp-server.md) records
 `pass with non-blocking follow-ups`; Sprint 28 is completed and Sprint 29 MCP
-Semantic Tools is the unique `next` planning target.
+Semantic Tools is the unique `next` planning target. The completed
+[current project review and remediation](reviews/current-project-review-2026-08-26.md)
+records one resolved Medium finding, complete validation, and a clean-context
+re-review with no actionable findings.
 
 ## Roadmap reconciliation
 
@@ -46,6 +49,16 @@ The project audit remediation is recorded here as completed governance work:
 - [x] Align README and architecture documents with implemented and planned scope.
 - [x] Replace the stale architecture audit with a current point-in-time audit.
 - [x] Add retrospective completion evidence for Sprints 1–2 and the v0.1 release review.
+
+## Completed interim assurance stages
+
+Interim assurance stages preserve cross-project review and remediation evidence
+without creating another execution sequence, reopening completed sprints, or
+changing the unique `next` sprint.
+
+| Date | Stage | Scope and outcome | Evidence | Status |
+|---|---|---|---|---|
+| 2026-08-26 | Current project review, remediation, and independent re-review | A fresh-context full-project review found one Medium EDT Event Subscription parser panic. The bounded parser and production-test remediation passed the complete workspace gate, and a second fresh-context read-only review found no actionable issues. Sprint 11 remains closed and Sprint 29 remains the unique `next` target. | [Current project review](reviews/current-project-review-2026-08-26.md) | completed |
 
 ## Release goals
 

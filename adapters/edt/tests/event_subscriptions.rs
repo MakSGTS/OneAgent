@@ -501,6 +501,65 @@ fn recoverable_failures_are_typed_counted_and_emit_no_placeholder_relations() {
 }
 
 #[test]
+fn whitespace_only_sources_are_typed_without_aborting_the_graph_build() {
+    let project = project();
+    write_valid_metadata(project.path());
+    write_subscription(
+        project.path(),
+        "Whitespace",
+        PRIMARY_SUBSCRIPTION_ID,
+        "Whitespace",
+        None,
+        &[
+            " ",
+            "CatalogObject. ",
+            " .Products",
+            "CatalogObject.Products",
+        ],
+        "CommonModule.Events.BeforeWrite",
+    );
+
+    let result = build(project.path());
+    let malformed = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code() == SemanticDiagnosticCode::ReferenceMalformedFormat
+                && diagnostic.kind() == SemanticDiagnosticKind::MalformedReferenceFormat
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(malformed.len(), 3);
+    assert!(malformed.iter().all(|diagnostic| {
+        diagnostic.source_node() == Some(&id(PRIMARY_SUBSCRIPTION_ID))
+            && !diagnostic.provenance().is_empty()
+    }));
+
+    let references = result
+        .graph()
+        .outgoing_by_kind(&id(PRIMARY_SUBSCRIPTION_ID), EdgeKind::References);
+    assert_eq!(references.len(), 2);
+    assert!(
+        references
+            .iter()
+            .any(|edge| edge.target() == &id(PRODUCTS_ID))
+    );
+    assert_eq!(
+        result
+            .graph()
+            .outgoing_by_kind(&id(PRIMARY_SUBSCRIPTION_ID), EdgeKind::Triggers)
+            .len(),
+        1
+    );
+
+    let statistics = result.reference_statistics();
+    assert_eq!(statistics.total(), 5);
+    assert_eq!(statistics.resolved(), 2);
+    assert_eq!(statistics.malformed_format(), 3);
+    assert!(result.reference_requests().is_empty());
+    assert!(result.validate().is_valid());
+}
+
+#[test]
 fn reordered_sources_and_repeated_builds_are_equal() {
     let project = project();
     write_valid_metadata(project.path());

@@ -599,21 +599,31 @@ fn parse_source(raw_selector: String, count: usize) -> EdtEventSubscriptionSourc
         reason: Some(reason),
         contexts: contexts.clone(),
     };
-    if raw_selector.is_empty() {
+    if raw_selector.trim().is_empty() {
         return malformed(EdtEventSubscriptionSourceReason::EmptyValue);
     }
     let components = raw_selector.split('.').collect::<Vec<_>>();
     if components.len() > 2 {
         return malformed(EdtEventSubscriptionSourceReason::AdditionalComponents);
     }
-    if components.iter().any(|component| component.is_empty()) {
+    if components
+        .iter()
+        .any(|component| component.trim().is_empty())
+    {
         return malformed(EdtEventSubscriptionSourceReason::EmptyComponent);
     }
 
-    let family = EntityName::new(components[0]).expect("non-empty selector family must be valid");
-    let target_name = components
-        .get(1)
-        .map(|component| EntityName::new(*component).expect("non-empty target name must be valid"));
+    let Ok(family) = EntityName::new(components[0]) else {
+        return malformed(EdtEventSubscriptionSourceReason::EmptyComponent);
+    };
+    let target_name = if let Some(component) = components.get(1) {
+        let Ok(target_name) = EntityName::new(*component) else {
+            return malformed(EdtEventSubscriptionSourceReason::EmptyComponent);
+        };
+        Some(target_name)
+    } else {
+        None
+    };
     let target_kind = source_metadata_kind(components[0]);
     let (outcome, reason) = if target_kind.is_some() {
         (EdtEventSubscriptionSourceOutcomeKind::Supported, None)
@@ -1176,6 +1186,40 @@ mod tests {
         assert!(first.sources().iter().any(|source| {
             source.reason() == Some(EdtEventSubscriptionSourceReason::AdditionalComponents)
         }));
+    }
+
+    #[test]
+    fn whitespace_only_source_values_and_components_are_typed() {
+        let descriptor = generated(&valid_xml(
+            &[" ", "CatalogObject. ", " .Products"],
+            "CommonModule.Events.BeforeWrite",
+        ))
+        .expect("whitespace-only source components must remain recoverable");
+
+        for (raw_selector, expected_reason) in [
+            (" ", EdtEventSubscriptionSourceReason::EmptyValue),
+            (
+                "CatalogObject. ",
+                EdtEventSubscriptionSourceReason::EmptyComponent,
+            ),
+            (
+                " .Products",
+                EdtEventSubscriptionSourceReason::EmptyComponent,
+            ),
+        ] {
+            let source = descriptor
+                .sources()
+                .iter()
+                .find(|source| source.raw_selector() == raw_selector)
+                .expect("source observation must retain the exact raw selector");
+            assert_eq!(
+                source.outcome(),
+                EdtEventSubscriptionSourceOutcomeKind::Malformed
+            );
+            assert_eq!(source.reason(), Some(expected_reason));
+            assert_eq!(source.family(), None);
+            assert_eq!(source.target_name(), None);
+        }
     }
 
     #[test]

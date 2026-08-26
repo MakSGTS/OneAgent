@@ -2,7 +2,7 @@
 
 ## Review decision
 
-`non-blocking finding`
+`finding remediated`
 
 The complete current repository was reviewed from a clean worktree at commit
 `5940ae69345b86dd2d1fd689d476353193c49bb9`. The review covered all 17 Rust
@@ -10,8 +10,10 @@ workspace packages, their production code and tests, workspace and CI
 configuration, and the relevant architecture documentation and ADRs.
 
 One actionable Medium-severity correctness finding was identified. No Critical,
-High, or Low findings were identified. No source or configuration changes were
-made as part of this review.
+High, or Low findings were identified. The original review made no source or
+configuration changes. The finding was subsequently remediated and the bounded
+change passed an independent clean-context re-review with no actionable
+findings.
 
 ## Findings by severity
 
@@ -69,6 +71,44 @@ parser and production graph-build coverage for `" "`, `"CatalogObject. "`, and
 
 None.
 
+## Remediation and re-review
+
+The finding was remediated from committed review head
+`5eee5c649f9cde7e41d2b77518520fc78ef71381` in the following bounded files:
+
+- `adapters/edt/src/event_subscription.rs` now classifies a trim-empty complete
+  selector as `EmptyValue`, classifies a trim-empty dot component as
+  `EmptyComponent`, and constructs both `EntityName` values fallibly instead of
+  relying on `expect`;
+- parser regression evidence covers `" "`, `"CatalogObject. "`, and
+  `" .Products"`, including exact raw-selector retention and typed outcomes;
+- `adapters/edt/tests/event_subscriptions.rs` proves through the production
+  graph builder that all three malformed observations emit typed diagnostics
+  and statistics without preventing the valid source and handler relations.
+
+The focused and complete remediation validation passed:
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all -- --check` | passed |
+| `cargo test -p oneagent-edt event_subscription` | passed |
+| `cargo test -p oneagent-edt --test event_subscriptions` | 8 passed |
+| `cargo check --workspace --all-targets` | passed |
+| `cargo test --workspace --all-targets` | passed with local loopback permission |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | passed |
+| `git diff --check` | passed |
+
+A separate fresh-context read-only subagent reviewed only the remediation diff
+against `5eee5c649f9cde7e41d2b77518520fc78ef71381`. It verified the
+`EntityName` invariants, ADR-0033 parser, resolution, and emission contracts,
+exact raw-selector retention, typed classifications, statistics, and continued
+processing of valid relations. The re-review reported no actionable findings
+and made no repository changes.
+
+The [Roadmap](../Roadmap.md#completed-interim-assurance-stages) records this
+review, remediation, and re-review as a completed interim assurance stage. The
+stage does not reopen Sprint 11 or change the Sprint 29 hand-off.
+
 ## Residual risks and coverage gaps
 
 - MCP retained-CR maximum-frame overlap still lacks the two explicit boundary
@@ -102,6 +142,8 @@ ignored artifacts under `target/`.
 
 ## Conclusion
 
-The current project has one confirmed non-blocking Medium-severity parser defect
-at the reviewed baseline. The rest of the review produced no actionable
-Critical, High, or Low findings. Remediation was intentionally not performed.
+The current project review identified one Medium-severity parser defect at the
+original reviewed baseline. That finding is now resolved with parser and
+production graph-build regression evidence, the complete workspace gate passes,
+and the independent remediation re-review found no actionable issues. No
+Critical, High, or Low findings remain from this review stage.

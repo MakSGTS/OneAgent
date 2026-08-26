@@ -786,6 +786,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "oneagent-ollama"
+version = "0.1.0"
+dependencies = [
+ "oneagent-llm",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "oneagent-openai-compatible"
 version = "0.1.0"
 dependencies = [

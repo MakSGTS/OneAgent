@@ -13,6 +13,7 @@ members = [
     "adapters/edt",
     "adapters/designer-xml",
     "adapters/lm-studio",
+    "adapters/ollama",
     "adapters/openai-compatible",
     "crates/analysis",
     "crates/llm",

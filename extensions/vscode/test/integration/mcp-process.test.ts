@@ -7,6 +7,10 @@ import { RuntimeClient, RuntimeClientFailure } from "../../src/mcp-client";
 
 const repositoryRoot = path.resolve(process.cwd(), "../..");
 const fixtureRoot = path.join(repositoryRoot, "apps/runtime/tests/fixtures/workspace_service");
+const startupFailureRoot = path.join(
+  process.cwd(),
+  "test/fixtures/runtime-startup-failure",
+);
 
 function runtimeExecutable(): string {
   const executable = process.env.ONEAGENT_MCP_BIN;
@@ -28,14 +32,16 @@ test("public oneagent-mcp handshake and EOF shutdown repeat without orphaned cli
   }
 });
 
-test("public process startup failure remains redacted", async () => {
-  const missing = path.join(repositoryRoot, "local-artifacts", "does-not-exist", "oneagent-mcp");
+test("public process uses the selected cwd and keeps Runtime startup failure redacted", async () => {
+  const executable = runtimeExecutable();
+  await access(executable);
+  await access(startupFailureRoot);
   const client = new RuntimeClient();
-  await assert.rejects(client.connect(missing, fixtureRoot), (error: unknown) => {
+  await assert.rejects(client.connect(executable, startupFailureRoot), (error: unknown) => {
     assert.ok(error instanceof RuntimeClientFailure);
-    assert.equal(error.code, "spawn_failed");
+    assert.equal(error.code, "process_exited");
     assert.equal(error.message.includes(repositoryRoot), false);
-    assert.equal(error.message.includes(missing), false);
+    assert.equal(error.message.includes(startupFailureRoot), false);
     return true;
   });
   assert.equal(client.state, "failed");

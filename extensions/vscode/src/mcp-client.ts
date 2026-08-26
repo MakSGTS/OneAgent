@@ -309,6 +309,9 @@ export class RuntimeClient {
   };
 
   private readonly handleStderr = (chunk: Buffer | string): void => {
+    if (this.currentState !== "connecting" && this.currentState !== "connected") {
+      return;
+    }
     const bytes = typeof chunk === "string" ? Buffer.byteLength(chunk, "utf8") : chunk.length;
     this.stderrBytes += bytes;
     if (this.stderrBytes > MAX_STDERR_BYTES) {
@@ -317,6 +320,12 @@ export class RuntimeClient {
   };
 
   private readonly handleProcessError = (): void => {
+    if (
+      this.stopping ||
+      (this.currentState !== "connecting" && this.currentState !== "connected")
+    ) {
+      return;
+    }
     const code: RuntimeFailureCode = this.currentState === "connecting" ? "spawn_failed" : "process_exited";
     this.abort(new RuntimeClientFailure(code));
   };

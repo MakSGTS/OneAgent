@@ -145,6 +145,15 @@ function factoryFor(process: FakeProcess): RuntimeProcessFactory {
   return () => process;
 }
 
+function assertReleased(process: FakeProcess, scheduler: FakeScheduler): void {
+  assert.equal(scheduler.activeCount, 0);
+  assert.equal(process.stdout.listenerCount("data"), 0);
+  assert.equal(process.stderr.listenerCount("data"), 0);
+  assert.equal(process.listenerCount("error"), 0);
+  assert.equal(process.listenerCount("exit"), 0);
+  assert.equal(process.listenerCount("close"), 0);
+}
+
 async function failureCode(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
@@ -180,8 +189,7 @@ test("performs the accepted sequential handshake and graceful shutdown", async (
   assert.equal(await client.disconnect(), "disconnected");
   assert.deepEqual(states, ["connecting", "connected", "disconnecting", "disconnected"]);
   assert.equal(process.killCalls, 0);
-  assert.equal(scheduler.activeCount, 0);
-  assert.equal(process.listenerCount("exit"), 0);
+  assertReleased(process, scheduler);
 });
 
 test("classifies spawn errors without exposing process inputs", async () => {
@@ -207,8 +215,7 @@ test("times out a pending startup request and reaps the child", async () => {
   scheduler.fire(REQUEST_TIMEOUT_MS);
   assert.equal(await failureCode(connection), "startup_timeout");
   assert.equal(client.state, "failed");
-  assert.equal(scheduler.activeCount, 0);
-  assert.equal(process.listenerCount("exit"), 0);
+  assertReleased(process, scheduler);
   assert.deepEqual(states, [
     ["connecting", undefined],
     ["failed", "startup_timeout"],
@@ -247,8 +254,17 @@ test("classifies failed startup cleanup and releases ownership after a late exit
     ["failed", "shutdown_failed"],
   ]);
 
+  firstProcess.stderr.write("late".padEnd(MAX_STDERR_BYTES + 1, "x"));
+  firstProcess.emit("error", new Error("late process error"));
+  assert.equal(client.state, "failed");
+  assert.equal(scheduler.activeCount, 0);
+  assert.deepEqual(states, [
+    ["connecting", undefined],
+    ["failed", "shutdown_failed"],
+  ]);
+
   firstProcess.emitExit(null, "SIGTERM");
-  assert.equal(firstProcess.listenerCount("exit"), 0);
+  assertReleased(firstProcess, scheduler);
   assert.equal(await client.connect("runtime", "/workspace"), "connected");
   assert.equal(spawnCalls, 2);
   assert.equal(await client.disconnect(), "disconnected");
@@ -328,6 +344,31 @@ test("enforces the retained stderr bound without exposing stderr text", async ()
   assert.equal(await failureCode(overClient.connect("runtime", "/workspace")), "stderr_overflow");
 });
 
+test("fails closed when the request identifier reaches safe-integer exhaustion", async () => {
+  const atMaximumScheduler = new FakeScheduler();
+  const atMaximum = new FakeProcess(compatibleResponder);
+  const atMaximumClient = new RuntimeClient({
+    processFactory: factoryFor(atMaximum),
+    scheduler: atMaximumScheduler,
+  });
+  (atMaximumClient as unknown as { nextRequestId: number }).nextRequestId = Number.MAX_SAFE_INTEGER;
+  assert.equal(await failureCode(atMaximumClient.connect("runtime", "/workspace")), "protocol_failure");
+  assert.deepEqual(atMaximum.requests.map((request) => request.id), [Number.MAX_SAFE_INTEGER]);
+  assertReleased(atMaximum, atMaximumScheduler);
+
+  const overMaximumScheduler = new FakeScheduler();
+  const overMaximum = new FakeProcess(compatibleResponder);
+  const overMaximumClient = new RuntimeClient({
+    processFactory: factoryFor(overMaximum),
+    scheduler: overMaximumScheduler,
+  });
+  (overMaximumClient as unknown as { nextRequestId: number }).nextRequestId =
+    Number.MAX_SAFE_INTEGER + 1;
+  assert.equal(await failureCode(overMaximumClient.connect("runtime", "/workspace")), "protocol_failure");
+  assert.deepEqual(overMaximum.requests, []);
+  assertReleased(overMaximum, overMaximumScheduler);
+});
+
 test("classifies incompatible discovery and tool catalogs", async () => {
   for (const incompatibleMethod of ["server/discover", "tools/list"] as const) {
     const process = new FakeProcess((owner, request) => {
@@ -365,7 +406,7 @@ test("forces shutdown after the graceful deadline", async () => {
   scheduler.fire(SHUTDOWN_TIMEOUT_MS);
   assert.equal(await disconnection, "disconnected");
   assert.equal(process.killCalls, 1);
-  assert.equal(scheduler.activeCount, 0);
+  assertReleased(process, scheduler);
 });
 
 test("fails closed when neither graceful nor forced shutdown observes exit", async () => {

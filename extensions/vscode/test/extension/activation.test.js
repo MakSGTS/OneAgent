@@ -1,9 +1,19 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const vscode = require("vscode");
 
 suite("OneAgent package activation", () => {
-  const configuration = () => vscode.workspace.getConfiguration("oneagent.runtime");
+  const workspaceResource = () => vscode.workspace.workspaceFolders?.[0]?.uri;
+  const configuration = () =>
+    vscode.workspace.getConfiguration("oneagent.runtime", workspaceResource());
+  const marker = process.env.ONEAGENT_SPAWN_MARKER;
+  const probe = process.env.ONEAGENT_SPAWN_PROBE;
+  const workspaceSettings = path.join(
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+    ".vscode",
+    "settings.json",
+  );
 
   suiteTeardown(async () => {
     await configuration().update(
@@ -11,6 +21,15 @@ suite("OneAgent package activation", () => {
       undefined,
       vscode.ConfigurationTarget.Global,
     );
+    await configuration().update(
+      "executable",
+      undefined,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    if (marker) {
+      fs.rmSync(marker, { force: true });
+    }
+    fs.rmSync(path.dirname(workspaceSettings), { force: true, recursive: true });
   });
 
   test("activates on contributed command and owns package registrations", async () => {
@@ -33,9 +52,45 @@ suite("OneAgent package activation", () => {
   });
 
   test("rejects invalid configuration before process creation", async () => {
+    assert.ok(marker);
+    assert.ok(probe);
+    fs.rmSync(marker, { force: true });
+    await configuration().update("executable", probe, vscode.ConfigurationTarget.Global);
     await configuration().update("executable", "", vscode.ConfigurationTarget.Global);
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "failed");
+    assert.equal(fs.existsSync(marker), false);
     assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+  });
+
+  test("applies workspace configuration over the user value", async () => {
+    const executable = process.env.ONEAGENT_MCP_BIN;
+    assert.ok(executable);
+    try {
+      await configuration().update(
+        "executable",
+        path.join(path.dirname(executable), "missing-user-runtime"),
+        vscode.ConfigurationTarget.Global,
+      );
+      await configuration().update(
+        "executable",
+        executable,
+        vscode.ConfigurationTarget.Workspace,
+      );
+      assert.equal(configuration().get("executable"), executable);
+      assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
+      assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+    } finally {
+      await configuration().update(
+        "executable",
+        undefined,
+        vscode.ConfigurationTarget.Workspace,
+      );
+      await configuration().update(
+        "executable",
+        undefined,
+        vscode.ConfigurationTarget.Global,
+      );
+    }
   });
 
   test("connects, replaces configuration, and reconnects explicitly", async () => {
@@ -82,6 +137,7 @@ suite("OneAgent package activation", () => {
     const extensionModule = require("../../dist/extension.js");
     await extensionModule.deactivate();
     await extensionModule.deactivate();
-    assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "disconnected");
+    await assert.rejects(vscode.commands.executeCommand("oneagent.connect"));
+    await assert.rejects(vscode.commands.executeCommand("oneagent.disconnect"));
   });
 });

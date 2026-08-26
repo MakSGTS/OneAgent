@@ -10,6 +10,7 @@ const DISCONNECT_COMMAND = "oneagent.disconnect";
 const EXECUTABLE_SETTING = "oneagent.runtime.executable";
 
 let lifecycle: ExtensionLifecycle | undefined;
+let ownedDisposables: readonly vscode.Disposable[] | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const status = vscode.window.createStatusBarItem(
@@ -52,16 +53,26 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
-  context.subscriptions.push(
+  const disposables = [
     status,
     connect,
     disconnect,
     configuration,
-  );
+  ];
+  ownedDisposables = disposables;
+  context.subscriptions.push(...disposables);
 }
 
 export async function deactivate(): Promise<void> {
   const owner = lifecycle;
+  const disposables = ownedDisposables;
   lifecycle = undefined;
-  await owner?.deactivate();
+  ownedDisposables = undefined;
+  try {
+    await owner?.deactivate();
+  } finally {
+    for (const disposable of [...(disposables ?? [])].reverse()) {
+      disposable.dispose();
+    }
+  }
 }

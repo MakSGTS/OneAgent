@@ -128,6 +128,24 @@ async fn public_mcp_process_classifies_overflow_exponent_id_as_invalid_request()
 }
 
 #[tokio::test]
+async fn public_mcp_process_does_not_retype_literal_arbitrary_number_token_objects() {
+    let input = b"{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{},\"progressToken\":{\"$serde_json::private::Number\":\"1\"}}}}\n";
+    let output = run_process(input).await;
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let response: Value = serde_json::from_slice(&output.stdout).expect("error response JSON");
+    assert_eq!(
+        response,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "error": {"code": -32602, "message": "Invalid params"}
+        })
+    );
+}
+
+#[tokio::test]
 async fn public_mcp_process_reports_only_bounded_terminal_diagnostics() {
     let invalid_utf8 = run_process(&[0xff, b'\n']).await;
     assert!(!invalid_utf8.status.success());

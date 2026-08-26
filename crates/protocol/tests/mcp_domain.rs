@@ -312,6 +312,56 @@ fn schema_valid_arbitrary_precision_progress_token_is_accepted() {
 }
 
 #[test]
+fn literal_arbitrary_precision_token_objects_preserve_schema_and_error_precedence() {
+    for key in [
+        "$serde_json::private::Number",
+        "$serde_json::private::\\u004eumber",
+    ] {
+        let input = format!(
+            r#"{{"jsonrpc":"2.0","id":12,"method":"server/discover","params":{{"_meta":{{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{{}},"progressToken":{{"{key}":"1"}}}}}}}}"#
+        );
+        let failure = error(&input);
+        assert_eq!(failure.code(), ErrorCode::InvalidParams);
+        assert_eq!(failure.id().and_then(RequestId::as_i64), Some(12));
+    }
+
+    let malformed = r#"{"jsonrpc":"2.0","id":12,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"progressToken":{"$serde_json::private::Number":"not-a-number"}}}}"#;
+    let failure = error(malformed);
+    assert_eq!(failure.code(), ErrorCode::InvalidParams);
+    assert_eq!(failure.id().and_then(RequestId::as_i64), Some(12));
+
+    let duplicate = r#"{"jsonrpc":"2.0","id":12,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"progressToken":{"$serde_json::private::Number":"1","$serde_json::private::Number":"2"}}}}"#;
+    let failure = error(duplicate);
+    assert_eq!(failure.code(), ErrorCode::InvalidRequest);
+    assert!(failure.id().is_none());
+}
+
+#[test]
+fn literal_arbitrary_precision_token_objects_observe_exact_nesting_bound() {
+    fn nested_request(array_depth: usize) -> String {
+        let nested = format!(
+            "{}{{\"$serde_json::private::Number\":\"1\"}}{}",
+            "[".repeat(array_depth),
+            "]".repeat(array_depth)
+        );
+        format!(
+            r#"{{"jsonrpc":"2.0","id":13,"method":"server/discover","params":{{"_meta":{{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{{}}}},"extension":{nested}}}}}"#
+        )
+    }
+
+    let exact = nested_request(MAX_JSON_NESTING_DEPTH - 3);
+    assert!(matches!(
+        decode_message(&exact),
+        DecodeOutcome::Message(InboundMessage::Request(_))
+    ));
+
+    let over = nested_request(MAX_JSON_NESTING_DEPTH - 2);
+    let failure = error(&over);
+    assert_eq!(failure.code(), ErrorCode::InvalidRequest);
+    assert!(failure.id().is_none());
+}
+
+#[test]
 fn duplicate_reordered_unicode_and_repeated_inputs_are_deterministic() {
     let duplicate = r#"{"jsonrpc":"2.0","id":1,"method":"x","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"secret":1,"secret":2}}}"#;
     assert_eq!(error(duplicate).code(), ErrorCode::InvalidRequest);

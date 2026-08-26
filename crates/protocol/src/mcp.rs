@@ -881,15 +881,122 @@ enum ParseFailure {
 }
 
 fn parse_unique_value(input: &str) -> Result<Value, ParseFailure> {
-    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let disambiguated = disambiguate_literal_number_tokens(input)?;
+    let parse_input = disambiguated
+        .as_ref()
+        .map_or(input, |(normalized, _)| normalized.as_str());
+    let mut deserializer = serde_json::Deserializer::from_str(parse_input);
     deserializer.disable_recursion_limit();
-    let value = UniqueValueSeed { depth: 0 }
+    let mut value = UniqueValueSeed { depth: 0 }
         .deserialize(&mut deserializer)
         .map_err(|error| classify_parse_error(&error))?;
     deserializer
         .end()
         .map_err(|error| classify_parse_error(&error))?;
+    if let Some((_, substitute)) = disambiguated {
+        restore_literal_number_tokens(&mut value, &substitute);
+    }
     Ok(value)
+}
+
+fn disambiguate_literal_number_tokens(
+    input: &str,
+) -> Result<Option<(String, String)>, ParseFailure> {
+    let bytes = input.as_bytes();
+    let mut key_tokens = Vec::new();
+    let mut literal_number_tokens = Vec::new();
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'"' {
+            cursor += 1;
+            continue;
+        }
+
+        let start = cursor;
+        cursor += 1;
+        while cursor < bytes.len() {
+            match bytes[cursor] {
+                b'\\' => cursor = cursor.saturating_add(2),
+                b'"' => {
+                    cursor += 1;
+                    break;
+                }
+                _ => cursor += 1,
+            }
+        }
+        if cursor > bytes.len() || bytes.get(cursor.saturating_sub(1)) != Some(&b'"') {
+            return Err(ParseFailure::Syntax);
+        }
+
+        let mut next = cursor;
+        while bytes
+            .get(next)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+        {
+            next += 1;
+        }
+        if bytes.get(next) != Some(&b':') {
+            continue;
+        }
+
+        let key = serde_json::from_str::<String>(&input[start..cursor])
+            .map_err(|_| ParseFailure::Syntax)?;
+        if key == ARBITRARY_PRECISION_NUMBER_TOKEN {
+            literal_number_tokens.push((start, cursor));
+        }
+        key_tokens.push(key);
+    }
+
+    if literal_number_tokens.is_empty() {
+        return Ok(None);
+    }
+
+    let mut suffix = 0_u64;
+    let substitute = loop {
+        let candidate = format!("$oneagent::literal::serde_json::Number::{suffix}");
+        if !key_tokens.iter().any(|key| key == &candidate) {
+            break candidate;
+        }
+        suffix = suffix.checked_add(1).ok_or(ParseFailure::Syntax)?;
+    };
+    let encoded_substitute =
+        serde_json::to_string(&substitute).map_err(|_| ParseFailure::Syntax)?;
+    let replaced_bytes = literal_number_tokens
+        .iter()
+        .map(|(start, end)| end - start)
+        .sum::<usize>();
+    let mut normalized = String::with_capacity(
+        input.len() - replaced_bytes + encoded_substitute.len() * literal_number_tokens.len(),
+    );
+    let mut copied = 0;
+    for (start, end) in literal_number_tokens {
+        normalized.push_str(&input[copied..start]);
+        normalized.push_str(&encoded_substitute);
+        copied = end;
+    }
+    normalized.push_str(&input[copied..]);
+
+    Ok(Some((normalized, substitute)))
+}
+
+fn restore_literal_number_tokens(value: &mut Value, substitute: &str) {
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                restore_literal_number_tokens(value, substitute);
+            }
+        }
+        Value::Object(values) => {
+            for value in values.values_mut() {
+                restore_literal_number_tokens(value, substitute);
+            }
+            if let Some(value) = values.remove(substitute) {
+                values.insert(ARBITRARY_PRECISION_NUMBER_TOKEN.to_owned(), value);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
 }
 
 fn classify_parse_error(error: &serde_json::Error) -> ParseFailure {
@@ -1041,7 +1148,10 @@ impl<'de> Visitor<'de> for UniqueValueVisitor {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_JSON_NESTING_DEPTH, ParseFailure, parse_unique_value};
+    use super::{
+        ARBITRARY_PRECISION_NUMBER_TOKEN, MAX_JSON_NESTING_DEPTH, ParseFailure, parse_unique_value,
+    };
+    use serde_json::Value;
 
     #[test]
     fn duplicate_visitor_rejects_nested_duplicates_without_key_disclosure() {
@@ -1070,5 +1180,19 @@ mod tests {
 
         assert!(value.is_number());
         assert_eq!(value.to_string(), "1e+400");
+    }
+
+    #[test]
+    fn duplicate_visitor_preserves_literal_number_token_objects() {
+        let input = format!(r#"{{"{ARBITRARY_PRECISION_NUMBER_TOKEN}":"1"}}"#);
+        let value = parse_unique_value(&input).expect("literal object must parse");
+
+        assert_eq!(
+            value
+                .as_object()
+                .and_then(|object| object.get(ARBITRARY_PRECISION_NUMBER_TOKEN))
+                .and_then(Value::as_str),
+            Some("1")
+        );
     }
 }

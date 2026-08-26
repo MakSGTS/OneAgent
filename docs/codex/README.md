@@ -96,6 +96,7 @@ docs/codex/
     repository-safety.md
     validation.md
   workflows/
+    ai-tool-policy.md
     architecture.md
     context-engine.md
     graph-emission.md
@@ -110,6 +111,7 @@ docs/codex/
     sequential-sprint-execution.md
     source-adapter.md
   profiles/
+    ai-tool-policy-implementation.md
     architecture.md
     context-engine-implementation.md
     graph-implementation.md
@@ -123,6 +125,7 @@ docs/codex/
     semantic-index-implementation.md
     source-adapter-implementation.md
   templates/
+    ai-tool-policy-task.md
     architecture-task.md
     context-engine-task.md
     graph-emission-task.md
@@ -213,6 +216,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 
 ## Choosing a profile
 
+- Use `docs/codex/profiles/ai-tool-policy-implementation.md` for
+  source-independent tool authorization, side-effect classification,
+  confirmation, execution gating, failure containment, and audit evidence.
 - Use `docs/codex/profiles/implementation.md` for accepted implementation work
   that does not need graph- or parser-specific behavior.
 - Use `docs/codex/profiles/graph-implementation.md` for graph model or graph
@@ -245,6 +251,9 @@ module composition.
 
 ## Choosing a template
 
+- Use `docs/codex/templates/ai-tool-policy-task.md` for tool requests,
+  authorization, side-effect classification, confirmation, execution gating,
+  terminal outcomes, or audit evidence.
 - Use `docs/codex/templates/implementation-task.md` for general implementation
   task contracts.
 - Use `docs/codex/templates/investigation-task.md` for read-only evidence
@@ -286,6 +295,12 @@ must not invent source formats or architecture.
 
 Implementation tasks apply accepted architecture in code or documentation. They
 must not reselect architecture during implementation.
+
+AI Tool Policy tasks define or implement fail-closed source-independent
+authorization, side-effect, confirmation, execution-gating, outcome, and audit
+contracts. They do not select a concrete tool schema, transport, executor,
+policy store, or user experience unless accepted architecture explicitly owns
+that scope.
 
 Parser tasks require real source evidence and define source-format behavior.
 They do not emit graph facts unless graph emission is explicitly included.

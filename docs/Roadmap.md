@@ -117,7 +117,7 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence implemented by the [Persistent State profile](codex/profiles/persistent-state-implementation.md), [Persistent State workflow](codex/workflows/persistent-state.md), and [Persistent State template](codex/templates/persistent-state-task.md). | Sprint 20 | completed |
 | Task prompt template update completed — Context Engine | Sprint 22 | Deterministic context selection, provenance, budgets, truncation, relevance evidence, reproducible evaluation, and data-boundary rules implemented by the [Context Engine profile](codex/profiles/context-engine-implementation.md), [Context Engine workflow](codex/workflows/context-engine.md), and [Context Engine template](codex/templates/context-engine-task.md). | Sprints 22 and 33 | completed |
 | Task prompt template update completed — LLM Providers | Sprint 23 | Provider capabilities, request/response compatibility, discovery, secrets, timeouts, retries, cancellation, error taxonomy, and contract tests implemented by the [LLM Provider profile](codex/profiles/llm-provider-implementation.md), [LLM Provider workflow](codex/workflows/llm-provider.md), and [LLM Provider template](codex/templates/llm-provider-task.md). | Sprints 23–26 | completed |
-| Task prompt template update required — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests. | Sprints 27, 29, and 33 | planned |
+| Task prompt template update completed — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests implemented by the [AI Tool Policy profile](codex/profiles/ai-tool-policy-implementation.md), [AI Tool Policy workflow](codex/workflows/ai-tool-policy.md), and [AI Tool Policy template](codex/templates/ai-tool-policy-task.md). | Sprints 27, 29, and 33 | completed |
 | Task prompt template update required — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence. | Sprints 28–29 and 35; protocol baseline for Sprint 32 | planned |
 | Task prompt template update required — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence. | Sprints 30–34 | planned |
 | Task prompt template update required — Diagnostics and Rules | Sprint 36 | Stable diagnostic identity, severity and configuration, deterministic rule registration and execution, suppression, reporting, and regression evidence. | Sprints 36–37 and 39 | planned |
@@ -155,6 +155,19 @@ Sprint 23 investigation and architecture. ADR-0045 subsequently accepted the
 provider-neutral first slice, and the
 [integration review](reviews/sprint-23-llm-provider-abstraction.md) records
 `pass`.
+
+The AI Tool Policy audit at committed Sprint 26 governance head
+`43a5a0955e9df1fdb23d4c49abf381b90b565cac` found that the generic
+implementation, LLM Provider, Runtime, and review contracts do not require
+fail-closed tool authorization; deterministic rule precedence and side-effect
+classification; confirmation binding and replay rejection; decision-to-
+execution gating; partial-failure containment; or bounded, redacted audit
+evidence. The AI Tool Policy modules add only those reusable execution and
+evidence requirements. They do not select crate ownership, tool or actor
+identity, a rule language, confirmation UX, executor trait, policy storage,
+audit sink, serialization, transport, provider wire mapping, MCP schema, or the
+Sprint 27 first slice; those remain live investigation and architecture
+decisions.
 
 The Source Adapter audit at committed baseline
 `80c25a69e50a572220d4c1380ee15934792b68b8` found that the existing parser

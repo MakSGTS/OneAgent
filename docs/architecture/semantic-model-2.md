@@ -165,6 +165,24 @@ usage. It does not own or mutate the Knowledge Graph, Context Engine, Runtime,
 protocol, configuration sources, persistence, model/server lifecycle, MCP, or
 IDE state; controlled-loopback evidence requires no live LM Studio state.
 
+### `oneagent-ollama`
+
+Owns the concrete ADR-0048 local-only Ollama leaf behind `LlmProvider`. It
+validates one credential-free numeric-loopback HTTP server root or the fixed
+default. Fresh bounded native `/api/tags` discovery validates exact identities
+and remote markers, excludes remote-backed entries, and queries local candidates
+sequentially through `/api/show`; only exact `completion` capability evidence
+becomes provider-neutral `TextGeneration`.
+
+Text generation sends one non-streaming raw `/api/generate` request with the
+exact model, prompt, disabled thinking, and the request output-byte bound. It
+accepts only an exact terminal model with `stop` or `length`, then constructs the
+response against the originating request with local UTF-8 usage. The adapter
+does not own or mutate the Knowledge Graph, Context Engine, Runtime, protocol,
+configuration sources, persistence, daemon/model lifecycle, cloud state, MCP,
+or IDE state; controlled-loopback evidence requires no installed Ollama, model,
+credential, or external network.
+
 ### `oneagent-edt`
 
 Owns EDT-specific loading and conversion:
@@ -299,8 +317,9 @@ authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
 `pass`; Sprint 22 is completed. The subsequent
 [Sprint 25 LM Studio Integration review](../reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
-unique `next` planning target.
+records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
+repository-owned evidence are present, while its integration review remains
+pending.
 
 ## Core principles
 
@@ -1211,9 +1230,9 @@ providers/models, Runtime, persistence, protocols, MCP, or IDE state.
 The independent `oneagent-llm` boundary may accept an explicitly copied
 `ContextBundle::rendered()` string as ordinary request text, but it assigns no
 prompt, role, source-text, tokenizer, provider-selection, tool, or conversation
-semantics to that content. The bounded OpenAI-compatible adapter is implemented;
-Runtime integration and additional provider adapters remain deferred, and
-provider output never becomes Knowledge Graph authority.
+semantics to that content. The bounded OpenAI-compatible, LM Studio, and Ollama
+adapters are implemented; Runtime integration and later provider adapters remain
+deferred, and provider output never becomes Knowledge Graph authority.
 
 ## Context request
 

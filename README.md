@@ -11,8 +11,9 @@ also complete with a `pass` integration review. The provider-neutral Sprint 23
 LLM Provider Abstraction is complete with a `pass` integration review. The
 bounded Sprint 24 OpenAI-Compatible Provider is complete with a
 `pass with non-blocking follow-ups` integration review. The bounded Sprint 25
-LM Studio Integration is complete with a `pass` integration review. Sprint 26
-Ollama Integration is the unique `next` planning target.
+LM Studio Integration is complete with a `pass` integration review. The
+bounded Sprint 26 Ollama provider implementation and repository-owned evidence
+are present; Sprint 26 remains incomplete until its integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -32,6 +33,7 @@ See
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
 - `adapters/openai-compatible` — implemented explicit bounded OpenAI-compatible `/v1/models` and non-streaming `/v1/completions` provider adapter
 - `adapters/lm-studio` — implemented explicit bounded LM Studio native model-discovery and composed non-streaming text-generation provider adapter
+- `adapters/ollama` — implemented local-only bounded Ollama native Tags/Show discovery and non-streaming raw generation provider adapter
 - `adapters/filesystem` — implemented filesystem workspace discovery adapter
 - `extensions` — reserved for future IDE extensions; currently empty
 - `docs/adr` — architecture decision records
@@ -87,11 +89,16 @@ redacted typed failures. The additive `oneagent-lm-studio` leaf implements
 ADR-0047 with stable `lm-studio` identity, explicit or numeric-loopback
 construction, type-aware native `/api/v1/models` discovery, and a private
 one-attempt generation bridge through the unchanged generic
-`/v1/completions` operation. Repository acceptance for both adapters uses
-controlled loopback only. Runtime configuration/exposure, live-provider
-acceptance, model/server lifecycle, prompt/tool policy, chat/Responses APIs,
-streaming, later providers, MCP, and IDE integration remain deferred. Sprint 24
-and Sprint 25 are complete; Sprint 26 is the next planning target.
+`/v1/completions` operation. The additive `oneagent-ollama` leaf implements
+ADR-0048 with stable `ollama` identity, credential-free numeric-loopback-only
+construction, capability-safe native `/api/tags` plus sequential `/api/show`
+discovery that excludes remote-backed entries, and one strict non-streaming raw
+`/api/generate` attempt. Repository acceptance for all three concrete adapters
+uses controlled loopback only. Runtime configuration/exposure, live-provider
+acceptance, remote/cloud access, model/server lifecycle, prompt/tool policy,
+chat/Responses APIs, streaming, later providers, MCP, and IDE integration
+remain deferred. Sprints 24 and 25 are complete; Sprint 26 implementation and
+evidence are present, with its integration review still pending.
 
 ## Verify
 

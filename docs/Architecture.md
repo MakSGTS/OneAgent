@@ -34,6 +34,8 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-lm-studio` implements the bounded concrete ADR-0047 leaf through
      native type-aware discovery and private composition over the unchanged
      OpenAI-compatible generation operation.
+   - `oneagent-ollama` implements the bounded concrete ADR-0048 local-only leaf
+     through native capability-safe Tags/Show discovery and raw generation.
 4. **Applications and protocol foundation**
    - `oneagent-runtime` exposes the long-running composition root as a reusable
      library. It owns ordered service startup, rollback, task handles,
@@ -78,8 +80,9 @@ The roadmap assigns future boundaries explicitly:
   `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
   also records `pass`. The later
   [Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
-  records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is
-  the unique `next` planning target.
+  records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
+  repository-owned evidence are present, while its integration review remains
+  pending.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -131,8 +134,8 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused and complete workspace gates. Sprint 22 is completed;
 the [Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
-unique `next` planning target.
+records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
+evidence are present, with its integration review still pending.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -171,8 +174,8 @@ services.
 | Compatibility | `oneagent-analysis` and `oneagent-runtime` remain unchanged and independently validated; neither depends on `oneagent-llm`, and Context text receives no prompt semantics. |
 
 The [Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`. Sprint 25 is completed and Sprint 26 Ollama Integration is the
-unique `next` planning target.
+records `pass`. Sprint 25 is completed; Sprint 26 implementation and evidence
+are present, but the sprint remains incomplete until integration review.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -201,10 +204,11 @@ redirect rejection, timeout/cancellation precedence, one attempt, cleanup, and
 fresh repetition without live services or credentials. Runtime composition,
 configuration sources, Context prompt semantics, chat/Responses APIs,
 streaming, tools, provider usage authority, and additional providers remain
-deferred except for the implemented LM Studio specialization described below.
+deferred except for the implemented LM Studio and Ollama specializations
+described below.
 The Sprint 24 integration review records `pass with non-blocking follow-ups`;
-the Sprint 25 integration review records `pass`, and Sprint 26 is the next
-planning target.
+the Sprint 25 integration review records `pass`. Sprint 26 implementation and
+evidence are present, with its integration review pending.
 
 ## Accepted LM Studio provider boundary
 
@@ -236,7 +240,46 @@ downloaded models, credentials, or external network. Runtime registration and
 configuration sources, live-provider acceptance, server/model lifecycle,
 chat/template quality, streaming, tools, MCP, and IDE integration remain
 deferred. The Sprint 25 integration review records `pass`; Sprint 25 is
-completed and Sprint 26 Ollama Integration is the unique `next` target.
+completed. Sprint 26 Ollama implementation and evidence are present, but the
+sprint remains incomplete until its integration review.
+
+## Accepted Ollama provider boundary
+
+[ADR-0048](adr/0048-ollama-integration.md) governs the implemented
+`oneagent-ollama` leaf adapter. Construction consumes one exact `ollama`
+provider configuration without a credential and either an explicit
+numeric-loopback HTTP root or the fixed `http://127.0.0.1:11434` default.
+Remote roots, DNS names, HTTPS, authentication, redirects, and implicit proxies
+are rejected or disabled.
+
+Each fresh discovery performs one bounded native `GET /api/tags`, validates
+exact equal model identities and remote markers, excludes well-formed
+remote-backed entries before provider-specific inspection, and sends sequential
+canonical `POST /api/show` requests only for local candidates. Exact lowercase
+`completion` is the sole evidence projected as `TextGeneration`; malformed,
+duplicate, invalid, over-count, ambiguous, or later-failing catalogs are
+rejected atomically.
+
+Generation performs one bounded non-streaming raw `POST /api/generate` with the
+exact validated model and prompt, `stream=false`, `raw=true`, `think=false`, and
+`options.num_predict` equal to the request output-byte bound. It accepts only an
+exact response model, `done=true`, absent or empty thinking, and `stop` or
+`length`, then constructs local request-bound UTF-8 usage and the corresponding
+`Completed` or `OutputLimit` finish. Operations share one total timeout and
+cooperative cancellation race and never retry, redirect, fall back, cache,
+manage models, or retain background work.
+
+The public `adapters/ollama/tests/conformance.rs` target uses only exported
+adapter and `oneagent-llm` APIs through `&dyn LlmProvider` plus deterministic
+numeric-loopback servers. It proves construction/redaction, exact Tags, Show,
+and Generate wires, remote exclusion, capability projection, identity and both
+finish mappings, malformed/ambiguous/bound/status/redirect failures, transport,
+timeout, cancellation, one-attempt repetition, and cleanup without installed
+Ollama, local or cloud models, credentials, or external network. Runtime
+registration/configuration, live-provider compatibility, daemon/model
+lifecycle, cloud/authentication, chat, templates, streaming, tools, MCP, and IDE
+integration remain deferred. Sprint 26 remains incomplete until Task 7 records
+the integration-review decision.
 
 ## Accepted Runtime service-container boundary
 
@@ -530,5 +573,5 @@ CLI Client is completed with a `pass` decision in the
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
 records `pass`. The later
 [Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
-unique `next` planning target.
+records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
+evidence are present, with its integration review still pending.

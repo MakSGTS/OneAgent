@@ -42,6 +42,7 @@ technical workflows:
 - architecture;
 - implementation;
 - context engine;
+- IDE and extension integration;
 - graph model;
 - graph emission;
 - semantic index;
@@ -99,6 +100,7 @@ docs/codex/
     ai-tool-policy.md
     architecture.md
     context-engine.md
+    ide-extension.md
     graph-emission.md
     graph-model.md
     implementation.md
@@ -116,6 +118,7 @@ docs/codex/
     architecture.md
     context-engine-implementation.md
     graph-implementation.md
+    ide-extension-implementation.md
     implementation.md
     investigation.md
     llm-provider-implementation.md
@@ -132,6 +135,7 @@ docs/codex/
     context-engine-task.md
     graph-emission-task.md
     graph-model-task.md
+    ide-extension-task.md
     implementation-task.md
     investigation-task.md
     llm-provider-task.md
@@ -231,6 +235,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 - Use `docs/codex/profiles/context-engine-implementation.md` for deterministic
   semantic context selection, budgeting, assembly, explanation, rendering, and
   reproducible evaluation tasks.
+- Use `docs/codex/profiles/ide-extension-implementation.md` for editor extension
+  build, packaging, activation, configuration, Runtime connectivity, UI state,
+  extension-host lifecycle, and integration evidence.
 - Use `docs/codex/profiles/llm-provider-implementation.md` for provider-neutral
   LLM contracts, capability discovery, provider adapters, secrets, execution
   policy, error mapping, and provider conformance tasks.
@@ -270,6 +277,9 @@ module composition.
   incremental Semantic Index work.
 - Use `docs/codex/templates/context-engine-task.md` for semantic context request,
   selection, budget, truncation, provenance, rendering, or evaluation work.
+- Use `docs/codex/templates/ide-extension-task.md` for editor extension build,
+  packaging, activation, configuration, Runtime connectivity, UI state, or
+  extension-host lifecycle work.
 - Use `docs/codex/templates/llm-provider-task.md` for provider-neutral LLM
   contracts, model/capability discovery, provider adapters, or provider
   conformance evidence.

@@ -7079,6 +7079,93 @@ documentation follow-up.
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
 
+##### Sprint 30 VS Code Extension Foundation execution plan
+
+Sprint 30 is planned from committed governance head `90695c74`. Sprint 29 is
+completed by `2ce0a845` with a non-blocking integration-review decision, so
+Sprint 30 is the unique `next` target. The existing `extensions/` directory is
+empty; no Node manifest, lockfile, TypeScript configuration, VS Code entry
+point, extension test, or extension CI job exists. The public `oneagent-mcp`
+binary and its newline-framed stdio process evidence are the accepted Runtime
+connectivity baseline. Framework readiness is complete through the IDE
+Extension profile, workflow, and template committed by `90695c74`; no further
+framework change is planned.
+
+Official VS Code manifest, extension-host, activation, test-runner, and VSIX
+packaging documentation plus the live Runtime process boundary provide enough
+evidence for a bounded investigation and reproducible implementation. Task 1
+must pin exact stable upstream sources and compatible tool versions before any
+Node dependency is introduced. Task 2 must accept the unresolved extension
+identity, host, activation, configuration, process ownership, initialization,
+status, failure, shutdown, packaging, and test contracts before production
+implementation.
+
+The current prompt suite is
+`docs/codex/prompts/sprint-30-vscode-extension-foundation/`. The immediately
+preceding suite is exactly
+`docs/codex/prompts/sprint-29-mcp-semantic-tools/`, containing these nine
+tracked files with an identical filesystem inventory and no untracked addition:
+
+- `00-sprint-29-execution-loop.md`
+- `01-investigate-mcp-semantic-tools.md`
+- `02-define-mcp-semantic-tools.md`
+- `03-implement-mcp-tool-protocol.md`
+- `04-implement-semantic-graph-tools.md`
+- `05-implement-impact-context-tools.md`
+- `06-integrate-mcp-semantic-tools.md`
+- `07-complete-mcp-semantic-tool-evidence.md`
+- `08-sprint-29-integration-review.md`
+
+Only Task 7 may retire those exact files after a non-blocking independent and
+primary review, successful full validation, and a passing same-reviewer
+artifact-consistency check.
+
+##### Sprint 30 objective
+
+Establish one reproducible desktop VS Code workspace extension that packages
+from tracked sources, activates on explicit OneAgent demand, validates bounded
+workspace-scoped configuration, owns one `oneagent-mcp` stdio child lifecycle,
+reports deterministic connection state, and proves cleanup through public
+extension-host and real-process evidence without implementing navigation, LSP,
+diagnostics, chat, EDT, remote/web hosts, Marketplace publication, or Runtime
+semantic changes.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the VS Code extension foundation. | Investigation / investigation | Pinned official platform/toolchain evidence, repository ownership map, package/activation/configuration/connectivity/lifecycle questions, dependency candidates, and deterministic test oracles. | Sprint 30 planning baseline. | `Investigate Sprint 30 VS Code extension foundation` |
+| 2 | Define the VS Code extension foundation. | Architecture / architecture | Accepted ADR-0052 for extension identity, compatibility, packaging, activation, configuration, Runtime process/MCP lifecycle, status, failures, cleanup, tests, and deferrals. | Task 1. | `Define Sprint 30 VS Code extension foundation` |
+| 3 | Establish the VS Code extension package. | IDE Extension / IDE Extension | Reproducible locked TypeScript package, manifest, bounded contributions, activation/deactivation entry point, build/unit evidence, and deterministic VSIX inventory. | Accepted ADR-0052. | `Establish Sprint 30 VS Code extension package` |
+| 4 | Implement the MCP Runtime client. | IDE Extension / IDE Extension | Editor-independent bounded stdio client state machine with protocol initialization, request correlation, framing, failures, shutdown, and real `oneagent-mcp` process evidence. | Task 3. | `Implement Sprint 30 MCP runtime client` |
+| 5 | Integrate the VS Code Runtime lifecycle. | IDE Extension / IDE Extension | Workspace configuration, explicit connect/disconnect commands, context-owned process client, deterministic status UI, configuration replacement, failure handling, deactivation cleanup, and extension-host evidence. | Task 4. | `Integrate Sprint 30 VS Code runtime lifecycle` |
+| 6 | Complete extension production evidence. | IDE Extension / IDE Extension | Cross-platform CI, clean package inventory, public activation/configuration/process/cleanup matrix, dependency and scope audits, and synchronized current-state documentation. | Task 5. | `Complete Sprint 30 VS Code extension evidence` |
+| 7 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation and validation, artifact consistency, Sprint 31 hand-off, and conditional Sprint 29 suite retirement. | Task 6 and all validation. | `Complete Sprint 30 VS Code extension review` |
+
+Tasks execute strictly in order. Tasks 1–2 are documentation-only and run link,
+structure, and `git diff --check` gates. Tasks 3–6 run non-zero package build,
+typecheck, unit, integration, packaging, and real-process checks selected by
+ADR-0052; Rust validation is required whenever Rust, Cargo, Runtime, or protocol
+behavior changes. Task 6 runs both the complete extension gate and the canonical
+Rust workspace gate. Task 7 reviews the exact planning-through-Task-6 range with
+one fresh-context read-only reviewer, then the primary independently reruns the
+complete validation matrix and reconciles all evidence. The same reviewer must
+pass the drafted artifact before Roadmap transition or prompt retirement.
+
+Sprint 30 remains `next` during planning, becomes `active` when Task 1 starts,
+and may become `completed` only after Task 7. Missing pinned authorities,
+unapproved production dependencies, a mutable or absent lockfile, unbounded or
+path-leaking diagnostics, eager activation, orphaned processes, protocol-channel
+contamination, zero matched tests, non-reproducible VSIX contents, failed
+validation/commit, reviewer mutation or incompleteness, unresolved evidence
+disagreement, or failed consistency check stops execution.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 30 VS Code Extension Foundation
+```
+
 The v0.6 release integration review follows Sprint 35.
 
 #### v0.7 — Intelligence

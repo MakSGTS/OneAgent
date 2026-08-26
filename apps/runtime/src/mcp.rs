@@ -182,7 +182,7 @@ impl McpStdioTransport {
     {
         let input = std::str::from_utf8(frame)
             .map_err(|_| McpStdioError::new(McpStdioErrorKind::InvalidUtf8))?;
-        let Some(response) = self.server.dispatch(input) else {
+        let Some(response) = self.server.dispatch(input).await else {
             return Ok(());
         };
         let payload =

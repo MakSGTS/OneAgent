@@ -10,7 +10,10 @@ pub use mcp::{
     PROTOCOL_VERSION_META_KEY, Request, RequestId, RequestMetadata, Response, ResultResponse,
     decode_message, encode_response,
 };
-pub use server::{MCP_SERVER_NAME, McpServer};
+pub use server::{
+    MCP_SERVER_NAME, McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome,
+    McpToolDefinition, McpToolDefinitionError, McpToolFuture,
+};
 
 /// Returns the protocol component name.
 #[must_use]

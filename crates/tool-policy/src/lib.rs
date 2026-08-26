@@ -3,12 +3,20 @@
 //! This crate owns no concrete tool, transport, provider wire, Runtime state,
 //! policy storage, confirmation user experience, clock, or external side effect.
 
+mod confirmation;
 mod error;
+mod execution;
 mod identity;
 mod policy;
 mod request;
 
+pub use confirmation::{ToolConfirmation, ToolConfirmationChallenge};
 pub use error::{ToolPolicyError, ToolPolicyErrorKind};
+pub use execution::{
+    ConfirmationState, MAX_TOOL_DIAGNOSTIC_BYTES, MAX_TOOL_OUTPUT_BYTES, NeverCancelled,
+    ToolAuditRecord, ToolCancellationSignal, ToolDenialReason, ToolDiagnostic, ToolExecutionResult,
+    ToolExecutor, ToolExecutorOutcome, ToolFuture, ToolOutput, ToolTerminalOutcome, execute_tool,
+};
 pub use identity::{
     ActorId, MAX_ACTOR_ID_BYTES, MAX_POLICY_REVISION_BYTES, MAX_TOOL_ID_BYTES,
     MAX_TOOL_REQUEST_ID_BYTES, PolicyRevision, ToolId, ToolRequestId,

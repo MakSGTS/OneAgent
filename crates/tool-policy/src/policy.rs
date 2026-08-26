@@ -2,6 +2,7 @@
 
 use std::fmt::{Debug, Formatter};
 
+use crate::confirmation::ToolConfirmationChallenge;
 use crate::{
     ActorId, PolicyRevision, ToolEffect, ToolId, ToolPolicyError, ToolPolicyErrorKind, ToolRequest,
 };
@@ -189,6 +190,7 @@ impl ToolPolicy {
             policy_revision: self.revision.clone(),
             kind,
             reason,
+            confirmation_challenge_issued: false,
         }
     }
 
@@ -243,6 +245,7 @@ pub struct ToolAuthorization {
     policy_revision: PolicyRevision,
     kind: AuthorizationDecisionKind,
     reason: AuthorizationDecisionReason,
+    confirmation_challenge_issued: bool,
 }
 
 impl ToolAuthorization {
@@ -269,6 +272,32 @@ impl ToolAuthorization {
     pub const fn reason(&self) -> AuthorizationDecisionReason {
         self.reason
     }
+
+    /// Issues the only confirmation challenge for this decision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ToolPolicyErrorKind::InvalidConfirmation`] when this decision
+    /// does not require confirmation or already issued its challenge. Decision
+    /// kind is checked first.
+    pub fn take_confirmation_challenge(
+        &mut self,
+    ) -> Result<ToolConfirmationChallenge, ToolPolicyError> {
+        if self.kind != AuthorizationDecisionKind::RequireConfirmation {
+            return Err(ToolPolicyError::new(
+                ToolPolicyErrorKind::InvalidConfirmation,
+                "authorization does not require confirmation",
+            ));
+        }
+        if self.confirmation_challenge_issued {
+            return Err(ToolPolicyError::new(
+                ToolPolicyErrorKind::InvalidConfirmation,
+                "confirmation challenge was already issued",
+            ));
+        }
+        self.confirmation_challenge_issued = true;
+        Ok(ToolConfirmationChallenge::new(self))
+    }
 }
 
 impl Debug for ToolAuthorization {
@@ -279,6 +308,10 @@ impl Debug for ToolAuthorization {
             .field("policy_revision", &self.policy_revision)
             .field("kind", &self.kind)
             .field("reason", &self.reason)
+            .field(
+                "confirmation_challenge_issued",
+                &self.confirmation_challenge_issued,
+            )
             .finish_non_exhaustive()
     }
 }

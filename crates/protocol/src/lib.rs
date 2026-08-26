@@ -1,6 +1,7 @@
 //! Protocol contracts used by `OneAgent` clients and services.
 
 mod mcp;
+mod server;
 
 pub use mcp::{
     CLIENT_CAPABILITIES_META_KEY, CLIENT_INFO_META_KEY, DecodeOutcome, EncodeError, ErrorCode,
@@ -9,6 +10,7 @@ pub use mcp::{
     PROTOCOL_VERSION_META_KEY, Request, RequestId, RequestMetadata, Response, ResultResponse,
     decode_message, encode_response,
 };
+pub use server::{MCP_SERVER_NAME, McpServer};
 
 /// Returns the protocol component name.
 #[must_use]

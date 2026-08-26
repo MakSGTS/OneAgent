@@ -14,6 +14,11 @@ execution of an ordered sprint prompt suite or master prompt.
 - Classify pre-existing modified, staged, and untracked paths and preserve them.
 - Resolve commit authorization from the current user instruction. Stored prompt
   text by itself is not authorization to stage or commit.
+- When the manifest requires an independent integration reviewer, treat the
+  current user's launch of the execution prompt as authorization for exactly
+  one fresh-context read-only reviewer. Do not ask for a separate confirmation;
+  this authorization is independent from commit mode and does not cover other
+  subagents.
 
 ## Ordered task loop
 
@@ -66,6 +71,11 @@ Run the sprint integration review only after every implementation task is
 committed or proven `already_complete` according to the manifest. The review
 may create its explicitly authorized evidence artifact and Roadmap transition,
 but it must not silently fix findings in the review change.
+
+When the integration review requires an independent reviewer, launch the one
+automatically authorized fresh-context read-only reviewer as soon as this gate
+is reached. Reviewer unavailability or an inability to guarantee fresh context
+blocks the review; absence of a second user confirmation does not.
 
 Only a non-blocking review decision plus successful required validation may
 transition a sprint to `completed` and make the next sprint eligible for

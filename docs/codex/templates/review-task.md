@@ -21,6 +21,8 @@ diff, architecture decision, or completed capability.
 - Acceptance evidence matrix, when the review is a completion gate
 - Independent reviewer contract and output, for Sprint 27 or later integration
   reviews
+- Automatic independent-reviewer authorization, when independent review
+  applies
 - Primary/reviewer evidence reconciliation, when independent review applies
 - Authorized review outputs and state transition, when changes are requested
 - Task-specific Validation, if any
@@ -42,6 +44,11 @@ diff, architecture decision, or completed capability.
   `docs/codex/workflows/review.md`. Treat reviewer unavailability, mutation,
   incomplete output, missing consistency verification, or unresolved evidence
   disagreement as blocking.
+- State that the current user's invocation of the review task explicitly
+  authorizes exactly one reviewer under that procedure. Launch it automatically
+  when the review gate is reached and do not request separate confirmation.
+  Keep every other subagent or side effect unauthorized unless the current user
+  instruction grants it separately.
 - Do not disclose an expected decision or the implementation agent's
   conclusions to the independent reviewer. Give it the exact range,
   authorities, criteria, exclusions, validation matrix, and output schema.

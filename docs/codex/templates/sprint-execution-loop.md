@@ -21,6 +21,8 @@ plan strictly in dependency order.
 - Task-loop additions, if any
 - Already-complete policy additions, if any
 - Failure and integration-review gates
+- Automatic mandatory reviewer authorization, when the manifest includes an
+  independent integration review
 - Final report additions
 
 The ordered manifest must identify, for every task:
@@ -39,6 +41,11 @@ The ordered manifest must identify, for every task:
 - Do not reorder, skip, combine, or partially commit dependent tasks.
 - Do not permanently encode commit authorization in a stored prompt. Determine
   commit mode from the current user instruction that launches the execution.
+- Treat the current user's launch of the master prompt as authorization for
+  exactly one mandatory fresh-context read-only reviewer named by the manifest.
+  Launch that reviewer automatically at the integration-review gate without a
+  separate confirmation request. This does not authorize other subagents or
+  change commit authorization.
 - Preserve prompt-suite files unless their modification is explicitly part of
   the current task scope.
 - Stop after the first blocking failure.

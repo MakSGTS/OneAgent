@@ -7,15 +7,15 @@ per successfully completed task:
 
 ```text
 Запусти следующий спринт с отдельным коммитом после каждой успешно завершённой задачи по промту docs/codex/prompts/run-next-sprint.md.
-Финальное интеграционное ревью поручить отдельному read-only субагенту с чистым контекстом.
 ```
 
 The shorter instruction `Запусти следующий спринт по промту
 docs/codex/prompts/run-next-sprint.md` starts the workflow without commit
 authorization. In that mode, stop when the next prerequisite requires a
-committed baseline. Starting with Sprint 27, it also lacks the required
-independent-review delegation authorization and therefore stops before
-planning.
+committed baseline. Every current user instruction that launches this prompt
+authorizes exactly one mandatory fresh-context read-only reviewer for the final
+integration review when the live sprint requires it. Do not request a separate
+reviewer confirmation.
 
 ---
 
@@ -37,12 +37,13 @@ prompt:
 - An instruction that only requests running the next sprint does not authorize
   commits. Do not stage or commit in that mode, and stop whenever the next
   prerequisite requires a committed baseline.
-- Starting with Sprint 27, the current launch instruction must explicitly
-  request a separate read-only fresh-context reviewer agent for the final
-  integration review. If it does not, stop before planning because the
-  mandatory completion gate cannot be satisfied.
+- Starting with Sprint 27, launching this prompt explicitly authorizes exactly
+  one separate read-only fresh-context reviewer agent for the final integration
+  review. Launch it automatically when the review gate is reached without
+  asking for a second confirmation.
 - This stored prompt never authorizes staging or committing by itself.
-- This stored prompt never authorizes subagent delegation by itself.
+- This authorization is limited to the one mandatory reviewer. This stored
+  prompt does not authorize any other subagent delegation by itself.
 
 Stop after the first blocking failure. Do not skip, reorder, combine, or
 partially commit dependent tasks.
@@ -336,6 +337,9 @@ The generated final integration-review prompt must additionally:
 
 - require the independent fresh-context read-only reviewer procedure from
   `docs/codex/workflows/review.md` for Sprint 27 and later;
+- state that the current user's invocation of that review prompt explicitly
+  authorizes exactly one reviewer under the procedure and require automatic
+  launch without a separate confirmation request;
 - give the reviewer the exact committed range, authorities, acceptance
   criteria, exclusions, validation matrix, and required output without an
   expected decision or implementation-agent conclusions;
@@ -509,6 +513,8 @@ The review must:
 
 - complete the mandatory independent fresh-context read-only reviewer workflow
   in `docs/codex/workflows/review.md` for Sprint 27 and later;
+- launch exactly one automatically authorized reviewer without requesting a
+  separate user confirmation;
 - inspect the exact planning and task commit range;
 - verify every accepted criterion and exclusion;
 - rerun the required focused and full validation matrix;
@@ -529,9 +535,10 @@ validation, may:
 
 A blocked review leaves the sprint incomplete.
 
-For Sprint 27 and later, missing reviewer authorization, unavailable fresh
-context, reviewer mutation, incomplete reviewer output, an unresolved evidence
-disagreement, or a failed final artifact-consistency check is a blocked review.
+For Sprint 27 and later, failure to launch the authorized reviewer, unavailable
+fresh context, reviewer mutation, incomplete reviewer output, an unresolved
+evidence disagreement, or a failed final artifact-consistency check is a
+blocked review.
 
 ## Previous sprint prompt-suite retirement gate
 

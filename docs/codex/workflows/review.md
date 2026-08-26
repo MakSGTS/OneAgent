@@ -16,13 +16,29 @@ Starting with Sprint 27, every sprint integration-review completion gate
 requires one separate read-only reviewer agent with a fresh context. This is a
 blocking requirement, not an optional parallelization hint.
 
+### Reviewer authorization
+
+A current user instruction that invokes a review task selecting this workflow
+and requiring an independent reviewer, or that launches a sprint execution whose
+final integration review requires this workflow, explicitly authorizes exactly
+one fresh-context read-only reviewer agent for that review. Start that reviewer
+automatically when the review gate is reached. Do not ask the user for a separate
+delegation confirmation.
+
+This automatic authorization is limited to the one mandatory reviewer and the
+read-only review contract below. It does not authorize additional subagents,
+reviewer delegation, repository mutation, staging, committing, or any external
+side effect. An explicit current user prohibition on subagents overrides this
+default and makes a mandatory independent review blocked.
+
 The primary agent must:
 
 1. finish and commit, or prove `already_complete`, every preceding task;
 2. verify a clean task-owned working tree and resolve the exact review range;
-3. use the active agent runtime's context-selection controls to start one
-   reviewer without inherited implementation conversation turns, and block the
-   review when a fresh context cannot be guaranteed;
+3. use the active agent runtime's context-selection controls to start the
+   automatically authorized reviewer without inherited implementation
+   conversation turns, and block the review when a fresh context cannot be
+   guaranteed;
 4. provide only the repository root, exact range, authoritative documents,
    acceptance criteria and exclusions, required validation commands, and the
    output contract below;

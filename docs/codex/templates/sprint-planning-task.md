@@ -40,6 +40,11 @@ without implementing production behavior.
   explicitly proven prerequisite.
 - Define `already_complete`, blocked-review, sprint-completion, and next-sprint
   hand-off gates.
+- When the sprint requires an independent integration reviewer, require both
+  the generated final review prompt and master execution prompt to state that
+  their current user invocation authorizes exactly one fresh-context read-only
+  reviewer. Require automatic launch at the review gate without a separate
+  confirmation request, while leaving all other delegation unauthorized.
 - Keep production implementation, unsupported source forms, and later-sprint
   concerns out of the planning change.
 - Do not mark the sprint `completed` during planning.

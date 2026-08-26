@@ -6,6 +6,18 @@ This forecast supersedes the 2026-08-19 calendar baseline retained below for
 comparison. It is a planning model, not a delivery commitment, and does not
 replace dependency order or authoritative status in `docs/Roadmap.md`.
 
+### Current schedule variance — 2026-08-26
+
+The current delay relative to the nominal execution schedule is caused by the
+deployment and configuration of the local engineering-assistant server. This
+infrastructure work includes the pinned CUDA toolkit, the `llama.cpp` build and
+service setup, and the supporting deployment configuration documented in the
+[Local Engineering Assistant Deployment Runbook](local-engineering-assistant/Local_Engineering_Assistant_Deployment_Runbook.md).
+It does not change sprint dependency order, scope, or completion status. The
+schedule must be rebaselined from current repository evidence after the server
+setup is complete; this note does not assign an unsupported delay duration or
+new delivery date.
+
 The rebaseline starts from the committed Sprint 12 review head
 `cf59854baebc6fe88add0de5a0e5b6858b755a19`:
 

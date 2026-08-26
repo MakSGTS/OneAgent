@@ -1,0 +1,15 @@
+.gitignore
+.vscode-test.mjs
+.vscodeignore
+pnpm-lock.yaml
+pnpm-workspace.yaml
+scripts/**
+src/**
+test/**
+tsconfig.json
+tsconfig.test.json
+dist-test/**
+node_modules/**
+.vscode-test/**
+coverage/**
+*.vsix

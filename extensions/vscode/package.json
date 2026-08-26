@@ -1,0 +1,75 @@
+{
+  "name": "oneagent",
+  "displayName": "OneAgent",
+  "description": "Connect a trusted VS Code workspace to the OneAgent Runtime.",
+  "version": "0.1.0",
+  "publisher": "oneagent-dev",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "commonjs",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "vscode": "^1.134.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "OneAgent starts a configured executable for the active workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "OneAgent requires a local file-backed workspace."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "oneagent.connect",
+        "title": "OneAgent: Connect"
+      },
+      {
+        "command": "oneagent.disconnect",
+        "title": "OneAgent: Disconnect"
+      }
+    ],
+    "configuration": {
+      "title": "OneAgent",
+      "properties": {
+        "oneagent.runtime.executable": {
+          "type": "string",
+          "default": "oneagent-mcp",
+          "scope": "window",
+          "description": "Executable path or command used for the OneAgent Runtime."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "tsc -b tsconfig.json tsconfig.test.json --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "compile": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test:unit": "node --test dist-test/test/unit/*.test.js",
+    "test:extension": "vscode-test --label packageActivation",
+    "test": "pnpm run compile && pnpm run test:unit && pnpm run test:extension",
+    "vscode:prepublish": "pnpm run compile",
+    "package:vsix": "vsce package --no-dependencies --allow-missing-repository --out oneagent-0.1.0.vsix",
+    "package:list": "vsce ls --no-dependencies",
+    "package:check": "node scripts/check-package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/vscode": "1.134.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "3.9.2",
+    "typescript": "7.0.2"
+  }
+}

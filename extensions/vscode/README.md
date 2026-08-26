@@ -58,11 +58,12 @@ needed, and does not leave background reconnect work.
 
 The package uses Node.js 24, pnpm `11.19.0`, TypeScript `7.0.2`, and a pinned VS
 Code `1.134.0` Extension Host. There are no production Node dependencies.
-The Extension Host gate runs isolated trusted, Restricted Mode, empty, virtual,
-and multi-root workspace cases. Unsupported hosts must fail before spawning a
-Runtime process; the trusted case also covers configuration precedence,
-connection replacement, status ownership, explicit disposal, and repeatable
-deactivation.
+The Extension Host gate runs two isolated trusted lifecycle cycles plus
+Restricted Mode, empty, virtual, and multi-root workspace cases. Unsupported
+hosts must fail before spawning a Runtime process; both trusted cases cover
+configuration precedence, connection replacement, all five actual status item
+presentations, command and configuration ownership, explicit disposal, and
+repeatable deactivation.
 
 From the repository root, build the public Runtime and install the locked
 development dependencies:

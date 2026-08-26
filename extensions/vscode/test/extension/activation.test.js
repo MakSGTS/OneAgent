@@ -4,6 +4,14 @@ const path = require("node:path");
 const vscode = require("vscode");
 
 suite("OneAgent package activation", () => {
+  const expectedStatus = {
+    disconnected: ["$(circle-outline) OneAgent", "OneAgent is disconnected", "oneagent.connect"],
+    connecting: ["$(sync~spin) OneAgent", "OneAgent is connecting", undefined],
+    connected: ["$(check) OneAgent", "OneAgent is connected", "oneagent.disconnect"],
+    disconnecting: ["$(sync~spin) OneAgent", "OneAgent is disconnecting", undefined],
+    failed: ["$(error) OneAgent", "OneAgent connection failed", "oneagent.connect"],
+  };
+  let testApi;
   const workspaceResource = () => vscode.workspace.workspaceFolders?.[0]?.uri;
   const configuration = () =>
     vscode.workspace.getConfiguration("oneagent.runtime", workspaceResource());
@@ -14,6 +22,14 @@ suite("OneAgent package activation", () => {
     ".vscode",
     "settings.json",
   );
+  const assertStatus = (state) => {
+    assert.ok(testApi);
+    const snapshot = testApi.status();
+    assert.deepEqual(
+      [snapshot.text, snapshot.tooltip, snapshot.command],
+      expectedStatus[state],
+    );
+  };
 
   suiteTeardown(async () => {
     await configuration().update(
@@ -45,6 +61,9 @@ suite("OneAgent package activation", () => {
     const result = await vscode.commands.executeCommand("oneagent.disconnect");
     assert.equal(result, "disconnected");
     assert.equal(extension.isActive, true);
+    testApi = await extension.activate();
+    assert.ok(testApi, "Development Host must expose status evidence");
+    assertStatus("disconnected");
 
     const commands = await vscode.commands.getCommands(true);
     assert.equal(commands.includes("oneagent.connect"), true);
@@ -58,6 +77,7 @@ suite("OneAgent package activation", () => {
     await configuration().update("executable", probe, vscode.ConfigurationTarget.Global);
     await configuration().update("executable", "", vscode.ConfigurationTarget.Global);
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "failed");
+    assertStatus("failed");
     assert.equal(fs.existsSync(marker), false);
     assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
   });
@@ -77,8 +97,14 @@ suite("OneAgent package activation", () => {
         vscode.ConfigurationTarget.Workspace,
       );
       assert.equal(configuration().get("executable"), executable);
-      assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
-      assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+      const connection = vscode.commands.executeCommand("oneagent.connect");
+      assertStatus("connecting");
+      assert.equal(await connection, "connected");
+      assertStatus("connected");
+      const disconnection = vscode.commands.executeCommand("oneagent.disconnect");
+      assertStatus("disconnecting");
+      assert.equal(await disconnection, "disconnected");
+      assertStatus("disconnected");
     } finally {
       await configuration().update(
         "executable",
@@ -104,6 +130,7 @@ suite("OneAgent package activation", () => {
       vscode.ConfigurationTarget.Global,
     );
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
+    assertStatus("connected");
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
 
     const missing = path.join(path.dirname(executable), "missing-oneagent-mcp");
@@ -113,7 +140,9 @@ suite("OneAgent package activation", () => {
       vscode.ConfigurationTarget.Global,
     );
     assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+    assertStatus("disconnected");
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "failed");
+    assertStatus("failed");
 
     await configuration().update(
       "executable",
@@ -121,7 +150,9 @@ suite("OneAgent package activation", () => {
       vscode.ConfigurationTarget.Global,
     );
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
+    assertStatus("connected");
     assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+    assertStatus("disconnected");
   });
 
   test("deactivation waits for cleanup and is repeatable", async () => {
@@ -135,8 +166,15 @@ suite("OneAgent package activation", () => {
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
 
     const extensionModule = require("../../dist/extension.js");
+    assertStatus("connected");
     await extensionModule.deactivate();
     await extensionModule.deactivate();
+    assert.deepEqual(testApi.status().disposed, {
+      status: true,
+      connect: true,
+      disconnect: true,
+      configuration: true,
+    });
     await assert.rejects(vscode.commands.executeCommand("oneagent.connect"));
     await assert.rejects(vscode.commands.executeCommand("oneagent.disconnect"));
   });

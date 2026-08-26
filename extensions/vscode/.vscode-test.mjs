@@ -30,6 +30,7 @@ const environment = (hostCase) => ({
 const isolatedLaunchArgs = (hostCase) => {
   const profileIds = {
     trusted: "t",
+    "trusted-repeat": "r",
     empty: "e",
     virtual: "v",
     "multi-root": "m",
@@ -57,6 +58,16 @@ export default defineConfig([
     ),
     env: environment("trusted"),
     launchArgs: isolatedLaunchArgs("trusted"),
+  },
+  {
+    ...shared,
+    label: "packageActivationRepeat",
+    files: "test/extension/activation.test.js",
+    workspaceFolder: fileURLToPath(
+      new URL("test/fixtures/workspace", import.meta.url),
+    ),
+    env: environment("trusted-repeat"),
+    launchArgs: isolatedLaunchArgs("trusted-repeat"),
   },
   {
     ...shared,

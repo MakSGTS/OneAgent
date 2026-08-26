@@ -12,11 +12,28 @@ const EXECUTABLE_SETTING = "oneagent.runtime.executable";
 let lifecycle: ExtensionLifecycle | undefined;
 let ownedDisposables: readonly vscode.Disposable[] | undefined;
 
-export function activate(context: vscode.ExtensionContext): void {
+type OwnedDisposable = "status" | "connect" | "disconnect" | "configuration";
+
+interface ExtensionHostTestApi {
+  readonly status: () => {
+    readonly text: string;
+    readonly tooltip: string | undefined;
+    readonly command: string | undefined;
+    readonly disposed: Readonly<Record<OwnedDisposable, boolean>>;
+  };
+}
+
+export function activate(context: vscode.ExtensionContext): void | ExtensionHostTestApi {
   const status = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     100,
   );
+  const disposed: Record<OwnedDisposable, boolean> = {
+    status: false,
+    connect: false,
+    disconnect: false,
+    configuration: false,
+  };
   const renderState = (state: Parameters<typeof statusPresentation>[0]): void => {
     const presentation = statusPresentation(state);
     status.text = presentation.text;
@@ -53,14 +70,32 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
+  const own = (name: OwnedDisposable, disposable: vscode.Disposable): vscode.Disposable => ({
+    dispose: () => {
+      disposable.dispose();
+      disposed[name] = true;
+    },
+  });
   const disposables = [
-    status,
-    connect,
-    disconnect,
-    configuration,
+    own("status", status),
+    own("connect", connect),
+    own("disconnect", disconnect),
+    own("configuration", configuration),
   ];
   ownedDisposables = disposables;
   context.subscriptions.push(...disposables);
+
+  const hostCase = process.env.ONEAGENT_HOST_CASE;
+  if (hostCase === "trusted" || hostCase === "trusted-repeat") {
+    return {
+      status: () => ({
+        text: status.text,
+        tooltip: typeof status.tooltip === "string" ? status.tooltip : undefined,
+        command: typeof status.command === "string" ? status.command : undefined,
+        disposed: { ...disposed },
+      }),
+    };
+  }
 }
 
 export async function deactivate(): Promise<void> {

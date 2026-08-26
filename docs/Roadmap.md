@@ -31,9 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
-the unique `next` planning target.
+[Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
+records `pass`; Sprint 27 is completed and Sprint 28 MCP Server is the unique
+`next` planning target.
 
 ## Roadmap reconciliation
 
@@ -5288,7 +5288,7 @@ later [Sprint 23 review](reviews/sprint-23-llm-provider-abstraction.md) records
 | Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | completed |
 | Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | completed |
 | Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | completed |
-| Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | next |
+| Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | completed |
 
 The v0.5 release integration review follows Sprint 27.
 
@@ -6647,11 +6647,31 @@ commit message:
 Plan Sprint 27 Tool Execution Policy
 ```
 
+##### Sprint 27 completed state
+
+Tasks 1-6 are committed in dependency order. The
+[Sprint 27 integration review](reviews/sprint-27-tool-execution-policy.md)
+records `pass` after independent fresh-context read-only review, primary
+reconciliation, the exact non-zero Tool Policy unit/public matrix, unchanged
+LLM/Analysis/Runtime compatibility, dependency/public-surface/sensitive-state/
+no-real-effect audits, and the canonical full workspace gate. The same reviewer
+passed the final artifact-consistency check before the state transition.
+
+Sprint 27 is `completed`, Sprint 28 MCP Server is the unique `next` planning
+target, and the exact verified Sprint 26 prompt suite is retired in the review
+commit. ADR-0049, the additive std-only `oneagent-tool-policy` crate, bounded
+request/effect domain, fail-closed authorization, exact one-use confirmation,
+one-attempt cancellation-aware executor gate, terminal result, redacted audit,
+deterministic fake/public evidence, and accepted deferrals remain the current
+baseline. No completion evidence requires a concrete or real tool action, live
+provider, MCP/IDE client, credential, external network, privileged access,
+wall-clock timing, or destructive action.
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | planned |
+| Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | next |
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | planned |
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | planned |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | planned |

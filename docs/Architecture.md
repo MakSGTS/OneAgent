@@ -84,9 +84,10 @@ The roadmap assigns future boundaries explicitly:
   `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
   also records `pass`. The later
   [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
-  records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
-  implementation and public evidence are present, while its integration review
-  and completion transition remain pending.
+  records `pass`; the later
+  [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
+  also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
+  unique next planning target.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -138,9 +139,10 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused and complete workspace gates. Sprint 22 is completed;
 the [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
-implementation and public evidence are present, while its integration review
-and completion transition remain pending.
+records `pass`; the later
+[Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
+also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
+unique next planning target.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -179,9 +181,10 @@ services.
 | Compatibility | `oneagent-analysis` and `oneagent-runtime` remain unchanged and independently validated; neither depends on `oneagent-llm`, and Context text receives no prompt semantics. |
 
 The [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`. Sprint 26 is completed. Sprint 27 Tool Execution Policy
-implementation and public evidence are present, while its integration review
-and completion transition remain pending.
+records `pass`. The later
+[Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
+also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
+unique next planning target.
 
 ## Implemented Tool Execution Policy boundary
 
@@ -226,8 +229,10 @@ The first slice owns no concrete tool, side effect, policy persistence or
 configuration source, authentication or confirmation UX, clock or timeout
 enforcement, retry/fallback, rollback, audit sink/export, Runtime lifecycle or
 registration, transport, MCP/provider/IDE mapping, sandbox, or cross-process
-replay prevention. Sprint 27 is not complete until its integration review and
-Roadmap transition succeed.
+replay prevention. The
+[Sprint 27 integration review](reviews/sprint-27-tool-execution-policy.md)
+records `pass`; Sprint 27 is completed and Sprint 28 MCP Server is the unique
+next planning target.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -260,9 +265,8 @@ deferred except for the implemented LM Studio and Ollama specializations
 described below.
 The Sprint 24 integration review records `pass with non-blocking follow-ups`;
 the Sprint 25 and Sprint 26 integration reviews record `pass`. Sprint 26 is
-completed. Sprint 27 Tool Execution Policy implementation and public evidence
-are present, while its integration review and completion transition remain
-pending.
+completed. Sprint 27 Tool Execution Policy is completed with a `pass` review;
+Sprint 28 MCP Server is the unique next planning target.
 
 ## Accepted LM Studio provider boundary
 
@@ -295,9 +299,8 @@ configuration sources, live-provider acceptance, server/model lifecycle,
 chat/template quality, streaming, tools, MCP, and IDE integration remain
 deferred. The Sprint 25 and
 [Sprint 26](reviews/sprint-26-ollama-integration.md) integration reviews record
-`pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy implementation
-and public evidence are present, while its integration review and completion
-transition remain pending.
+`pass`; Sprint 27 Tool Execution Policy is completed with a `pass` review and
+Sprint 28 MCP Server is the unique next planning target.
 
 ## Accepted Ollama provider boundary
 
@@ -336,9 +339,8 @@ registration/configuration, live-provider compatibility, daemon/model
 lifecycle, cloud/authentication, chat, templates, streaming, tools, MCP, and IDE
 integration remain deferred. The
 [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md) records
-`pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy implementation
-and public evidence are present, while its integration review and completion
-transition remain pending.
+`pass`; Sprint 27 Tool Execution Policy is completed with a `pass` review and
+Sprint 28 MCP Server is the unique next planning target.
 
 ## Accepted Runtime service-container boundary
 
@@ -632,6 +634,5 @@ CLI Client is completed with a `pass` decision in the
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
 records `pass`. The later
 [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
-implementation and public evidence are present, while its integration review
-and completion transition remain pending.
+records `pass`; Sprint 27 Tool Execution Policy is completed with a `pass`
+review and Sprint 28 MCP Server is the unique next planning target.

@@ -13,9 +13,8 @@ bounded Sprint 24 OpenAI-Compatible Provider is complete with a
 `pass with non-blocking follow-ups` integration review. The bounded Sprint 25
 LM Studio Integration is complete with a `pass` integration review. The
 bounded Sprint 26 Ollama Integration is complete with a `pass` integration
-review. Sprint 27 now has an implemented and publicly tested Tool Execution
-Policy library boundary; its integration review and completion transition are
-still pending.
+review. The bounded Sprint 27 Tool Execution Policy is complete with a `pass`
+integration review. Sprint 28 MCP Server is the unique next planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -115,8 +114,8 @@ completed, partial, failed, executor-reported timeout, and cancelled outcomes;
 redaction, repetition, and cleanup. The crate owns no concrete tools, real side
 effects, policy storage, clock or timeout enforcement, retry/fallback,
 rollback, audit sink, Runtime registration, transport, MCP, provider, or IDE
-integration. Sprint 27 implementation and public evidence are present, but the
-integration review remains pending.
+integration. Sprint 27 is complete with a `pass` integration review; Sprint 28
+MCP Server is the unique next planning target.
 
 ## Verify
 

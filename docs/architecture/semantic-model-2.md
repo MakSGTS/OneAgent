@@ -337,9 +337,10 @@ authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
 `pass`; Sprint 22 is completed. The subsequent
 [Sprint 26 Ollama Integration review](../reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
-implementation and public evidence are present, while its integration review
-and completion transition remain pending.
+records `pass`; the later
+[Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
+also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
+unique next planning target.
 
 ## Core principles
 

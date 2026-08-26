@@ -6683,6 +6683,221 @@ baseline. No completion evidence requires a concrete or real tool action, live
 provider, MCP/IDE client, credential, external network, privileged access,
 wall-clock timing, or destructive action.
 
+#### Sprint 28 MCP Server execution plan
+
+Sprint 28 is planned from committed MCP framework baseline `53b1b0df`. The
+[Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
+records `pass`, so Sprint 28 is the unique `next` target. The committed
+[MCP Protocol profile](codex/profiles/mcp-protocol-implementation.md),
+[workflow](codex/workflows/mcp-protocol.md), and
+[template](codex/templates/mcp-protocol-task.md), together with the existing
+Runtime Service, investigation, architecture, review, sprint-planning, and
+sequential-execution contracts, cover every planned task. No further framework
+change or post-sprint framework audit is justified.
+
+The live repository contains only the dependency-free `oneagent-protocol`
+package foundation. Runtime already owns structured service lifecycle,
+cancellation, Workspace observation, health, HTTP, and Graph Query behavior,
+but it has no MCP message model, server dispatch, stdio transport, process
+entry point, or MCP capability. The official MCP specification revision
+`2026-07-28` supplies a complete stateless JSON-RPC, per-request metadata,
+`server/discover`, newline-delimited stdio, EOF shutdown, and error oracle.
+Repository-owned in-memory streams and public child-process pipes can exercise
+the bounded first slice without a live client, external network, credential,
+remote transport, semantic tool, or real tool effect.
+
+##### Sprint 28 objective
+
+Define and implement one bounded MCP server foundation with an explicit
+protocol revision, strict JSON-RPC validation, truthful empty first-slice
+capabilities, deterministic method dispatch, newline-framed stdio, structured
+Runtime/process lifecycle ownership, typed terminal failures, channel purity,
+and repository-owned protocol and public-process conformance.
+
+Included scope is:
+
+- repository and official-specification investigation plus one accepted ADR;
+- activation of `oneagent-protocol` as the MCP wire and server-dispatch owner,
+  or the smallest evidence-backed equivalent selected by ADR-0050;
+- one explicit supported MCP revision, request identifiers, per-request
+  metadata, result/error envelopes, validation precedence, size bounds, and
+  exact `server/discover` behavior;
+- deterministic registration/dispatch with no advertised semantic capability
+  before Sprint 29 and exact unknown/unsupported behavior;
+- one newline-delimited UTF-8 stdio transport with protocol-only stdout,
+  diagnostics-only stderr, bounded reads/writes, EOF/disconnect, cancellation,
+  failure, shutdown, and cleanup semantics;
+- explicit Runtime and process composition that preserves ADR-0037 ownership
+  and existing HTTP/Workspace behavior as accepted by ADR-0050;
+- repository-owned in-memory, public-library, and real-executable conformance
+  for positive, malformed, missing, unknown, incompatible, reordered,
+  repeated, EOF, cancellation, failure, channel-purity, and cleanup cases;
+- truthful current-state documentation, independent fresh-context integration
+  review, Sprint 29 hand-off, and conditional Sprint 27 prompt-suite retirement.
+
+Excluded scope is:
+
+- MCP semantic tools, prompts, resources, completions, logging, subscriptions,
+  sampling, elicitation, roots, tasks/extensions, or any real tool execution;
+- legacy `initialize`/`initialized`, session state, protocol versions before
+  `2026-07-28`, compatibility fallback, batching, server-to-client requests,
+  progress, or multi-round-trip behavior unless ADR-0050 proves a smaller
+  required compatibility slice;
+- Streamable HTTP, HTTP+SSE, custom sockets, remote access, authentication,
+  authorization transport policy, TLS, Origin policy, DNS, proxies, retries,
+  process supervision, packaging, installation, or external-client support;
+- changes to graph semantics, Context Engine selection, Tool Execution Policy,
+  provider behavior, existing Runtime HTTP/Graph Query wires, source adapters,
+  Coverage Registries, Sprint 29 tools, IDE/LSP behavior, or the v0.6 release
+  review;
+- performance, denial-of-service, security, cross-client compatibility, or
+  protocol-revision stability claims beyond executable bounded evidence.
+
+##### Accepted planning baseline and framework decision
+
+ADR-0037 remains authoritative for Runtime service and cancellation ownership;
+ADR-0038 and ADR-0040 preserve existing HTTP health and Graph Query wires;
+ADR-0043 preserves CLI behavior; ADR-0049 keeps MCP validity separate from tool
+authorization. Task 1 must pin authoritative official pages and schema,
+protocol revision, ownership and dependency direction, message/error/bounds,
+capabilities/dispatch, transport framing, Runtime/process lifecycle, consumer
+compatibility, platform behavior, and deterministic oracles. Task 2 must accept
+ADR-0050 before Cargo or production Rust changes. Adding `serde` and
+`serde_json` to `oneagent-protocol` or adding the internal
+`oneagent-protocol` path dependency to Runtime requires explicit current-user
+approval before Task 3, even though those external versions are already locked.
+
+The mandatory data and testability gate passes for planning: official revision
+`2026-07-28` defines exact wire, discovery, stdio, metadata, shutdown, and
+negative behavior; current Runtime/process owners and consumers are
+discoverable; Tokio pipes and standard child-process I/O provide deterministic
+public oracles. Task 1 may preserve a provenance-backed bounded schema fixture
+when ADR inputs require it. No accepted test depends on a live MCP client,
+external network, credential, real side effect, fixed port, real signal, or
+platform-specific Unix primitive.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-28-mcp-server/`. The verified immediately preceding
+suite is
+`docs/codex/prompts/sprint-27-tool-execution-policy/`; its eight tracked files
+exactly match the filesystem inventory and it contains no untracked addition.
+Only Task 8 may conditionally retire that exact suite after a non-blocking
+decision, successful independent and primary validation, and the reviewer's
+final artifact-consistency check.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the MCP Server boundary. | Investigation / investigation | Verified official revision/schema, repository ownership, dependency, message/error/bounds, capability/dispatch, stdio, lifecycle, consumer, platform, and deterministic-oracle evidence. | Sprint 28 planning baseline. | `Investigate Sprint 28 MCP server` |
+| 2 | Define the MCP Server contract. | Architecture / architecture | Accepted ADR-0050 for protocol authority, ownership, messages, errors, bounds, discovery, dispatch, stdio, lifecycle, failures, compatibility, evidence, and deferred scope. | Task 1 evidence. | `Define Sprint 28 MCP server` |
+| 3 | Implement the MCP protocol domain. | MCP Protocol / MCP Protocol | Accepted bounded JSON-RPC/MCP request, metadata, identifier, response, error, serialization, and validation foundation with focused evidence. | Accepted ADR-0050 and explicit approval for the planned production dependency edges. | `Implement Sprint 28 MCP protocol domain` |
+| 4 | Implement MCP server discovery and dispatch. | MCP Protocol / MCP Protocol | Deterministic accepted method dispatch, truthful discovery, version rejection, notification handling, and closed errors without transport ownership. | Task 3. | `Implement Sprint 28 MCP server dispatch` |
+| 5 | Implement the MCP stdio transport. | MCP Protocol / MCP Protocol | Bounded newline framing, protocol-channel purity, injected stream execution, EOF/cancellation/failure containment, and cleanup evidence. | Task 4. | `Implement Sprint 28 MCP stdio transport` |
+| 6 | Integrate MCP server lifecycle and process composition. | Runtime Service / Runtime Service | Public MCP server executable/composition with structured ownership, startup, EOF-driven graceful shutdown, terminal failures, and unchanged Runtime HTTP/Workspace behavior. | Task 5. | `Integrate Sprint 28 MCP server lifecycle` |
+| 7 | Complete MCP Server evidence. | MCP Protocol / MCP Protocol | Non-zero public library and real-executable conformance, compatibility audits, and truthful current-state docs. | Task 6. | `Complete Sprint 28 MCP server evidence` |
+| 8 | Review the integrated Sprint 28 baseline. | Review / review | Independent reviewer report, primary reconciliation and validation, artifact consistency, sprint decision, Sprint 27 suite retirement, and Sprint 29 hand-off. | Task 7 and all implementation validation. | `Complete Sprint 28 MCP server review` |
+
+Task 1 creates only `docs/architecture/mcp-server-investigation.md`. It records
+the pinned official revision and source provenance; current protocol, Runtime,
+process, dependency, and consumer facts; candidate ownership, message,
+validation, bound, capability, dispatch, transport, lifecycle, failure, and
+compatibility requirements; rejected unsupported assumptions; unresolved
+decisions; and deterministic in-memory/public-process oracles. It performs no
+production implementation or external-client compatibility claim.
+
+Task 2 creates `docs/adr/0050-mcp-server.md`. It accepts the smallest ownership
+and dependency direction, exact protocol revision, supported message patterns,
+request metadata and identifiers, validation/error precedence, bounds,
+discovery and empty capability response, method registration and dispatch,
+stdio framing and channel ownership, Runtime/process lifecycle, EOF,
+cancellation, failure, cleanup, public conformance, compatibility, and deferred
+scope. It changes no Rust or Cargo file.
+
+Task 3 implements only the accepted protocol value and codec foundation. It
+does not own method registration, stdio, Runtime services, process I/O, semantic
+tools, or external-client compatibility. It preserves request identifiers and
+never emits sensitive or unbounded content through implicit diagnostics.
+
+Task 4 implements only transport-independent server behavior. It exposes the
+accepted discovery result with no semantic capability, rejects unsupported
+versions and methods with the accepted precedence, handles notifications
+without responses, and keeps dispatch independent from stdio and Runtime.
+
+Task 5 implements only the accepted newline-framed stream adapter over injected
+asynchronous I/O. It never writes logs or banners to protocol output, never
+accepts embedded-newline frames, retains no detached work, and terminates under
+the accepted EOF, cancellation, writer failure, malformed-input, and repeated-
+run rules. It does not choose production composition.
+
+Task 6 wires the accepted public executable and Runtime/process lifecycle. It
+keeps existing Runtime services and HTTP/CLI contracts unchanged, gives every
+reader, writer, task, channel, and shutdown signal one structured owner, and
+proves startup failure, EOF-driven graceful shutdown, cancellation, cleanup,
+and fresh process behavior without real signals or external clients.
+
+Task 7 adds a non-zero public protocol/transport/executable conformance target,
+reruns complete protocol and Runtime regressions plus dependency, capability,
+method, framing, channel-purity, ignored-test, and deferred-scope audits, and
+synchronizes only `README.md`, `docs/Architecture.md`, and
+`docs/architecture/semantic-model-2.md`. It does not mark Sprint 28 completed.
+
+Task 8 first delegates the exact planning-through-Task-7 range to one fresh-
+context read-only reviewer under `docs/codex/workflows/review.md`. The primary
+agent independently inspects the same range and reruns the required matrix,
+reconciles both evidence sets without weakening the reviewer, drafts
+`docs/reviews/sprint-28-mcp-server.md`, and asks the same reviewer for a final
+read-only artifact-consistency check. Only `pass` or `pass with non-blocking
+follow-ups` after both validation paths and consistency may transition Sprint
+28 to `completed`, make Sprint 29 MCP Semantic Tools the unique `next` target,
+and atomically retire the exact tracked Sprint 27 prompt suite.
+
+##### State, failure, and validation gates
+
+Sprint 28 remains `next` during planning and becomes `active` only after the
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing official or repository evidence, an unimplementable ADR, absent
+dependency approval, unsupported-version ambiguity, invalid JSON-RPC error
+precedence, false capability advertisement, protocol-output contamination,
+detached I/O/task state, external-client-dependent acceptance, zero matched
+tests, failed validation, staging/commit failure, unavailable or mutating
+reviewer, incomplete reviewer output, unresolved evidence disagreement, or
+failed artifact-consistency check stops the sprint immediately.
+
+Documentation-only Tasks 1-2 run source-provenance/evidence/decision/link
+consistency and `git diff --check`. Production Tasks 3-7 run non-zero focused,
+public protocol, stdio, process, and affected Runtime tests; dependency,
+capability, method, framing, channel-purity, compatibility, and deferred-scope
+audits; and the canonical full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+No completion claim may require a live MCP client, external network,
+credential, remote transport, real tool effect, fixed port, real signal,
+platform-specific pipe, or unsupported compatibility claim. Task 8 independently
+reruns the exact focused/public/full review matrix and revalidates the Sprint 27
+prompt inventory before any explicit deletion.
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 27 retirement inventory, independent-review handoff and consistency
+rules, `git diff --check`, and unrelated-change absence. Suggested planning
+commit message:
+
+```text
+Plan Sprint 28 MCP Server
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

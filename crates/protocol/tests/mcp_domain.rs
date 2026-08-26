@@ -1,7 +1,7 @@
 use oneagent_protocol::{
     CLIENT_CAPABILITIES_META_KEY, CLIENT_INFO_META_KEY, DecodeOutcome, ErrorCode, InboundMessage,
-    MAX_REQUEST_ID_BYTES, PROTOCOL_VERSION, PROTOCOL_VERSION_META_KEY, RequestId, Response,
-    decode_message, encode_response,
+    MAX_JSON_NESTING_DEPTH, MAX_REQUEST_ID_BYTES, PROTOCOL_VERSION, PROTOCOL_VERSION_META_KEY,
+    RequestId, Response, decode_message, encode_response,
 };
 use serde_json::{Value, json};
 
@@ -88,6 +88,27 @@ fn invalid_identifier_matrix_uses_invalid_request() {
 }
 
 #[test]
+fn public_identifier_and_json_depth_bounds_are_exact() {
+    let exact = "x".repeat(MAX_REQUEST_ID_BYTES);
+    let DecodeOutcome::Message(InboundMessage::Request(request)) =
+        decode_message(&request(&json!(exact), "server/discover"))
+    else {
+        panic!("exact request ID boundary must decode");
+    };
+    assert_eq!(
+        request.id().as_str().map(str::len),
+        Some(MAX_REQUEST_ID_BYTES)
+    );
+
+    let too_deep = format!(
+        "{}0{}",
+        "[".repeat(MAX_JSON_NESTING_DEPTH + 1),
+        "]".repeat(MAX_JSON_NESTING_DEPTH + 1)
+    );
+    assert_eq!(error(&too_deep).code(), ErrorCode::InvalidRequest);
+}
+
+#[test]
 fn parse_shape_metadata_and_version_precedence_is_stable() {
     let cases = [
         ("{", ErrorCode::ParseError, false),
@@ -131,6 +152,14 @@ fn parse_shape_metadata_and_version_precedence_is_stable() {
             "supported": [PROTOCOL_VERSION]
         }))
     );
+
+    let invalid_client = request(&json!(8), "x").replace(
+        r#"{"name":"test-client","version":"1.0"}"#,
+        r#"{"name":"test-client"}"#,
+    );
+    let failure = error(&invalid_client);
+    assert_eq!(failure.code(), ErrorCode::InvalidParams);
+    assert_eq!(failure.id().and_then(RequestId::as_i64), Some(8));
 }
 
 #[test]

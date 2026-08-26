@@ -57,14 +57,17 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      lifecycle-derived readiness probes plus the versioned read-only Graph
      Query route set. A transport-neutral observer-backed query component owns
      exact configuration, node, direct-relation, and bounded-traversal
-     operations without becoming a background service.
+     operations without becoming a background service. A separate bounded MCP
+     stdio adapter and `oneagent-mcp` binary serve discovery without
+     constructing `App` or changing Runtime service ownership.
    - `oneagent-cli` is the supported dependency-free client for the accepted
      Runtime health and Graph Query HTTP/1.1 surface. It owns a closed command
      grammar, local validation, bounded one-request socket lifecycle, exact
      query encoding, opaque Runtime JSON presentation, and stable failure/exit
      classification without becoming protocol or semantic authority.
-   - `oneagent-protocol` is a package foundation and does not yet expose HTTP,
-     MCP, or LSP contracts.
+   - `oneagent-protocol` owns the bounded MCP 2026-07-28 request, notification,
+     response, error, discovery, codec, validation, and dispatch contracts. It
+     does not own Runtime I/O, semantic tools, HTTP, or LSP contracts.
 
 `SemanticGraph` is the canonical semantic authority. Adapters may observe source
 formats and contribute provenance-backed facts, but source-specific identities
@@ -86,9 +89,10 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
   records `pass`; the later
   [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
-  also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
-  unique next planning target.
-- MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
+  also records `pass`. The Sprint 28 MCP Server implementation is present and
+  remains the unique `next` target pending integration review.
+- Semantic MCP tools, external-client compatibility, VS Code, LSP, and EDT
+  product integration remain later work in Sprints 29–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
@@ -141,8 +145,8 @@ The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 the [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
-also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
-unique next planning target.
+also records `pass`. The Sprint 28 MCP Server implementation is present and
+remains the unique `next` target pending integration review.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -183,8 +187,8 @@ services.
 The [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`. The later
 [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
-also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
-unique next planning target.
+also records `pass`. The Sprint 28 MCP Server implementation is present and
+remains the unique `next` target pending integration review.
 
 ## Implemented Tool Execution Policy boundary
 
@@ -231,8 +235,34 @@ enforcement, retry/fallback, rollback, audit sink/export, Runtime lifecycle or
 registration, transport, MCP/provider/IDE mapping, sandbox, or cross-process
 replay prevention. The
 [Sprint 27 integration review](reviews/sprint-27-tool-execution-policy.md)
-records `pass`; Sprint 27 is completed and Sprint 28 MCP Server is the unique
-next planning target.
+records `pass`. The Sprint 28 MCP Server implementation is present and remains
+the unique `next` target pending integration review.
+
+## Implemented MCP Server boundary
+
+[ADR-0050](adr/0050-mcp-server.md) governs the discovery-only Sprint 28 first
+slice for MCP revision 2026-07-28. `oneagent-protocol` owns bounded request IDs,
+method names, request and notification metadata, closed responses and errors,
+newline-payload codec validation, and exact discovery data. The sole supported
+method is `server/discover`, which returns a complete result for the one
+supported revision, empty capabilities, bounded server identity, zero TTL, and
+public cache scope. Legacy initialize, sessions, and negotiation are absent.
+
+`oneagent-runtime` owns one injected sequential asynchronous stdio adapter. It
+accepts LF and CRLF framing, enforces a 1 MiB payload limit and bounded JSON
+nesting, emits no response for notifications, flushes every response, maps
+controlled read/write/flush/shutdown failures to stable categories, and treats
+cancellation and EOF as successful completion. The separate `oneagent-mcp`
+binary constructs no Runtime `App`; stdout contains protocol frames only, EOF
+exits with status zero, and terminal failures use stable stderr text.
+
+Public protocol, adapter, and real-process tests cover exact discovery,
+validation bounds, malformed and oversized input, unsupported methods,
+notifications, LF/CRLF framing, cancellation, transport failures, EOF, stdout
+purity, exit status, and cleanup. Semantic graph/context tools, additional MCP
+revisions, remote transports, authentication, external-client compatibility,
+packaging, and IDE integration remain deferred. The implementation remains the
+unique `next` target pending integration review.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -265,8 +295,9 @@ deferred except for the implemented LM Studio and Ollama specializations
 described below.
 The Sprint 24 integration review records `pass with non-blocking follow-ups`;
 the Sprint 25 and Sprint 26 integration reviews record `pass`. Sprint 26 is
-completed. Sprint 27 Tool Execution Policy is completed with a `pass` review;
-Sprint 28 MCP Server is the unique next planning target.
+completed. Sprint 27 Tool Execution Policy is completed with a `pass` review.
+The Sprint 28 MCP Server implementation is present and remains the unique
+`next` target pending integration review.
 
 ## Accepted LM Studio provider boundary
 
@@ -299,8 +330,9 @@ configuration sources, live-provider acceptance, server/model lifecycle,
 chat/template quality, streaming, tools, MCP, and IDE integration remain
 deferred. The Sprint 25 and
 [Sprint 26](reviews/sprint-26-ollama-integration.md) integration reviews record
-`pass`; Sprint 27 Tool Execution Policy is completed with a `pass` review and
-Sprint 28 MCP Server is the unique next planning target.
+`pass`; Sprint 27 Tool Execution Policy is completed with a `pass` review. The
+Sprint 28 MCP Server implementation is present and remains the unique `next`
+target pending integration review.
 
 ## Accepted Ollama provider boundary
 
@@ -339,8 +371,9 @@ registration/configuration, live-provider compatibility, daemon/model
 lifecycle, cloud/authentication, chat, templates, streaming, tools, MCP, and IDE
 integration remain deferred. The
 [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md) records
-`pass`; Sprint 27 Tool Execution Policy is completed with a `pass` review and
-Sprint 28 MCP Server is the unique next planning target.
+`pass`; Sprint 27 Tool Execution Policy is completed with a `pass` review. The
+Sprint 28 MCP Server implementation is present and remains the unique `next`
+target pending integration review.
 
 ## Accepted Runtime service-container boundary
 
@@ -635,4 +668,5 @@ CLI Client is completed with a `pass` decision in the
 records `pass`. The later
 [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`; Sprint 27 Tool Execution Policy is completed with a `pass`
-review and Sprint 28 MCP Server is the unique next planning target.
+review. The Sprint 28 MCP Server implementation is present and remains the
+unique `next` target pending integration review.

@@ -159,6 +159,22 @@ side effect, clock or timeout enforcement, retry/fallback, rollback, sandbox,
 audit sink, confirmation UX/authentication, or cross-process replay authority.
 Tool results do not create or mutate Knowledge Graph facts.
 
+### `oneagent-protocol`
+
+Owns the bounded discovery-only MCP revision 2026-07-28 boundary accepted by
+ADR-0050:
+
+* bounded request IDs, method names, client and server information, and request
+  and notification metadata;
+* closed request, notification, response, and protocol-error values;
+* bounded JSON encoding/decoding and newline-payload validation;
+* exact `server/discover` result construction and method dispatch.
+
+It depends only on serialization support and does not own Runtime stream I/O,
+the Knowledge Graph, Context Engine, providers, tool execution, semantic MCP
+tools, remote transports, authentication, persistence, or IDE state. Protocol
+messages do not create or mutate Knowledge Graph facts.
+
 ### `oneagent-openai-compatible`
 
 Owns the concrete ADR-0046 leaf adapter behind `LlmProvider`. It validates one
@@ -339,8 +355,26 @@ authority. The subsequent
 [Sprint 26 Ollama Integration review](../reviews/sprint-26-ollama-integration.md)
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
-also records `pass`. Sprint 27 is completed and Sprint 28 MCP Server is the
-unique next planning target.
+also records `pass`. The Sprint 28 MCP Server implementation is present and
+remains the unique `next` target pending integration review.
+
+ADR-0050 governs the implemented discovery-only MCP Server boundary without
+changing graph, Context Engine, tool-policy, provider, or Runtime service
+authority. `oneagent-protocol` represents MCP revision 2026-07-28 requests,
+notifications, responses, closed errors, bounded JSON payloads, and the exact
+`server/discover` method with no legacy initialize or session behavior.
+`oneagent-runtime` supplies an injected sequential newline-framed asynchronous
+adapter with a 1 MiB payload limit, notification silence, per-response flush,
+cooperative cancellation, successful EOF completion, and stable controlled
+transport failures. The separate `oneagent-mcp` process constructs no Runtime
+`App`, preserves protocol-only stdout, exits successfully at EOF, and reports
+terminal failure on stderr. Public domain, dispatch, adapter, and real-process
+evidence covers bounds, malformed and oversized input, LF/CRLF framing,
+unsupported methods, notifications, cancellation, transport failures, stdout
+purity, exit status, repetition, and cleanup. Semantic graph/context tools,
+additional revisions, remote transports, authentication, external-client
+compatibility, packaging, and IDE integration remain deferred. Sprint 28
+remains the unique `next` target pending integration review.
 
 ## Core principles
 
@@ -1464,10 +1498,11 @@ SM-8 AI Context Engine
     deferred: source extraction and provider/model context
 
 SM-9 MCP and IDE integration
-    graph queries
-    context tools
-    VS Code position seeds
-    incremental refresh
+    implemented: MCP 2026-07-28 request/response and discovery domain
+    implemented: bounded newline-framed stdio process and EOF lifecycle
+    deferred: semantic graph and context tools
+    deferred: VS Code position seeds
+    deferred: incremental refresh and external-client compatibility
 ```
 
 ## Historical initial implementation boundary

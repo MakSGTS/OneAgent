@@ -1,7 +1,7 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use oneagent_protocol::PROTOCOL_VERSION;
+use oneagent_protocol::{MAX_MESSAGE_BYTES, PROTOCOL_VERSION};
 use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -84,4 +84,9 @@ async fn public_mcp_process_reports_only_bounded_terminal_diagnostics() {
     assert!(!incomplete.status.success());
     assert!(incomplete.stdout.is_empty());
     assert_eq!(incomplete.stderr, b"oneagent-mcp: incomplete frame\n");
+
+    let oversized = run_process(&vec![b'x'; MAX_MESSAGE_BYTES + 1]).await;
+    assert!(!oversized.status.success());
+    assert!(oversized.stdout.is_empty());
+    assert_eq!(oversized.stderr, b"oneagent-mcp: frame too large\n");
 }

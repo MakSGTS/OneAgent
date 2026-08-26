@@ -89,3 +89,25 @@ fn public_dispatch_has_closed_version_method_and_notification_behavior() {
             .is_none()
     );
 }
+
+#[test]
+fn public_dispatch_enforces_exact_method_name_bounds_before_lookup() {
+    let server = McpServer::new();
+    let exact = "m".repeat(oneagent_protocol::MAX_METHOD_NAME_BYTES);
+    let response = server
+        .dispatch(&request(&json!(3), &exact, PROTOCOL_VERSION))
+        .expect("exact-bound request must respond");
+    let Response::Error(error) = response else {
+        panic!("unregistered exact-bound method must fail");
+    };
+    assert_eq!(error.code(), ErrorCode::MethodNotFound);
+
+    let oversized = "m".repeat(oneagent_protocol::MAX_METHOD_NAME_BYTES + 1);
+    let response = server
+        .dispatch(&request(&json!(4), &oversized, PROTOCOL_VERSION))
+        .expect("oversized method must respond");
+    let Response::Error(error) = response else {
+        panic!("oversized method must fail");
+    };
+    assert_eq!(error.code(), ErrorCode::InvalidRequest);
+}

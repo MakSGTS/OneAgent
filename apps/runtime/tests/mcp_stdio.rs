@@ -1,9 +1,13 @@
 use std::convert::Infallible;
-use std::future::pending;
+use std::future::{pending, ready};
+use std::io;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use oneagent_protocol::{MAX_MESSAGE_BYTES, PROTOCOL_VERSION};
 use oneagent_runtime::{McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
 use serde_json::{Value, json};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 fn request(id: u64, method: &str) -> String {
     json!({
@@ -105,4 +109,109 @@ async fn public_transport_enforces_utf8_size_and_complete_delimiters() {
     let (outcome, output) = run(&crlf_boundary).await;
     assert_eq!(outcome, Ok(McpStdioOutcome::EndOfInput));
     assert!(!output.is_empty());
+}
+
+struct PublicFailingReader;
+
+impl AsyncRead for PublicFailingReader {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        _buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Poll::Ready(Err(io::Error::other("private sentinel")))
+    }
+}
+
+enum PublicWriterFailure {
+    Write,
+    Flush(Vec<u8>),
+}
+
+impl AsyncWrite for PublicWriterFailure {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        match &mut *self {
+            Self::Write => Poll::Ready(Err(io::Error::other("private sentinel"))),
+            Self::Flush(bytes) => {
+                bytes.extend_from_slice(buffer);
+                Poll::Ready(Ok(buffer.len()))
+            }
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &*self {
+            Self::Write => Poll::Ready(Ok(())),
+            Self::Flush(_) => Poll::Ready(Err(io::Error::other("private sentinel"))),
+        }
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[tokio::test]
+async fn public_transport_closes_cancellation_and_io_failure_matrix() {
+    let transport = McpStdioTransport::default();
+    let mut empty = &b""[..];
+    let mut output = Vec::new();
+    assert_eq!(
+        transport
+            .run(&mut empty, &mut output, ready(Ok::<(), io::Error>(())))
+            .await,
+        Ok(McpStdioOutcome::Cancelled)
+    );
+
+    let mut empty = &b""[..];
+    let error = transport
+        .run(
+            &mut empty,
+            &mut output,
+            ready(Err::<(), _>(io::Error::other("private sentinel"))),
+        )
+        .await
+        .expect_err("shutdown-source failure must terminate");
+    assert_eq!(error.kind(), McpStdioErrorKind::Shutdown);
+    assert!(!error.to_string().contains("sentinel"));
+
+    let mut reader = PublicFailingReader;
+    let error = transport
+        .run(
+            &mut reader,
+            &mut output,
+            pending::<Result<(), Infallible>>(),
+        )
+        .await
+        .expect_err("read failure must terminate");
+    assert_eq!(error.kind(), McpStdioErrorKind::Read);
+
+    let input = format!("{}\n", request(5, "server/discover"));
+    let mut reader = input.as_bytes();
+    let mut writer = PublicWriterFailure::Write;
+    let error = transport
+        .run(
+            &mut reader,
+            &mut writer,
+            pending::<Result<(), Infallible>>(),
+        )
+        .await
+        .expect_err("write failure must terminate");
+    assert_eq!(error.kind(), McpStdioErrorKind::Write);
+
+    let mut reader = input.as_bytes();
+    let mut writer = PublicWriterFailure::Flush(Vec::new());
+    let error = transport
+        .run(
+            &mut reader,
+            &mut writer,
+            pending::<Result<(), Infallible>>(),
+        )
+        .await
+        .expect_err("flush failure must terminate");
+    assert_eq!(error.kind(), McpStdioErrorKind::Flush);
 }

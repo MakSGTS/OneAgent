@@ -39,11 +39,16 @@ architecture or implement production behavior.
 
 ## Pinned upstream platform evidence
 
-The selected platform candidate is stable desktop VS Code `1.134.0`. The
-official update service returned `1.134.0` as the first stable release on
-2026-08-26:
+The selected platform candidate is stable desktop VS Code `1.134.0`. Its
+version-selection provenance is pinned to the official release tag and full
+source commit `474a349ad5b745e512ef86b864d1c74f7264dd7a`, published on
+2026-08-19. The mutable update-service inventory was observed on 2026-08-26
+only to discover the then-current stable candidate; it is not an immutable
+authority for the historical selection:
 
-- [Stable release inventory](https://update.code.visualstudio.com/api/releases/stable)
+- [Official `1.134.0` release](https://github.com/microsoft/vscode/releases/tag/1.134.0)
+- [Immutable `1.134.0` source commit](https://github.com/microsoft/vscode/commit/474a349ad5b745e512ef86b864d1c74f7264dd7a)
+- [Dated mutable release-inventory observation](https://update.code.visualstudio.com/api/releases/stable)
 - [Extension manifest reference](https://code.visualstudio.com/api/references/extension-manifest)
 - [Extension anatomy](https://code.visualstudio.com/api/get-started/extension-anatomy)
 - [Activation events](https://code.visualstudio.com/api/references/activation-events)
@@ -56,6 +61,13 @@ official update service returned `1.134.0` as the first stable release on
 - [Continuous integration](https://code.visualstudio.com/api/working-with-extensions/continuous-integration)
 - [Bundling extensions](https://code.visualstudio.com/api/working-with-extensions/bundling-extension)
 - [Publishing and VSIX packaging](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
+
+The `code.visualstudio.com` references above explain the documented extension
+model but are living documentation. Reproducibility of the selected platform
+and Extension Host evidence depends on the immutable source commit, the exact
+manifest engine and `@types/vscode` versions, the locked development
+dependencies, and the exact `1.134.0` test download rather than on mutable
+ordering or wording at those documentation URLs.
 
 Confirmed platform facts are:
 

@@ -197,12 +197,61 @@ test("classifies spawn errors without exposing process inputs", async () => {
 test("times out a pending startup request and reaps the child", async () => {
   const scheduler = new FakeScheduler();
   const process = new FakeProcess(() => undefined);
-  const client = new RuntimeClient({ processFactory: factoryFor(process), scheduler });
+  const states: Array<[string, string | undefined]> = [];
+  const client = new RuntimeClient({
+    processFactory: factoryFor(process),
+    scheduler,
+    onStateChange: (state, failure) => states.push([state, failure?.code]),
+  });
   const connection = client.connect("runtime", "/workspace");
   scheduler.fire(REQUEST_TIMEOUT_MS);
   assert.equal(await failureCode(connection), "startup_timeout");
   assert.equal(client.state, "failed");
   assert.equal(scheduler.activeCount, 0);
+  assert.equal(process.listenerCount("exit"), 0);
+  assert.deepEqual(states, [
+    ["connecting", undefined],
+    ["failed", "startup_timeout"],
+  ]);
+});
+
+test("classifies failed startup cleanup and releases ownership after a late exit", async () => {
+  const scheduler = new FakeScheduler();
+  const firstProcess = new FakeProcess(() => undefined);
+  firstProcess.exitOnEnd = false;
+  firstProcess.exitOnKill = false;
+  const secondProcess = new FakeProcess(compatibleResponder);
+  const processes = [firstProcess, secondProcess];
+  const states: Array<[string, string | undefined]> = [];
+  let spawnCalls = 0;
+  const client = new RuntimeClient({
+    processFactory: () => processes[spawnCalls++] as FakeProcess,
+    scheduler,
+    onStateChange: (state, failure) => states.push([state, failure?.code]),
+  });
+
+  const connection = client.connect("runtime", "/workspace");
+  scheduler.fire(REQUEST_TIMEOUT_MS);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  scheduler.fire(SHUTDOWN_TIMEOUT_MS);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  scheduler.fire(SHUTDOWN_TIMEOUT_MS);
+
+  assert.equal(await failureCode(connection), "shutdown_failed");
+  assert.equal(client.state, "failed");
+  assert.equal(firstProcess.killCalls, 1);
+  assert.equal(firstProcess.listenerCount("exit"), 1, "the unobserved child remains owned");
+  assert.equal(scheduler.activeCount, 0);
+  assert.deepEqual(states, [
+    ["connecting", undefined],
+    ["failed", "shutdown_failed"],
+  ]);
+
+  firstProcess.emitExit(null, "SIGTERM");
+  assert.equal(firstProcess.listenerCount("exit"), 0);
+  assert.equal(await client.connect("runtime", "/workspace"), "connected");
+  assert.equal(spawnCalls, 2);
+  assert.equal(await client.disconnect(), "disconnected");
 });
 
 test("disconnects an in-flight connection without a transient failed state", async () => {

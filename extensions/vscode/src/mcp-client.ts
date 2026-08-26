@@ -175,10 +175,15 @@ export class RuntimeClient {
       return this.currentState;
     } catch (error) {
       const failure = asRuntimeFailure(error);
+      const stopped = await this.stopOwnedProcess();
+      if (!stopped) {
+        const shutdownFailure = new RuntimeClientFailure("shutdown_failed");
+        this.setState("failed", shutdownFailure);
+        throw shutdownFailure;
+      }
       if (this.shouldReportConnectionFailure()) {
         this.setState("failed", failure);
       }
-      await this.stopOwnedProcess();
       throw failure;
     }
   }
@@ -323,6 +328,8 @@ export class RuntimeClient {
       const code: RuntimeFailureCode =
         this.stdoutBuffer.length === 0 ? "process_exited" : "protocol_failure";
       this.abort(new RuntimeClientFailure(code));
+    } else if (!this.stopping && this.currentState === "failed") {
+      this.releaseTerminatedProcess();
     }
   };
 
@@ -337,6 +344,8 @@ export class RuntimeClient {
       const code: RuntimeFailureCode =
         this.stdoutBuffer.length === 0 ? "process_exited" : "protocol_failure";
       this.abort(new RuntimeClientFailure(code));
+    } else if (!this.stopping && this.currentState === "failed") {
+      this.releaseTerminatedProcess();
     }
   };
 
@@ -430,9 +439,7 @@ export class RuntimeClient {
       exited = await this.waitForExit(SHUTDOWN_TIMEOUT_MS);
     }
     if (exited) {
-      this.detachProcess(child);
-      this.process = undefined;
-      this.resetConnectionBuffers();
+      this.releaseTerminatedProcess();
     }
     this.stopping = false;
     return exited;
@@ -461,6 +468,16 @@ export class RuntimeClient {
     this.exitWaiters.clear();
   }
 
+  private releaseTerminatedProcess(): void {
+    const child = this.process;
+    if (child === undefined) {
+      return;
+    }
+    this.detachProcess(child);
+    this.process = undefined;
+    this.resetConnectionBuffers();
+  }
+
   private setState(state: ConnectionState, failure?: RuntimeClientFailure): void {
     this.currentState = state;
     if (failure === undefined) {
@@ -475,7 +492,7 @@ export class RuntimeClient {
   }
 
   private shouldReportConnectionFailure(): boolean {
-    return this.currentState !== "failed" && this.currentState !== "disconnecting";
+    return this.currentState === "connecting";
   }
 }
 

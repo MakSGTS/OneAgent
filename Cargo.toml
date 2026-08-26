@@ -17,6 +17,7 @@ members = [
     "adapters/openai-compatible",
     "crates/analysis",
     "crates/llm",
+    "crates/tool-policy",
 ]
 
 [workspace.package]

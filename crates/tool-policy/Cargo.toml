@@ -1,0 +1,10 @@
+[package]
+name = "oneagent-tool-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

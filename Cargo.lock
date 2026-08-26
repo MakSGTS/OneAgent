@@ -832,6 +832,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "oneagent-tool-policy"
+version = "0.1.0"
+
+[[package]]
 name = "oneagent-workspace"
 version = "0.1.0"
 dependencies = [

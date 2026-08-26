@@ -6438,6 +6438,215 @@ evidence, and accepted deferrals remain the current baseline. No completion
 evidence requires installed or running Ollama, a local or cloud model,
 credential, external network, or response-quality claim.
 
+#### Sprint 27 Tool Execution Policy execution plan
+
+Sprint 27 is planned from committed framework baseline `d31e9a43`. The
+[Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
+records `pass`, so Sprint 27 is the unique `next` target. The committed
+[AI Tool Policy profile](codex/profiles/ai-tool-policy-implementation.md),
+[workflow](codex/workflows/ai-tool-policy.md), and
+[template](codex/templates/ai-tool-policy-task.md), together with the existing
+investigation, architecture, review, sprint-planning, and sequential-execution
+contracts, cover every planned task. No further framework change or post-sprint
+framework audit is justified.
+
+The live repository contains no source-independent tool identity, request,
+side-effect, authorization, confirmation, executor, outcome, or audit domain.
+The std-only `oneagent-llm` crate owns provider execution but explicitly defers
+tool authorization, and Runtime owns application lifecycle without depending on
+the LLM crate. Rust 1.97.1, existing owned-value conventions, boxed-future
+patterns, and deterministic fake-provider tests prove that repository-owned
+policy and fake-executor evidence can cover the first slice without a live
+provider, MCP client, external service, credential, destructive action, wall
+clock, or platform-specific tool.
+
+##### Sprint 27 objective
+
+Define and implement one source-independent, fail-closed AI tool execution
+policy boundary with bounded identities and requests, explicit side-effect
+classification, deterministic authorization and denial, exact confirmation
+binding, gated one-attempt execution, typed terminal outcomes, bounded redacted
+audit evidence, and repository-owned fake-executor conformance.
+
+Included scope is:
+
+- repository and architecture investigation plus one accepted ADR;
+- one additive source-independent tool-policy crate or the smallest
+  evidence-backed equivalent owner, with no required external production
+  dependency;
+- bounded tool, actor, request, argument-summary, policy-revision, and decision
+  identity as accepted by ADR-0049;
+- a closed conservative side-effect vocabulary and deterministic policy rule
+  matching with explicit deny, allow, confirmation-required, and default-deny
+  outcomes;
+- confirmation bound to the exact current request and decision, with rejected
+  missing, mismatched, stale, duplicated, or replayed evidence;
+- a substitutable execution seam that cannot be invoked after denial or without
+  required confirmation and produces one bounded terminal result;
+- exact cancellation, timeout representation/enforcement boundary, no-retry,
+  partial-failure classification, cleanup, sensitive-data redaction, stable
+  audit correlation, ordering, and repetition behavior accepted by ADR-0049;
+- repository-owned deterministic fakes and public conformance proving positive,
+  negative, malformed, ambiguous, duplicate, reordered, cancellation, timeout,
+  failure, partial, redaction, and repeated cases as applicable;
+- truthful current-state documentation, independent fresh-context integration
+  review, Sprint 28 hand-off, and conditional Sprint 26 prompt-suite retirement.
+
+Excluded scope is:
+
+- concrete filesystem, shell, Git, network, database, 1C, provider, MCP, LSP,
+  IDE, CLI, browser, or other tool implementations and schemas;
+- real external, destructive, privileged, credentialed, or third-party-visible
+  execution as repository acceptance evidence;
+- Runtime composition, service lifecycle, HTTP/protocol exposure, MCP server or
+  semantic tools, IDE confirmation UX, actor authentication, policy
+  administration UI, persistence, configuration sources, or audit export;
+- provider tool-call wire formats, model capability expansion, prompt assembly,
+  conversation state, automatic tool selection, planning, chaining, or loops;
+- sandbox, operating-system permissions, rollback, transaction, idempotency,
+  atomicity, security, performance, or compliance claims without a later
+  concrete executor and reproducible evidence;
+- graph, metadata, BSL, workspace, source adapters, Semantic Coverage
+  Registries, Sprint 28 implementation, or the v0.5 release review.
+
+##### Accepted planning baseline and framework decision
+
+ADR-0037 remains authoritative for Runtime lifecycle and cancellation
+ownership; ADR-0044 keeps Context Engine output deterministic and independent
+from tool execution; ADR-0045 keeps provider execution and tool authorization
+separate and does not imply a tool-capable model. Task 1 must resolve the exact
+crate owner, dependency direction, identity and sensitivity inputs, effect
+vocabulary, rule/actor/scope model, confirmation trust boundary, execution seam,
+terminal and audit evidence, error precedence, platform portability, consumer
+impact, and deterministic oracle. Task 2 must accept ADR-0049 before Cargo or
+production Rust changes. Any new external repository production dependency or
+feature requires explicit user approval before Task 3; an additive local
+workspace member with no external dependency does not.
+
+The mandatory data and testability gate passes for planning: every existing
+owner and consumer is discoverable; no serialized external wire or real source
+artifact is part of the source-independent first slice; bounded Rust values and
+repository-owned fake executors provide observable allow/deny/no-invocation,
+confirmation-binding, terminal-outcome, redaction, ordering, and repeated-run
+oracles. Task 1 may close architecture questions from repository-owned evidence;
+it may not hide a requirement for external data or real side effects.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-27-tool-execution-policy/`. The verified immediately
+preceding suite is
+`docs/codex/prompts/sprint-26-ollama-integration/`; its eight tracked files
+exactly match the filesystem inventory and it contains no untracked addition.
+Only Task 7 may conditionally retire that exact suite after a non-blocking
+decision, successful independent and primary validation, and the reviewer's
+final artifact-consistency check.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Tool Execution Policy boundary. | Investigation / investigation | Verified ownership, dependency, identity, sensitivity, side-effect, actor/scope/rule, confirmation, execution, outcome, audit, consumer, platform, and deterministic-oracle evidence. | Sprint 27 planning baseline. | `Investigate Sprint 27 tool execution policy` |
+| 2 | Define the Tool Execution Policy contract. | Architecture / architecture | Accepted ADR-0049 for ownership, values, effects, rules, decisions, confirmation, execution, outcomes, audit, failures, evidence, compatibility, and deferred scope. | Task 1 evidence. | `Define Sprint 27 tool execution policy` |
+| 3 | Implement the tool request domain. | AI Tool Policy / AI Tool Policy | Accepted additive crate foundation and bounded identities, requests, sensitive arguments, effects, errors, and deterministic domain evidence. | Accepted ADR-0049 and explicit approval for any new external production dependency or feature. | `Implement Sprint 27 tool request domain` |
+| 4 | Implement deterministic authorization. | AI Tool Policy / AI Tool Policy | Fail-closed canonical rule evaluation with accepted actor/scope matching, deny/confirmation/allow precedence, stable decisions, and no execution. | Task 3. | `Implement Sprint 27 authorization policy` |
+| 5 | Implement confirmation-gated execution. | AI Tool Policy / AI Tool Policy | Exact decision/confirmation binding, one-attempt executor gate, cancellation/failure containment, terminal outcomes, and bounded audit evidence. | Task 4. | `Implement Sprint 27 confirmed execution` |
+| 6 | Complete Tool Execution Policy evidence. | AI Tool Policy / AI Tool Policy | Public fake-executor conformance, LLM/Analysis/Runtime compatibility evidence, and current-state docs. | Task 5. | `Complete Sprint 27 tool policy evidence` |
+| 7 | Review the integrated Sprint 27 baseline. | Review / review | Independent reviewer report, primary reconciliation and validation, artifact consistency, sprint decision, Sprint 26 suite retirement, and Sprint 28 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 27 tool execution policy review` |
+
+Task 1 creates only
+`docs/architecture/tool-execution-policy-investigation.md`. It records confirmed
+repository ownership and dependency facts; accepted ADR constraints; candidate
+identity, sensitive-data, effect, actor/scope/rule, confirmation, execution,
+outcome, error, audit, consumer, and platform requirements; rejected unsupported
+assumptions; unresolved decisions; and a deterministic fake-executor oracle. It
+does not execute a real tool or select production architecture.
+
+Task 2 creates `docs/adr/0049-tool-execution-policy.md`. It accepts the smallest
+source-independent ownership and dependency direction, public value vocabulary
+and bounds, validation precedence, effect conservatism, policy rule matching and
+decision precedence, default deny, confirmation trust and replay boundary,
+decision-to-execution binding, executor/cancellation/timeout/no-retry behavior,
+terminal outcomes, audit correlation/redaction, deterministic conformance,
+consumer compatibility, and deferred scope. It changes no Rust or Cargo file.
+
+Task 3 implements only the ADR-0049 domain foundation. It may register one
+additive std-only workspace member and mechanically update `Cargo.lock`; it
+adds no policy evaluator, confirmation workflow, or executor invocation. Public
+values expose no unrestricted sensitive argument through implicit formatting.
+
+Task 4 implements only deterministic policy construction and evaluation. It
+canonicalizes accepted rules, applies exact actor/tool/effect/scope matching and
+ADR-0049 precedence, defaults to deny, binds decisions to the evaluated request
+and policy revision, and never calls an executor or treats audit history as
+authorization.
+
+Task 5 implements only the accepted confirmation and execution boundary. Denied
+or unconfirmed requests never enter the fake executor; allowed or exactly
+confirmed requests receive one attempt and one inspectable terminal outcome
+with bounded redacted audit evidence. Retry, rollback, persistence, Runtime,
+transport, and concrete tools remain excluded.
+
+Task 6 adds a non-zero public conformance target using only exported values and
+repository-owned fakes, reruns complete tool-policy tests plus unchanged LLM,
+Analysis, and Runtime compatibility targets, and synchronizes only `README.md`,
+`docs/Architecture.md`, and `docs/architecture/semantic-model-2.md`. It performs
+no real tool action and does not mark Sprint 27 completed.
+
+Task 7 first delegates the exact planning-through-Task-6 range to one fresh-
+context read-only reviewer under `docs/codex/workflows/review.md`. The primary
+agent independently inspects the same range and reruns the required matrix,
+reconciles both evidence sets without weakening the reviewer, drafts
+`docs/reviews/sprint-27-tool-execution-policy.md`, and asks the same reviewer for
+a final read-only artifact-consistency check. Only `pass` or `pass with
+non-blocking follow-ups` after both validation paths and consistency may
+transition Sprint 27 to `completed`, make Sprint 28 MCP Server the unique
+`next` target, and atomically retire the exact tracked Sprint 26 prompt suite.
+
+##### State, failure, and validation gates
+
+Sprint 27 remains `next` during planning and becomes `active` only after the
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing repository evidence, an unimplementable ADR, absent approval for a new
+external production dependency or feature, an execution path that bypasses
+policy or confirmation, non-conservative ambiguity, real-side-effect-dependent
+acceptance, sensitive-content leakage, zero matched tests, failed validation,
+staging/commit failure, unavailable or mutating reviewer, incomplete reviewer
+output, unresolved evidence disagreement, or failed artifact-consistency check
+stops the sprint immediately.
+
+Documentation-only Tasks 1-2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3-6 run non-zero focused and public
+tool-policy tests, affected LLM/Analysis/Runtime compatibility checks,
+dependency/public-surface/redaction/no-real-effect audits, and the canonical
+full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+No completion claim may require a live provider, MCP/IDE client, credential,
+external network, filesystem or shell mutation, privileged access, wall-clock
+timing, or destructive action. Task 7 independently reruns the exact focused/
+public/full review matrix and revalidates the Sprint 26 prompt inventory before
+any explicit deletion.
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 26 retirement inventory, independent-review handoff and consistency
+rules, `git diff --check`, and unrelated-change absence. Suggested planning
+commit message:
+
+```text
+Plan Sprint 27 Tool Execution Policy
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

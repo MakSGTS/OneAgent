@@ -14,6 +14,10 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-llm` owns the std-only provider-neutral identity, model,
      capability, request, response, policy, cancellation, error, and
      asynchronous provider contracts.
+   - `oneagent-tool-policy` owns the independent std-only bounded tool request,
+     declared-effect, fail-closed authorization, exact confirmation,
+     cancellation-aware execution-gate, terminal-result, and redacted-audit
+     contracts.
 2. **Semantic core**
    - `oneagent-graph` owns canonical semantic nodes, edges, provenance,
      validation, query, diff, impact, coverage, and resolution APIs.
@@ -80,8 +84,9 @@ The roadmap assigns future boundaries explicitly:
   `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
   also records `pass`. The later
   [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
-  records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
-  the unique next planning target.
+  records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
+  implementation and public evidence are present, while its integration review
+  and completion transition remain pending.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -133,8 +138,9 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused and complete workspace gates. Sprint 22 is completed;
 the [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
-the unique next planning target.
+records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
+implementation and public evidence are present, while its integration review
+and completion transition remain pending.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -173,8 +179,55 @@ services.
 | Compatibility | `oneagent-analysis` and `oneagent-runtime` remain unchanged and independently validated; neither depends on `oneagent-llm`, and Context text receives no prompt semantics. |
 
 The [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`. Sprint 26 is completed; Sprint 27 Tool Execution Policy is the
-unique next planning target.
+records `pass`. Sprint 26 is completed. Sprint 27 Tool Execution Policy
+implementation and public evidence are present, while its integration review
+and completion transition remain pending.
+
+## Implemented Tool Execution Policy boundary
+
+[ADR-0049](adr/0049-tool-execution-policy.md) governs the implemented
+provider- and Runtime-independent `oneagent-tool-policy` first slice. The
+additive std-only crate owns bounded request, actor, tool, policy-revision, and
+argument values; a closed conservative effect vocabulary; canonical immutable
+rules; and request-wide fail-closed authorization. Any matching deny wins,
+unmatched declared effects deny by default, required confirmation wins over
+allow, and only complete allow coverage permits unconfirmed execution.
+
+A `RequireConfirmation` authorization can issue one non-cloneable challenge.
+Accepted evidence is privately bound to the exact policy revision, request ID,
+actor, tool, canonical effects, and argument bytes. The public execution gate
+consumes authorization and optional confirmation, rejects denial or missing,
+mismatched, stale, and unexpected confirmation before executor construction,
+observes pre-existing and in-flight cancellation, and invokes an object-safe
+substitutable executor at most once. Cancellation wins a simultaneously ready
+executor outcome. Completed, partial, failed, executor-reported timeout, and
+cancelled paths become one owned terminal result; its audit record retains only
+safe identities, canonical effects, byte counts, authorization and confirmation
+states, zero-or-one attempt count, and terminal classification.
+
+### Sprint 27 public evidence matrix
+
+The public `crates/tool-policy/tests/conformance.rs` target imports only the
+exported `oneagent-tool-policy` surface. Standard-library fakes use counters,
+explicit cancellation, and drop guards without filesystem, shell, Git,
+network, environment, credential, clock, privileged, destructive, or external
+state.
+
+| Contract | Public evidence |
+| --- | --- |
+| Construction and policy | UTF-8 byte bounds, contradictory effects, canonical duplicate rules, global deny, default deny, stable reasons, and sensitive argument formatting are asserted. |
+| Confirmation and denial | One challenge per required authorization, stale revision and changed-request mismatch, missing or denied paths, zero attempts, and zero executor calls are exact oracles. |
+| Accepted execution | Allow and exact confirmation produce one attempt; no retry or fallback exists, and repeated fresh calls have equal safe observations. |
+| Terminal outcomes | Completed, partial, failed with bounded diagnostic, executor-reported timeout, pre-cancelled, and in-flight-cancelled results retain the closed outcome and output-presence matrix. |
+| Audit and redaction | Every specified correlation field, canonical field/effect order, argument/output byte counts, and sentinel absence from implicit formatting are checked. |
+| Cleanup | Drop guards prove no active fake work remains after completion, failure, timeout, cancellation, or repeated calls. |
+
+The first slice owns no concrete tool, side effect, policy persistence or
+configuration source, authentication or confirmation UX, clock or timeout
+enforcement, retry/fallback, rollback, audit sink/export, Runtime lifecycle or
+registration, transport, MCP/provider/IDE mapping, sandbox, or cross-process
+replay prevention. Sprint 27 is not complete until its integration review and
+Roadmap transition succeed.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -207,8 +260,9 @@ deferred except for the implemented LM Studio and Ollama specializations
 described below.
 The Sprint 24 integration review records `pass with non-blocking follow-ups`;
 the Sprint 25 and Sprint 26 integration reviews record `pass`. Sprint 26 is
-completed, and Sprint 27 Tool Execution Policy is the unique next planning
-target.
+completed. Sprint 27 Tool Execution Policy implementation and public evidence
+are present, while its integration review and completion transition remain
+pending.
 
 ## Accepted LM Studio provider boundary
 
@@ -241,8 +295,9 @@ configuration sources, live-provider acceptance, server/model lifecycle,
 chat/template quality, streaming, tools, MCP, and IDE integration remain
 deferred. The Sprint 25 and
 [Sprint 26](reviews/sprint-26-ollama-integration.md) integration reviews record
-`pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is the
-unique next planning target.
+`pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy implementation
+and public evidence are present, while its integration review and completion
+transition remain pending.
 
 ## Accepted Ollama provider boundary
 
@@ -281,8 +336,9 @@ registration/configuration, live-provider compatibility, daemon/model
 lifecycle, cloud/authentication, chat, templates, streaming, tools, MCP, and IDE
 integration remain deferred. The
 [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md) records
-`pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is the
-unique next planning target.
+`pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy implementation
+and public evidence are present, while its integration review and completion
+transition remain pending.
 
 ## Accepted Runtime service-container boundary
 
@@ -576,5 +632,6 @@ CLI Client is completed with a `pass` decision in the
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
 records `pass`. The later
 [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
-the unique next planning target.
+records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
+implementation and public evidence are present, while its integration review
+and completion transition remain pending.

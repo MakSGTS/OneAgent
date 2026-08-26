@@ -139,6 +139,26 @@ It is std-only and does not depend on the Knowledge Graph, Context Engine,
 Runtime, protocol, provider wire schemas, configuration sources, or transports.
 Provider results do not create or mutate graph facts.
 
+### `oneagent-tool-policy`
+
+Owns the additive provider-, graph-, and Runtime-independent Tool Execution
+Policy boundary accepted by ADR-0049:
+
+* bounded request, actor, tool, policy-revision, and opaque argument values;
+* a closed conservative side-effect vocabulary and canonical immutable rules;
+* request-wide deny, default-deny, confirmation, and allow precedence;
+* exact one-use non-cloneable confirmation bound to the complete decision and
+  request;
+* an object-safe one-attempt executor seam with cooperative cancellation;
+* closed terminal outcomes and redacted content-free audit correlation.
+
+The crate is std-only and has no dependency on the Knowledge Graph, Context
+Engine, LLM providers/adapters, Runtime, protocol, configuration sources,
+transports, persistence, MCP, or IDE state. It owns no concrete tool or real
+side effect, clock or timeout enforcement, retry/fallback, rollback, sandbox,
+audit sink, confirmation UX/authentication, or cross-process replay authority.
+Tool results do not create or mutate Knowledge Graph facts.
+
 ### `oneagent-openai-compatible`
 
 Owns the concrete ADR-0046 leaf adapter behind `LlmProvider`. It validates one
@@ -317,8 +337,9 @@ authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
 `pass`; Sprint 22 is completed. The subsequent
 [Sprint 26 Ollama Integration review](../reviews/sprint-26-ollama-integration.md)
-records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
-the unique next planning target.
+records `pass`; Sprint 26 is completed. Sprint 27 Tool Execution Policy
+implementation and public evidence are present, while its integration review
+and completion transition remain pending.
 
 ## Core principles
 

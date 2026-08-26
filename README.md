@@ -13,7 +13,9 @@ bounded Sprint 24 OpenAI-Compatible Provider is complete with a
 `pass with non-blocking follow-ups` integration review. The bounded Sprint 25
 LM Studio Integration is complete with a `pass` integration review. The
 bounded Sprint 26 Ollama Integration is complete with a `pass` integration
-review. Sprint 27 Tool Execution Policy is the unique next planning target.
+review. Sprint 27 now has an implemented and publicly tested Tool Execution
+Policy library boundary; its integration review and completion transition are
+still pending.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -28,6 +30,7 @@ See
 - `crates/bsl` — BSL lexical and syntax analysis
 - `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
+- `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
 - `crates/protocol` — protocol package foundation; transport contracts are not implemented yet
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
@@ -95,10 +98,25 @@ construction, capability-safe native `/api/tags` plus sequential `/api/show`
 discovery that excludes remote-backed entries, and one strict non-streaming raw
 `/api/generate` attempt. Repository acceptance for all three concrete adapters
 uses controlled loopback only. Runtime configuration/exposure, live-provider
-acceptance, remote/cloud access, model/server lifecycle, prompt/tool policy,
+acceptance, remote/cloud access, model/server lifecycle, prompt construction,
 chat/Responses APIs, streaming, later providers, MCP, and IDE integration
-remain deferred. Sprints 24–26 are complete; Sprint 27 Tool Execution Policy
-is the unique next planning target.
+remain deferred.
+
+The additive std-only `oneagent-tool-policy` crate implements the bounded
+ADR-0049 library boundary independently of providers and Runtime. It owns
+validated request identity, opaque bounded arguments, conservative declared
+effects, canonical fail-closed rules, request-wide authorization precedence,
+exact non-cloneable one-use confirmation, an object-safe executor seam,
+cooperative cancellation precedence, and one typed terminal result with
+content-free audit correlation. Repository-owned deterministic fakes prove
+zero executor calls for denied, unconfirmed, mismatched, and pre-cancelled
+requests; one attempt for allowed or exactly confirmed requests; mapped
+completed, partial, failed, executor-reported timeout, and cancelled outcomes;
+redaction, repetition, and cleanup. The crate owns no concrete tools, real side
+effects, policy storage, clock or timeout enforcement, retry/fallback,
+rollback, audit sink, Runtime registration, transport, MCP, provider, or IDE
+integration. Sprint 27 implementation and public evidence are present, but the
+integration review remains pending.
 
 ## Verify
 

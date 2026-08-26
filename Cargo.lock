@@ -825,6 +825,7 @@ dependencies = [
  "oneagent-edt",
  "oneagent-graph",
  "oneagent-metadata",
+ "oneagent-protocol",
  "oneagent-workspace",
  "oneagent-workspace-fs",
  "serde",

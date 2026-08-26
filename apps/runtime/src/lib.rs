@@ -5,6 +5,7 @@ mod config;
 mod error;
 mod health;
 mod http;
+mod mcp;
 mod service;
 mod state;
 mod workspace;
@@ -14,6 +15,7 @@ pub use config::{ConfigurationProvider, DefaultConfigurationProvider, RuntimeCon
 pub use error::{BoxError, CleanupFailure, RuntimeError, RuntimeErrorKind};
 pub use health::{RuntimeHealth, RuntimeHealthSnapshot};
 pub use http::HttpService;
+pub use mcp::{McpStdioError, McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
 pub use service::{
     Cancellation, RunningServices, RuntimeService, ServiceContainer, ServiceContainerBuilder,
     ServiceContext, ServiceStartFuture, ServiceTask,

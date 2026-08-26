@@ -14,28 +14,15 @@ use crate::{
 /// A concrete client foundation for the bounded LM Studio provider contract.
 ///
 /// Construction is deterministic and performs no network I/O. Native model
-/// discovery and composed text generation are introduced by later Sprint 25
-/// tasks.
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery state is exposed through LlmProvider by Task 5"
-)]
+/// discovery and composed text generation execute only through `LlmProvider`.
 pub struct LmStudioProvider {
     id: ProviderId,
     native_client: Client,
     native_models_url: Url,
     native_authorization: Option<HeaderValue>,
-    #[allow(
-        dead_code,
-        reason = "Task 3 composition state is consumed by Task 5 generation"
-    )]
     generation_provider: OpenAiCompatibleProvider,
 }
 
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery accessors are exposed through LlmProvider by Task 5"
-)]
 impl LmStudioProvider {
     /// Constructs a provider from explicit provider-neutral configuration and
     /// one LM Studio server-origin root URL.
@@ -107,6 +94,10 @@ impl LmStudioProvider {
     pub(crate) const fn native_authorization(&self) -> Option<&HeaderValue> {
         self.native_authorization.as_ref()
     }
+
+    pub(crate) const fn generation_provider(&self) -> &OpenAiCompatibleProvider {
+        &self.generation_provider
+    }
 }
 
 fn validate_base_url(value: &str) -> Result<Url, LlmError> {
@@ -177,10 +168,6 @@ fn authorization_header(secret: &str) -> Result<HeaderValue, LlmError> {
     Ok(header)
 }
 
-#[allow(
-    dead_code,
-    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
-)]
 pub(crate) fn apply_authorization(
     request: reqwest::RequestBuilder,
     authorization: Option<&HeaderValue>,

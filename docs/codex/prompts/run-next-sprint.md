@@ -647,7 +647,23 @@ Report:
 - current sprint prompt-suite directory;
 - previous sprint prompt-suite retirement result (`retired`,
   `already_retired`, `not_reached`, or `blocked`) and every deleted path;
-- next sprint eligibility.
+- next sprint eligibility;
+- one explicit `Next sprint action` section using the contract below.
+
+When the next sprint is eligible, end that section with this exact user-ready
+instruction:
+
+```text
+Запусти следующий спринт с отдельным коммитом после каждой успешно завершённой задачи по промту docs/codex/prompts/run-next-sprint.md.
+```
+
+When the next sprint is not eligible, the current run stopped safely, or a
+blocker remains, do not present the launch instruction as immediately
+actionable. Instead, provide an ordered list of the concrete actions required
+to make the next sprint eligible. Include exact unresolved approvals, failed
+checks, repository-state cleanup, review/state-transition requirements, and
+commands or files the user must address when they are known. If the Roadmap has
+no later sprint, state that explicitly instead of inventing an action.
 
 Provide an ordered task table with:
 

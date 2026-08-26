@@ -8,6 +8,7 @@ const expected = [
   "CHANGELOG.md",
   "dist/status.js",
   "dist/mcp-client.js",
+  "dist/lifecycle.js",
   "dist/extension.js",
   "dist/configuration.js",
 ];

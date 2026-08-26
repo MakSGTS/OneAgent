@@ -6212,6 +6212,201 @@ No completion evidence requires installed or running LM Studio, a downloaded
 model, credential, developer-local state, external network, or response-quality
 claim.
 
+#### Sprint 26 Ollama Integration execution plan
+
+Sprint 26 is planned from committed Sprint 25 review baseline `5f903043`. The
+[Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
+records `pass`, so Sprint 26 is the unique `next` target. The existing LLM
+Provider [profile](codex/profiles/llm-provider-implementation.md),
+[workflow](codex/workflows/llm-provider.md), and
+[template](codex/templates/llm-provider-task.md), together with the existing
+investigation, architecture, review, sprint-planning, and sequential-execution
+contracts, cover every planned task. No framework change is required.
+
+The live repository contains the provider-neutral `oneagent-llm` crate, the
+bounded `oneagent-openai-compatible` adapter, and the LM Studio-specific leaf.
+The completed Sprint 25 review proves controlled-loopback, provider-neutral,
+generic-adapter, Analysis, Runtime, redaction, timeout, cancellation, cleanup,
+and full-workspace oracles without a live provider.
+
+The current launch instruction authorizes bounded local Ollama use. The
+read-only planning audit found Ollama client `0.33.0`; after a locally running
+server became reachable, `GET /api/version` returned `0.33.0` and
+`GET /api/tags` returned one `minimax-m3:cloud` entry with explicit
+`completion`, `tools`, `thinking`, and `vision` capabilities. No generation was
+attempted because the only installed entry is remote-backed. Official Ollama
+documentation defines native model listing and non-streaming generation plus
+OpenAI-compatible model and completion endpoints. These facts provide enough
+evidence to plan a bounded investigation, but the mutable local observation is
+supplementary and cannot become repository acceptance evidence.
+
+##### Sprint 26 objective
+
+Add one bounded Ollama provider behind ADR-0045's `LlmProvider` seam with a
+stable Ollama provider identity, exact explicit and numeric-loopback
+construction, fresh model discovery that advertises text generation only from
+accepted capability evidence, one accepted non-streaming text-generation path,
+strict identity and response validation, typed redacted failures, total timeout
+and cooperative cancellation, and deterministic repository-owned conformance
+evidence.
+
+Included scope is:
+
+- repository, official Ollama documentation, and authorized sanitized local
+  version/catalog investigation plus one accepted ADR;
+- one Ollama-specific leaf adapter or the smallest evidence-backed composition
+  over an existing transport without weakening ADR-0046 or ADR-0047;
+- explicit server-root and numeric-loopback local construction with stable
+  `ollama` provider identity and only evidence-backed authentication behavior;
+- fresh bounded discovery using an accepted native or compatibility endpoint,
+  exact model identities, and capability-aware filtering;
+- one accepted non-streaming mapping for the existing provider-neutral
+  `TextGenerationRequest` and terminal response contract;
+- exact status, protocol, identity, body/output bounds, redaction, timeout,
+  cancellation, cleanup, no-retry, no-fallback, and repeated-operation behavior;
+- repository-owned synthetic fixtures, controlled-loopback public provider
+  conformance, existing-provider regression evidence, consumer compatibility,
+  and truthful current-state documentation;
+- integration review, Sprint 27 hand-off, and conditional Sprint 25 prompt-suite
+  retirement.
+
+Excluded scope is:
+
+- Ollama installation, daemon/server startup or shutdown, model pull/create/
+  copy/delete/push, load/unload, keep-alive ownership, storage, or upgrade;
+- live Ollama, local or cloud models, credentials, remote provider traffic,
+  latency, throughput, cost, response quality, or generated output as acceptance;
+- chat history, stateful chat, streaming, tools, MCP, structured output,
+  reasoning, vision, images, embeddings, or provider metadata in the shared
+  domain;
+- prompt templates/policy, roles/messages, conversations, model selection,
+  aliases, fallback, retry/backoff, cache/refresh, registry, or persistence;
+- Runtime registration, configuration sources, HTTP/CLI/protocol exposure,
+  Context-to-prompt orchestration, MCP, LSP, IDE, or UI;
+- changes to graph, metadata, BSL, workspace, source adapters, semantic Coverage
+  Registries, Sprint 27, or the v0.5 release review.
+
+##### Accepted planning baseline and framework decision
+
+ADR-0045 remains authoritative for provider-neutral identity, capabilities,
+requests, responses, byte usage, secrets, errors, no retry, cancellation, and
+the `LlmProvider` seam. ADR-0046 and ADR-0047 remain authoritative for the
+existing concrete adapters and cannot be weakened for Ollama. Task 1 must
+resolve the live/documented catalog vocabulary, local versus cloud entry
+semantics, generation endpoint, authentication, reuse boundary, dependency
+inventory, and deterministic error oracle. Task 2 must accept ADR-0048 before
+Cargo or production Rust changes. Any new repository production dependency or
+feature requires explicit user approval before Task 3.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-26-ollama-integration/`. The verified immediately
+preceding suite is
+`docs/codex/prompts/sprint-25-lm-studio-integration/`; its eight tracked files
+exactly match the filesystem inventory and it contains no untracked addition.
+Only Task 7 may conditionally retire that exact suite after a non-blocking
+decision and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Ollama integration boundary. | Investigation / investigation | Verified repository, official, sanitized local version/catalog, capability, local/cloud, generation, reuse, dependency, error, consumer, and deterministic-oracle evidence. | Sprint 26 planning baseline and renewed authorization for any live call. | `Investigate Sprint 26 Ollama integration` |
+| 2 | Define the Ollama provider contract. | Architecture / architecture | Accepted ADR-0048 for ownership, construction, discovery, generation, identity, bounds, authentication, errors, timeout/cancellation, conformance, and deferred scope. | Task 1 evidence. | `Define Sprint 26 Ollama integration` |
+| 3 | Implement the Ollama client foundation. | LLM Provider / LLM Provider | Accepted concrete adapter/composition seam, stable identity, safe construction, bounded client policy, and private wire foundation. | Accepted ADR-0048 and explicit approval for any new repository production dependency or feature. | `Implement Sprint 26 Ollama client` |
+| 4 | Implement Ollama model discovery. | LLM Provider / LLM Provider | Fresh strict Ollama discovery that exposes only accepted text-capable entries and rejects malformed or ambiguous catalogs atomically. | Task 3. | `Implement Sprint 26 Ollama discovery` |
+| 5 | Implement Ollama text generation. | LLM Provider / LLM Provider | One accepted non-streaming generation attempt with exact identity, finish, output, error, timeout, cancellation, and cleanup mapping. | Task 4. | `Implement Sprint 26 Ollama generation` |
+| 6 | Complete Ollama provider evidence. | LLM Provider / LLM Provider | Public controlled-loopback conformance, existing-provider regression and consumer compatibility evidence, and current-state docs. | Task 5. | `Complete Sprint 26 Ollama evidence` |
+| 7 | Review the integrated Sprint 26 baseline. | Review / review | Findings, complete validation evidence, sprint decision, Sprint 25 suite retirement, and Sprint 27 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 26 Ollama review` |
+
+Task 1 creates only
+`docs/architecture/ollama-integration-investigation.md`. It records exact
+official documentation versions/URLs, sanitized local version/catalog shapes,
+capability and local/cloud distinctions, generation limitations, existing
+adapter reuse constraints, dependency and consumer inventory, error cases,
+unresolved decisions, and repository-owned oracle design. It stores no
+credential, unrestricted prompt/output, dynamic duration payload, digest,
+developer-local path, server configuration, or live-availability claim.
+
+Task 2 creates `docs/adr/0048-ollama-integration.md`. It accepts the smallest
+provider-specific ownership and dependency direction, exact construction and
+locality contract, discovery and capability mapping, generation wire, identity,
+body/output bounds, authentication, error/status/timeout/cancellation
+precedence, reuse versus isolation boundary, conformance, and deferred scope.
+It changes no Rust or Cargo file.
+
+Task 3 implements only the accepted foundation. It may add a workspace member
+or minimally reuse existing concrete transport only when ADR-0048 and consumer
+inspection require it. It adds no discovery or generation operation and does
+not weaken the public or observable ADR-0046 or ADR-0047 contracts.
+
+Task 4 implements only fresh model discovery. It maps only entries with exact
+accepted text-generation evidence, preserves exact valid IDs, canonicalizes
+through `ModelCatalog`, and handles empty, maximum, reordered, unknown,
+missing, malformed, duplicate, over-count, ambiguous-capability, local/cloud,
+status, body-bound, transport, timeout, and cancellation cases.
+
+Task 5 implements only the ADR-0048 terminal generation path. It preserves the
+validated request model/input/output bound, rejects provider or response model
+mismatch and unsupported terminal shapes, and returns one bounded response
+with local byte usage and exact no-retry/no-fallback cleanup semantics.
+
+Task 6 adds a public non-zero Ollama conformance target using controlled
+loopback and synthetic fixtures, reruns the complete existing concrete-provider
+and provider-neutral contracts, proves Analysis/Runtime compatibility, and
+synchronizes only `README.md`, `docs/Architecture.md`, and
+`docs/architecture/semantic-model-2.md`. It does not require or contact a live
+Ollama server or model and does not mark Sprint 26 completed.
+
+Task 7 reviews the exact planning-through-Task-6 range without fixing findings.
+Only `pass` or `pass with non-blocking follow-ups` after focused and complete
+validation may create `docs/reviews/sprint-26-ollama-integration.md`, transition
+Sprint 26 to `completed`, make Sprint 27 Tool Execution Policy the unique
+`next` target, synchronize minimal hand-off text when required, and atomically
+retire the exact tracked Sprint 25 prompt suite.
+
+##### State, failure, and validation gates
+
+Sprint 26 remains `next` during planning and becomes `active` only after the
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing official/wire evidence, an unimplementable ADR, absent approval for a
+new repository dependency or feature, weakening an existing provider contract,
+capability misclassification, cloud/network-dependent acceptance, zero matched
+tests, sensitive-content leakage, failed validation, or staging/commit failure
+stops the sprint immediately.
+
+Documentation-only Tasks 1-2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3-6 run non-zero focused and public Ollama
+tests, the complete existing concrete-provider and provider-neutral regression
+targets, affected compatibility checks, dependency/redaction audits, and the
+canonical full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Controlled-loopback tests may use only sandbox-authorized local binds. No CI or
+completion claim may require installed/running Ollama, a local or cloud model,
+credential, external network, or response-quality observation. Task 7 reruns
+the exact focused/public/full review matrix and revalidates the Sprint 25 prompt
+inventory before any explicit deletion.
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 25 retirement inventory, `git diff --check`, and unrelated-change
+absence. Suggested planning commit message:
+
+```text
+Plan Sprint 26 Ollama Integration
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

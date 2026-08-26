@@ -44,8 +44,8 @@ cross-check. These sources were reopened on 2026-08-26.
 - A successful response identifies its `resultType`. The current base result
   types include `complete` and `input_required`.
 - `server/discover` is the discovery method for this revision. Its complete
-  result reports `supportedVersions` and `capabilities`, with optional
-  instructions, cache policy, and server information.
+  result reports `supportedVersions`, `capabilities`, `ttlMs`, and
+  `cacheScope`, with optional instructions and server information.
 - Protocol-specific JSON-RPC errors include header mismatch (`-32020`), missing
   required client capability (`-32021`), and unsupported protocol version
   (`-32022`), in addition to standard JSON-RPC errors.
@@ -193,8 +193,9 @@ For a conforming semantic-free first slice, the ADR must define:
 - exactly one supported version: `2026-07-28`;
 - truthful empty server capabilities until Sprint 29 registers semantic tools;
 - deterministic server identity and optional metadata fields;
-- whether optional discovery instructions, TTL, and cache scope are omitted or
-  populated, with no invented caching promise;
+- whether optional discovery instructions are omitted or populated, and the
+  exact required `ttlMs` and `cacheScope` values, with no invented caching
+  promise;
 - `server/discover` success for compatible metadata;
 - unsupported-version and missing-capability precedence;
 - standard method-not-found behavior for unknown requests;

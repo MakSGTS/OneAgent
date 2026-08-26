@@ -316,10 +316,9 @@ equal fresh runs. The
 authority. The subsequent
 [Sprint 22 Context Engine review](../reviews/sprint-22-context-engine.md) records
 `pass`; Sprint 22 is completed. The subsequent
-[Sprint 25 LM Studio Integration review](../reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
-repository-owned evidence are present, while its integration review remains
-pending.
+[Sprint 26 Ollama Integration review](../reviews/sprint-26-ollama-integration.md)
+records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
+the unique next planning target.
 
 ## Core principles
 

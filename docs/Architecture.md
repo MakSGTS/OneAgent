@@ -79,10 +79,9 @@ The roadmap assigns future boundaries explicitly:
   review. The [v0.4 release review](reviews/v0.4-release-review.md) records
   `pass`. The [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md)
   also records `pass`. The later
-  [Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
-  records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
-  repository-owned evidence are present, while its integration review remains
-  pending.
+  [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
+  records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
+  the unique next planning target.
 - MCP, VS Code, LSP, and EDT product integration arrive in Sprints 28–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -133,9 +132,9 @@ filesystem corpus, network, service, clock, or arbitrary ordering oracle.
 
 The [Sprint 22 integration review](reviews/sprint-22-context-engine.md) records
 `pass` after the focused and complete workspace gates. Sprint 22 is completed;
-the [Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
-evidence are present, with its integration review still pending.
+the [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
+records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
+the unique next planning target.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -173,9 +172,9 @@ services.
 | Provider substitution and cleanup | Independent providers work through `&dyn LlmProvider`; canonical/empty discovery, repeated generation, typed failures, provider mismatch, cancellation before/during work, and zero surviving active state are exact oracles. |
 | Compatibility | `oneagent-analysis` and `oneagent-runtime` remain unchanged and independently validated; neither depends on `oneagent-llm`, and Context text receives no prompt semantics. |
 
-The [Sprint 25 integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`. Sprint 25 is completed; Sprint 26 implementation and evidence
-are present, but the sprint remains incomplete until integration review.
+The [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
+records `pass`. Sprint 26 is completed; Sprint 27 Tool Execution Policy is the
+unique next planning target.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -207,8 +206,9 @@ streaming, tools, provider usage authority, and additional providers remain
 deferred except for the implemented LM Studio and Ollama specializations
 described below.
 The Sprint 24 integration review records `pass with non-blocking follow-ups`;
-the Sprint 25 integration review records `pass`. Sprint 26 implementation and
-evidence are present, with its integration review pending.
+the Sprint 25 and Sprint 26 integration reviews record `pass`. Sprint 26 is
+completed, and Sprint 27 Tool Execution Policy is the unique next planning
+target.
 
 ## Accepted LM Studio provider boundary
 
@@ -239,9 +239,10 @@ cancellation, one-attempt behavior, and cleanup without installed LM Studio,
 downloaded models, credentials, or external network. Runtime registration and
 configuration sources, live-provider acceptance, server/model lifecycle,
 chat/template quality, streaming, tools, MCP, and IDE integration remain
-deferred. The Sprint 25 integration review records `pass`; Sprint 25 is
-completed. Sprint 26 Ollama implementation and evidence are present, but the
-sprint remains incomplete until its integration review.
+deferred. The Sprint 25 and
+[Sprint 26](reviews/sprint-26-ollama-integration.md) integration reviews record
+`pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is the
+unique next planning target.
 
 ## Accepted Ollama provider boundary
 
@@ -278,8 +279,10 @@ timeout, cancellation, one-attempt repetition, and cleanup without installed
 Ollama, local or cloud models, credentials, or external network. Runtime
 registration/configuration, live-provider compatibility, daemon/model
 lifecycle, cloud/authentication, chat, templates, streaming, tools, MCP, and IDE
-integration remain deferred. Sprint 26 remains incomplete until Task 7 records
-the integration-review decision.
+integration remain deferred. The
+[Sprint 26 integration review](reviews/sprint-26-ollama-integration.md) records
+`pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is the
+unique next planning target.
 
 ## Accepted Runtime service-container boundary
 
@@ -572,6 +575,6 @@ CLI Client is completed with a `pass` decision in the
 `pass` and completes the Runtime API boundary. The subsequent
 [Sprint 22 Context Engine review](reviews/sprint-22-context-engine.md) also
 records `pass`. The later
-[Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed. Sprint 26 Ollama implementation and
-evidence are present, with its integration review still pending.
+[Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
+records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
+the unique next planning target.

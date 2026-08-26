@@ -12,8 +12,8 @@ LLM Provider Abstraction is complete with a `pass` integration review. The
 bounded Sprint 24 OpenAI-Compatible Provider is complete with a
 `pass with non-blocking follow-ups` integration review. The bounded Sprint 25
 LM Studio Integration is complete with a `pass` integration review. The
-bounded Sprint 26 Ollama provider implementation and repository-owned evidence
-are present; Sprint 26 remains incomplete until its integration review.
+bounded Sprint 26 Ollama Integration is complete with a `pass` integration
+review. Sprint 27 Tool Execution Policy is the unique next planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -97,8 +97,8 @@ discovery that excludes remote-backed entries, and one strict non-streaming raw
 uses controlled loopback only. Runtime configuration/exposure, live-provider
 acceptance, remote/cloud access, model/server lifecycle, prompt/tool policy,
 chat/Responses APIs, streaming, later providers, MCP, and IDE integration
-remain deferred. Sprints 24 and 25 are complete; Sprint 26 implementation and
-evidence are present, with its integration review still pending.
+remain deferred. Sprints 24–26 are complete; Sprint 27 Tool Execution Policy
+is the unique next planning target.
 
 ## Verify
 

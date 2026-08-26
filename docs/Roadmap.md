@@ -31,9 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 25 LM Studio Integration review](reviews/sprint-25-lm-studio-integration.md)
-records `pass`; Sprint 25 is completed and Sprint 26 Ollama Integration is the
-unique `next` planning target.
+[Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
+records `pass`; Sprint 26 is completed and Sprint 27 Tool Execution Policy is
+the unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -5274,8 +5274,8 @@ later [Sprint 23 review](reviews/sprint-23-llm-provider-abstraction.md) records
 | Sprint 23 — LLM Provider Abstraction | Define provider-independent model, request, response, and capability contracts. | completed |
 | Sprint 24 — OpenAI-Compatible Provider | Implement the first OpenAI-compatible provider integration. | completed |
 | Sprint 25 — LM Studio Integration | Add local LM Studio discovery and execution support. | completed |
-| Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | next |
-| Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | planned |
+| Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | completed |
+| Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | next |
 
 The v0.5 release integration review follows Sprint 27.
 
@@ -6406,6 +6406,24 @@ absence. Suggested planning commit message:
 ```text
 Plan Sprint 26 Ollama Integration
 ```
+
+##### Sprint 26 completed state
+
+Tasks 1-6 are committed in dependency order. The
+[Sprint 26 integration review](reviews/sprint-26-ollama-integration.md) records
+`pass` after the exact Ollama unit/public provider matrix, complete existing
+concrete-provider and provider-neutral regressions, Analysis/Runtime
+compatibility, and the full workspace gate. Sprint 26 is `completed`, Sprint 27
+Tool Execution Policy is the unique `next` planning target, and the exact
+verified Sprint 25 prompt suite is retired in the review commit.
+
+ADR-0048, the explicitly approved dependency block, stable `ollama` identity,
+credential-free numeric-loopback-only construction, native Tags/Show discovery
+with remote-backed exclusion, native bounded raw generation, redaction, one-
+attempt timeout/cancellation/cleanup behavior, controlled-loopback public
+evidence, and accepted deferrals remain the current baseline. No completion
+evidence requires installed or running Ollama, a local or cloud model,
+credential, external network, or response-quality claim.
 
 #### v0.6 — MCP and IDE
 

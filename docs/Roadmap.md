@@ -31,9 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
-records `pass`; Sprint 27 is completed and Sprint 28 MCP Server is the unique
-`next` planning target.
+[Sprint 28 MCP Server review](reviews/sprint-28-mcp-server.md) records
+`pass with non-blocking follow-ups`; Sprint 28 is completed and Sprint 29 MCP
+Semantic Tools is the unique `next` planning target.
 
 ## Roadmap reconciliation
 
@@ -6898,12 +6898,32 @@ commit message:
 Plan Sprint 28 MCP Server
 ```
 
+##### Sprint 28 completed state
+
+Tasks 1-7 and the review remediations are committed in dependency order. The
+[Sprint 28 integration review](reviews/sprint-28-mcp-server.md) records
+`pass with non-blocking follow-ups` after independent fresh-context read-only
+review, primary reconciliation, non-zero protocol/stdio/process evidence,
+unchanged Runtime/CLI compatibility, specification/dependency/public-surface/
+capability/method/error/bounds/framing/channel/task/no-real-effect audits, and
+the canonical full workspace gate. The same reviewer passed the final artifact-
+consistency check before the state transition.
+
+Sprint 28 is `completed`, Sprint 29 MCP Semantic Tools is the unique `next`
+planning target, and the exact verified Sprint 27 prompt suite is retired in
+the review commit. ADR-0050, the bounded `oneagent-protocol` MCP domain and
+discovery server, injected Runtime stdio transport, dedicated `oneagent-mcp`
+process, repository-owned public conformance, and accepted deferrals remain the
+current baseline. No completion evidence requires a live MCP client,
+credential, remote transport, fixed port, real signal, semantic tool, graph or
+provider action, or other real effect.
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | next |
-| Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | planned |
+| Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | completed |
+| Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | next |
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | planned |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | planned |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | planned |
@@ -6936,7 +6956,31 @@ The v0.7 release integration review follows Sprint 41.
 | Sprint 45 — Documentation and Examples | Complete user, operator, contributor, and API documentation with examples. | planned |
 | Sprint 46 — OneAgent 1.0 Release | Complete final release validation, packaging, and publication. | planned |
 
-The v1.0 release integration review and release decision are part of Sprint 46.
+Sprint 46 completes the planned implementation and produces the final release
+candidate. Final project closure and the v1.0 publication decision require the
+post-project assurance gates below.
+
+#### Post-project assurance and external validation
+
+These stages run only after the Sprint 46 implementation baseline is committed,
+the working tree is clean, and the complete Definition of Done gate passes. A
+stage may not weaken or silently omit a finding from an earlier stage. Every
+finding must be remediated in a separate bounded change or explicitly accepted
+with an owner, rationale, scope, and residual risk before the next stage starts.
+
+| Order | Stage | Independent owner and required outcome | Status |
+|---:|---|---|---|
+| 1 | Final full-project integration review | One separate fresh-context read-only subagent reviews the exact project range, architecture, public APIs, behavior, tests, documentation, packaging, dependencies, compatibility, and release evidence. The primary agent independently reconciles the report and reruns the complete repository gate. | planned |
+| 2 | Repository hygiene and completeness audit | Audit all tracked source, tests, documentation, manifests, generated artifacts, and release inputs for `TODO`, `FIXME`, `XXX`, `HACK`, `todo!`, `unimplemented!`, ignored or zero-match tests, dead or unreachable code, debug output, stale documentation, unresolved ADR decisions, dependency/license drift, accidental secrets, and incomplete release artifacts. Every match is classified as fixed, intentionally deferred, or false positive with evidence. | planned |
+| 3 | Independent security audit | One separate fresh-context read-only security subagent reviews the final baseline and threat model, trust boundaries, input parsing and bounds, authentication/authorization, secret handling and redaction, filesystem/process/network effects, unsafe code, dependency and supply-chain exposure, denial-of-service paths, privilege boundaries, packaging, and update behavior. Blocking findings stop release eligibility. | planned |
+| 4 | External engineering review | An independent external reviewer evaluates architecture, maintainability, public API stability, interoperability, operational behavior, documentation, tests, packaging, and release readiness. The repository records the reviewed revision, complete findings, responses, and disposition. | planned |
+| 5 | External security audit | An independent external security specialist assesses the same immutable release candidate, including source, dependencies, build/release pipeline, threat model, attack surface, configuration, deployment assumptions, and reproducible security evidence. Unresolved critical or high findings block publication. | planned |
+| 6 | Final remediation, revalidation, and release decision | Apply accepted findings through separately reviewed commits, rerun the full integration, hygiene, security, packaging, and Definition of Done gates, obtain targeted re-review from the originating reviewers, publish residual risks, and record the final v1.0 go/no-go decision against one immutable commit. | planned |
+
+The project is not finally closed and v1.0 is not publication-eligible until
+all six stages are complete, all blocking findings are resolved, required
+external reports are preserved, and the final decision names the exact release
+commit and artifacts.
 
 Deferred Sprint 3 scope is not implicitly promoted by this schedule. The
 accepted direct Query-source-derived `DependsOn` slice belongs to Sprint 8 and

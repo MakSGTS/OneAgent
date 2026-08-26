@@ -12,6 +12,7 @@ members = [
     "adapters/filesystem",
     "adapters/edt",
     "adapters/designer-xml",
+    "adapters/lm-studio",
     "adapters/openai-compatible",
     "crates/analysis",
     "crates/llm",

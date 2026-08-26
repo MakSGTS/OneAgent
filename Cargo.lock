@@ -767,6 +767,18 @@ name = "oneagent-llm"
 version = "0.1.0"
 
 [[package]]
+name = "oneagent-lm-studio"
+version = "0.1.0"
+dependencies = [
+ "oneagent-llm",
+ "oneagent-openai-compatible",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "oneagent-metadata"
 version = "0.1.0"
 dependencies = [

@@ -6,6 +6,24 @@
 //! by later Sprint 25 tasks.
 
 mod config;
+#[allow(
+    dead_code,
+    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
+)]
+mod discovery;
+#[allow(
+    dead_code,
+    reason = "Task 4 private execution helpers are exposed through LlmProvider by Task 5"
+)]
+mod execution;
+#[allow(
+    dead_code,
+    reason = "Task 4 private wire values are exposed through LlmProvider by Task 5"
+)]
+mod wire;
+
+#[cfg(test)]
+mod test_support;
 
 pub use config::LmStudioProvider;
 
@@ -16,3 +34,8 @@ const NATIVE_MODELS_PATH: &str = "api/v1/models";
 const USER_AGENT: &str = "oneagent-lm-studio/0.1.0";
 
 const MAX_BASE_URL_BYTES: usize = 2_048;
+#[allow(
+    dead_code,
+    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
+)]
+const MAX_NATIVE_MODELS_RESPONSE_BODY_BYTES: usize = 1_024 * 1_024;

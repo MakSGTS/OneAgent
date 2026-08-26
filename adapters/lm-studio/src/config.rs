@@ -1,10 +1,14 @@
-use oneagent_llm::{LlmError, LlmErrorKind, ProviderConfiguration, ProviderDiagnostic, ProviderId};
+use oneagent_llm::{LlmError, LlmErrorKind, ProviderConfiguration, ProviderId};
 use oneagent_openai_compatible::OpenAiCompatibleProvider;
-use reqwest::{Client, Url, header::HeaderValue, redirect::Policy};
+use reqwest::{
+    Client, Url,
+    header::{AUTHORIZATION, HeaderValue},
+    redirect::Policy,
+};
 
 use crate::{
     LOCAL_BASE_URL, MAX_BASE_URL_BYTES, NATIVE_MODELS_PATH, OPENAI_COMPATIBLE_PROVIDER_ID,
-    PROVIDER_ID, USER_AGENT,
+    PROVIDER_ID, USER_AGENT, execution::adapter_error,
 };
 
 /// A concrete client foundation for the bounded LM Studio provider contract.
@@ -14,16 +18,24 @@ use crate::{
 /// tasks.
 #[allow(
     dead_code,
-    reason = "Task 3 retains transport and composition state consumed by Tasks 4 and 5"
+    reason = "Task 4 private discovery state is exposed through LlmProvider by Task 5"
 )]
 pub struct LmStudioProvider {
     id: ProviderId,
     native_client: Client,
     native_models_url: Url,
     native_authorization: Option<HeaderValue>,
+    #[allow(
+        dead_code,
+        reason = "Task 3 composition state is consumed by Task 5 generation"
+    )]
     generation_provider: OpenAiCompatibleProvider,
 }
 
+#[allow(
+    dead_code,
+    reason = "Task 4 private discovery accessors are exposed through LlmProvider by Task 5"
+)]
 impl LmStudioProvider {
     /// Constructs a provider from explicit provider-neutral configuration and
     /// one LM Studio server-origin root URL.
@@ -82,6 +94,18 @@ impl LmStudioProvider {
     #[must_use]
     pub const fn id(&self) -> &ProviderId {
         &self.id
+    }
+
+    pub(crate) const fn native_client(&self) -> &Client {
+        &self.native_client
+    }
+
+    pub(crate) const fn native_models_url(&self) -> &Url {
+        &self.native_models_url
+    }
+
+    pub(crate) const fn native_authorization(&self) -> Option<&HeaderValue> {
+        self.native_authorization.as_ref()
     }
 }
 
@@ -153,18 +177,26 @@ fn authorization_header(secret: &str) -> Result<HeaderValue, LlmError> {
     Ok(header)
 }
 
+#[allow(
+    dead_code,
+    reason = "Task 4 private discovery is exposed through LlmProvider by Task 5"
+)]
+pub(crate) fn apply_authorization(
+    request: reqwest::RequestBuilder,
+    authorization: Option<&HeaderValue>,
+) -> reqwest::RequestBuilder {
+    match authorization {
+        Some(value) => request.header(AUTHORIZATION, value.clone()),
+        None => request,
+    }
+}
+
 fn configuration_error(diagnostic: &'static str) -> LlmError {
     adapter_error(LlmErrorKind::InvalidConfiguration, diagnostic)
 }
 
 fn internal_error(diagnostic: &'static str) -> LlmError {
     adapter_error(LlmErrorKind::Internal, diagnostic)
-}
-
-fn adapter_error(kind: LlmErrorKind, diagnostic: &'static str) -> LlmError {
-    let diagnostic = ProviderDiagnostic::new(diagnostic)
-        .expect("static adapter diagnostics must satisfy the shared bound");
-    LlmError::new(kind).with_diagnostic(diagnostic)
 }
 
 #[cfg(test)]

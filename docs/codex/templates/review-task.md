@@ -19,6 +19,9 @@ diff, architecture decision, or completed capability.
 - Excluded
 - Review Criteria
 - Acceptance evidence matrix, when the review is a completion gate
+- Independent reviewer contract and output, for Sprint 27 or later integration
+  reviews
+- Primary/reviewer evidence reconciliation, when independent review applies
 - Authorized review outputs and state transition, when changes are requested
 - Task-specific Validation, if any
 - Suggested commit message, when review outputs are explicitly authorized
@@ -34,6 +37,17 @@ diff, architecture decision, or completed capability.
   reviewed change.
 - For a sprint, release, or capability completion gate, issue one explicit
   decision: `pass`, `pass with non-blocking follow-ups`, or `blocked`.
+- For a Sprint 27 or later integration review, complete the independent
+  fresh-context read-only reviewer procedure in
+  `docs/codex/workflows/review.md`. Treat reviewer unavailability, mutation,
+  incomplete output, missing consistency verification, or unresolved evidence
+  disagreement as blocking.
+- Do not disclose an expected decision or the implementation agent's
+  conclusions to the independent reviewer. Give it the exact range,
+  authorities, criteria, exclusions, validation matrix, and output schema.
+- Do not create a review artifact or change sprint state before the independent
+  reviewer returns. The final decision must not be less severe than the
+  reviewer's recommendation.
 - Base a completion decision on executed evidence for every applicable
   acceptance criterion, not on implementation claims alone.
 - Keep review artifact creation and Roadmap state transitions explicit and
@@ -44,6 +58,10 @@ diff, architecture decision, or completed capability.
 ## Additional report sections
 
 - Reviewed baseline
+- Independent reviewer handoff, observed baseline, and recommended decision,
+  when applicable
+- Primary/reviewer evidence reconciliation and artifact-consistency result,
+  when applicable
 - Acceptance evidence matrix, when applicable
 - Findings
 - Missing evidence
@@ -59,3 +77,7 @@ diff, architecture decision, or completed capability.
 - Run only review-appropriate checks unless the user asks to fix issues.
 - For a completion gate, run or verify the focused and integration checks named
   by the authoritative acceptance contract and record their exact results.
+- When independent review applies, preserve the reviewer's command results
+  separately and have the primary agent independently rerun the required
+  focused and complete validation matrix. A copied result is not independent
+  validation.

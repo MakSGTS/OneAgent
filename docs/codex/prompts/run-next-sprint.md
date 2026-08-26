@@ -7,12 +7,15 @@ per successfully completed task:
 
 ```text
 Запусти следующий спринт с отдельным коммитом после каждой успешно завершённой задачи по промту docs/codex/prompts/run-next-sprint.md.
+Финальное интеграционное ревью поручить отдельному read-only субагенту с чистым контекстом.
 ```
 
 The shorter instruction `Запусти следующий спринт по промту
 docs/codex/prompts/run-next-sprint.md` starts the workflow without commit
 authorization. In that mode, stop when the next prerequisite requires a
-committed baseline.
+committed baseline. Starting with Sprint 27, it also lacks the required
+independent-review delegation authorization and therefore stops before
+planning.
 
 ---
 
@@ -34,7 +37,12 @@ prompt:
 - An instruction that only requests running the next sprint does not authorize
   commits. Do not stage or commit in that mode, and stop whenever the next
   prerequisite requires a committed baseline.
+- Starting with Sprint 27, the current launch instruction must explicitly
+  request a separate read-only fresh-context reviewer agent for the final
+  integration review. If it does not, stop before planning because the
+  mandatory completion gate cannot be satisfied.
 - This stored prompt never authorizes staging or committing by itself.
+- This stored prompt never authorizes subagent delegation by itself.
 
 Stop after the first blocking failure. Do not skip, reorder, combine, or
 partially commit dependent tasks.
@@ -324,13 +332,23 @@ contain:
 12. `Suggested commit message`
 13. `Final report additions`
 
-The generated final integration-review prompt must additionally state that,
-only after it has issued `pass` or `pass with non-blocking follow-ups` and all
-required validation has succeeded, it owns the previous prompt-suite
-retirement procedure from this bootstrap prompt. Its Change Contract and
-suggested final review commit must include the exact verified previous suite
-files as deletions together with the review artifact and sprint-state
-transition.
+The generated final integration-review prompt must additionally:
+
+- require the independent fresh-context read-only reviewer procedure from
+  `docs/codex/workflows/review.md` for Sprint 27 and later;
+- give the reviewer the exact committed range, authorities, acceptance
+  criteria, exclusions, validation matrix, and required output without an
+  expected decision or implementation-agent conclusions;
+- prohibit review-owned edits until the independent report is complete;
+- require independent primary validation, evidence reconciliation, and the
+  reviewer's final read-only artifact-consistency check; and
+- state that, only after the effective decision is `pass` or `pass with
+  non-blocking follow-ups` and all required validation has succeeded, it owns
+  the previous prompt-suite retirement procedure from this bootstrap prompt.
+
+Its Change Contract and suggested final review commit must include the exact
+verified previous suite files as deletions together with the review artifact
+and sprint-state transition.
 
 Use exact paths, APIs, test targets, commits, and artifacts only when verified.
 Turn unknowns into explicit investigation questions or blockers. Never invent
@@ -401,6 +419,9 @@ Also validate manually or through discovered repository tooling:
 - the generated master and final review prompt name the same verified
   immediately preceding suite directory for conditional retirement, or the
   same `already_retired` evidence;
+- for Sprint 27 and later, the final review prompt contains the mandatory
+  independent reviewer handoff, read-only boundary, output contract,
+  reconciliation, consistency-check, and blocking rules;
 - absence of unrelated changes.
 
 Do not run production Rust tests for a documentation-only planning change
@@ -486,9 +507,13 @@ committed or proven `already_complete` and all required validation succeeds.
 
 The review must:
 
+- complete the mandatory independent fresh-context read-only reviewer workflow
+  in `docs/codex/workflows/review.md` for Sprint 27 and later;
 - inspect the exact planning and task commit range;
 - verify every accepted criterion and exclusion;
 - rerun the required focused and full validation matrix;
+- preserve the independent report separately from the primary agent's
+  evidence, reconcile both, and use the more severe decision;
 - create only explicitly authorized review artifacts;
 - issue `pass`, `pass with non-blocking follow-ups`, or `blocked`;
 - avoid silently fixing findings in the review commit;
@@ -503,6 +528,10 @@ validation, may:
 - authorize the final review commit.
 
 A blocked review leaves the sprint incomplete.
+
+For Sprint 27 and later, missing reviewer authorization, unavailable fresh
+context, reviewer mutation, incomplete reviewer output, an unresolved evidence
+disagreement, or a failed final artifact-consistency check is a blocked review.
 
 ## Previous sprint prompt-suite retirement gate
 
@@ -612,6 +641,9 @@ Report:
 - whether `.codex/` remained untouched;
 - whether anything remains staged or uncommitted;
 - integration-review decision, when reached;
+- independent reviewer task identity, fresh-context/read-only confirmation,
+  recommended decision, primary/reviewer discrepancies, and final artifact-
+  consistency result, when the Sprint 27+ requirement applies;
 - current sprint prompt-suite directory;
 - previous sprint prompt-suite retirement result (`retired`,
   `already_retired`, `not_reached`, or `blocked`) and every deleted path;
@@ -652,6 +684,9 @@ The run is complete only when one of these terminal conditions is reached:
    - the ordered sprint plan and prompt suite were created and validated;
    - the planning baseline was committed when authorized;
    - every task was committed or proven `already_complete`;
+   - for Sprint 27 and later, the independent reviewer completed its read-only
+     report and final artifact-consistency check, and all evidence differences
+     were resolved without weakening its decision;
    - the integration review issued a non-blocking decision;
    - the sprint state and documentation match live evidence;
    - the immediately preceding sprint prompt suite was safely retired or

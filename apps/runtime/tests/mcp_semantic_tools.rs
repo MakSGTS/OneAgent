@@ -1,8 +1,10 @@
+use std::fs;
 use std::path::Path;
 
 use oneagent_protocol::{McpServer, PROTOCOL_VERSION, encode_response};
 use oneagent_runtime::{WorkspaceSnapshotBuilder, semantic_server};
 use serde_json::{Value, json};
+use tempfile::{TempDir, tempdir};
 
 fn fixture_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -57,8 +59,35 @@ fn assert_catalog(listed: &Value) {
             .as_array()
             .expect("tools")
             .iter()
-            .all(|tool| tool["annotations"]["readOnlyHint"] == true
-                && tool["annotations"]["destructiveHint"] == false)
+            .all(|tool| tool["annotations"]
+                == json!({
+                    "readOnlyHint": true,
+                    "destructiveHint": false,
+                    "idempotentHint": true,
+                    "openWorldHint": false
+                }))
+    );
+    let query = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.query")
+        .expect("query definition");
+    assert_eq!(
+        query["inputSchema"]["properties"]["edgeKinds"]["items"]["enum"],
+        json!([
+            "contains",
+            "calls",
+            "references",
+            "reads",
+            "writes",
+            "grants",
+            "includes",
+            "extends",
+            "depends_on",
+            "opens",
+            "triggers"
+        ])
     );
 }
 
@@ -180,6 +209,44 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         let serialized = first["result"]["structuredContent"].to_string();
         assert!(!serialized.contains(fixture_root().to_str().expect("UTF-8 fixture path")));
         assert!(!serialized.contains("provenance"));
+        assert!(!serialized.contains("Configuration.xml"));
+        assert_projection(offset, &first["result"]["structuredContent"]);
+    }
+}
+
+fn assert_projection(offset: usize, content: &Value) {
+    match offset {
+        2 => {
+            let relation = &content["relations"][0];
+            assert!(relation["edgeId"].is_string());
+            assert!(relation["edgeKind"].is_string());
+            assert!(relation["relatedNode"]["id"].is_string());
+        }
+        3 => {
+            let nodes = content["nodes"].as_array().expect("traversal nodes");
+            assert!(nodes[0]["viaEdgeId"].is_null());
+            assert!(
+                nodes
+                    .iter()
+                    .skip(1)
+                    .all(|node| node["viaEdgeId"].is_string())
+            );
+        }
+        6 => {
+            let affected = content["affectedNodes"].as_array().expect("affected nodes");
+            assert!(!affected.is_empty());
+            assert!(affected.iter().all(|node| node["reasons"].is_array()));
+        }
+        7 => {
+            let items = content["items"].as_array().expect("context items");
+            assert!(
+                items
+                    .iter()
+                    .all(|item| item["reason"].is_string() && item["relations"].is_array())
+            );
+            assert!(items.iter().any(|item| item["reason"] == "related"));
+        }
+        _ => {}
     }
 }
 
@@ -225,6 +292,17 @@ async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
             "nodeId": "missing",
             "budgetBytes": 4096
         }}),
+        json!({"name": "oneagent.context", "arguments": {
+            "configurationId": configuration_id,
+            "nodeId": node_id,
+            "budgetBytes": 1
+        }}),
+        json!({"name": "oneagent.query", "arguments": {
+            "configurationId": configuration_id,
+            "operation": "relations",
+            "nodeId": node_id,
+            "edgeKinds": ["calls", "calls"]
+        }}),
     ] {
         let response = dispatch(&server, &request(30, "tools/call", &fields)).await;
         assert_eq!(response["result"]["isError"], true);
@@ -236,4 +314,172 @@ async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
             "{response}"
         );
     }
+}
+
+#[tokio::test]
+async fn public_semantic_tools_enforce_exact_and_one_over_bounds() {
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot.configurations()[0]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let current_configuration = snapshot.configurations()[1]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let node_id = snapshot.configurations()[0]
+        .graph()
+        .nodes()
+        .next()
+        .expect("fixture graph must contain a node")
+        .id()
+        .as_str()
+        .to_owned();
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    let exact = [
+        json!({"name": "oneagent.graph", "arguments": {"limit": 100}}),
+        json!({"name": "oneagent.query", "arguments": {
+            "configurationId": configuration_id, "operation": "traverse", "nodeId": node_id,
+            "maxDepth": 4, "limit": 100
+        }}),
+        json!({"name": "oneagent.validation", "arguments": {
+            "configurationId": configuration_id, "limit": 100
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "limit": 100
+        }}),
+        json!({"name": "oneagent.impact", "arguments": {
+            "previousConfigurationId": configuration_id,
+            "currentConfigurationId": current_configuration,
+            "maxDepth": 4, "limit": 100
+        }}),
+        json!({"name": "oneagent.context", "arguments": {
+            "configurationId": configuration_id, "nodeId": node_id,
+            "maxDepth": 4, "maxCandidates": 128, "budgetBytes": 32768
+        }}),
+    ];
+    for fields in &exact {
+        let response = dispatch(&server, &request(40, "tools/call", fields)).await;
+        assert!(response["result"].get("isError").is_none(), "{response}");
+    }
+
+    let one_over = [
+        json!({"name": "oneagent.graph", "arguments": {"limit": 101}}),
+        json!({"name": "oneagent.query", "arguments": {
+            "configurationId": configuration_id, "operation": "traverse", "nodeId": node_id,
+            "maxDepth": 5
+        }}),
+        json!({"name": "oneagent.validation", "arguments": {
+            "configurationId": configuration_id, "limit": 101
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "limit": 101
+        }}),
+        json!({"name": "oneagent.impact", "arguments": {
+            "previousConfigurationId": configuration_id,
+            "currentConfigurationId": current_configuration,
+            "maxDepth": 5
+        }}),
+        json!({"name": "oneagent.context", "arguments": {
+            "configurationId": configuration_id, "nodeId": node_id,
+            "budgetBytes": 32769
+        }}),
+    ];
+    for fields in &one_over {
+        let response = dispatch(&server, &request(41, "tools/call", fields)).await;
+        assert_eq!(
+            response["result"]["structuredContent"]["code"], "invalid_arguments",
+            "{response}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn public_semantic_tools_cover_empty_reordered_and_oversized_results() {
+    let empty = tempdir().expect("empty workspace root");
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(empty.path())
+        .expect("empty workspace must build");
+    let server = semantic_server(snapshot).expect("empty semantic server must build");
+    let graph = dispatch(
+        &server,
+        &request(
+            50,
+            "tools/call",
+            &json!({"name": "oneagent.graph", "arguments": {}}),
+        ),
+    )
+    .await;
+    assert_eq!(graph["result"]["structuredContent"]["total"], 0);
+
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot.configurations()[0]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+    let first = dispatch(
+        &server,
+        &request(
+            51,
+            "tools/call",
+            &json!({"name": "oneagent.graph", "arguments": {
+                "configurationId": configuration_id, "limit": 1
+            }}),
+        ),
+    )
+    .await;
+    let reordered = format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"tools/call\",\"params\":{{\"arguments\":{{\"limit\":1,\"configurationId\":\"{configuration_id}\"}},\"name\":\"oneagent.graph\",\"_meta\":{{\"io.modelcontextprotocol/clientCapabilities\":{{}},\"io.modelcontextprotocol/protocolVersion\":\"{PROTOCOL_VERSION}\"}}}}}}"
+    );
+    let reordered = dispatch(&server, &reordered).await;
+    assert_eq!(
+        first["result"]["structuredContent"],
+        reordered["result"]["structuredContent"]
+    );
+
+    let large = large_workspace();
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(large.path())
+        .expect("large workspace must build");
+    let server = semantic_server(snapshot).expect("large semantic server must build");
+    let response = dispatch(
+        &server,
+        &request(
+            53,
+            "tools/call",
+            &json!({"name": "oneagent.graph", "arguments": {"limit": 100}}),
+        ),
+    )
+    .await;
+    assert_eq!(response["result"]["isError"], true);
+    assert_eq!(
+        response["result"]["structuredContent"]["code"],
+        "result_too_large"
+    );
+}
+
+fn large_workspace() -> TempDir {
+    let root = tempdir().expect("large workspace root");
+    let configuration = fs::read_to_string(fixture_root().join("designer/Configuration.xml"))
+        .expect("Designer Configuration fixture");
+    let dump = fs::read(fixture_root().join("designer/ConfigDumpInfo.xml"))
+        .expect("Designer dump marker fixture");
+    for index in 0..80 {
+        let project = root.path().join(format!("project-{index:03}"));
+        fs::create_dir(&project).expect("large project directory");
+        let identifier = format!("00000000-0000-0000-0000-{index:012}");
+        let name = format!("Configuration{index}{}", "x".repeat(900));
+        let source = configuration
+            .replace("408a41e7-907a-4fb3-8999-83d1e8b6e093", &identifier)
+            .replace("DNSWorldEdition", &name);
+        fs::write(project.join("Configuration.xml"), source).expect("large Configuration source");
+        fs::write(project.join("ConfigDumpInfo.xml"), &dump).expect("large dump marker");
+    }
+    root
 }

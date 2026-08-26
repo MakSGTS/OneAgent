@@ -247,6 +247,21 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
         "tools/call",
         &json!({"name": "oneagent.unknown", "arguments": {}}),
     ));
+    frames.push(request_with_fields(
+        22,
+        "tools/call",
+        &json!({"name": "oneagent.context", "arguments": {
+            "configurationId": configuration_id, "nodeId": node_id, "budgetBytes": 1
+        }}),
+    ));
+    frames.push(request_with_fields(
+        23,
+        "tools/call",
+        &json!({"name": "oneagent.query", "arguments": {
+            "configurationId": configuration_id, "operation": "relations", "nodeId": node_id,
+            "edgeKinds": ["calls", "calls"]
+        }}),
+    ));
     let input = format!("{}\n", frames.join("\n"));
 
     let first = run_process_in(&root, input.as_bytes()).await;
@@ -261,7 +276,11 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).expect("tool response JSON"))
         .collect::<Vec<_>>();
-    assert_eq!(responses.len(), 8);
+    assert_semantic_responses(&responses);
+}
+
+fn assert_semantic_responses(responses: &[Value]) {
+    assert_eq!(responses.len(), 10);
     for response in &responses[..6] {
         assert!(response["result"].get("isError").is_none(), "{response}");
         assert!(response["result"].get("structuredContent").is_some());
@@ -275,6 +294,13 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
             "error": {"code": -32602, "message": "Invalid params"}
         })
     );
+    for response in &responses[8..] {
+        assert_eq!(response["result"]["isError"], true);
+        assert_eq!(
+            response["result"]["structuredContent"]["code"],
+            "invalid_arguments"
+        );
+    }
 }
 
 fn request_with_fields(id: u64, method: &str, fields: &Value) -> String {

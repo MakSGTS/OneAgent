@@ -3,8 +3,9 @@ use std::pin::pin;
 use std::task::{Context, Poll, Waker};
 
 use oneagent_protocol::{
-    ErrorCode, McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome,
-    McpToolDefinition, McpToolFuture, PROTOCOL_VERSION, Response, encode_response,
+    ErrorCode, MAX_JSON_NESTING_DEPTH, MAX_MESSAGE_BYTES, McpServer, McpToolAnnotations,
+    McpToolCallHandler, McpToolCallOutcome, McpToolDefinition, McpToolDefinitionError,
+    McpToolFuture, PROTOCOL_VERSION, Response, encode_response,
 };
 use serde_json::Map;
 use serde_json::{Value, json};
@@ -240,6 +241,15 @@ fn public_tool_catalog_is_truthful_ordered_and_bounded() {
         listed["result"]["tools"][0]["annotations"]["readOnlyHint"],
         true
     );
+    assert_eq!(
+        listed["result"]["tools"][0]["annotations"],
+        json!({
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        })
+    );
     assert_eq!(listed["result"]["ttlMs"], 0);
 
     let invalid_cursor = dispatch_json(
@@ -250,6 +260,60 @@ fn public_tool_catalog_is_truthful_ordered_and_bounded() {
         invalid_cursor["error"]["code"],
         ErrorCode::InvalidParams.value()
     );
+}
+
+#[test]
+fn public_tool_definitions_and_catalog_enforce_complete_response_bounds() {
+    let oversized_schema = json!({
+        "type": "object",
+        "description": "x".repeat(MAX_MESSAGE_BYTES)
+    })
+    .as_object()
+    .expect("oversized schema object")
+    .clone();
+    assert_eq!(
+        McpToolDefinition::new(
+            "oneagent.oversized",
+            "Oversized schema.",
+            oversized_schema,
+            McpToolAnnotations::read_only(),
+        ),
+        Err(McpToolDefinitionError::InvalidInputSchema)
+    );
+
+    let mut nested = json!({"type": "object"});
+    for _ in 0..MAX_JSON_NESTING_DEPTH {
+        nested = json!({"type": "object", "properties": {"nested": nested}});
+    }
+    assert_eq!(
+        McpToolDefinition::new(
+            "oneagent.deep",
+            "Deep schema.",
+            nested.as_object().expect("deep schema object").clone(),
+            McpToolAnnotations::read_only(),
+        ),
+        Err(McpToolDefinitionError::InvalidInputSchema)
+    );
+
+    let schema = json!({"type": "object"})
+        .as_object()
+        .expect("schema object")
+        .clone();
+    let catalog = (0..1_024)
+        .map(|index| {
+            McpToolDefinition::new(
+                format!("oneagent.tool.{index:04}"),
+                "x".repeat(1_024),
+                schema.clone(),
+                McpToolAnnotations::read_only(),
+            )
+            .expect("individual definition must remain bounded")
+        })
+        .collect();
+    assert!(matches!(
+        McpServer::with_tools(catalog, TestToolHandler),
+        Err(McpToolDefinitionError::InvalidCatalog)
+    ));
 }
 
 #[test]

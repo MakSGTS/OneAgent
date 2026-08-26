@@ -10,7 +10,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     DecodeOutcome, ErrorCode, ErrorResponse, InboundMessage, MAX_METHOD_NAME_BYTES, Notification,
-    PROTOCOL_VERSION, Request, Response, ResultResponse, decode_message,
+    PROTOCOL_VERSION, Request, RequestId, Response, ResultResponse, decode_message,
     mcp::validate_client_capabilities,
 };
 
@@ -90,12 +90,15 @@ impl McpToolDefinition {
         if input_schema.get("type") != Some(&Value::String("object".to_owned())) {
             return Err(McpToolDefinitionError::InvalidInputSchema);
         }
-        Ok(Self {
+        let definition = Self {
             name,
             description,
             input_schema,
             annotations,
-        })
+        };
+        validate_tool_list(std::slice::from_ref(&definition))
+            .map_err(|()| McpToolDefinitionError::InvalidInputSchema)?;
+        Ok(definition)
     }
 
     /// Returns the stable tool name.
@@ -195,6 +198,7 @@ impl McpServer {
         if tools.windows(2).any(|pair| pair[0].name == pair[1].name) {
             return Err(McpToolDefinitionError::DuplicateName);
         }
+        validate_tool_list(&tools).map_err(|()| McpToolDefinitionError::InvalidCatalog)?;
         let mut capabilities = Map::new();
         capabilities.insert("tools".to_owned(), Value::Object(Map::new()));
         let tools: Arc<[McpToolDefinition]> = tools.into();
@@ -288,6 +292,20 @@ impl McpServer {
             registration.handler.handle_notification(notification);
         }
     }
+}
+
+fn validate_tool_list(tools: &[McpToolDefinition]) -> Result<(), ()> {
+    let fields = json!({
+        "tools": tools.iter().map(McpToolDefinition::as_value).collect::<Vec<_>>(),
+        "ttlMs": 0,
+        "cacheScope": "public"
+    })
+    .as_object()
+    .expect("tools/list result is an object")
+    .clone();
+    ResultResponse::complete(RequestId::unsigned(0), fields)
+        .map(|_| ())
+        .map_err(|_| ())
 }
 
 impl Default for McpServer {

@@ -5988,6 +5988,211 @@ deferred Runtime/chat/streaming/tool scope remain authoritative. The review's
 only non-blocking follow-up, correction of the stale crate-level Rustdoc
 sentence, is resolved by the immediate post-review documentation change.
 
+#### Sprint 25 LM Studio Integration execution plan
+
+Sprint 25 is planned from committed Sprint 24 review and follow-up baseline
+`e6fb8e4c`. The
+[Sprint 24 OpenAI-Compatible Provider review](reviews/sprint-24-openai-compatible-provider.md)
+records `pass with non-blocking follow-ups`, and the follow-up is resolved, so
+Sprint 25 is the unique `next` target. The existing LLM Provider
+[profile](codex/profiles/llm-provider-implementation.md),
+[workflow](codex/workflows/llm-provider.md), and
+[template](codex/templates/llm-provider-task.md), together with the existing
+investigation, architecture, review, sprint-planning, and sequential-execution
+contracts, cover every planned task. No framework change is required.
+
+The live repository already contains the provider-neutral `oneagent-llm` crate
+and the bounded `oneagent-openai-compatible` leaf adapter accepted by ADR-0045
+and ADR-0046. Focused baseline validation passes with 18 adapter unit tests, 6
+public adapter conformance tests, 22 provider-neutral unit tests, and 7 public
+provider-neutral tests; controlled-loopback adapter tests require the existing
+local-bind permission.
+
+The current launch instruction authorized local LM Studio use on macOS. A
+read-only readiness audit started the installed server on
+`http://127.0.0.1:1234`, recorded `lms` CLI commit `71bd99c`, one loaded
+`qwen/qwen3-4b` LLM, and one available embedding model, and observed successful
+`/v1/models`, `/api/v1/models`, `/api/v0/models`, and non-streaming
+`/v1/completions` responses. The OpenAI-compatible catalog does not identify
+model type and includes both entries, while the native v1 catalog distinguishes
+`llm` from `embedding` and exposes loaded instances. The existing generic
+adapter would therefore advertise `TextGeneration` for the embedding entry.
+Official LM Studio documentation recommends the native `/api/v1/*` API for new
+integrations and describes `/v1/completions` as a legacy base-model endpoint
+whose use with chat-tuned models can produce unexpected tokens. These facts
+prove an LM Studio-specific discovery gap and leave the exact generation and
+reuse boundary for investigation and ADR-0047 rather than planning-time guess.
+
+Local service observations are supplementary and mutable. Repository acceptance
+must use bounded synthetic fixtures and controlled loopback without credentials,
+external network, installed LM Studio, downloaded models, developer-local state,
+or quality assertions. Renewed live access in a later execution context requires
+current user authorization.
+
+##### Sprint 25 objective
+
+Add one bounded LM Studio provider behind ADR-0045's `LlmProvider` seam with a
+stable LM Studio provider identity, exact local-server construction, fresh
+model discovery that never exposes embedding-only models as text-capable, one
+accepted terminal text-generation path, strict identity and response
+validation, typed redacted failures, total timeout and cooperative cancellation,
+and deterministic repository-owned conformance evidence.
+
+Included scope is:
+
+- repository, official LM Studio documentation, and authorized sanitized local
+  macOS wire investigation plus ADR-0047;
+- one LM Studio-specific leaf adapter or the smallest accepted composition over
+  the existing OpenAI-compatible transport without weakening ADR-0046;
+- explicit server-root and optional bearer construction with stable
+  `lm-studio` provider identity;
+- fresh bounded LM Studio model discovery that distinguishes LLM and embedding
+  entries and maps only supported text models into `ModelCatalog`;
+- one accepted non-streaming text-generation mapping for the existing
+  provider-neutral `TextGenerationRequest` and terminal response contract;
+- exact status, protocol, identity, bound, redaction, timeout, cancellation,
+  cleanup, no-retry, no-fallback, and repeated-operation behavior;
+- repository-owned controlled-loopback fixtures, public provider conformance,
+  existing OpenAI-compatible regression evidence, provider-neutral/Context/
+  Runtime compatibility, and truthful current-state documentation;
+- integration review, Sprint 26 hand-off, and conditional Sprint 24 prompt-suite
+  retirement.
+
+Excluded scope is:
+
+- LM Studio installation, model download, model load/unload, daemon or GUI
+  lifecycle, server startup/shutdown ownership, JIT policy, TTL, or auto-evict;
+- live LM Studio, a downloaded model, local paths, credentials, latency,
+  throughput, response quality, or model output as repository acceptance;
+- chat history, stateful chat, Responses API, Anthropic compatibility,
+  streaming, tools, MCP, structured output, reasoning, vision, embeddings, or
+  provider metadata in the shared domain;
+- prompt templates/policy, roles/messages, conversations, model selection,
+  aliases, fallback, retry/backoff, cache/refresh, registry, or persistence;
+- Runtime registration, configuration sources, HTTP/CLI/protocol exposure,
+  Context-to-prompt orchestration, MCP, LSP, IDE, or UI;
+- changes to graph, metadata, BSL, workspace, source adapters, semantic Coverage
+  Registries, Sprint 26-27, or the v0.5 release review.
+
+##### Accepted planning baseline and framework decision
+
+ADR-0045 remains authoritative for provider-neutral identity, capabilities,
+requests, responses, byte usage, secrets, errors, no retry, cancellation, and
+the `LlmProvider` seam. ADR-0046 remains authoritative for the existing generic
+adapter and cannot be weakened to accommodate LM Studio. Task 1 must decide from
+evidence whether Sprint 25 composes, refactors, or independently implements the
+minimum provider-specific transport boundary; Task 2 accepts ADR-0047 before
+Cargo or production Rust changes. Any new direct dependency or feature requires
+explicit user approval before the implementing task.
+
+The complete prompt suite is owned by
+`docs/codex/prompts/sprint-25-lm-studio-integration/`. The verified immediately
+preceding suite is
+`docs/codex/prompts/sprint-24-openai-compatible-provider/`, whose eight tracked
+files exactly match its filesystem inventory and have no untracked addition.
+Only Task 7 may conditionally retire that exact suite after a non-blocking
+decision and successful complete validation.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the LM Studio integration boundary. | Investigation / investigation | Verified repository, official, sanitized local wire, discovery-type, generation, reuse, dependency, error, consumer, and deterministic-oracle evidence. | Sprint 25 planning baseline and renewed authorization for any live call. | `Investigate Sprint 25 LM Studio integration` |
+| 2 | Define the LM Studio provider contract. | Architecture / architecture | Accepted ADR-0047 for ownership, composition, construction, discovery, generation, identity, bounds, errors, timeout/cancellation, conformance, and deferred scope. | Task 1 evidence. | `Define Sprint 25 LM Studio integration` |
+| 3 | Implement the LM Studio client foundation. | LLM Provider / LLM Provider | Accepted concrete adapter/composition seam, stable identity, safe construction, bounded client policy, and private wire foundation. | Accepted ADR-0047 and explicit approval for any new direct dependency or feature. | `Implement Sprint 25 LM Studio client` |
+| 4 | Implement LM Studio model discovery. | LLM Provider / LLM Provider | Fresh strict LM Studio discovery that maps only accepted LLM entries and rejects malformed or ambiguous catalogs atomically. | Task 3. | `Implement Sprint 25 LM Studio discovery` |
+| 5 | Implement LM Studio text generation. | LLM Provider / LLM Provider | One accepted non-streaming generation attempt with exact identity, finish, output, error, timeout, cancellation, and cleanup mapping. | Task 4. | `Implement Sprint 25 LM Studio generation` |
+| 6 | Complete LM Studio provider evidence. | LLM Provider / LLM Provider | Public controlled-loopback conformance, generic-adapter regression and consumer compatibility evidence, and current-state docs. | Task 5. | `Complete Sprint 25 LM Studio evidence` |
+| 7 | Review the integrated Sprint 25 baseline. | Review / review | Findings, complete validation evidence, sprint decision, Sprint 24 suite retirement, and Sprint 26 hand-off. | Task 6 and all implementation validation. | `Complete Sprint 25 LM Studio review` |
+
+Task 1 creates only
+`docs/architecture/lm-studio-integration-investigation.md`. It records exact
+official documentation versions/URLs, sanitized local request and response
+shapes, model-type and loaded-instance evidence, generation limitations,
+existing adapter reuse constraints, dependency and consumer inventory, error
+cases, unresolved decisions, and repository-owned oracle design. It stores no
+credential, unrestricted prompt/output, dynamic timing payload, local model
+path, server configuration, or live-availability claim.
+
+Task 2 creates `docs/adr/0047-lm-studio-integration.md`. It accepts the smallest
+provider-specific ownership and dependency direction, exact construction and
+locality contract, discovery endpoint and model-type mapping, generation wire,
+identity, body and output bounds, authentication, error/status/timeout/
+cancellation precedence, reuse versus isolation boundary, conformance, and
+deferred scope. It changes no Rust or Cargo file.
+
+Task 3 implements only the accepted foundation. It may add a workspace member
+or minimally refactor reusable private/public transport seams only when ADR-0047
+and consumer inspection require it. It adds no discovery or generation call and
+does not weaken the public or observable ADR-0046 adapter contract.
+
+Task 4 implements only fresh model discovery. It distinguishes accepted LLM
+entries from embedding entries before assigning `TextGeneration`, preserves
+exact valid IDs, canonicalizes through `ModelCatalog`, and handles empty,
+maximum, reordered, unknown, missing, malformed, duplicate, over-count,
+ambiguous-type, status, body-bound, transport, timeout, and cancellation cases.
+
+Task 5 implements only the ADR-0047 terminal generation path. It preserves the
+validated request model/input/output bound, rejects provider or response model
+mismatch and unsupported terminal shapes, and returns one bounded response with
+local byte usage and exact no-retry/no-fallback cleanup semantics.
+
+Task 6 adds a public non-zero LM Studio conformance target using controlled
+loopback and synthetic fixtures, reruns the complete existing generic adapter
+and provider-neutral contracts, proves Context/Runtime compatibility, and
+synchronizes only `README.md`, `docs/Architecture.md`, and
+`docs/architecture/semantic-model-2.md`. It does not require or contact a live
+LM Studio server and does not mark Sprint 25 completed.
+
+Task 7 reviews the exact planning-through-Task-6 range without fixing findings.
+Only `pass` or `pass with non-blocking follow-ups` after focused and complete
+validation may create `docs/reviews/sprint-25-lm-studio-integration.md`,
+transition Sprint 25 to `completed`, make Sprint 26 Ollama Integration the
+unique `next` target, synchronize minimal hand-off text when required, and
+atomically retire the exact tracked Sprint 24 prompt suite.
+
+##### State, failure, and validation gates
+
+Sprint 25 remains `next` during planning and becomes `active` only after a
+committed planning baseline starts dependency-ordered execution. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing official/wire evidence, an unimplementable ADR, absent approval for a
+new dependency, weakening ADR-0046, embedding misclassification, live-state CI
+dependence, zero matched tests, sensitive-content leakage, failed validation,
+or staging/commit failure stops the sprint immediately.
+
+Documentation-only Tasks 1-2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3-6 run non-zero focused and public LM
+Studio tests, the complete existing OpenAI-compatible and provider-neutral
+regression targets, affected compatibility checks, dependency/redaction audits,
+and the canonical full workspace gate:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Controlled-loopback tests may use only sandbox-authorized local binds. No CI or
+completion claim may require installed/running LM Studio, a downloaded model,
+credential, developer-local state, or external network. Task 7 reruns the exact
+focused/public/full review matrix and revalidates the Sprint 24 prompt inventory
+before any explicit deletion.
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership, exact
+Sprint 24 retirement inventory, `git diff --check`, and unrelated-change
+absence. Suggested planning commit message:
+
+```text
+Plan Sprint 25 LM Studio Integration
+```
+
 #### v0.6 — MCP and IDE
 
 | Sprint | Goal | Status |

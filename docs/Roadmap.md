@@ -7072,7 +7072,7 @@ documentation follow-up.
 |---|---|---|
 | Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | completed |
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
-| Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | next |
+| Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | active |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | planned |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | planned |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |

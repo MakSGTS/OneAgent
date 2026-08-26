@@ -14,9 +14,10 @@ bounded Sprint 24 OpenAI-Compatible Provider is complete with a
 LM Studio Integration is complete with a `pass` integration review. The
 bounded Sprint 26 Ollama Integration is complete with a `pass` integration
 review. The bounded Sprint 27 Tool Execution Policy is complete with a `pass`
-integration review. The bounded Sprint 28 discovery-only MCP Server
-implementation is present and remains the unique `next` target pending
-integration review.
+integration review. The bounded Sprint 28 discovery-only MCP Server is complete
+with a `pass with non-blocking follow-ups` integration review. The Sprint 29
+MCP Semantic Tools implementation is present and remains the unique `next`
+target pending integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -32,7 +33,7 @@ See
 - `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
-- `crates/protocol` — bounded MCP 2026-07-28 domain values, validation, encoding, discovery, and dispatch contracts
+- `crates/protocol` — bounded MCP 2026-07-28 domain values, validation, encoding, discovery, tool catalog/list/call, and asynchronous sequential dispatch contracts
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
 - `adapters/openai-compatible` — implemented explicit bounded OpenAI-compatible `/v1/models` and non-streaming `/v1/completions` provider adapter
@@ -64,9 +65,9 @@ and Graph Query GET routes through one bounded HTTP/1.1 connection, preserves
 Runtime JSON, and distinguishes usage, transport, server, protocol, and output
 failures with stable exit codes. Runtime process management, endpoint discovery,
 configuration files, richer output, alternate transports, packaging, Git,
-semantic MCP tools, LSP, VS Code, and AI-provider integration remain planned
-capabilities with explicit ownership. Health remains available through exact
-`GET /health/live` and `GET /health/ready` probes.
+LSP, VS Code, external MCP-client compatibility, and AI-provider integration
+remain planned capabilities with explicit ownership. Health remains available
+through exact `GET /health/live` and `GET /health/ready` probes.
 
 The additive `oneagent-analysis` Context Engine borrows one immutable
 `SemanticGraph`, resolves exact node-ID or canonical-name seeds, applies bounded
@@ -74,8 +75,9 @@ deterministic graph selection with retained provenance paths, and returns an
 owned semantic-only bundle under an explicit UTF-8 byte budget. Candidate and
 budget omissions are reported separately, and exact two-line item fragments
 make the result reproducible. Source text/ranges, tokenizers, providers/models,
-Runtime or protocol routes, persistence, MCP, and IDE integration remain
-deferred.
+persistence, direct Context-owned transports, and IDE integration remain
+deferred. Runtime adapts this engine only through the bounded read-only MCP
+context tool described below.
 
 The additive std-only `oneagent-llm` crate owns provider-scoped identities,
 canonical model catalogs, the closed `TextGeneration` capability, bounded
@@ -115,25 +117,42 @@ requests; one attempt for allowed or exactly confirmed requests; mapped
 completed, partial, failed, executor-reported timeout, and cancelled outcomes;
 redaction, repetition, and cleanup. The crate owns no concrete tools, real side
 effects, policy storage, clock or timeout enforcement, retry/fallback,
-rollback, audit sink, Runtime registration, transport, MCP, provider, or IDE
-integration. Sprint 27 is complete with a `pass` integration review.
+rollback, audit sink, Runtime registration, transport, provider, or IDE
+integration. Runtime composes its execution gate for the MCP semantic tools
+without moving policy authority. Sprint 27 is complete with a `pass`
+integration review.
 
-The Sprint 28 first slice implements MCP revision 2026-07-28 without legacy
-initialize or session behavior. `oneagent-protocol` owns the bounded protocol
-fields, validation, error mapping, and the sole `server/discover` method;
-`oneagent-runtime` owns a sequential newline-framed 1 MiB stdio adapter and the
-separate `oneagent-mcp` binary. The process keeps stdout protocol-pure, treats
-EOF as successful completion, and reports stable transport failures on stderr.
-Semantic tools, additional protocol revisions, remote transports,
-authentication, external-client compatibility, packaging, and IDE integration
-remain deferred. Sprint 28 remains the unique `next` target pending integration
-review.
+The Sprint 28 foundation implements MCP revision 2026-07-28 without legacy
+initialize or session behavior. Sprint 29 extends that exact revision with a
+truthful `tools` capability and one lexicographically ordered, read-only catalog:
+`oneagent.context`, `oneagent.diagnostics`, `oneagent.graph`,
+`oneagent.impact`, `oneagent.query`, and `oneagent.validation`.
+`oneagent-protocol` owns bounded discovery, `tools/list`, `tools/call`, schemas,
+wire errors/results, and asynchronous sequential dispatch. `oneagent-runtime`
+builds one immutable Workspace snapshot from the process working directory,
+composes every known call through the fail-closed Tool Policy execution gate,
+and serves it through the separate newline-framed 1 MiB `oneagent-mcp` stdio
+process. Successful tool results contain both compact JSON text and identical
+structured content; known semantic failures are tool errors, while malformed
+or unknown calls are protocol `Invalid params` errors. Outputs are bounded,
+deterministic, and omit source paths and provenance.
+
+The process constructs no long-running Runtime `App`, watcher, cache, HTTP
+listener, background task, remote client, or real side effect. It keeps stdout
+protocol-pure, treats EOF as successful completion, and reports only stable
+startup or transport categories on stderr. Additional protocol revisions,
+remote transports, authentication, snapshot refresh, external-client
+compatibility, packaging, and IDE integration remain deferred. Sprint 28 is
+complete; the Sprint 29 implementation remains the unique `next` target
+pending integration review.
 
 ## Verify
 
 ```bash
-cargo fmt --all -- --check
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo doc --workspace --no-deps
+git diff --check
 ```

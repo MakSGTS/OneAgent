@@ -105,7 +105,7 @@ fn tool_cases(
 }
 
 #[tokio::test]
-async fn public_graph_tools_are_truthful_policy_gated_and_repeatable() {
+async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
     let snapshot = WorkspaceSnapshotBuilder::new()
         .build(fixture_root())
         .expect("mixed fixture must build");
@@ -170,13 +170,21 @@ async fn public_graph_tools_are_truthful_policy_gated_and_repeatable() {
             first["result"]["structuredContent"],
             repeated["result"]["structuredContent"]
         );
+        let text = first["result"]["content"][0]["text"]
+            .as_str()
+            .expect("tool result text");
+        assert_eq!(
+            serde_json::from_str::<Value>(text).expect("tool result text must be JSON"),
+            first["result"]["structuredContent"]
+        );
         let serialized = first["result"]["structuredContent"].to_string();
         assert!(!serialized.contains(fixture_root().to_str().expect("UTF-8 fixture path")));
+        assert!(!serialized.contains("provenance"));
     }
 }
 
 #[tokio::test]
-async fn public_graph_tools_fail_closed_at_argument_and_lookup_boundaries() {
+async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
     let snapshot = WorkspaceSnapshotBuilder::new()
         .build(fixture_root())
         .expect("mixed fixture must build");

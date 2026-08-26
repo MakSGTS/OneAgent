@@ -40,3 +40,10 @@ const PRESENTATIONS: Readonly<Record<ConnectionState, StatusPresentation>> = {
 export function statusPresentation(state: ConnectionState): StatusPresentation {
   return PRESENTATIONS[state];
 }
+
+export function extensionHostEvidenceEnabled(
+  productionMode: boolean,
+  hostCase: string | undefined,
+): boolean {
+  return !productionMode && (hostCase === "trusted" || hostCase === "trusted-repeat");
+}

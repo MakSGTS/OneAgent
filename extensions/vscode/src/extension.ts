@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { resolveConnectionTarget } from "./configuration";
 import { ExtensionLifecycle } from "./lifecycle";
 import { RuntimeClient } from "./mcp-client";
-import { statusPresentation } from "./status";
+import { extensionHostEvidenceEnabled, statusPresentation } from "./status";
 
 const CONNECT_COMMAND = "oneagent.connect";
 const DISCONNECT_COMMAND = "oneagent.disconnect";
@@ -86,7 +86,12 @@ export function activate(context: vscode.ExtensionContext): void | ExtensionHost
   context.subscriptions.push(...disposables);
 
   const hostCase = process.env.ONEAGENT_HOST_CASE;
-  if (hostCase === "trusted" || hostCase === "trusted-repeat") {
+  if (
+    extensionHostEvidenceEnabled(
+      context.extensionMode === vscode.ExtensionMode.Production,
+      hostCase,
+    )
+  ) {
     return {
       status: () => ({
         text: status.text,

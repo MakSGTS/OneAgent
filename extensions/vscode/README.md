@@ -63,7 +63,8 @@ Restricted Mode, empty, virtual, and multi-root workspace cases. Unsupported
 hosts must fail before spawning a Runtime process; both trusted cases cover
 configuration precedence, connection replacement, all five actual status item
 presentations, command and configuration ownership, explicit disposal, and
-repeatable deactivation.
+repeatable deactivation. The observation API used by those tests is disabled
+in a production Extension Host.
 
 From the repository root, build the public Runtime and install the locked
 development dependencies:

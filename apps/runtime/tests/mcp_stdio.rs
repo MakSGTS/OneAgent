@@ -85,6 +85,27 @@ async fn public_transport_handles_recoverable_frames_without_extra_output() {
 }
 
 #[tokio::test]
+async fn public_transport_preserves_syntax_precedence_after_structural_failures() {
+    let malformed_duplicate = r#"{"jsonrpc":"2.0","x":1,"x":2,"tail":"\q"}"#;
+    let malformed_depth = format!(
+        "{}0{}x",
+        "[".repeat(oneagent_protocol::MAX_JSON_NESTING_DEPTH + 1),
+        "]".repeat(oneagent_protocol::MAX_JSON_NESTING_DEPTH + 1)
+    );
+    let input = format!("{malformed_duplicate}\n{malformed_depth}\n");
+    let (outcome, output) = run(input.as_bytes()).await;
+
+    assert_eq!(outcome, Ok(McpStdioOutcome::EndOfInput));
+    let lines = String::from_utf8(output).expect("protocol output must be UTF-8");
+    assert_eq!(lines.lines().count(), 2);
+    for line in lines.lines() {
+        let response: Value = serde_json::from_str(line).expect("parse error response JSON");
+        assert_eq!(response["error"]["code"], -32700);
+        assert!(response.get("id").is_none());
+    }
+}
+
+#[tokio::test]
 async fn public_transport_enforces_utf8_size_and_complete_delimiters() {
     let (outcome, output) = run(&[0xff, b'\n']).await;
     assert_eq!(outcome, Err(McpStdioErrorKind::InvalidUtf8));

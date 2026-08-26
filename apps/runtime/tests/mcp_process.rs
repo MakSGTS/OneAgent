@@ -146,6 +146,33 @@ async fn public_mcp_process_does_not_retype_literal_arbitrary_number_token_objec
 }
 
 #[tokio::test]
+async fn public_mcp_process_preserves_syntax_precedence_after_structural_failures() {
+    let duplicate = r#"{"jsonrpc":"2.0","x":1,"x":2,"tail":"\q"}"#;
+    let depth = format!(
+        "{}0{}x",
+        "[".repeat(oneagent_protocol::MAX_JSON_NESTING_DEPTH + 1),
+        "]".repeat(oneagent_protocol::MAX_JSON_NESTING_DEPTH + 1)
+    );
+    let input = format!("{duplicate}\n{depth}\n");
+    let output = run_process(input.as_bytes()).await;
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let lines = String::from_utf8(output.stdout).expect("protocol output must be UTF-8");
+    assert_eq!(lines.lines().count(), 2);
+    for line in lines.lines() {
+        let response: Value = serde_json::from_str(line).expect("parse error response JSON");
+        assert_eq!(
+            response,
+            json!({
+                "jsonrpc": "2.0",
+                "error": {"code": -32700, "message": "Parse error"}
+            })
+        );
+    }
+}
+
+#[tokio::test]
 async fn public_mcp_process_reports_only_bounded_terminal_diagnostics() {
     let invalid_utf8 = run_process(&[0xff, b'\n']).await;
     assert!(!invalid_utf8.status.success());

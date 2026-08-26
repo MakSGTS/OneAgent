@@ -881,6 +881,7 @@ enum ParseFailure {
 }
 
 fn parse_unique_value(input: &str) -> Result<Value, ParseFailure> {
+    validate_json_syntax(input)?;
     let disambiguated = disambiguate_literal_number_tokens(input)?;
     let parse_input = disambiguated
         .as_ref()
@@ -897,6 +898,274 @@ fn parse_unique_value(input: &str) -> Result<Value, ParseFailure> {
         restore_literal_number_tokens(&mut value, &substitute);
     }
     Ok(value)
+}
+
+#[derive(Clone, Copy)]
+enum SyntaxFrame {
+    Array(ArraySyntaxState),
+    Object(ObjectSyntaxState),
+}
+
+#[derive(Clone, Copy)]
+enum ArraySyntaxState {
+    FirstValueOrEnd,
+    Value,
+    CommaOrEnd,
+}
+
+#[derive(Clone, Copy)]
+enum ObjectSyntaxState {
+    FirstKeyOrEnd,
+    Key,
+    Colon,
+    Value,
+    CommaOrEnd,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SyntaxToken {
+    ArrayStart,
+    ArrayEnd,
+    ObjectStart,
+    ObjectEnd,
+    Colon,
+    Comma,
+    String,
+    Scalar,
+}
+
+fn validate_json_syntax(input: &str) -> Result<(), ParseFailure> {
+    let mut cursor = 0;
+    let mut frames = Vec::new();
+    let mut root_started = false;
+    let mut root_complete = false;
+
+    loop {
+        let token = next_syntax_token(input, &mut cursor)?;
+        if frames.is_empty() {
+            if root_complete {
+                return token.map_or(Ok(()), |_| Err(ParseFailure::Syntax));
+            }
+            if root_started {
+                return Err(ParseFailure::Syntax);
+            }
+            let token = token.ok_or(ParseFailure::Syntax)?;
+            root_started = true;
+            root_complete = start_syntax_value(token, &mut frames)?;
+            continue;
+        }
+
+        let token = token.ok_or(ParseFailure::Syntax)?;
+        match *frames.last().expect("non-empty syntax stack") {
+            SyntaxFrame::Array(ArraySyntaxState::FirstValueOrEnd) => {
+                if token == SyntaxToken::ArrayEnd {
+                    frames.pop();
+                    root_complete = frames.is_empty();
+                } else {
+                    *frames.last_mut().expect("non-empty syntax stack") =
+                        SyntaxFrame::Array(ArraySyntaxState::CommaOrEnd);
+                    start_syntax_value(token, &mut frames)?;
+                }
+            }
+            SyntaxFrame::Array(ArraySyntaxState::Value) => {
+                *frames.last_mut().expect("non-empty syntax stack") =
+                    SyntaxFrame::Array(ArraySyntaxState::CommaOrEnd);
+                start_syntax_value(token, &mut frames)?;
+            }
+            SyntaxFrame::Array(ArraySyntaxState::CommaOrEnd) => match token {
+                SyntaxToken::Comma => {
+                    *frames.last_mut().expect("non-empty syntax stack") =
+                        SyntaxFrame::Array(ArraySyntaxState::Value);
+                }
+                SyntaxToken::ArrayEnd => {
+                    frames.pop();
+                    root_complete = frames.is_empty();
+                }
+                _ => return Err(ParseFailure::Syntax),
+            },
+            SyntaxFrame::Object(ObjectSyntaxState::FirstKeyOrEnd) => match token {
+                SyntaxToken::ObjectEnd => {
+                    frames.pop();
+                    root_complete = frames.is_empty();
+                }
+                SyntaxToken::String => {
+                    *frames.last_mut().expect("non-empty syntax stack") =
+                        SyntaxFrame::Object(ObjectSyntaxState::Colon);
+                }
+                _ => return Err(ParseFailure::Syntax),
+            },
+            SyntaxFrame::Object(ObjectSyntaxState::Key) => {
+                if token != SyntaxToken::String {
+                    return Err(ParseFailure::Syntax);
+                }
+                *frames.last_mut().expect("non-empty syntax stack") =
+                    SyntaxFrame::Object(ObjectSyntaxState::Colon);
+            }
+            SyntaxFrame::Object(ObjectSyntaxState::Colon) => {
+                if token != SyntaxToken::Colon {
+                    return Err(ParseFailure::Syntax);
+                }
+                *frames.last_mut().expect("non-empty syntax stack") =
+                    SyntaxFrame::Object(ObjectSyntaxState::Value);
+            }
+            SyntaxFrame::Object(ObjectSyntaxState::Value) => {
+                *frames.last_mut().expect("non-empty syntax stack") =
+                    SyntaxFrame::Object(ObjectSyntaxState::CommaOrEnd);
+                start_syntax_value(token, &mut frames)?;
+            }
+            SyntaxFrame::Object(ObjectSyntaxState::CommaOrEnd) => match token {
+                SyntaxToken::Comma => {
+                    *frames.last_mut().expect("non-empty syntax stack") =
+                        SyntaxFrame::Object(ObjectSyntaxState::Key);
+                }
+                SyntaxToken::ObjectEnd => {
+                    frames.pop();
+                    root_complete = frames.is_empty();
+                }
+                _ => return Err(ParseFailure::Syntax),
+            },
+        }
+    }
+}
+
+fn start_syntax_value(
+    token: SyntaxToken,
+    frames: &mut Vec<SyntaxFrame>,
+) -> Result<bool, ParseFailure> {
+    match token {
+        SyntaxToken::ArrayStart => {
+            frames.push(SyntaxFrame::Array(ArraySyntaxState::FirstValueOrEnd));
+            Ok(false)
+        }
+        SyntaxToken::ObjectStart => {
+            frames.push(SyntaxFrame::Object(ObjectSyntaxState::FirstKeyOrEnd));
+            Ok(false)
+        }
+        SyntaxToken::String | SyntaxToken::Scalar => Ok(frames.is_empty()),
+        SyntaxToken::ArrayEnd
+        | SyntaxToken::ObjectEnd
+        | SyntaxToken::Colon
+        | SyntaxToken::Comma => Err(ParseFailure::Syntax),
+    }
+}
+
+fn next_syntax_token(input: &str, cursor: &mut usize) -> Result<Option<SyntaxToken>, ParseFailure> {
+    let bytes = input.as_bytes();
+    while bytes
+        .get(*cursor)
+        .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+    {
+        *cursor += 1;
+    }
+    let Some(byte) = bytes.get(*cursor).copied() else {
+        return Ok(None);
+    };
+
+    let punctuation = match byte {
+        b'[' => Some(SyntaxToken::ArrayStart),
+        b']' => Some(SyntaxToken::ArrayEnd),
+        b'{' => Some(SyntaxToken::ObjectStart),
+        b'}' => Some(SyntaxToken::ObjectEnd),
+        b':' => Some(SyntaxToken::Colon),
+        b',' => Some(SyntaxToken::Comma),
+        _ => None,
+    };
+    if let Some(token) = punctuation {
+        *cursor += 1;
+        return Ok(Some(token));
+    }
+
+    if byte == b'"' {
+        let start = *cursor;
+        *cursor += 1;
+        while let Some(byte) = bytes.get(*cursor).copied() {
+            match byte {
+                b'"' => {
+                    *cursor += 1;
+                    serde_json::from_str::<String>(&input[start..*cursor])
+                        .map_err(|_| ParseFailure::Syntax)?;
+                    return Ok(Some(SyntaxToken::String));
+                }
+                b'\\' => {
+                    *cursor += 1;
+                    match bytes.get(*cursor).copied() {
+                        Some(b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't') => {
+                            *cursor += 1;
+                        }
+                        Some(b'u') => {
+                            let digits_start = *cursor + 1;
+                            let digits_end = digits_start + 4;
+                            if bytes
+                                .get(digits_start..digits_end)
+                                .is_none_or(|digits| !digits.iter().all(u8::is_ascii_hexdigit))
+                            {
+                                return Err(ParseFailure::Syntax);
+                            }
+                            *cursor = digits_end;
+                        }
+                        _ => return Err(ParseFailure::Syntax),
+                    }
+                }
+                0x00..=0x1f => return Err(ParseFailure::Syntax),
+                _ => *cursor += 1,
+            }
+        }
+        return Err(ParseFailure::Syntax);
+    }
+
+    for literal in [b"true".as_slice(), b"false".as_slice(), b"null".as_slice()] {
+        if bytes[*cursor..].starts_with(literal) {
+            *cursor += literal.len();
+            return Ok(Some(SyntaxToken::Scalar));
+        }
+    }
+
+    if byte == b'-' || byte.is_ascii_digit() {
+        consume_json_number(bytes, cursor)?;
+        return Ok(Some(SyntaxToken::Scalar));
+    }
+
+    Err(ParseFailure::Syntax)
+}
+
+fn consume_json_number(bytes: &[u8], cursor: &mut usize) -> Result<(), ParseFailure> {
+    if bytes.get(*cursor) == Some(&b'-') {
+        *cursor += 1;
+    }
+    match bytes.get(*cursor).copied() {
+        Some(b'0') => *cursor += 1,
+        Some(b'1'..=b'9') => {
+            *cursor += 1;
+            while bytes.get(*cursor).is_some_and(u8::is_ascii_digit) {
+                *cursor += 1;
+            }
+        }
+        _ => return Err(ParseFailure::Syntax),
+    }
+    if bytes.get(*cursor) == Some(&b'.') {
+        *cursor += 1;
+        let fraction_start = *cursor;
+        while bytes.get(*cursor).is_some_and(u8::is_ascii_digit) {
+            *cursor += 1;
+        }
+        if *cursor == fraction_start {
+            return Err(ParseFailure::Syntax);
+        }
+    }
+    if matches!(bytes.get(*cursor), Some(b'e' | b'E')) {
+        *cursor += 1;
+        if matches!(bytes.get(*cursor), Some(b'+' | b'-')) {
+            *cursor += 1;
+        }
+        let exponent_start = *cursor;
+        while bytes.get(*cursor).is_some_and(u8::is_ascii_digit) {
+            *cursor += 1;
+        }
+        if *cursor == exponent_start {
+            return Err(ParseFailure::Syntax);
+        }
+    }
+    Ok(())
 }
 
 fn disambiguate_literal_number_tokens(

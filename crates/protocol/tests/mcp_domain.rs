@@ -380,6 +380,35 @@ fn duplicate_reordered_unicode_and_repeated_inputs_are_deterministic() {
 }
 
 #[test]
+fn malformed_json_precedes_earlier_duplicate_and_depth_failures() {
+    for input in [
+        r#"{"jsonrpc":"2.0","jsonrpc":"2.0","#,
+        r#"{"jsonrpc":"2.0","x":1,"x":2,"tail":"\q"}"#,
+        r#"{"jsonrpc":"2.0","nested":{"x":1,"x":2},"tail":"\q"}"#,
+    ] {
+        let failure = error(input);
+        assert_eq!(failure.code(), ErrorCode::ParseError);
+        assert!(failure.id().is_none());
+    }
+
+    let malformed_after_depth = format!(
+        "{}0{}x",
+        "[".repeat(MAX_JSON_NESTING_DEPTH + 1),
+        "]".repeat(MAX_JSON_NESTING_DEPTH + 1)
+    );
+    let failure = error(&malformed_after_depth);
+    assert_eq!(failure.code(), ErrorCode::ParseError);
+    assert!(failure.id().is_none());
+
+    let valid_over_depth = format!(
+        "{}0{}",
+        "[".repeat(MAX_JSON_NESTING_DEPTH + 1),
+        "]".repeat(MAX_JSON_NESTING_DEPTH + 1)
+    );
+    assert_eq!(error(&valid_over_depth).code(), ErrorCode::InvalidRequest);
+}
+
+#[test]
 fn notifications_are_distinct_and_never_create_error_responses() {
     let valid = r#"{"jsonrpc":"2.0","method":"unknown","params":{"value":1}}"#;
     let DecodeOutcome::Message(InboundMessage::Notification(notification)) = decode_message(valid)

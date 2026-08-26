@@ -31,9 +31,9 @@ The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The
-[Sprint 29 MCP Semantic Tools review](reviews/sprint-29-mcp-semantic-tools.md)
-records `pass with non-blocking follow-up`; Sprint 29 is completed and Sprint
-30 VS Code Extension Foundation is the unique `next` planning target. The
+[Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
+records `pass with non-blocking follow-ups`; Sprint 30 is completed and Sprint
+31 Navigation and Symbol Search is the unique `next` planning target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -7072,8 +7072,8 @@ documentation follow-up.
 |---|---|---|
 | Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | completed |
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
-| Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | active |
-| Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | planned |
+| Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
+| Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | next |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | planned |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
@@ -7100,9 +7100,9 @@ identity, host, activation, configuration, process ownership, initialization,
 status, failure, shutdown, packaging, and test contracts before production
 implementation.
 
-The current prompt suite is
-`docs/codex/prompts/sprint-30-vscode-extension-foundation/`. The immediately
-preceding suite is exactly
+The completed Sprint 30 prompt suite remains
+`docs/codex/prompts/sprint-30-vscode-extension-foundation/`. Before Task 7, the
+immediately preceding suite was exactly
 `docs/codex/prompts/sprint-29-mcp-semantic-tools/`, containing these nine
 tracked files with an identical filesystem inventory and no untracked addition:
 
@@ -7116,7 +7116,7 @@ tracked files with an identical filesystem inventory and no untracked addition:
 - `07-complete-mcp-semantic-tool-evidence.md`
 - `08-sprint-29-integration-review.md`
 
-Only Task 7 may retire those exact files after a non-blocking independent and
+Task 7 retired those exact files only after a non-blocking independent and
 primary review, successful full validation, and a passing same-reviewer
 artifact-consistency check.
 
@@ -7172,12 +7172,20 @@ two-clean-build VSIX, dependency/license, exclusion, and macOS/Windows CI
 evidence cover the implemented boundary without adding a production Node
 dependency or changing Rust behavior.
 
-Sprint 30 remains `active` until Task 7 completes the required independent and
-primary integration reviews, artifact-consistency check, final state
-transition, and conditional Sprint 29 prompt-suite retirement. Navigation,
-symbol search, LSP, diagnostics, chat/context UI, EDT integration, remote/web
-hosts, Runtime installation, Marketplace publication/signing, telemetry, and
-external-client compatibility remain deferred.
+Tasks 1-7 and four bounded remediation commits are committed in dependency
+order. The
+[Sprint 30 integration review](reviews/sprint-30-vscode-extension-foundation.md)
+records `pass with non-blocking follow-ups` after two fresh-context read-only
+reviewers, primary reconciliation, the complete extension and Rust gates, and
+a passing same-reviewer artifact-consistency check. Sprint 30 is `completed`,
+Sprint 31 Navigation and Symbol Search is the unique `next` target, and the
+exact verified Sprint 29 prompt suite is retired in the review commit.
+
+Navigation, symbol search, LSP, diagnostics, chat/context UI, EDT integration,
+remote/web hosts, Runtime installation, Marketplace publication/signing,
+telemetry, and external-client compatibility remain deferred. An actual
+`windows-latest` run for the immutable completion commit and investigation of
+the exit-zero VS Code Host SIGPIPE diagnostic remain non-blocking follow-ups.
 
 Suggested planning commit message:
 

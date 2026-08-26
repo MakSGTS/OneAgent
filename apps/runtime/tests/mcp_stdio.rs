@@ -2,6 +2,8 @@ use std::convert::Infallible;
 use std::future::{pending, ready};
 use std::io;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 
 use oneagent_protocol::{MAX_MESSAGE_BYTES, PROTOCOL_VERSION};
@@ -123,6 +125,77 @@ impl AsyncRead for PublicFailingReader {
     }
 }
 
+struct PublicChunkedReader {
+    input: Vec<u8>,
+    position: usize,
+    chunk_bytes: usize,
+    polls: Arc<AtomicUsize>,
+    dropped: Arc<AtomicBool>,
+}
+
+impl AsyncRead for PublicChunkedReader {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        self.polls.fetch_add(1, Ordering::SeqCst);
+        if self.position == self.input.len() {
+            return Poll::Ready(Ok(()));
+        }
+        let available = self.input.len() - self.position;
+        let count = available.min(self.chunk_bytes).min(buffer.remaining());
+        let end = self.position + count;
+        buffer.put_slice(&self.input[self.position..end]);
+        self.position = end;
+        Poll::Ready(Ok(()))
+    }
+}
+
+impl Drop for PublicChunkedReader {
+    fn drop(&mut self) {
+        self.dropped.store(true, Ordering::SeqCst);
+    }
+}
+
+struct PublicPendingReader {
+    polls: Arc<AtomicUsize>,
+    dropped: Arc<AtomicBool>,
+}
+
+impl AsyncRead for PublicPendingReader {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        _buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        self.polls.fetch_add(1, Ordering::SeqCst);
+        Poll::Pending
+    }
+}
+
+impl Drop for PublicPendingReader {
+    fn drop(&mut self) {
+        self.dropped.store(true, Ordering::SeqCst);
+    }
+}
+
+struct PublicDeferredShutdown(bool);
+
+impl std::future::Future for PublicDeferredShutdown {
+    type Output = Result<(), Infallible>;
+
+    fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.0 {
+            Poll::Ready(Ok(()))
+        } else {
+            self.0 = true;
+            context.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
+
 enum PublicWriterFailure {
     Write,
     Flush(Vec<u8>),
@@ -214,4 +287,70 @@ async fn public_transport_closes_cancellation_and_io_failure_matrix() {
         .await
         .expect_err("flush failure must terminate");
     assert_eq!(error.kind(), McpStdioErrorKind::Flush);
+}
+
+#[tokio::test]
+async fn public_transport_handles_partial_reads_escaped_newlines_and_releases_streams() {
+    let input = json!({
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "server/discover",
+        "params": {
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": PROTOCOL_VERSION,
+                "io.modelcontextprotocol/clientCapabilities": {}
+            },
+            "extension": "first\nsecond"
+        }
+    })
+    .to_string()
+        + "\n";
+    assert!(!input[..input.len() - 1].contains('\n'));
+
+    let polls = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicBool::new(false));
+    let mut reader = PublicChunkedReader {
+        input: input.into_bytes(),
+        position: 0,
+        chunk_bytes: 1,
+        polls: Arc::clone(&polls),
+        dropped: Arc::clone(&dropped),
+    };
+    let mut output = Vec::new();
+    let outcome = McpStdioTransport::default()
+        .run(
+            &mut reader,
+            &mut output,
+            pending::<Result<(), Infallible>>(),
+        )
+        .await;
+    assert_eq!(outcome, Ok(McpStdioOutcome::EndOfInput));
+    assert!(polls.load(Ordering::SeqCst) > 1);
+    let lines = String::from_utf8(output).expect("protocol output must be UTF-8");
+    assert_eq!(lines.lines().count(), 1);
+    assert_eq!(
+        serde_json::from_str::<Value>(lines.trim_end()).expect("discovery response")["id"],
+        6
+    );
+    drop(reader);
+    assert!(dropped.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn public_transport_cancels_a_pending_reader_without_retained_work() {
+    let polls = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicBool::new(false));
+    let mut reader = PublicPendingReader {
+        polls: Arc::clone(&polls),
+        dropped: Arc::clone(&dropped),
+    };
+    let mut output = Vec::new();
+    let outcome = McpStdioTransport::default()
+        .run(&mut reader, &mut output, PublicDeferredShutdown(false))
+        .await;
+    assert_eq!(outcome, Ok(McpStdioOutcome::Cancelled));
+    assert_eq!(polls.load(Ordering::SeqCst), 1);
+    assert!(output.is_empty());
+    drop(reader);
+    assert!(dropped.load(Ordering::SeqCst));
 }

@@ -8,6 +8,7 @@ use serde_json::{Map, Value, json};
 use crate::{
     DecodeOutcome, ErrorCode, ErrorResponse, InboundMessage, MAX_METHOD_NAME_BYTES, Notification,
     PROTOCOL_VERSION, Request, Response, ResultResponse, decode_message,
+    mcp::validate_client_capabilities,
 };
 
 /// Programmatic MCP server name advertised by discovery.
@@ -60,38 +61,30 @@ impl McpServer {
 
     fn dispatch_request(&self, request: &Request) -> Response {
         let Some(registration) = self.methods.get(request.method()) else {
-            return Response::Error(ErrorResponse::new(
-                Some(request.id().clone()),
-                ErrorCode::MethodNotFound,
-            ));
+            return standard_error(Some(request.id().clone()), ErrorCode::MethodNotFound);
         };
         if !registration.mode.accepts_requests() {
-            return Response::Error(ErrorResponse::new(
-                Some(request.id().clone()),
-                ErrorCode::MethodNotFound,
-            ));
+            return standard_error(Some(request.id().clone()), ErrorCode::MethodNotFound);
         }
         if !has_required_capabilities(
             request.metadata().client_capabilities(),
             &registration.required_capabilities,
         ) {
-            return Response::Error(ErrorResponse::missing_capability(
+            return ErrorResponse::missing_capability(
                 request.id().clone(),
                 &registration.required_capabilities,
-            ));
+            )
+            .map_or_else(|_| internal_error(request.id().clone()), Response::Error);
         }
 
         match registration.handler.handle_request(request) {
-            Ok(result) => Response::Result(ResultResponse::complete(request.id().clone(), result)),
+            Ok(result) => ResultResponse::complete(request.id().clone(), result)
+                .map_or_else(|_| internal_error(request.id().clone()), Response::Result),
             #[cfg(test)]
-            Err(HandlerFailure::InvalidParams) => Response::Error(ErrorResponse::new(
-                Some(request.id().clone()),
-                ErrorCode::InvalidParams,
-            )),
-            Err(HandlerFailure::Internal) => Response::Error(ErrorResponse::new(
-                Some(request.id().clone()),
-                ErrorCode::InternalError,
-            )),
+            Err(HandlerFailure::InvalidParams) => {
+                standard_error(Some(request.id().clone()), ErrorCode::InvalidParams)
+            }
+            Err(HandlerFailure::Internal) => internal_error(request.id().clone()),
         }
     }
 
@@ -222,6 +215,9 @@ impl ServerBuilder {
         if method.is_empty() || method.len() > MAX_METHOD_NAME_BYTES {
             return Err(RegistrationError::Invalid);
         }
+        if !validate_client_capabilities(&required_capabilities) {
+            return Err(RegistrationError::Invalid);
+        }
         if method == DISCOVER_METHOD && self.methods.contains_key(method) {
             return Err(RegistrationError::Reserved);
         }
@@ -275,6 +271,16 @@ fn has_required_capabilities(declared: &Map<String, Value>, required: &Map<Strin
         .all(|(name, value)| declared.get(name) == Some(value))
 }
 
+fn standard_error(id: Option<crate::RequestId>, code: ErrorCode) -> Response {
+    Response::Error(
+        ErrorResponse::new(id, code).expect("standard MCP errors must satisfy outbound bounds"),
+    )
+}
+
+fn internal_error(id: crate::RequestId) -> Response {
+    standard_error(Some(id), ErrorCode::InternalError)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -282,7 +288,7 @@ mod tests {
 
     use serde_json::{Map, Value, json};
 
-    use crate::{ErrorCode, Response, encode_response};
+    use crate::{ErrorCode, MAX_MESSAGE_BYTES, Response, encode_response};
 
     use super::{
         DISCOVER_METHOD, HandlerFailure, MethodHandler, MethodMode, Notification,
@@ -322,6 +328,16 @@ mod tests {
 
     impl MethodHandler for FailingHandler {}
 
+    struct OversizedHandler;
+
+    impl MethodHandler for OversizedHandler {
+        fn handle_request(&self, _request: &Request) -> Result<Map<String, Value>, HandlerFailure> {
+            let mut result = Map::new();
+            result.insert("oversized".to_owned(), json!("x".repeat(MAX_MESSAGE_BYTES)));
+            Ok(result)
+        }
+    }
+
     struct CountingNotificationHandler(Arc<AtomicUsize>);
 
     impl MethodHandler for CountingNotificationHandler {
@@ -335,6 +351,18 @@ mod tests {
         let mut builder = ServerBuilder::new();
         assert_eq!(
             builder.register("", MethodMode::RequestOnly, Map::new(), EchoHandler),
+            Err(RegistrationError::Invalid)
+        );
+        assert_eq!(
+            builder.register(
+                "invalid/capability",
+                MethodMode::RequestOnly,
+                json!({"elicitation": 42})
+                    .as_object()
+                    .expect("capability object")
+                    .clone(),
+                EchoHandler
+            ),
             Err(RegistrationError::Invalid)
         );
         assert_eq!(
@@ -377,6 +405,14 @@ mod tests {
             .expect("registration must succeed");
         first
             .register(
+                "z/oversized",
+                MethodMode::RequestOnly,
+                Map::new(),
+                OversizedHandler,
+            )
+            .expect("registration must succeed");
+        first
+            .register(
                 "a/echo",
                 MethodMode::RequestOnly,
                 required.clone(),
@@ -386,7 +422,7 @@ mod tests {
         let server = first.build();
         assert_eq!(
             server.registered_methods().collect::<Vec<_>>(),
-            ["a/echo", DISCOVER_METHOD, "z/fail"]
+            ["a/echo", DISCOVER_METHOD, "z/fail", "z/oversized"]
         );
 
         let missing = server
@@ -421,6 +457,15 @@ mod tests {
             panic!("handler failure must be closed");
         };
         assert_eq!(failed.code(), ErrorCode::InternalError);
+
+        let oversized = server
+            .dispatch(&request("z/oversized", &json!({}), &Value::Null))
+            .expect("request must respond");
+        let Response::Error(oversized) = oversized else {
+            panic!("oversized handler result must become a closed error");
+        };
+        assert_eq!(oversized.code(), ErrorCode::InternalError);
+        assert!(encode_response(&Response::Error(oversized)).is_ok());
     }
 
     #[test]

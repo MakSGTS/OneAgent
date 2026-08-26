@@ -2,6 +2,15 @@ use oneagent_protocol::{ErrorCode, McpServer, PROTOCOL_VERSION, Response, encode
 use serde_json::{Value, json};
 
 fn request(id: &Value, method: &str, version: &str) -> String {
+    request_with_capabilities(id, method, version, &json!({}))
+}
+
+fn request_with_capabilities(
+    id: &Value,
+    method: &str,
+    version: &str,
+    capabilities: &Value,
+) -> String {
     json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -9,7 +18,7 @@ fn request(id: &Value, method: &str, version: &str) -> String {
         "params": {
             "_meta": {
                 "io.modelcontextprotocol/protocolVersion": version,
-                "io.modelcontextprotocol/clientCapabilities": {}
+                "io.modelcontextprotocol/clientCapabilities": capabilities
             }
         }
     })
@@ -77,6 +86,26 @@ fn public_dispatch_has_closed_version_method_and_notification_behavior() {
         panic!("unknown method must fail");
     };
     assert_eq!(unknown.code(), ErrorCode::MethodNotFound);
+
+    let malformed_capability = server
+        .dispatch(&request_with_capabilities(
+            &json!(3),
+            "server/discover",
+            PROTOCOL_VERSION,
+            &json!({"elicitation": 42}),
+        ))
+        .expect("malformed request must respond");
+    let Response::Error(malformed_capability) = malformed_capability else {
+        panic!("malformed capability must fail");
+    };
+    assert_eq!(malformed_capability.code(), ErrorCode::InvalidParams);
+    assert_eq!(
+        malformed_capability
+            .id()
+            .and_then(oneagent_protocol::RequestId::as_i64),
+        Some(3)
+    );
+    assert!(malformed_capability.data().is_none());
 
     assert!(
         server

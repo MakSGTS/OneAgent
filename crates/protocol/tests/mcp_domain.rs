@@ -1,9 +1,10 @@
 use oneagent_protocol::{
     CLIENT_CAPABILITIES_META_KEY, CLIENT_INFO_META_KEY, DecodeOutcome, ErrorCode, InboundMessage,
-    MAX_JSON_NESTING_DEPTH, MAX_REQUEST_ID_BYTES, PROTOCOL_VERSION, PROTOCOL_VERSION_META_KEY,
-    RequestId, Response, decode_message, encode_response,
+    MAX_JSON_NESTING_DEPTH, MAX_MESSAGE_BYTES, MAX_REQUEST_ID_BYTES, PROTOCOL_VERSION,
+    PROTOCOL_VERSION_META_KEY, RequestId, Response, ResultResponse, decode_message,
+    encode_response,
 };
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 fn request(id: &Value, method: &str) -> String {
     json!({
@@ -57,10 +58,13 @@ fn request_identifiers_and_metadata_round_trip() {
             Some("test-client")
         );
 
-        let response = Response::Error(oneagent_protocol::ErrorResponse::new(
-            Some(request.id().clone()),
-            ErrorCode::MethodNotFound,
-        ));
+        let response = Response::Error(
+            oneagent_protocol::ErrorResponse::new(
+                Some(request.id().clone()),
+                ErrorCode::MethodNotFound,
+            )
+            .expect("standard error must be constructible"),
+        );
         let encoded: Value = serde_json::from_slice(
             &encode_response(&response).expect("closed response must encode"),
         )
@@ -163,6 +167,105 @@ fn parse_shape_metadata_and_version_precedence_is_stable() {
 }
 
 #[test]
+fn known_request_metadata_and_client_capability_shapes_match_the_schema() {
+    let valid = json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "server/discover",
+        "params": {
+            "_meta": {
+                PROTOCOL_VERSION_META_KEY: PROTOCOL_VERSION,
+                CLIENT_CAPABILITIES_META_KEY: {
+                    "experimental": {"feature": {}},
+                    "roots": {},
+                    "sampling": {"context": {}, "tools": {}},
+                    "elicitation": {"form": {}, "url": {}},
+                    "extensions": {"com.example/feature": {}},
+                    "futureCapability": 42
+                },
+                CLIENT_INFO_META_KEY: {
+                    "name": "test-client",
+                    "version": "1.0",
+                    "title": "Test Client",
+                    "description": "Controlled client",
+                    "websiteUrl": "https://example.invalid",
+                    "icons": [{
+                        "src": "data:image/png;base64,AA==",
+                        "mimeType": "image/png",
+                        "sizes": ["16x16", "any"],
+                        "theme": "dark"
+                    }]
+                },
+                "progressToken": 1.5,
+                "io.modelcontextprotocol/logLevel": "warning",
+                "com.example/extension": true
+            }
+        }
+    })
+    .to_string();
+    assert!(matches!(
+        decode_message(&valid),
+        DecodeOutcome::Message(InboundMessage::Request(_))
+    ));
+
+    let invalid_capabilities = [
+        json!({"elicitation": 42}),
+        json!({"elicitation": {"form": 42}}),
+        json!({"sampling": false}),
+        json!({"sampling": {"tools": []}}),
+        json!({"roots": null}),
+        json!({"experimental": {"feature": 1}}),
+        json!({"extensions": {"unprefixed": {}}}),
+        json!({"extensions": {"com.example/feature": 1}}),
+    ];
+    for capabilities in invalid_capabilities {
+        let input = json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "server/discover",
+            "params": {"_meta": {
+                PROTOCOL_VERSION_META_KEY: PROTOCOL_VERSION,
+                CLIENT_CAPABILITIES_META_KEY: capabilities
+            }}
+        })
+        .to_string();
+        let failure = error(&input);
+        assert_eq!(failure.code(), ErrorCode::InvalidParams);
+        assert_eq!(failure.id().and_then(RequestId::as_i64), Some(10));
+    }
+
+    let invalid_metadata = [
+        json!({"progressToken": true}),
+        json!({"io.modelcontextprotocol/logLevel": "trace"}),
+        json!({"bad key": true}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "title": false}}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "description": 1}}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "websiteUrl": {}}}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "icons": {}}}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "icons": [{"src": 1}]}}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "icons": [{"src": "x", "sizes": [1]}]}}),
+        json!({CLIENT_INFO_META_KEY: {"name": "client", "version": "1", "icons": [{"src": "x", "theme": "sepia"}]}}),
+    ];
+    for addition in invalid_metadata {
+        let mut metadata = Map::new();
+        metadata.insert(
+            PROTOCOL_VERSION_META_KEY.to_owned(),
+            json!(PROTOCOL_VERSION),
+        );
+        metadata.insert(CLIENT_CAPABILITIES_META_KEY.to_owned(), json!({}));
+        metadata.extend(addition.as_object().expect("metadata addition").clone());
+        let input = json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "server/discover",
+            "params": {"_meta": metadata}
+        })
+        .to_string();
+        assert_eq!(error(&input).code(), ErrorCode::InvalidParams);
+    }
+}
+
+#[test]
 fn duplicate_reordered_unicode_and_repeated_inputs_are_deterministic() {
     let duplicate = r#"{"jsonrpc":"2.0","id":1,"method":"x","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"secret":1,"secret":2}}}"#;
     assert_eq!(error(duplicate).code(), ErrorCode::InvalidRequest);
@@ -197,13 +300,72 @@ fn notifications_are_distinct_and_never_create_error_responses() {
 
 #[test]
 fn compact_error_serialization_has_exact_closed_shape() {
-    let encoded = encode_response(&Response::Error(oneagent_protocol::ErrorResponse::new(
-        None,
-        ErrorCode::ParseError,
-    )))
+    let encoded = encode_response(&Response::Error(
+        oneagent_protocol::ErrorResponse::new(None, ErrorCode::ParseError)
+            .expect("standard error must be constructible"),
+    ))
     .expect("error response must encode");
     assert_eq!(
         String::from_utf8(encoded).expect("JSON is UTF-8"),
         r#"{"error":{"code":-32700,"message":"Parse error"},"jsonrpc":"2.0"}"#
     );
+}
+
+#[test]
+fn public_outbound_construction_enforces_error_data_size_and_depth_invariants() {
+    assert!(
+        oneagent_protocol::ErrorResponse::new(None, ErrorCode::UnsupportedProtocolVersion).is_err()
+    );
+    assert!(
+        oneagent_protocol::ErrorResponse::new(None, ErrorCode::MissingRequiredClientCapability)
+            .is_err()
+    );
+    assert!(
+        oneagent_protocol::ErrorResponse::missing_capability(
+            RequestId::Unsigned(1),
+            json!({"elicitation": 42})
+                .as_object()
+                .expect("capability object")
+        )
+        .is_err()
+    );
+    assert!(
+        oneagent_protocol::ErrorResponse::unsupported_version(
+            RequestId::Unsigned(1),
+            &"x".repeat(MAX_MESSAGE_BYTES)
+        )
+        .is_err()
+    );
+
+    let mut baseline_fields = Map::new();
+    baseline_fields.insert("payload".to_owned(), json!(""));
+    let baseline = ResultResponse::complete(RequestId::Unsigned(1), baseline_fields)
+        .expect("baseline response must fit");
+    let baseline_bytes = encode_response(&Response::Result(baseline))
+        .expect("baseline response must encode")
+        .len();
+    let padding_bytes = MAX_MESSAGE_BYTES - baseline_bytes;
+
+    let mut exact_fields = Map::new();
+    exact_fields.insert("payload".to_owned(), json!("x".repeat(padding_bytes)));
+    let exact = ResultResponse::complete(RequestId::Unsigned(1), exact_fields)
+        .expect("exact-bound response must be constructible");
+    assert_eq!(
+        encode_response(&Response::Result(exact))
+            .expect("exact-bound response must encode")
+            .len(),
+        MAX_MESSAGE_BYTES
+    );
+
+    let mut oversized_fields = Map::new();
+    oversized_fields.insert("payload".to_owned(), json!("x".repeat(padding_bytes + 1)));
+    assert!(ResultResponse::complete(RequestId::Unsigned(1), oversized_fields).is_err());
+
+    let mut nested = Value::Null;
+    for _ in 0..MAX_JSON_NESTING_DEPTH {
+        nested = Value::Array(vec![nested]);
+    }
+    let mut nested_fields = Map::new();
+    nested_fields.insert("nested".to_owned(), nested);
+    assert!(ResultResponse::complete(RequestId::Unsigned(1), nested_fields).is_err());
 }

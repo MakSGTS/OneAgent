@@ -130,6 +130,18 @@ well-formed top-level, params, and `_meta` extension members are ignored or
 retained only as needed by the selected handler; their presence does not alter
 dispatch.
 
+Known request metadata remains schema-validated even when Sprint 28 does not
+consume it. `progressToken` is a string or number; the deprecated versioned
+log-level value is one of the eight schema values; client information requires
+string `name` and `version`, string-valued known optional text fields, and
+well-typed icon objects. `_meta` keys follow the versioned prefix/name grammar.
+Known client capabilities retain the selected schema shapes: `roots` is an
+object; `sampling` and `elicitation` are objects whose known options are
+objects; `experimental` and `extensions` map names to objects; extension names
+are valid prefixed metadata keys. Unknown top-level client capability members
+remain accepted with arbitrary JSON values because the schema is explicitly
+open.
+
 ### Parse and validation precedence
 
 For one size-bounded UTF-8 frame, validation is deterministic:
@@ -143,8 +155,10 @@ For one size-bounded UTF-8 frame, validation is deterministic:
    notification;
 5. for a request, require `params` to be an object and `params._meta` to be an
    object;
-6. require string `_meta["io.modelcontextprotocol/protocolVersion"]` and object
-   `_meta["io.modelcontextprotocol/clientCapabilities"]`;
+6. require string `_meta["io.modelcontextprotocol/protocolVersion"]`, a
+   schema-conformant object at
+   `_meta["io.modelcontextprotocol/clientCapabilities"]`, valid metadata key
+   names, and correct known optional metadata/client-information shapes;
 7. reject an unsupported protocol version;
 8. find the method, validate any required client capability, then validate
    method-specific params;
@@ -195,6 +209,15 @@ Unexpected handler failure maps to the closed internal error without source
 detail. Serialization failure is a terminal internal transport failure rather
 than a second protocol response. No application-defined code in the MCP
 reserved `-32020..=-32099` range is introduced.
+
+Public constructors are fallible and preserve the same closed contract.
+Standard errors cannot be constructed with an MCP-specific code that requires
+data; the two MCP-specific constructors supply and validate their exact data.
+Complete result construction checks the fully wrapped response. Construction
+and encoding both reject a response above 1,048,576 bytes or above the accepted
+128-level JSON nesting bound, so an unbounded handler value cannot reach the
+transport writer. A handler construction failure becomes the small closed
+internal error.
 
 ### Discovery and truthful capabilities
 
@@ -274,6 +297,11 @@ The Runtime adapter reads and writes a reliable byte stream using these rules:
   produce parse errors but no partial fragment reaches a method handler;
 - an escaped JSON newline remains ordinary content and is valid.
 
+The 1,048,576-byte and 128-level limits apply independently to each fully
+encoded outbound JSON-RPC response before the framing LF is added. Exact-bound
+responses are accepted; a one-byte-over or over-depth response fails before
+any writer call.
+
 The adapter processes frames sequentially. For each response-producing request
 it serializes one compact JSON value, writes exactly one LF, and flushes before
 reading the next frame. Notifications produce no output and require no flush.
@@ -327,25 +355,30 @@ Protocol-domain tests must cover:
 - string, empty-string, signed, zero, and unsigned integer IDs and rejected ID
   kinds/bounds;
 - valid discovery metadata, reordered/unknown members, and repeated requests;
+- every known client capability shape, namespaced extension keys, optional
+  progress/log/client-information/icon shape, and malformed counterparts;
 - malformed JSON, non-object input, duplicate keys at every relevant depth,
   wrong marker, missing/wrong method, params, `_meta`, version, and capability;
 - unsupported version and exact error data;
 - unknown methods, method params, required capabilities, handler failure, and
   registration conflicts;
 - valid and invalid notifications with no response;
-- deterministic compact serialization and safe error formatting.
+- deterministic compact serialization, closed MCP-specific error data, exact
+  and over-limit outbound size/depth behavior, and safe error formatting.
 
 Injected-stream tests must cover positive, malformed, repeated, multi-frame,
 CRLF, empty, boundary, one-byte-over-limit, invalid UTF-8, incomplete EOF,
-embedded-LF fragments, notification, ordering, flush, read failure, write
-failure, cancellation, EOF, cleanup, no-extra-output, and fresh-instance cases.
+embedded-LF fragments, escaped-newline content, partial reads, notification,
+ordering, flush, read failure, write failure, cancellation of a pending reader,
+EOF, stream release, cleanup, no-extra-output, and fresh-instance cases.
 
-Platform-neutral child-process pipe tests must cover discovery, unknown method,
-notification no-output, exact stdout JSON lines, empty-or-accepted stderr,
-stdin-close exit 0, terminal malformed-frame exit non-zero where applicable,
-bounded hang guards, and repeated fresh processes. No real signal, fixed port,
-credential, remote service, live MCP client, platform-specific pipe API, or
-tool action is required.
+Platform-neutral child-process pipe tests must cover exact discovery,
+unknown-method and malformed-capability envelopes, notification no-output,
+exact stdout JSON lines, empty-or-accepted stderr, stdin-close exit 0, terminal
+malformed-frame exit non-zero where applicable, bounded hang guards, and
+repeated fresh processes. No real signal, fixed port, credential, remote
+service, live MCP client, platform-specific pipe API, or tool action is
+required.
 
 The canonical full workspace gate and focused Runtime HTTP, Workspace, Graph
 Query, lifecycle, and CLI compatibility targets must still pass.

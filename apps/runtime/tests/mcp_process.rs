@@ -10,6 +10,10 @@ use tokio::time::timeout;
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn request(id: u64, method: &str) -> String {
+    request_with_capabilities(id, method, &json!({}))
+}
+
+fn request_with_capabilities(id: u64, method: &str, capabilities: &Value) -> String {
     json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -17,7 +21,7 @@ fn request(id: u64, method: &str) -> String {
         "params": {
             "_meta": {
                 "io.modelcontextprotocol/protocolVersion": PROTOCOL_VERSION,
-                "io.modelcontextprotocol/clientCapabilities": {}
+                "io.modelcontextprotocol/clientCapabilities": capabilities
             }
         }
     })
@@ -52,7 +56,8 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
     let discover = request(1, "server/discover");
     let notification = r#"{"jsonrpc":"2.0","method":"server/discover"}"#;
     let unknown = request(2, "tools/list");
-    let input = format!("{discover}\n{notification}\n{unknown}\n");
+    let malformed = request_with_capabilities(3, "server/discover", &json!({"elicitation": 42}));
+    let input = format!("{discover}\n{notification}\n{unknown}\n{malformed}\n");
 
     for _ in 0..2 {
         let output = run_process(input.as_bytes()).await;
@@ -62,14 +67,46 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
         let stdout = String::from_utf8(output.stdout).expect("stdout must be UTF-8 JSON lines");
         assert!(stdout.ends_with('\n'));
         let lines = stdout.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), 2);
+        assert_eq!(lines.len(), 3);
         let discovery: Value = serde_json::from_str(lines[0]).expect("discovery JSON");
         let method_error: Value = serde_json::from_str(lines[1]).expect("method error JSON");
-        assert_eq!(discovery["id"], 1);
-        assert_eq!(discovery["result"]["resultType"], "complete");
-        assert_eq!(discovery["result"]["capabilities"], json!({}));
-        assert_eq!(method_error["id"], 2);
-        assert_eq!(method_error["error"]["code"], -32601);
+        let malformed_error: Value = serde_json::from_str(lines[2]).expect("invalid params JSON");
+        assert_eq!(
+            discovery,
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {
+                    "resultType": "complete",
+                    "supportedVersions": [PROTOCOL_VERSION],
+                    "capabilities": {},
+                    "_meta": {
+                        "io.modelcontextprotocol/serverInfo": {
+                            "name": "oneagent",
+                            "version": env!("CARGO_PKG_VERSION")
+                        }
+                    },
+                    "ttlMs": 0,
+                    "cacheScope": "public"
+                }
+            })
+        );
+        assert_eq!(
+            method_error,
+            json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "error": {"code": -32601, "message": "Method not found"}
+            })
+        );
+        assert_eq!(
+            malformed_error,
+            json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "error": {"code": -32602, "message": "Invalid params"}
+            })
+        );
     }
 }
 

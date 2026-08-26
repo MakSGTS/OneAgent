@@ -24,6 +24,8 @@ pub const MAX_JSON_NESTING_DEPTH: usize = 128;
 
 const DUPLICATE_KEY_MARKER: &str = "duplicate JSON object key";
 const DEPTH_MARKER: &str = "maximum JSON nesting depth exceeded";
+const PROGRESS_TOKEN_META_KEY: &str = "progressToken";
+const LOG_LEVEL_META_KEY: &str = "io.modelcontextprotocol/logLevel";
 
 /// A JSON-RPC request identifier accepted by MCP.
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -322,37 +324,70 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    /// Creates a closed error without data.
-    #[must_use]
-    pub const fn new(id: Option<RequestId>, code: ErrorCode) -> Self {
-        Self {
+    /// Creates a bounded standard JSON-RPC error without data.
+    ///
+    /// MCP-specific error codes with required data are rejected. Use their
+    /// dedicated constructors instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EncodeError`] when the code requires data or the complete
+    /// response violates an outbound bound.
+    pub fn new(id: Option<RequestId>, code: ErrorCode) -> Result<Self, EncodeError> {
+        if matches!(
+            code,
+            ErrorCode::MissingRequiredClientCapability | ErrorCode::UnsupportedProtocolVersion
+        ) {
+            return Err(EncodeError);
+        }
+        let response = Self {
             id,
             code,
             data: None,
-        }
+        };
+        ensure_response_bound(&Response::Error(response.clone()))?;
+        Ok(response)
     }
 
     /// Creates the exact unsupported-version error.
-    #[must_use]
-    pub fn unsupported_version(id: RequestId, requested: &str) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EncodeError`] when the complete response violates an
+    /// outbound bound.
+    pub fn unsupported_version(id: RequestId, requested: &str) -> Result<Self, EncodeError> {
+        let response = Self {
             id: Some(id),
             code: ErrorCode::UnsupportedProtocolVersion,
             data: Some(serde_json::json!({
                 "requested": requested,
                 "supported": [PROTOCOL_VERSION]
             })),
-        }
+        };
+        ensure_response_bound(&Response::Error(response.clone()))?;
+        Ok(response)
     }
 
     /// Creates the exact missing-capability error.
-    #[must_use]
-    pub fn missing_capability(id: RequestId, required: &Map<String, Value>) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EncodeError`] when the capability object is not
+    /// schema-conformant or the complete response violates an outbound bound.
+    pub fn missing_capability(
+        id: RequestId,
+        required: &Map<String, Value>,
+    ) -> Result<Self, EncodeError> {
+        if !validate_client_capabilities(required) {
+            return Err(EncodeError);
+        }
+        let response = Self {
             id: Some(id),
             code: ErrorCode::MissingRequiredClientCapability,
             data: Some(serde_json::json!({ "requiredCapabilities": required })),
-        }
+        };
+        ensure_response_bound(&Response::Error(response.clone()))?;
+        Ok(response)
     }
 
     /// Returns the response identifier, if a valid request ID was available.
@@ -394,13 +429,19 @@ pub struct ResultResponse {
 
 impl ResultResponse {
     /// Creates a result whose `resultType` is exactly `complete`.
-    #[must_use]
-    pub fn complete(id: RequestId, mut fields: Map<String, Value>) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EncodeError`] when the complete response violates an
+    /// outbound size or nesting bound.
+    pub fn complete(id: RequestId, mut fields: Map<String, Value>) -> Result<Self, EncodeError> {
         fields.insert(
             "resultType".to_owned(),
             Value::String("complete".to_owned()),
         );
-        Self { id, result: fields }
+        let response = Self { id, result: fields };
+        ensure_response_bound(&Response::Result(response.clone()))?;
+        Ok(response)
     }
 
     /// Returns the response identifier.
@@ -468,7 +509,7 @@ pub fn decode_message(input: &str) -> DecodeOutcome {
     let value = match parse_unique_value(input) {
         Ok(value) => value,
         Err(ParseFailure::Syntax) => {
-            return DecodeOutcome::Error(ErrorResponse::new(None, ErrorCode::ParseError));
+            return DecodeOutcome::Error(standard_error(None, ErrorCode::ParseError));
         }
         Err(ParseFailure::Duplicate | ParseFailure::Depth) => return invalid_request(None),
     };
@@ -508,7 +549,19 @@ pub fn decode_message(input: &str) -> DecodeOutcome {
 ///
 /// Returns [`EncodeError`] if the closed response cannot be serialized.
 pub fn encode_response(response: &Response) -> Result<Vec<u8>, EncodeError> {
-    let value = match response {
+    let value = response_value(response);
+    if !value_within_nesting_bound(&value, 0) {
+        return Err(EncodeError);
+    }
+    let encoded = serde_json::to_vec(&value).map_err(|_| EncodeError)?;
+    if encoded.len() > MAX_MESSAGE_BYTES {
+        return Err(EncodeError);
+    }
+    Ok(encoded)
+}
+
+fn response_value(response: &Response) -> Value {
+    match response {
         Response::Result(response) => {
             let mut object = Map::new();
             object.insert("jsonrpc".to_owned(), Value::String("2.0".to_owned()));
@@ -538,9 +591,29 @@ pub fn encode_response(response: &Response) -> Result<Vec<u8>, EncodeError> {
             object.insert("error".to_owned(), Value::Object(error));
             Value::Object(object)
         }
-    };
+    }
+}
 
-    serde_json::to_vec(&value).map_err(|_| EncodeError)
+fn ensure_response_bound(response: &Response) -> Result<(), EncodeError> {
+    encode_response(response).map(|_| ())
+}
+
+fn value_within_nesting_bound(value: &Value, depth: usize) -> bool {
+    match value {
+        Value::Array(values) => {
+            depth < MAX_JSON_NESTING_DEPTH
+                && values
+                    .iter()
+                    .all(|value| value_within_nesting_bound(value, depth + 1))
+        }
+        Value::Object(values) => {
+            depth < MAX_JSON_NESTING_DEPTH
+                && values
+                    .values()
+                    .all(|value| value_within_nesting_bound(value, depth + 1))
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => true,
+    }
 }
 
 fn decode_request(id: RequestId, method: String, params: Option<&Value>) -> DecodeOutcome {
@@ -560,6 +633,12 @@ fn decode_request(id: RequestId, method: String, params: Option<&Value>) -> Deco
     else {
         return invalid_params(id);
     };
+    if !metadata.keys().all(|key| valid_meta_key(key))
+        || !validate_request_metadata(metadata)
+        || !validate_client_capabilities(client_capabilities)
+    {
+        return invalid_params(id);
+    }
     let client_info = match metadata.get(CLIENT_INFO_META_KEY) {
         None => None,
         Some(value) => match decode_implementation(value) {
@@ -569,7 +648,10 @@ fn decode_request(id: RequestId, method: String, params: Option<&Value>) -> Deco
     };
 
     if protocol_version != PROTOCOL_VERSION {
-        return DecodeOutcome::Error(ErrorResponse::unsupported_version(id, protocol_version));
+        return match ErrorResponse::unsupported_version(id.clone(), protocol_version) {
+            Ok(error) => DecodeOutcome::Error(error),
+            Err(_) => invalid_params(id),
+        };
     }
 
     DecodeOutcome::Message(InboundMessage::Request(Request {
@@ -596,21 +678,162 @@ fn decode_notification(method: String, params: Option<&Value>) -> DecodeOutcome 
     }))
 }
 
+fn validate_request_metadata(metadata: &Map<String, Value>) -> bool {
+    let progress_token_is_valid = metadata
+        .get(PROGRESS_TOKEN_META_KEY)
+        .is_none_or(|value| value.is_string() || value.is_number());
+    let log_level_is_valid = metadata.get(LOG_LEVEL_META_KEY).is_none_or(|value| {
+        matches!(
+            value.as_str(),
+            Some(
+                "debug"
+                    | "info"
+                    | "notice"
+                    | "warning"
+                    | "error"
+                    | "critical"
+                    | "alert"
+                    | "emergency"
+            )
+        )
+    });
+    progress_token_is_valid && log_level_is_valid
+}
+
+pub(crate) fn validate_client_capabilities(capabilities: &Map<String, Value>) -> bool {
+    map_values_are_objects(capabilities.get("experimental"))
+        && optional_object(capabilities.get("roots"))
+        && capability_options_are_objects(capabilities.get("sampling"), &["context", "tools"])
+        && capability_options_are_objects(capabilities.get("elicitation"), &["form", "url"])
+        && extensions_are_valid(capabilities.get("extensions"))
+}
+
+fn map_values_are_objects(value: Option<&Value>) -> bool {
+    value.is_none_or(|value| {
+        value
+            .as_object()
+            .is_some_and(|values| values.values().all(Value::is_object))
+    })
+}
+
+fn optional_object(value: Option<&Value>) -> bool {
+    value.is_none_or(Value::is_object)
+}
+
+fn capability_options_are_objects(value: Option<&Value>, options: &[&str]) -> bool {
+    value.is_none_or(|value| {
+        value.as_object().is_some_and(|value| {
+            options
+                .iter()
+                .all(|option| value.get(*option).is_none_or(Value::is_object))
+        })
+    })
+}
+
+fn extensions_are_valid(value: Option<&Value>) -> bool {
+    value.is_none_or(|value| {
+        value.as_object().is_some_and(|extensions| {
+            extensions.iter().all(|(name, settings)| {
+                name.contains('/') && valid_meta_key(name) && settings.is_object()
+            })
+        })
+    })
+}
+
+fn valid_meta_key(key: &str) -> bool {
+    let mut segments = key.split('/');
+    let first = segments.next().unwrap_or_default();
+    let second = segments.next();
+    if segments.next().is_some() {
+        return false;
+    }
+    match second {
+        None => valid_meta_name(first),
+        Some(name) => valid_meta_prefix(first) && valid_meta_name(name),
+    }
+}
+
+fn valid_meta_prefix(prefix: &str) -> bool {
+    !prefix.is_empty() && prefix.split('.').all(valid_meta_label)
+}
+
+fn valid_meta_label(label: &str) -> bool {
+    let bytes = label.as_bytes();
+    bytes.first().is_some_and(u8::is_ascii_alphabetic)
+        && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+}
+
+fn valid_meta_name(name: &str) -> bool {
+    if name.is_empty() {
+        return true;
+    }
+    let bytes = name.as_bytes();
+    bytes.first().is_some_and(u8::is_ascii_alphanumeric)
+        && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'_' | b'.'))
+}
+
 fn decode_implementation(value: &Value) -> Option<Implementation> {
     let Value::Object(object) = value else {
         return None;
     };
     let name = object.get("name")?.as_str()?;
     let version = object.get("version")?.as_str()?;
+    for field in ["title", "description", "websiteUrl"] {
+        if object.get(field).is_some_and(|value| !value.is_string()) {
+            return None;
+        }
+    }
+    if object
+        .get("icons")
+        .is_some_and(|value| !validate_icons(value))
+    {
+        return None;
+    }
     Implementation::new(name, version)
 }
 
+fn validate_icons(value: &Value) -> bool {
+    value
+        .as_array()
+        .is_some_and(|icons| icons.iter().all(validate_icon))
+}
+
+fn validate_icon(value: &Value) -> bool {
+    let Some(icon) = value.as_object() else {
+        return false;
+    };
+    if !icon.get("src").is_some_and(Value::is_string)
+        || icon.get("mimeType").is_some_and(|value| !value.is_string())
+    {
+        return false;
+    }
+    if icon.get("sizes").is_some_and(|value| {
+        !value
+            .as_array()
+            .is_some_and(|sizes| sizes.iter().all(Value::is_string))
+    }) {
+        return false;
+    }
+    icon.get("theme")
+        .is_none_or(|value| matches!(value.as_str(), Some("light" | "dark")))
+}
+
 fn invalid_request(id: Option<RequestId>) -> DecodeOutcome {
-    DecodeOutcome::Error(ErrorResponse::new(id, ErrorCode::InvalidRequest))
+    DecodeOutcome::Error(standard_error(id, ErrorCode::InvalidRequest))
 }
 
 fn invalid_params(id: RequestId) -> DecodeOutcome {
-    DecodeOutcome::Error(ErrorResponse::new(Some(id), ErrorCode::InvalidParams))
+    DecodeOutcome::Error(standard_error(Some(id), ErrorCode::InvalidParams))
+}
+
+fn standard_error(id: Option<RequestId>, code: ErrorCode) -> ErrorResponse {
+    ErrorResponse::new(id, code).expect("standard MCP errors must satisfy outbound bounds")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

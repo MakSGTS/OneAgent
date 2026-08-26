@@ -41,6 +41,14 @@ cross-check. These sources were reopened on 2026-08-26.
   `io.modelcontextprotocol/protocolVersion` and
   `io.modelcontextprotocol/clientCapabilities`. Client information is
   optional.
+- Known `ClientCapabilities` members have schema-defined object shapes:
+  `roots` is an object; `sampling` and `elicitation` contain only object-valued
+  known options; `experimental` and namespaced `extensions` map to objects.
+  Known optional request metadata, client-information, and icon fields also
+  retain their schema types even when the server does not use their values.
+- `_meta` names follow the versioned prefix/name grammar. Extension capability
+  identifiers require the prefixed form; unknown capability members remain
+  open for forward-compatible JSON values.
 - A successful response identifies its `resultType`. The current base result
   types include `complete` and `input_required`.
 - `server/discover` is the discovery method for this revision. Its complete
@@ -175,6 +183,8 @@ The ADR must fix:
   otherwise invalid identifiers;
 - request versus notification classification when an `id` member is absent;
 - handling of unknown top-level and `_meta` members;
+- schema validation for known capability, progress-token, log-level,
+  client-information, icon, and namespaced-extension shapes before dispatch;
 - rejection policy for duplicate JSON object keys, invalid UTF-8, blank lines,
   embedded newlines, and oversized lines;
 - fixed maximum line length and whether the reader can recover at the next
@@ -249,6 +259,8 @@ prove that HTTP and Workspace behavior remain unchanged.
 - MCP-specific `-32020`, `-32021`, and `-32022` errors where applicable;
 - notification versions of valid, invalid, and unknown methods with no result;
 - deterministic compact encoding and identifier round trips;
+- closed public error construction, mandatory MCP-specific error data, and
+  exact/over-limit outbound response bounds;
 - boundary-size, one-byte-over-limit, invalid UTF-8, embedded-newline, and
   duplicate-key fixtures after the ADR fixes those policies.
 
@@ -259,10 +271,13 @@ Platform-neutral in-memory streams should prove:
 - multiple requests in one stream and repeated discovery;
 - request/notification mixtures and response ordering;
 - partial reads and a final line followed by EOF;
+- escaped JSON newlines that remain within one frame;
 - explicit flush and exactly one trailing newline per response;
 - cancellation while the reader is blocked;
 - controlled reader, writer, serialization, and flush failures;
 - EOF, failure, and cancellation cleanup with no detached task;
+- drop/release evidence after partial input and cancellation of a blocked
+  reader;
 - empty input and no-extra-output behavior.
 
 These tests can remain in Runtime and use its existing Tokio dependency, so the
@@ -275,11 +290,13 @@ A real child-process pipe test must:
 1. spawn the selected MCP entry point with piped stdin, stdout, and stderr;
 2. send a discovery request and assert the exact JSON-RPC result semantically;
 3. send an unknown request and assert the exact error and echoed identifier;
-4. send a notification and prove no response is produced;
-5. close stdin, enforce a bounded wait, and require successful prompt exit;
-6. assert stdout contains only expected newline-delimited JSON-RPC messages;
-7. assert stderr is empty or contains only an explicitly documented diagnostic;
-8. repeat enough of the sequence to detect stale session state or leaked
+4. send malformed known capability metadata and assert the exact invalid-params
+   envelope;
+5. send a notification and prove no response is produced;
+6. close stdin, enforce a bounded wait, and require successful prompt exit;
+7. assert stdout contains only expected newline-delimited JSON-RPC messages;
+8. assert stderr is empty or contains only an explicitly documented diagnostic;
+9. repeat enough of the sequence to detect stale session state or leaked
    process-global state.
 
 Malformed and oversized cases may use separate child processes if the accepted

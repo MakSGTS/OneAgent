@@ -10,8 +10,9 @@ Sprints 15–21. The source-independent Context Engine delivered by Sprint 22 is
 also complete with a `pass` integration review. The provider-neutral Sprint 23
 LLM Provider Abstraction is complete with a `pass` integration review. The
 bounded Sprint 24 OpenAI-Compatible Provider is complete with a
-`pass with non-blocking follow-ups` integration review. Sprint 25 LM Studio
-Integration is the unique `next` planning target.
+`pass with non-blocking follow-ups` integration review. The Sprint 25 LM Studio
+leaf adapter and controlled-loopback evidence are implemented; its integration
+review remains pending, so Sprint 25 is still the unique `next` planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -30,6 +31,7 @@ See
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
 - `adapters/openai-compatible` — implemented explicit bounded OpenAI-compatible `/v1/models` and non-streaming `/v1/completions` provider adapter
+- `adapters/lm-studio` — implemented explicit bounded LM Studio native model-discovery and composed non-streaming text-generation provider adapter
 - `adapters/filesystem` — implemented filesystem workspace discovery adapter
 - `extensions` — reserved for future IDE extensions; currently empty
 - `docs/adr` — architecture decision records
@@ -81,10 +83,16 @@ one explicit HTTP/HTTPS server-root URL and optional bearer credential. It
 performs fresh bounded `/v1/models` discovery and one strict non-streaming
 `/v1/completions` attempt with exact model identity, local UTF-8 byte usage,
 no redirect/proxy/retry/fallback, total timeout, cooperative cancellation, and
-redacted typed failures. Repository acceptance uses controlled loopback only;
-Runtime configuration/exposure, live-provider acceptance, prompt/tool policy,
-chat/Responses APIs, streaming, additional providers, MCP, and IDE integration
-remain deferred. Sprint 24 is complete; Sprint 25 is the next planning target.
+redacted typed failures. The additive `oneagent-lm-studio` leaf implements
+ADR-0047 with stable `lm-studio` identity, explicit or numeric-loopback
+construction, type-aware native `/api/v1/models` discovery, and a private
+one-attempt generation bridge through the unchanged generic
+`/v1/completions` operation. Repository acceptance for both adapters uses
+controlled loopback only. Runtime configuration/exposure, live-provider
+acceptance, model/server lifecycle, prompt/tool policy, chat/Responses APIs,
+streaming, later providers, MCP, and IDE integration remain deferred. Sprint 24
+is complete; Sprint 25 remains the next planning target pending its integration
+review.
 
 ## Verify
 

@@ -31,6 +31,9 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      filesystem boundary.
    - `oneagent-openai-compatible` implements the bounded concrete ADR-0046
      provider adapter without changing provider-neutral or Runtime ownership.
+   - `oneagent-lm-studio` implements the bounded concrete ADR-0047 leaf through
+     native type-aware discovery and private composition over the unchanged
+     OpenAI-compatible generation operation.
 4. **Applications and protocol foundation**
    - `oneagent-runtime` exposes the long-running composition root as a reusable
      library. It owns ordered service startup, rollback, task handles,
@@ -198,8 +201,41 @@ redirect rejection, timeout/cancellation precedence, one attempt, cleanup, and
 fresh repetition without live services or credentials. Runtime composition,
 configuration sources, Context prompt semantics, chat/Responses APIs,
 streaming, tools, provider usage authority, and additional providers remain
-deferred. The Sprint 24 integration review records
+deferred except for the implemented LM Studio specialization described below.
+The Sprint 24 integration review records
 `pass with non-blocking follow-ups`; Sprint 25 is the next planning target.
+
+## Accepted LM Studio provider boundary
+
+[ADR-0047](adr/0047-lm-studio-integration.md) governs the implemented
+`oneagent-lm-studio` leaf adapter. Construction consumes one exact `lm-studio`
+provider configuration, one explicit server-root URL or the numeric-loopback
+`http://127.0.0.1:1234` default, and an optional bearer secret. Its private
+native client performs one fresh bounded `GET /api/v1/models`, projects only
+loaded `llm` instance IDs into the provider-neutral catalog, ignores embedding
+and unloaded entries, and rejects unknown types or invalid, duplicate, and
+over-count catalogs atomically.
+
+Generation privately translates one validated LM Studio request into an exact
+temporary `openai-compatible` request and delegates once to the unchanged
+ADR-0046 `/v1/completions` operation. The successful response is rebound to the
+original `lm-studio` request identity with local UTF-8 byte usage and only the
+accepted `Completed` or `OutputLimit` finish. Both clients disable redirects
+and implicit proxies; operations do not retry, fall back, cache, manage models,
+or retain background work.
+
+The public `adapters/lm-studio/tests/conformance.rs` target uses only exported
+adapter and `oneagent-llm` APIs through `&dyn LlmProvider` plus deterministic
+controlled-loopback servers. It proves explicit construction and redaction,
+mixed LLM/embedding projection, exact authenticated native/generic wires,
+canonical and repeated discovery, both finish mappings, identity and local
+usage, malformed/fallback/bound/status/redirect rejection, transport, timeout,
+cancellation, one-attempt behavior, and cleanup without installed LM Studio,
+downloaded models, credentials, or external network. Runtime registration and
+configuration sources, live-provider acceptance, server/model lifecycle,
+chat/template quality, streaming, tools, MCP, and IDE integration remain
+deferred. Sprint 25 remains the unique `next` target until its integration
+review records the sprint decision.
 
 ## Accepted Runtime service-container boundary
 

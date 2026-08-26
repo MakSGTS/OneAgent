@@ -151,6 +151,20 @@ complete temporary-state cleanup are enforced through controlled-loopback
 evidence. It does not depend on or mutate the Knowledge Graph, Context Engine,
 Runtime, protocol, configuration sources, persistence, MCP, or IDE state.
 
+### `oneagent-lm-studio`
+
+Owns the concrete ADR-0047 LM Studio leaf behind `LlmProvider`. It validates
+one explicit server-root URL or the fixed numeric-loopback default and an
+optional bearer credential. Fresh bounded native `/api/v1/models` discovery
+projects only loaded `llm` instance IDs and filters embedding and unloaded
+entries without exposing LM Studio metadata through provider-neutral values.
+Text generation privately composes the unchanged
+`oneagent-openai-compatible` `/v1/completions` operation, then rebinds the
+validated result to the original `lm-studio` request identity and local UTF-8
+usage. It does not own or mutate the Knowledge Graph, Context Engine, Runtime,
+protocol, configuration sources, persistence, model/server lifecycle, MCP, or
+IDE state; controlled-loopback evidence requires no live LM Studio state.
+
 ### `oneagent-edt`
 
 Owns EDT-specific loading and conversion:

@@ -820,6 +820,7 @@ name = "oneagent-runtime"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "oneagent-analysis",
  "oneagent-common",
  "oneagent-designer-xml",
  "oneagent-edt",

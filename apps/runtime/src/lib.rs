@@ -17,7 +17,7 @@ pub use error::{BoxError, CleanupFailure, RuntimeError, RuntimeErrorKind};
 pub use health::{RuntimeHealth, RuntimeHealthSnapshot};
 pub use http::HttpService;
 pub use mcp::{McpStdioError, McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
-pub use mcp_tools::{McpSemanticServerError, graph_semantic_server};
+pub use mcp_tools::{McpSemanticServerError, graph_semantic_server, semantic_server};
 pub use service::{
     Cancellation, RunningServices, RuntimeService, ServiceContainer, ServiceContainerBuilder,
     ServiceContext, ServiceStartFuture, ServiceTask,

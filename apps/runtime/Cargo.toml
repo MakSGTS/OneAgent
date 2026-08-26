@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 axum = "0.8.9"
+oneagent-analysis = { path = "../../crates/analysis" }
 oneagent-common = { path = "../../crates/common" }
 oneagent-designer-xml = { path = "../../adapters/designer-xml" }
 oneagent-edt = { path = "../../adapters/edt" }

@@ -3,10 +3,15 @@
 use std::collections::{BTreeSet, VecDeque};
 use std::sync::Arc;
 
+use oneagent_analysis::context::{
+    ContextEngine, ContextIntent, ContextPolicy, ContextRequest, ContextSeed,
+    ContextTraversalDirection,
+};
 use oneagent_common::EntityId;
 use oneagent_graph::{
-    EdgeKind, GraphEdge, GraphNode, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
-    SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity,
+    EdgeKind, GraphEdge, GraphNode, ImpactNodeStatus, SemanticDiagnosticKind,
+    SemanticDiagnosticSeverity, SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity,
+    SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use oneagent_protocol::{
     McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome, McpToolDefinition,
@@ -28,6 +33,8 @@ const GRAPH: &str = "oneagent.graph";
 const QUERY: &str = "oneagent.query";
 const VALIDATION: &str = "oneagent.validation";
 const DIAGNOSTICS: &str = "oneagent.diagnostics";
+const IMPACT: &str = "oneagent.impact";
+const CONTEXT: &str = "oneagent.context";
 const ACTOR: &str = "oneagent.mcp";
 const REQUEST: &str = "oneagent.mcp.request";
 const REVISION: &str = "oneagent.mcp.read-only.v1";
@@ -48,14 +55,82 @@ pub fn graph_semantic_server(
     snapshot: WorkspaceSnapshot,
 ) -> Result<McpServer, McpSemanticServerError> {
     let names = [GRAPH, QUERY, VALIDATION, DIAGNOSTICS];
+    build_server(snapshot, definitions()?, &names)
+}
+
+/// Builds the complete immutable Sprint 29 semantic MCP server.
+///
+/// # Errors
+///
+/// Returns a closed error when a fixed catalog or policy invariant fails.
+pub fn semantic_server(snapshot: WorkspaceSnapshot) -> Result<McpServer, McpSemanticServerError> {
+    let names = [CONTEXT, DIAGNOSTICS, GRAPH, IMPACT, QUERY, VALIDATION];
+    let mut catalog = definitions()?;
+    catalog.extend(impact_context_definitions()?);
+    build_server(snapshot, catalog, &names)
+}
+
+fn build_server(
+    snapshot: WorkspaceSnapshot,
+    catalog: Vec<McpToolDefinition>,
+    names: &[&str],
+) -> Result<McpServer, McpSemanticServerError> {
     McpServer::with_tools(
-        definitions()?,
+        catalog,
         Handler {
             snapshot: Arc::new(snapshot),
-            policy: policy(&names)?,
+            policy: policy(names)?,
         },
     )
     .map_err(|_| McpSemanticServerError)
+}
+
+fn impact_context_definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
+    [
+        (
+            IMPACT,
+            "Analyze bounded semantic impact between two configurations.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "previousConfigurationId": {"type": "string"},
+                    "currentConfigurationId": {"type": "string"},
+                    "maxDepth": {"type": "integer", "minimum": 0, "maximum": MAX_DEPTH},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+                },
+                "required": ["previousConfigurationId", "currentConfigurationId"],
+                "additionalProperties": false
+            }),
+        ),
+        (
+            CONTEXT,
+            "Build bounded semantic context around one exact node.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "configurationId": {"type": "string"},
+                    "nodeId": {"type": "string"},
+                    "direction": {"enum": ["incoming", "outgoing", "both"]},
+                    "maxDepth": {"type": "integer", "minimum": 0, "maximum": MAX_DEPTH},
+                    "maxCandidates": {"type": "integer", "minimum": 1, "maximum": 128},
+                    "budgetBytes": {"type": "integer", "minimum": 1, "maximum": 32768}
+                },
+                "required": ["configurationId", "nodeId"],
+                "additionalProperties": false
+            }),
+        ),
+    ]
+    .into_iter()
+    .map(|(name, description, schema)| {
+        McpToolDefinition::new(
+            name,
+            description,
+            schema.as_object().cloned().ok_or(McpSemanticServerError)?,
+            McpToolAnnotations::read_only(),
+        )
+        .map_err(|_| McpSemanticServerError)
+    })
+    .collect()
 }
 
 fn definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
@@ -279,6 +354,8 @@ fn project(
         QUERY => query(snapshot, arguments),
         VALIDATION => validation(snapshot, arguments),
         DIAGNOSTICS => diagnostics(snapshot, arguments),
+        IMPACT => impact(snapshot, arguments),
+        CONTEXT => context(snapshot, arguments),
         _ => Err(INVALID),
     }
 }
@@ -536,6 +613,168 @@ fn diagnostics(
         "total": total,
         "truncated": total > limit
     }))
+}
+
+fn impact(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+) -> Result<Value, SemanticError> {
+    fields(
+        arguments,
+        &[
+            "previousConfigurationId",
+            "currentConfigurationId",
+            "maxDepth",
+            "limit",
+        ],
+    )?;
+    let previous_id = string(arguments, "previousConfigurationId")?;
+    let current_id = string(arguments, "currentConfigurationId")?;
+    if previous_id == current_id {
+        return Err(INVALID);
+    }
+    let previous = configuration(snapshot, previous_id)?;
+    let current = configuration(snapshot, current_id)?;
+    let depth = number(arguments, "maxDepth")?.unwrap_or(1);
+    if depth > MAX_DEPTH {
+        return Err(INVALID);
+    }
+    let limit = limit(arguments)?;
+    let diff = previous.graph().diff(current.graph());
+    let result = SemanticImpactAnalyzer::analyze(
+        previous.graph(),
+        current.graph(),
+        &diff,
+        &SemanticImpactOptions::new(depth),
+    )
+    .map_err(|_| INVALID)?;
+    let summary = result.summary();
+    let total = result.affected_nodes().len();
+    let affected = result
+        .affected_nodes()
+        .iter()
+        .take(limit)
+        .map(|node| {
+            json!({
+                "nodeId": node.node_id().as_str(),
+                "kind": node.node_kind().map(GraphQueryNodeKind::from).map(GraphQueryNodeKind::as_str),
+                "status": impact_status(node.status()),
+                "depth": node.depth(),
+                "reasonCount": node.reasons().len()
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "previousConfigurationId": previous.configuration_id().as_str(),
+        "currentConfigurationId": current.configuration_id().as_str(),
+        "summary": {
+            "seedNodeChanges": summary.seed_node_changes(),
+            "seedEdgeChanges": summary.seed_edge_changes(),
+            "directlyChangedNodes": summary.directly_changed_nodes(),
+            "transitivelyAffectedNodes": summary.transitively_affected_nodes(),
+            "removedNodes": summary.removed_nodes(),
+            "totalAffectedNodes": summary.total_affected_nodes(),
+            "maxReachedDepth": summary.max_reached_depth(),
+            "requestedMaxDepth": summary.requested_max_depth()
+        },
+        "affectedNodes": affected,
+        "total": total,
+        "truncated": total > limit
+    }))
+}
+
+fn context(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+) -> Result<Value, SemanticError> {
+    fields(
+        arguments,
+        &[
+            "configurationId",
+            "nodeId",
+            "direction",
+            "maxDepth",
+            "maxCandidates",
+            "budgetBytes",
+        ],
+    )?;
+    let configuration = configuration(snapshot, string(arguments, "configurationId")?)?;
+    let node_id = EntityId::new(string(arguments, "nodeId")?.to_owned()).map_err(|_| INVALID)?;
+    let depth = number(arguments, "maxDepth")?.unwrap_or(2);
+    let candidates = number(arguments, "maxCandidates")?.unwrap_or(50);
+    let budget = number(arguments, "budgetBytes")?.unwrap_or(16_384);
+    if depth > MAX_DEPTH || !(1..=128).contains(&candidates) || !(1..=32_768).contains(&budget) {
+        return Err(INVALID);
+    }
+    let traversal = match direction(arguments)? {
+        "incoming" => ContextTraversalDirection::Incoming,
+        "outgoing" => ContextTraversalDirection::Outgoing,
+        "both" => ContextTraversalDirection::Both,
+        _ => return Err(INVALID),
+    };
+    let policy = ContextPolicy::new(
+        traversal,
+        BTreeSet::from([
+            EdgeKind::Contains,
+            EdgeKind::Calls,
+            EdgeKind::References,
+            EdgeKind::Reads,
+            EdgeKind::Writes,
+            EdgeKind::Grants,
+            EdgeKind::Includes,
+            EdgeKind::Extends,
+            EdgeKind::DependsOn,
+            EdgeKind::Opens,
+            EdgeKind::Triggers,
+        ]),
+        None,
+        depth,
+        candidates,
+    );
+    let request = ContextRequest::new(
+        ContextIntent::Explain,
+        vec![ContextSeed::node(node_id.as_str())],
+        budget,
+        policy,
+    )
+    .map_err(|_| INVALID)?;
+    let bundle = ContextEngine
+        .build(configuration.graph(), &request)
+        .map_err(|_| NOT_FOUND)?;
+    let items = bundle
+        .items()
+        .iter()
+        .map(|item| {
+            json!({
+                "nodeId": item.node_id().as_str(),
+                "name": item.name().as_str(),
+                "kind": GraphQueryNodeKind::from(item.kind()).as_str(),
+                "depth": item.depth(),
+                "seedId": item.seed_id().as_str(),
+                "costBytes": item.cost_bytes()
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "configurationId": configuration.configuration_id().as_str(),
+        "rendered": bundle.rendered(),
+        "items": items,
+        "budgetBytes": bundle.budget().bytes(),
+        "usedBytes": bundle.used_bytes(),
+        "remainingBytes": bundle.remaining_bytes(),
+        "candidateTruncated": bundle.candidate_truncated(),
+        "candidateOmitted": bundle.candidate_omitted(),
+        "budgetTruncated": bundle.budget_truncated(),
+        "budgetOmitted": bundle.budget_omitted()
+    }))
+}
+
+const fn impact_status(value: ImpactNodeStatus) -> &'static str {
+    match value {
+        ImpactNodeStatus::DirectlyChanged => "directly_changed",
+        ImpactNodeStatus::TransitivelyAffected => "transitively_affected",
+        ImpactNodeStatus::Removed => "removed",
+    }
 }
 
 fn configuration<'a>(

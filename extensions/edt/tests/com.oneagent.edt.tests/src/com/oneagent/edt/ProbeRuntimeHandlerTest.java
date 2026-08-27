@@ -94,7 +94,8 @@ public final class ProbeRuntimeHandlerTest {
         }
 
         @Override
-        public void cancel() {
+        public boolean cancel() {
+            return true;
         }
 
         @Override

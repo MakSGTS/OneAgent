@@ -33,8 +33,8 @@ final class EclipseProbeJobFactory implements ProbeController.JobFactory {
         }
 
         @Override
-        public void cancel() {
-            job.cancel();
+        public boolean cancel() {
+            return job.cancel();
         }
 
         @Override

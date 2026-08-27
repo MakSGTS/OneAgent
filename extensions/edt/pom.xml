@@ -23,6 +23,8 @@
     <module>releng/com.oneagent.edt.target</module>
     <module>bundles/com.oneagent.edt</module>
     <module>tests/com.oneagent.edt.tests</module>
+    <module>features/com.oneagent.edt.feature</module>
+    <module>repositories/com.oneagent.edt.repository</module>
   </modules>
 
   <build>

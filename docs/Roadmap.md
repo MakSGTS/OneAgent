@@ -8072,6 +8072,30 @@ command behavior, repeated activation/invocation, shutdown, and cleanup. It
 does not publish externally, bundle credentials/JRE/Runtime, or broaden the
 first-slice workflow.
 
+Task 5 packages only `com.oneagent.edt.feature` and `com.oneagent.edt` in the
+`com.oneagent.edt.category` p2 repository; tests, fixtures, Runtime, JRE, and
+generated Java execution-environment units are absent. The production bundle
+retains JavaSE-17 bytecode and public Eclipse imports while Maven/Tycho runs on
+JDK 25. Two host `clean verify` executions pass 38/38 tests with the real
+Runtime process, and two clean repositories have identical inventories,
+feature and bundle bytes, and metadata after removing only generated p2
+timestamps and the generated `p2.index` comment. The disposable p2 director
+profile installs and lists the feature, removes it, lists no remaining root,
+and a clean EDT relaunch contains no OneAgent bundle. A repeated EDT 2026.1
+workbench run on x86_64 JDK 17 and the separately verified OpenJFX 17 SDK
+records byte-identical positive, repeated, invalid-configuration, timeout,
+cancellation, stop, and final `PASS` evidence with no JavaFX or OneAgent error.
+EDT's own environment checker additionally requires `javafx-swt.jar` under
+`java.home/lib`, so the host proof uses an ignored disposable JDK copy and does
+not change the authorized application, read-only p2 pool, or signatures. The
+host matrix exposed and fixed queued-job cancellation retaining a permanently
+busy controller; a regression test now proves the pending job releases
+ownership while running-job cleanup remains joined. Remaining log noise is
+limited to proprietary EDT monitoring and incomplete disposable configuration
+fixture initialization outside the OneAgent workflow; automatic merging of the
+proprietary base profile is not claimed, so p2 lifecycle and workbench workflow
+proofs use separate disposable configurations.
+
 Task 6 freezes the Maven/Tycho inputs and validation scripts, adds the bounded
 macOS and Windows CI build/test/package jobs that do not require ITS secrets,
 records optional authenticated official-p2 and local read-only-pool setup,

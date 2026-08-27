@@ -64,7 +64,7 @@ final class ProbeController {
             generation++;
             state = active;
         }
-        cancel(state);
+        cancelAndReleasePending(state);
     }
 
     void disposeAndJoin() {
@@ -157,6 +157,20 @@ final class ProbeController {
         state.job.cancel();
     }
 
+    private void cancelAndReleasePending(RunState state) {
+        if (state == null) {
+            return;
+        }
+        state.cancellation.cancel();
+        if (state.job.cancel()) {
+            synchronized (this) {
+                if (active == state) {
+                    active = null;
+                }
+            }
+        }
+    }
+
     interface ProbeClient {
         ProbeResult probe(String executable, Path workingDirectory, CancellationToken cancellation)
                 throws ProbeFailure;
@@ -169,7 +183,7 @@ final class ProbeController {
     interface JobHandle {
         void schedule();
 
-        void cancel();
+        boolean cancel();
 
         void join() throws InterruptedException;
     }

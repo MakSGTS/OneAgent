@@ -131,6 +131,24 @@ public final class ProbeControllerTest {
     }
 
     @Test
+    public void cancellationBeforeExecutionReleasesTheController() {
+        ManualJobs jobs = new ManualJobs();
+        ManualUi ui = new ManualUi();
+        RecordingPresenter presenter = new RecordingPresenter();
+        ProbeController controller = new ProbeController(
+                (executable, cwd, cancellation) -> ProbeResult.COMPATIBLE,
+                jobs, ui, presenter);
+
+        controller.start("oneagent-mcp", WORKSPACE);
+        controller.invalidate();
+
+        assertTrue(jobs.jobs.get(0).cancelled);
+        assertFalse(controller.isRunning());
+        controller.start("oneagent-mcp", WORKSPACE);
+        assertEquals(2, jobs.jobs.size());
+    }
+
+    @Test
     public void disposalCancelsJoinsAndPreventsLateOrRepeatedWork() {
         ManualJobs jobs = new ManualJobs();
         ManualUi ui = new ManualUi();
@@ -226,6 +244,7 @@ public final class ProbeControllerTest {
         private final boolean failSchedule;
         private boolean cancelled;
         private boolean joined;
+        private boolean running;
 
         ManualJob(Runnable work, Runnable cancellation, boolean failSchedule) {
             this.work = work;
@@ -241,9 +260,10 @@ public final class ProbeControllerTest {
         }
 
         @Override
-        public void cancel() {
+        public boolean cancel() {
             cancelled = true;
             cancellation.run();
+            return !running;
         }
 
         @Override
@@ -252,7 +272,12 @@ public final class ProbeControllerTest {
         }
 
         void run() {
-            work.run();
+            running = true;
+            try {
+                work.run();
+            } finally {
+                running = false;
+            }
         }
     }
 

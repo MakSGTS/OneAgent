@@ -276,6 +276,41 @@ test("calls symbols with exact arguments and validates the bounded result", asyn
   await client.disconnect();
 });
 
+test("serializes repeated symbol calls without failing the connected process", async () => {
+  let held: Request | undefined;
+  const process = new FakeProcess((owner, request) => {
+    if (request.method !== "tools/call") {
+      compatibleResponder(owner, request);
+      return;
+    }
+    held = request;
+  });
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+
+  const first = client.symbols({ query: "first" });
+  await Promise.resolve();
+  assert.equal(process.requests.length, 3);
+  const firstRequest = held;
+  assert.ok(firstRequest);
+
+  const second = client.symbols({ query: "second" });
+  await Promise.resolve();
+  assert.equal(process.requests.length, 3, "only one symbol request may be in flight");
+  process.send(symbolResult(firstRequest.id));
+  await first;
+  await Promise.resolve();
+
+  assert.equal(process.requests.length, 4);
+  const secondRequest = held;
+  assert.ok(secondRequest);
+  assert.notEqual(secondRequest.id, firstRequest.id);
+  process.send(symbolResult(secondRequest.id));
+  await second;
+  assert.equal(client.state, "connected");
+  await client.disconnect();
+});
+
 test("rejects invalid symbol requests locally without touching the process", async () => {
   const process = new FakeProcess(symbolResponder);
   const client = new RuntimeClient({ processFactory: factoryFor(process) });

@@ -416,6 +416,41 @@ async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
 }
 
 #[tokio::test]
+async fn public_symbols_validate_all_arguments_before_lookup() {
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    for arguments in [
+        json!({"query": "x", "configurationId": "missing", "limit": 0}),
+        json!({"query": "x", "configurationId": "missing", "kinds": []}),
+        json!({"query": "x", "configurationId": "missing", "kinds": ["module", "module"]}),
+        json!({"query": "x", "configurationId": "missing", "kinds": ["metadata"]}),
+        json!({"query": "", "configurationId": "missing"}),
+        json!({"query": "x", "configurationId": "missing", "extra": true}),
+    ] {
+        let fields = json!({"name": "oneagent.symbols", "arguments": arguments});
+        let response = dispatch(&server, &request(31, "tools/call", &fields)).await;
+        assert_eq!(response["result"]["isError"], true, "{response}");
+        assert_eq!(
+            response["result"]["structuredContent"]["code"], "invalid_arguments",
+            "{response}"
+        );
+    }
+
+    let fields = json!({"name": "oneagent.symbols", "arguments": {
+        "query": "x", "configurationId": "missing", "limit": 1
+    }});
+    let response = dispatch(&server, &request(32, "tools/call", &fields)).await;
+    assert_eq!(response["result"]["isError"], true, "{response}");
+    assert_eq!(
+        response["result"]["structuredContent"]["code"], "not_found",
+        "{response}"
+    );
+}
+
+#[tokio::test]
 async fn public_semantic_tools_enforce_exact_and_one_over_bounds() {
     let snapshot = WorkspaceSnapshotBuilder::new()
         .build(fixture_root())

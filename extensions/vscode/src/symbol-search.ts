@@ -14,6 +14,7 @@ export interface SymbolSearchClient {
 
 export interface SymbolSearchPresentation {
   setBusy(busy: boolean): void;
+  clear(): void;
   present(result: SymbolSearchResult): void;
   failed(): void;
 }
@@ -49,6 +50,7 @@ export class SymbolSearchController {
       this.presentation.present({ results: [], total: 0, truncated: false });
       return;
     }
+    this.presentation.clear();
     this.queued = query;
     void this.drain();
   }

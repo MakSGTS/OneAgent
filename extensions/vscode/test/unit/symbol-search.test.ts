@@ -41,10 +41,15 @@ class ControlledClient implements SymbolSearchClient {
 class Presentation implements SymbolSearchPresentation {
   public readonly busy: boolean[] = [];
   public readonly results: SymbolSearchResult[] = [];
+  public clears = 0;
   public failures = 0;
 
   public setBusy(busy: boolean): void {
     this.busy.push(busy);
+  }
+
+  public clear(): void {
+    this.clears += 1;
   }
 
   public present(result: SymbolSearchResult): void {
@@ -76,6 +81,7 @@ test("coalesces sequential requests to the latest query and ignores stale result
   controller.update("second");
   controller.update("latest");
   assert.deepEqual(client.calls, ["first"]);
+  assert.equal(presentation.clears, 3);
   client.deferred[0]?.resolve(empty(1));
   await flush();
   assert.deepEqual(client.calls, ["first", "latest"]);
@@ -84,6 +90,25 @@ test("coalesces sequential requests to the latest query and ignores stale result
   await flush();
   assert.deepEqual(presentation.results, [empty()]);
   assert.deepEqual(presentation.busy, [true, false]);
+});
+
+test("clears stale results before starting a new searchable query", async () => {
+  const client = new ControlledClient();
+  const presentation = new Presentation();
+  const controller = new SymbolSearchController(client, presentation);
+
+  controller.update("first");
+  client.deferred[0]?.resolve(empty());
+  await flush();
+  assert.deepEqual(presentation.results, [empty()]);
+
+  controller.update("second");
+  assert.equal(presentation.clears, 2);
+  assert.deepEqual(client.calls, ["first", "second"]);
+  assert.deepEqual(presentation.results, [empty()]);
+  client.deferred[1]?.resolve(empty(1));
+  await flush();
+  assert.deepEqual(presentation.results, [empty(), empty(1)]);
 });
 
 test("treats empty and one-over input as local state and suppresses late completion", async () => {

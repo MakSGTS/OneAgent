@@ -166,6 +166,7 @@ export class RuntimeClient {
   private exitWaiters = new Set<(exited: boolean) => void>();
   private stopping = false;
   private stopPromise: Promise<boolean> | undefined;
+  private symbolRequestTail: Promise<void> = Promise.resolve();
 
   public constructor(options: RuntimeClientOptions = {}) {
     this.processFactory = options.processFactory ?? spawnRuntimeProcess;
@@ -248,8 +249,20 @@ export class RuntimeClient {
     return this.currentState;
   }
 
-  public async symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
+  public symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
     if (this.currentState !== "connected" || !isSymbolSearchRequest(input)) {
+      return Promise.reject(new RuntimeClientFailure("protocol_failure"));
+    }
+    const operation = this.symbolRequestTail.then(() => this.executeSymbols(input));
+    this.symbolRequestTail = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
+  }
+
+  private async executeSymbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
+    if (this.currentState !== "connected") {
       throw new RuntimeClientFailure("protocol_failure");
     }
     const argumentsValue: Record<string, unknown> = { query: input.query };

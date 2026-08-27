@@ -229,9 +229,22 @@ suite("OneAgent package activation", () => {
     assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
     const replaced = testApi.search();
     assert.ok(replaced);
+    const replacedInput = replaced.input("FillSecurity");
     assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
     assert.equal(replaced.snapshot().disposed, true);
-    testApi.search().hide();
+    await replacedInput;
+    const replacement = testApi.search();
+    assert.ok(replacement);
+    await replacement.input("DynamicSecurityOverridable");
+    assert.deepEqual(replacement.snapshot().items, [
+      {
+        label: "DynamicSecurityOverridable",
+        description: "module — DNSWorldEdition",
+        detail: "designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl",
+      },
+    ]);
+    assertStatus("connected");
+    replacement.hide();
     assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
   });
 

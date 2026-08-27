@@ -257,6 +257,9 @@ struct Handler {
 impl McpToolCallHandler for Handler {
     fn call<'a>(&'a self, name: &'a str, arguments: &'a Map<String, Value>) -> McpToolFuture<'a> {
         Box::pin(async move {
+            if name == SYMBOLS && symbol_arguments(arguments).is_err() {
+                return tool_error("invalid_arguments");
+            }
             let Ok(encoded) = serde_json::to_string(arguments) else {
                 return McpToolCallOutcome::Internal;
             };
@@ -425,22 +428,37 @@ struct SymbolResult<'a> {
     location: Value,
 }
 
-fn symbols(
-    snapshot: &WorkspaceSnapshot,
-    arguments: &Map<String, Value>,
-) -> Result<Value, SemanticError> {
+struct SymbolArguments<'a> {
+    query: &'a str,
+    selected: Option<&'a str>,
+    accepted_kinds: BTreeSet<&'static str>,
+    limit: usize,
+}
+
+fn symbol_arguments(arguments: &Map<String, Value>) -> Result<SymbolArguments<'_>, SemanticError> {
     fields(arguments, &["query", "configurationId", "kinds", "limit"])?;
     let query = string(arguments, "query")?;
     if query.len() > MAX_SYMBOL_QUERY_BYTES {
         return Err(INVALID);
     }
-    let folded_query = query.to_lowercase();
-    let selected = optional_string(arguments, "configurationId")?;
+    Ok(SymbolArguments {
+        query,
+        selected: optional_string(arguments, "configurationId")?,
+        accepted_kinds: symbol_kinds(arguments)?,
+        limit: limit(arguments)?,
+    })
+}
+
+fn symbols(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+) -> Result<Value, SemanticError> {
+    let arguments = symbol_arguments(arguments)?;
+    let folded_query = arguments.query.to_lowercase();
+    let selected = arguments.selected;
     if let Some(id) = selected {
         configuration(snapshot, id)?;
     }
-    let accepted_kinds = symbol_kinds(arguments)?;
-    let limit = limit(arguments)?;
     let mut results = Vec::new();
 
     for configuration in snapshot.configurations().iter().filter(|configuration| {
@@ -450,7 +468,7 @@ fn symbols(
             let Some(kind) = symbol_kind(node.kind()) else {
                 continue;
             };
-            if !accepted_kinds.contains(kind) {
+            if !arguments.accepted_kinds.contains(kind) {
                 continue;
             }
             let folded_name = node.name().as_str().to_lowercase();
@@ -487,7 +505,7 @@ fn symbols(
             ))
     });
     let total = u64::try_from(results.len()).map_err(|_| EXECUTION_FAILED)?;
-    results.truncate(limit);
+    results.truncate(arguments.limit);
     let values = results
         .into_iter()
         .map(|result| {
@@ -504,7 +522,7 @@ fn symbols(
     Ok(json!({
         "results": values,
         "total": total,
-        "truncated": total > u64::try_from(limit).map_err(|_| EXECUTION_FAILED)?
+        "truncated": total > u64::try_from(arguments.limit).map_err(|_| EXECUTION_FAILED)?
     }))
 }
 
@@ -1346,7 +1364,7 @@ mod tests {
     };
     use oneagent_protocol::{McpToolCallHandler, McpToolCallOutcome};
     use oneagent_tool_policy::{PolicyRevision, ToolPolicy};
-    use serde_json::Map;
+    use serde_json::{Map, json};
     use tempfile::tempdir;
 
     use super::{GRAPH, Handler, SYMBOLS, project_symbol_location, unique_symbol_location};
@@ -1370,7 +1388,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn denied_policy_cannot_bypass_the_semantic_executor_gate() {
+    async fn symbols_validate_before_policy_and_valid_calls_remain_policy_gated() {
         let root = tempdir().expect("empty workspace root");
         let snapshot = WorkspaceSnapshotBuilder::new()
             .build(root.path())
@@ -1384,14 +1402,31 @@ mod tests {
             .expect("empty policy must deny by default"),
         };
 
-        for tool in [GRAPH, SYMBOLS] {
-            let outcome = handler.call(tool, &Map::new()).await;
-            assert!(matches!(
-                outcome,
-                McpToolCallOutcome::Error { ref code, ref message }
-                    if code == "policy_denied" && message == "The semantic tool request was denied."
-            ));
-        }
+        let graph = handler.call(GRAPH, &Map::new()).await;
+        assert!(matches!(
+            graph,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
+
+        let invalid_symbols = handler.call(SYMBOLS, &Map::new()).await;
+        assert!(matches!(
+            invalid_symbols,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "invalid_arguments"
+                    && message == "The semantic tool arguments are invalid."
+        ));
+
+        let valid_arguments = json!({"query": "x"})
+            .as_object()
+            .expect("symbol arguments must be an object")
+            .clone();
+        let valid_symbols = handler.call(SYMBOLS, &valid_arguments).await;
+        assert!(matches!(
+            valid_symbols,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
     }
 
     #[test]

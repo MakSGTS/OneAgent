@@ -76,6 +76,11 @@ class SymbolSearchInvocation {
           this.quickPick.busy = busy;
         }
       },
+      clear: () => {
+        if (this.active) {
+          this.quickPick.items = [];
+        }
+      },
       present: (result) => this.present(result),
       failed: () => this.fail(),
     });

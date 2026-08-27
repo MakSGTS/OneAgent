@@ -335,6 +335,42 @@ fn request_with_fields(id: u64, method: &str, fields: &Value) -> String {
 }
 
 #[tokio::test]
+async fn public_mcp_process_symbols_validate_arguments_before_lookup() {
+    let invalid = request_with_fields(
+        59,
+        "tools/call",
+        &json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "configurationId": "missing", "limit": 0
+        }}),
+    );
+    let valid = request_with_fields(
+        60,
+        "tools/call",
+        &json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "configurationId": "missing", "limit": 1
+        }}),
+    );
+    let input = format!("{invalid}\n{valid}\n");
+    let output = run_process(input.as_bytes()).await;
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let responses = String::from_utf8(output.stdout)
+        .expect("stdout must be UTF-8 JSON lines")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("symbol response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(
+        responses[0]["result"]["structuredContent"]["code"],
+        "invalid_arguments"
+    );
+    assert_eq!(
+        responses[1]["result"]["structuredContent"]["code"],
+        "not_found"
+    );
+}
+
+#[tokio::test]
 async fn public_mcp_process_symbols_cover_all_supported_kinds_and_source_formats() {
     let temporary = tempdir().expect("temporary symbol Workspace must be created");
     copy_tree(&fixture_root(), temporary.path());

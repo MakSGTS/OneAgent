@@ -7076,7 +7076,7 @@ documentation follow-up.
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | completed |
-| Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | next |
+| Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | active |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
@@ -7971,6 +7971,19 @@ workflow, dependencies, configuration, packaging, CI and local-host oracles,
 positive and negative cases, and every decision ADR-0056 must make. It selects
 no architecture, changes no production behavior, writes no credential, and
 does not modify the authorized p2 pool or application installations.
+
+Task 1 pins the official 1C plug-in example at commit
+`ae9c1f06a01de4f3ee7fe32bf35e284f25e3915f`, Tycho 5.0.2, the public Eclipse
+4.30 / 2023-12 target, EDT 2026.1.2.2 application 1.35.2, Maven 3.9.16, arm64
+JDK 25 build execution, and an x86_64 JDK 17 EDT-host boundary in the
+[EDT integration prototype investigation](architecture/edt-integration-prototype-investigation.md).
+The decision-ready dependency-free candidate uses only public Eclipse APIs and
+the exact EDT configuration nature, so authenticated private p2 access and the
+read-only local pool are not production or CI prerequisites. A disposable
+fixture with `DT-INF/PROJECT.PMF` imports and reports through the authorized
+EDT host, while the full checked-in EDT project currently returns the stable
+Runtime workspace-build failure. Exact identifiers, protocol bounds, lifecycle,
+messages, packaging, and host oracles remain owned by ADR-0056.
 
 Task 2 creates `docs/adr/0056-edt-integration-prototype.md` and synchronizes
 only planning-level architecture text required by the decision. It fixes the

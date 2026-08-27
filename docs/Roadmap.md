@@ -7074,8 +7074,8 @@ documentation follow-up.
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
-| Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | active |
-| Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |
+| Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
+| Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | next |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
 
@@ -7655,6 +7655,26 @@ focused matrix now contains 12 protocol-domain, 8 Runtime LSP unit, 5
 transport, and 6 real-process tests with no dependency or public capability
 change.
 
+The third bounded remediation closes the final notification-dispatch finding.
+After a message without `id` is classified as a notification, an empty or
+over-bound method name now produces no response instead of an `InvalidRequest`
+frame with `id: null`. Exact 256-byte and one-over 257-byte regressions cover
+both the transport-independent protocol and public stdio process. The final
+focused matrix contains 12 protocol-domain, 8 Runtime LSP unit, 5 transport,
+and 7 real-process tests with no dependency, capability, or semantic-authority
+change.
+
+Task 8 records `pass with non-blocking follow-ups` in the
+[Sprint 32 integration review](reviews/sprint-32-lsp-adapter.md) for the exact
+`daab0ecf192a6a860ffc5e297657fccea0582efa..12e7f21a094a465ab5b619fd6da7f254b86d024a`
+range. The final fresh-context read-only reviewer found no blocker, the primary
+independently completed the canonical Rust and compatibility matrices, and the
+same reviewer passed the artifact-consistency check. The review transition
+retires the verified eight-file Sprint 31 prompt suite, completes Sprint 32,
+and makes Sprint 33 — AI Chat and Context Panel the unique `next` target. A
+real final-head Windows CI run and a repeated unchanged extension matrix in an
+environment with Node remain non-blocking execution follow-ups.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
 source/link/structure and `git diff --check` gates. Tasks 3-6 run focused
 protocol/Graph/adapter/Workspace/Runtime/public-process checks plus the
@@ -7665,10 +7685,11 @@ context read-only reviewer, then the primary independently inspects and reruns
 the complete matrix. The same reviewer must pass the drafted artifact before
 Roadmap transition or prompt retirement.
 
-Sprint 32 remains `next` during planning, becomes `active` when Task 1 starts,
-and may become `completed` only after Task 8. Missing or contradictory pinned
-protocol evidence, an unapproved dependency, guessed document identity or
-source position, escaping URI, mutable-source dependence, unstable ordering,
+Sprint 32 remained `next` during planning, became `active` when Task 1 started,
+and is `completed` after the non-blocking Task 8 review. Missing or
+contradictory pinned protocol evidence, an unapproved dependency, guessed
+document identity or source position, escaping URI, mutable-source dependence,
+unstable ordering,
 unbounded input/output, capability/handler disagreement, protocol-channel
 contamination, zero matched tests, failed validation or commit, reviewer
 mutation or incompleteness, unresolved evidence disagreement, or failed

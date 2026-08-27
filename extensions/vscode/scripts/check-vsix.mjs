@@ -9,6 +9,7 @@ const expected = [
   "extension/readme.md",
   "extension/LICENSE.txt",
   "extension/changelog.md",
+  "extension/dist/symbol-search.js",
   "extension/dist/status.js",
   "extension/dist/mcp-client.js",
   "extension/dist/lifecycle.js",

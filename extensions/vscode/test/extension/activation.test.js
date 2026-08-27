@@ -68,6 +68,11 @@ suite("OneAgent package activation", () => {
     const commands = await vscode.commands.getCommands(true);
     assert.equal(commands.includes("oneagent.connect"), true);
     assert.equal(commands.includes("oneagent.disconnect"), true);
+    assert.equal(commands.includes("oneagent.searchSymbols"), true);
+    assert.equal(
+      await vscode.commands.executeCommand("oneagent.searchSymbols"),
+      "not_connected",
+    );
   });
 
   test("rejects invalid configuration before process creation", async () => {
@@ -155,6 +160,81 @@ suite("OneAgent package activation", () => {
     assertStatus("disconnected");
   });
 
+  test("searches through the public command and opens exact source navigation", async () => {
+    const executable = process.env.ONEAGENT_MCP_BIN;
+    assert.ok(executable);
+    await configuration().update(
+      "executable",
+      executable,
+      vscode.ConfigurationTarget.Global,
+    );
+    assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
+    const procedureSearch = testApi.search();
+    assert.ok(procedureSearch);
+    assert.deepEqual(procedureSearch.snapshot(), {
+      title: "OneAgent: Search Symbols",
+      placeholder: "Type a symbol name",
+      busy: false,
+      disposed: false,
+      items: [],
+    });
+    await procedureSearch.input("FillSecurity");
+    assert.deepEqual(procedureSearch.snapshot().items, [
+      {
+        label: "FillSecurityCollection",
+        description: "procedure — DNSWorldEdition",
+        detail: "designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl:5",
+      },
+    ]);
+    await procedureSearch.accept(0);
+    const modulePath = path.join(
+      vscode.workspace.workspaceFolders[0].uri.fsPath,
+      "designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl",
+    );
+    assert.equal(vscode.window.activeTextEditor.document.uri.fsPath, modulePath);
+    assert.deepEqual(
+      [
+        vscode.window.activeTextEditor.selection.start.line,
+        vscode.window.activeTextEditor.selection.start.character,
+        vscode.window.activeTextEditor.selection.end.line,
+        vscode.window.activeTextEditor.selection.end.character,
+      ],
+      [4, 0, 4, 0],
+    );
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
+    const moduleSearch = testApi.search();
+    assert.ok(moduleSearch);
+    await moduleSearch.input("DynamicSecurityOverridable");
+    await moduleSearch.accept(0);
+    assert.equal(vscode.window.activeTextEditor.document.uri.fsPath, modulePath);
+    assert.equal(vscode.window.activeTextEditor.selection.start.line, 4);
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
+    const missingSearch = testApi.search();
+    assert.ok(missingSearch);
+    await missingSearch.navigate({
+      configurationId: "configuration-id",
+      configurationName: "Configuration",
+      nodeId: "missing-node",
+      name: "Missing",
+      kind: "module",
+      location: { path: "designer/Missing.bsl" },
+    });
+    assert.equal(vscode.window.activeTextEditor.document.uri.fsPath, modulePath);
+    missingSearch.hide();
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
+    const replaced = testApi.search();
+    assert.ok(replaced);
+    assert.equal(await vscode.commands.executeCommand("oneagent.searchSymbols"), "shown");
+    assert.equal(replaced.snapshot().disposed, true);
+    testApi.search().hide();
+    assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+  });
+
   test("deactivation waits for cleanup and is repeatable", async () => {
     const executable = process.env.ONEAGENT_MCP_BIN;
     assert.ok(executable);
@@ -173,9 +253,11 @@ suite("OneAgent package activation", () => {
       status: true,
       connect: true,
       disconnect: true,
+      search: true,
       configuration: true,
     });
     await assert.rejects(vscode.commands.executeCommand("oneagent.connect"));
     await assert.rejects(vscode.commands.executeCommand("oneagent.disconnect"));
+    await assert.rejects(vscode.commands.executeCommand("oneagent.searchSymbols"));
   });
 });

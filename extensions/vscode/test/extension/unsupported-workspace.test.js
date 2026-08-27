@@ -33,6 +33,10 @@ suite("OneAgent unsupported workspace hosts", () => {
     } else {
       assert.fail("unexpected Extension Host case");
     }
+    assert.equal(
+      await vscode.commands.executeCommand("oneagent.searchSymbols"),
+      "not_connected",
+    );
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "failed");
     assert.equal(fs.existsSync(marker), false);
   });

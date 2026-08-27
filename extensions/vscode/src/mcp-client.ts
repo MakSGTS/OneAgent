@@ -17,8 +17,49 @@ const TOOL_NAMES = [
   "oneagent.graph",
   "oneagent.impact",
   "oneagent.query",
+  "oneagent.symbols",
   "oneagent.validation",
 ] as const;
+
+export const MAX_SYMBOL_QUERY_BYTES = 256;
+export const MAX_SYMBOL_PATH_BYTES = 4_096;
+
+export type SymbolKind = "module" | "procedure" | "function" | "query";
+
+export interface SymbolSearchRequest {
+  readonly query: string;
+  readonly configurationId?: string;
+  readonly kinds?: readonly SymbolKind[];
+  readonly limit?: number;
+}
+
+export interface SourcePosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+export interface SourceSpan {
+  readonly start: SourcePosition;
+  readonly end: SourcePosition;
+}
+
+export interface SymbolSearchResultItem {
+  readonly configurationId: string;
+  readonly configurationName: string;
+  readonly nodeId: string;
+  readonly name: string;
+  readonly kind: SymbolKind;
+  readonly location: {
+    readonly path: string;
+    readonly span?: SourceSpan;
+  };
+}
+
+export interface SymbolSearchResult {
+  readonly results: readonly SymbolSearchResultItem[];
+  readonly total: number;
+  readonly truncated: boolean;
+}
 
 export type RuntimeFailureCode =
   | "invalid_configuration"
@@ -29,6 +70,7 @@ export type RuntimeFailureCode =
   | "incompatible_server"
   | "stderr_overflow"
   | "process_exited"
+  | "tool_failure"
   | "shutdown_failed";
 
 const FAILURE_MESSAGES: Readonly<Record<RuntimeFailureCode, string>> = {
@@ -40,6 +82,7 @@ const FAILURE_MESSAGES: Readonly<Record<RuntimeFailureCode, string>> = {
   incompatible_server: "OneAgent Runtime is not compatible with this extension.",
   stderr_overflow: "OneAgent Runtime diagnostics exceeded the safety limit.",
   process_exited: "OneAgent Runtime stopped unexpectedly.",
+  tool_failure: "OneAgent symbol search failed.",
   shutdown_failed: "OneAgent Runtime could not be stopped.",
 };
 
@@ -205,7 +248,50 @@ export class RuntimeClient {
     return this.currentState;
   }
 
-  private async request(method: "server/discover" | "tools/list"): Promise<unknown> {
+  public async symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
+    if (this.currentState !== "connected" || !isSymbolSearchRequest(input)) {
+      throw new RuntimeClientFailure("protocol_failure");
+    }
+    const argumentsValue: Record<string, unknown> = { query: input.query };
+    if (input.configurationId !== undefined) {
+      argumentsValue.configurationId = input.configurationId;
+    }
+    if (input.kinds !== undefined) {
+      argumentsValue.kinds = [...input.kinds];
+    }
+    if (input.limit !== undefined) {
+      argumentsValue.limit = input.limit;
+    }
+
+    let result: unknown;
+    try {
+      result = await this.request("tools/call", {
+        name: "oneagent.symbols",
+        arguments: argumentsValue,
+      });
+    } catch (error) {
+      const failure = asRuntimeFailure(error);
+      if (this.currentState === "connected") {
+        this.abort(failure);
+      }
+      throw failure;
+    }
+    const decoded = decodeSymbolToolResult(result, input.limit ?? 50);
+    if (decoded === "tool_failure") {
+      throw new RuntimeClientFailure("tool_failure");
+    }
+    if (decoded === undefined) {
+      const failure = new RuntimeClientFailure("protocol_failure");
+      this.abort(failure);
+      throw failure;
+    }
+    return decoded;
+  }
+
+  private async request(
+    method: "server/discover" | "tools/list" | "tools/call",
+    fields: Readonly<Record<string, unknown>> = {},
+  ): Promise<unknown> {
     const child = this.process;
     if (child === undefined || this.pending !== undefined) {
       throw new RuntimeClientFailure("protocol_failure");
@@ -221,6 +307,7 @@ export class RuntimeClient {
       id,
       method,
       params: {
+        ...fields,
         _meta: {
           "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
           "io.modelcontextprotocol/clientCapabilities": {},
@@ -546,6 +633,238 @@ function isCompatibleToolList(value: unknown): boolean {
   }
   return value.tools.every(
     (tool, index) => isRecord(tool) && tool.name === TOOL_NAMES[index],
+  );
+}
+
+function isSymbolSearchRequest(value: SymbolSearchRequest): boolean {
+  if (
+    typeof value.query !== "string" ||
+    Buffer.byteLength(value.query, "utf8") === 0 ||
+    Buffer.byteLength(value.query, "utf8") > MAX_SYMBOL_QUERY_BYTES ||
+    (value.configurationId !== undefined && !isNonEmptyBoundedText(value.configurationId)) ||
+    (value.limit !== undefined &&
+      (!Number.isSafeInteger(value.limit) || value.limit < 1 || value.limit > 100))
+  ) {
+    return false;
+  }
+  if (value.kinds === undefined) {
+    return true;
+  }
+  if (!Array.isArray(value.kinds) || value.kinds.length === 0) {
+    return false;
+  }
+  const kinds = new Set<SymbolKind>();
+  for (const kind of value.kinds) {
+    if (!isSymbolKind(kind) || kinds.has(kind)) {
+      return false;
+    }
+    kinds.add(kind);
+  }
+  return true;
+}
+
+function decodeSymbolToolResult(
+  value: unknown,
+  limit: number,
+): SymbolSearchResult | "tool_failure" | undefined {
+  if (!isRecord(value) || value.resultType !== "complete") {
+    return undefined;
+  }
+  const expectedKeys = value.isError === true
+    ? ["content", "isError", "resultType", "structuredContent"]
+    : ["content", "resultType", "structuredContent"];
+  if (!hasExactKeys(value, expectedKeys) || !Array.isArray(value.content) || value.content.length !== 1) {
+    return undefined;
+  }
+  const block = value.content[0];
+  if (
+    !isRecord(block) ||
+    !hasExactKeys(block, ["text", "type"]) ||
+    block.type !== "text" ||
+    typeof block.text !== "string"
+  ) {
+    return undefined;
+  }
+  let textValue: unknown;
+  try {
+    textValue = new UniqueJsonParser(block.text).parse();
+  } catch {
+    return undefined;
+  }
+  if (!jsonEqual(textValue, value.structuredContent)) {
+    return undefined;
+  }
+  if (value.isError === true) {
+    return isToolError(value.structuredContent) ? "tool_failure" : undefined;
+  }
+  return decodeSymbolSearchResult(value.structuredContent, limit);
+}
+
+function decodeSymbolSearchResult(value: unknown, limit: number): SymbolSearchResult | undefined {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["results", "total", "truncated"]) ||
+    !Array.isArray(value.results) ||
+    value.results.length > limit ||
+    !Number.isSafeInteger(value.total) ||
+    typeof value.total !== "number" ||
+    value.total < value.results.length ||
+    typeof value.truncated !== "boolean" ||
+    value.truncated !== (value.total > value.results.length)
+  ) {
+    return undefined;
+  }
+  const results: SymbolSearchResultItem[] = [];
+  for (const item of value.results) {
+    const decoded = decodeSymbolSearchItem(item);
+    if (decoded === undefined) {
+      return undefined;
+    }
+    results.push(decoded);
+  }
+  return { results, total: value.total, truncated: value.truncated };
+}
+
+function decodeSymbolSearchItem(value: unknown): SymbolSearchResultItem | undefined {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "configurationId",
+      "configurationName",
+      "kind",
+      "location",
+      "name",
+      "nodeId",
+    ]) ||
+    !isNonEmptyBoundedText(value.configurationId) ||
+    !isNonEmptyBoundedText(value.configurationName) ||
+    !isNonEmptyBoundedText(value.nodeId) ||
+    !isNonEmptyBoundedText(value.name) ||
+    !isSymbolKind(value.kind) ||
+    !isRecord(value.location) ||
+    !hasExactKeys(
+      value.location,
+      value.location.span === undefined ? ["path"] : ["path", "span"],
+    ) ||
+    !isSafeRelativeSymbolPath(value.location.path)
+  ) {
+    return undefined;
+  }
+  const rawSpan = value.location.span;
+  const span = rawSpan === undefined ? undefined : decodeSourceSpan(rawSpan);
+  if (rawSpan !== undefined && span === undefined) {
+    return undefined;
+  }
+  const location = span === undefined
+    ? { path: value.location.path }
+    : { path: value.location.path, span };
+  return {
+    configurationId: value.configurationId,
+    configurationName: value.configurationName,
+    nodeId: value.nodeId,
+    name: value.name,
+    kind: value.kind,
+    location,
+  };
+}
+
+function isToolError(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["code", "message"]) &&
+    isNonEmptyBoundedText(value.code) &&
+    isNonEmptyBoundedText(value.message)
+  );
+}
+
+function decodeSourceSpan(value: unknown): SourceSpan | undefined {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["end", "start"]) ||
+    !isSourcePosition(value.start) ||
+    !isSourcePosition(value.end)
+  ) {
+    return undefined;
+  }
+  if (!(
+    value.end.line > value.start.line ||
+    (value.end.line === value.start.line && value.end.column >= value.start.column)
+  )) {
+    return undefined;
+  }
+  return {
+    start: { line: value.start.line, column: value.start.column },
+    end: { line: value.end.line, column: value.end.column },
+  };
+}
+
+function isSourcePosition(value: unknown): value is SourcePosition {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["column", "line"]) &&
+    isUnsigned32(value.line) &&
+    isUnsigned32(value.column) &&
+    value.line > 0 &&
+    value.column > 0
+  );
+}
+
+function isUnsigned32(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffff_ffff;
+}
+
+function isSymbolKind(value: unknown): value is SymbolKind {
+  return value === "module" || value === "procedure" || value === "function" || value === "query";
+}
+
+export function isSafeRelativeSymbolPath(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    Buffer.byteLength(value, "utf8") === 0 ||
+    Buffer.byteLength(value, "utf8") > MAX_SYMBOL_PATH_BYTES ||
+    value.includes("\\") ||
+    value.includes("\0") ||
+    value.startsWith("/") ||
+    /^[A-Za-z]:/u.test(value)
+  ) {
+    return false;
+  }
+  return value.split("/").every((component) => component !== "" && component !== "." && component !== "..");
+}
+
+function isNonEmptyBoundedText(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    Buffer.byteLength(value, "utf8") <= 65_536
+  );
+}
+
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value).sort();
+  return keys.length === expected.length && keys.every((key, index) => key === [...expected].sort()[index]);
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => jsonEqual(item, right[index]))
+    );
+  }
+  if (!isRecord(left) || !isRecord(right)) {
+    return false;
+  }
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key, index) => key === rightKeys[index] && jsonEqual(left[key], right[key]))
   );
 }
 

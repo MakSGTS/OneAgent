@@ -8,6 +8,7 @@
   "include": [
     "src/configuration.ts",
     "src/mcp-client.ts",
+    "src/symbol-search.ts",
     "src/status.ts",
     "test/integration/**/*.ts",
     "test/unit/**/*.ts"

@@ -6,7 +6,11 @@ import {
   ExtensionLifecycle,
   type RuntimeClientPort,
 } from "../../src/lifecycle";
-import { RuntimeClientFailure } from "../../src/mcp-client";
+import {
+  RuntimeClientFailure,
+  type SymbolSearchRequest,
+  type SymbolSearchResult,
+} from "../../src/mcp-client";
 import type { ConnectionState } from "../../src/status";
 
 class ControlledClient implements RuntimeClientPort {
@@ -14,6 +18,7 @@ class ControlledClient implements RuntimeClientPort {
   public disconnectCalls = 0;
   public connectFailure: RuntimeClientFailure | undefined;
   public disconnectFailure: RuntimeClientFailure | undefined;
+  public symbolCalls: SymbolSearchRequest[] = [];
   public holdConnect = false;
   private connectCompletion: (() => void) | undefined;
   private connectCancelled = false;
@@ -51,6 +56,11 @@ class ControlledClient implements RuntimeClientPort {
     }
     this.stateChanged("disconnected");
     return "disconnected";
+  }
+
+  public async symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
+    this.symbolCalls.push(input);
+    return { results: [], total: 0, truncated: false };
   }
 }
 
@@ -132,6 +142,20 @@ test("configuration replacement disconnects without automatic reconnect", async 
   assert.deepEqual(states.slice(-2), ["disconnecting", "disconnected"]);
   assert.equal(await lifecycle.configurationChanged(), "disconnected");
   assert.equal(client.disconnectCalls, 1);
+});
+
+test("forwards symbol search only while the owned client is connected", async () => {
+  const { lifecycle, client } = harness();
+  await assert.rejects(lifecycle.symbols({ query: "Sales" }), RuntimeClientFailure);
+  await lifecycle.connect();
+  assert.deepEqual(await lifecycle.symbols({ query: "Sales" }), {
+    results: [],
+    total: 0,
+    truncated: false,
+  });
+  assert.deepEqual(client.symbolCalls, [{ query: "Sales" }]);
+  await lifecycle.disconnect();
+  await assert.rejects(lifecycle.symbols({ query: "Sales" }), RuntimeClientFailure);
 });
 
 test("disconnect cancels an in-flight connect and shares one cleanup operation", async () => {

@@ -38,6 +38,10 @@
       {
         "command": "oneagent.disconnect",
         "title": "OneAgent: Disconnect"
+      },
+      {
+        "command": "oneagent.searchSymbols",
+        "title": "OneAgent: Search Symbols"
       }
     ],
     "configuration": {

@@ -29,12 +29,30 @@ working-directory overrides, downloads, updates, or fallback executables.
 
 - `OneAgent: Connect`
 - `OneAgent: Disconnect`
+- `OneAgent: Search Symbols`
 
 Connection readiness sends the accepted stateless `server/discover` and
-`tools/list` MCP requests and requires the exact six read-only OneAgent tools.
+`tools/list` MCP requests and requires the exact seven read-only OneAgent tools.
 Changing the executable while a connection is active disconnects the current
 child and never reconnects automatically. A later connection always requires
 another explicit command.
+
+## Symbol search and navigation
+
+`OneAgent: Search Symbols` requires an existing connected Runtime and never
+connects, reloads, or searches files on its own. Non-empty input up to 256 UTF-8
+bytes is sent to the bounded `oneagent.symbols` tool. The Quick Pick preserves
+the Runtime result order and identifies every result by its exact symbol kind,
+Configuration name, and Workspace-relative path.
+
+Selecting a result revalidates the relative forward-slash path, joins it below
+the single trusted Workspace root, opens that document, and converts accepted
+one-based source positions to VS Code's zero-based selection. A file-only
+Module result opens without changing the current selection. Hiding or replacing
+the picker, disconnecting, configuration replacement, failure, and deactivation
+invalidate late results and dispose the invocation. The extension does not
+perform semantic matching, ranking, provenance parsing, source inspection, or
+filesystem fallback.
 
 ## Connection status
 
@@ -62,9 +80,10 @@ The Extension Host gate runs two isolated trusted lifecycle cycles plus
 Restricted Mode, empty, virtual, and multi-root workspace cases. Unsupported
 hosts must fail before spawning a Runtime process; both trusted cases cover
 configuration precedence, connection replacement, all five actual status item
-presentations, command and configuration ownership, explicit disposal, and
-repeatable deactivation. The observation API used by those tests is disabled
-in a production Extension Host.
+presentations, command and configuration ownership, real symbol results,
+Quick Pick presentation, file and point navigation, missing files, replacement,
+explicit disposal, and repeatable deactivation. The observation API used by
+those tests is disabled in a production Extension Host.
 
 From the repository root, build the public Runtime and install the locked
 development dependencies:
@@ -89,13 +108,13 @@ On Windows, set `ONEAGENT_MCP_BIN` to the absolute
 `target/debug/oneagent-mcp.exe` path. The pinned Extension Host configuration
 selects the same platform-specific repository binary automatically.
 
-The VSIX contains only the manifest, license, README, changelog, and five
+The VSIX contains only the manifest, license, README, changelog, and six
 compiled production JavaScript modules. Source, tests, lockfiles, caches,
 workspace files, Rust artifacts, secrets, and local configuration are excluded.
 
 ## Deferred scope
 
-Navigation, symbol search, LSP, diagnostics, chat/context UI, EDT integration,
-remote and web extension hosts, multi-root operation, Runtime installation or
-updates, Marketplace publication/signing, telemetry, authentication, and
-external-client compatibility are not included.
+LSP providers, definition/reference APIs, diagnostics UI, chat/context UI, EDT
+integration, remote and web extension hosts, multi-root operation, Runtime
+installation or updates, Marketplace publication/signing, telemetry,
+authentication, and external-client compatibility are not included.

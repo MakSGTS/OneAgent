@@ -7348,6 +7348,25 @@ policy denial, repeated/reordered requests, channel purity, EOF cleanup, and
 the unchanged existing tool families. No dependency, source content,
 filesystem fallback, TypeScript behavior, or LSP surface is added.
 
+###### Sprint 31 VS Code navigation integration
+
+Task 5 adds the explicit-demand `oneagent.searchSymbols` command to the pinned
+desktop VS Code 1.134.0 extension. The connected sequential MCP client now
+validates the exact seven-tool catalog, sends one bounded `oneagent.symbols`
+call, strictly validates mirrored structured/text results, keeps server tool
+errors distinct, and closes malformed-result connections. One invocation-owned
+Quick Pick coalesces changes to the latest valid UTF-8 query, preserves Runtime
+order and ambiguity, and invalidates late work on hide, replacement,
+disconnect, failure, configuration change, or deactivation. Selection repeats
+the relative-path gate, confines the URI to the sole trusted file Workspace,
+opens the exact document, and converts one-based spans to zero-based VS Code
+selections without source inspection or fallback. Pure, real-process, and two
+fresh pinned Extension Host cycles prove input/result bounds, Unicode,
+coalescing, stale responses, tool/protocol failures, all supported result
+fields, actual Quick Pick presentation, procedure selection, file-only Module
+opening, missing files, repetition, disposal, and preserved connect/disconnect
+behavior. The package adds no dependency and keeps LSP/provider APIs deferred.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused
 Common/BSL/Graph/adapter/Workspace tests and the canonical Rust workspace gate.

@@ -8,3 +8,5 @@
   stdio lifecycle.
 - Add pure unit, pinned Extension Host, real-process, package, and cross-platform
   CI evidence.
+- Add explicit connected symbol search with bounded Quick Pick requests and
+  workspace-confined source navigation.

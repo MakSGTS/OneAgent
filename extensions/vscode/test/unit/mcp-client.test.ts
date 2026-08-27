@@ -23,6 +23,7 @@ const TOOL_NAMES = [
   "oneagent.graph",
   "oneagent.impact",
   "oneagent.query",
+  "oneagent.symbols",
   "oneagent.validation",
 ];
 
@@ -56,6 +57,8 @@ type Request = {
   readonly method: string;
   readonly params: {
     readonly _meta: Record<string, unknown>;
+    readonly name?: string;
+    readonly arguments?: Record<string, unknown>;
   };
 };
 
@@ -138,7 +141,52 @@ function toolList(id: number): unknown {
 }
 
 function compatibleResponder(process: FakeProcess, request: Request): void {
-  process.send(request.method === "server/discover" ? discovery(request.id) : toolList(request.id), true);
+  process.send(
+    request.method === "server/discover" ? discovery(request.id) : toolList(request.id),
+    true,
+  );
+}
+
+function symbolResult(
+  id: number,
+  structuredContent: unknown = {
+    results: [
+      {
+        configurationId: "configuration-id",
+        configurationName: "Configuration",
+        nodeId: "node-id",
+        name: "SearchProcedure",
+        kind: "procedure",
+        location: {
+          path: "designer/CommonModules/Search/Ext/Module.bsl",
+          span: {
+            start: { line: 5, column: 1 },
+            end: { line: 5, column: 1 },
+          },
+        },
+      },
+    ],
+    total: 1,
+    truncated: false,
+  },
+): unknown {
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      resultType: "complete",
+      content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    },
+  };
+}
+
+function symbolResponder(process: FakeProcess, request: Request): void {
+  if (request.method === "tools/call") {
+    process.send(symbolResult(request.id));
+  } else {
+    compatibleResponder(process, request);
+  }
 }
 
 function factoryFor(process: FakeProcess): RuntimeProcessFactory {
@@ -190,6 +238,131 @@ test("performs the accepted sequential handshake and graceful shutdown", async (
   assert.deepEqual(states, ["connecting", "connected", "disconnecting", "disconnected"]);
   assert.equal(process.killCalls, 0);
   assertReleased(process, scheduler);
+});
+
+test("calls symbols with exact arguments and validates the bounded result", async () => {
+  const process = new FakeProcess(symbolResponder);
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+  const result = await client.symbols({
+    query: "Поиск",
+    configurationId: "configuration-id",
+    kinds: ["procedure", "function"],
+    limit: 2,
+  });
+  assert.equal(result.results[0]?.name, "SearchProcedure");
+  assert.deepEqual(process.requests[2], {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "oneagent.symbols",
+      arguments: {
+        query: "Поиск",
+        configurationId: "configuration-id",
+        kinds: ["procedure", "function"],
+        limit: 2,
+      },
+      _meta: {
+        "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {
+          name: "oneagent-vscode",
+          version: "0.1.0",
+        },
+      },
+    },
+  });
+  await client.disconnect();
+});
+
+test("rejects invalid symbol requests locally without touching the process", async () => {
+  const process = new FakeProcess(symbolResponder);
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+  for (const input of [
+    { query: "" },
+    { query: "🙂".repeat(65) },
+    { query: "x", kinds: [] },
+    { query: "x", kinds: ["module", "module"] },
+    { query: "x", limit: 101 },
+  ]) {
+    assert.equal(
+      await failureCode(client.symbols(input as Parameters<RuntimeClient["symbols"]>[0])),
+      "protocol_failure",
+    );
+  }
+  assert.equal(process.requests.length, 2);
+  await client.disconnect();
+});
+
+test("keeps tool errors bounded and closes malformed symbol result processes", async () => {
+  const toolError = { code: "invalid_arguments", message: "The semantic tool arguments are invalid." };
+  const toolProcess = new FakeProcess((owner, request) => {
+    if (request.method !== "tools/call") {
+      compatibleResponder(owner, request);
+      return;
+    }
+    owner.send({
+      jsonrpc: "2.0",
+      id: request.id,
+      result: {
+        resultType: "complete",
+        content: [{ type: "text", text: JSON.stringify(toolError) }],
+        structuredContent: toolError,
+        isError: true,
+      },
+    });
+  });
+  const toolClient = new RuntimeClient({ processFactory: factoryFor(toolProcess) });
+  await toolClient.connect("runtime", "/workspace");
+  assert.equal(await failureCode(toolClient.symbols({ query: "x" })), "tool_failure");
+  assert.equal(toolClient.state, "connected");
+  await toolClient.disconnect();
+
+  for (const malformed of [
+    { results: [], total: 0, truncated: false, extra: true },
+    { results: [], total: 1, truncated: false },
+    {
+      results: [{
+        configurationId: "configuration-id",
+        configurationName: "Configuration",
+        nodeId: "node-id",
+        name: "Node",
+        kind: "module",
+        location: { path: "../escape.bsl" },
+      }],
+      total: 1,
+      truncated: false,
+    },
+    {
+      results: [{
+        configurationId: "configuration-id",
+        configurationName: "Configuration",
+        nodeId: "node-id",
+        name: "Node",
+        kind: "procedure",
+        location: {
+          path: "configuration/Module.bsl",
+          span: { start: { line: 0, column: 1 }, end: { line: 1, column: 1 } },
+        },
+      }],
+      total: 1,
+      truncated: false,
+    },
+  ]) {
+    const process = new FakeProcess((owner, request) => {
+      if (request.method === "tools/call") {
+        owner.send(symbolResult(request.id, malformed));
+      } else {
+        compatibleResponder(owner, request);
+      }
+    });
+    const client = new RuntimeClient({ processFactory: factoryFor(process) });
+    await client.connect("runtime", "/workspace");
+    assert.equal(await failureCode(client.symbols({ query: "x" })), "protocol_failure");
+    assert.equal(client.state, "failed");
+  }
 });
 
 test("classifies spawn errors without exposing process inputs", async () => {

@@ -15,6 +15,10 @@ const spawnProbe = path.resolve(
   "test/fixtures",
   process.platform === "win32" ? "spawn-probe.cmd" : "spawn-probe.sh",
 );
+const semanticWorkspace = path.resolve(
+  root,
+  "../../apps/runtime/tests/fixtures/workspace_service",
+);
 const shared = {
   version: "1.134.0",
   extensionDevelopmentPath: root,
@@ -53,9 +57,7 @@ export default defineConfig([
     ...shared,
     label: "packageActivation",
     files: "test/extension/activation.test.js",
-    workspaceFolder: fileURLToPath(
-      new URL("test/fixtures/workspace", import.meta.url),
-    ),
+    workspaceFolder: semanticWorkspace,
     env: environment("trusted"),
     launchArgs: isolatedLaunchArgs("trusted"),
   },
@@ -63,9 +65,7 @@ export default defineConfig([
     ...shared,
     label: "packageActivationRepeat",
     files: "test/extension/activation.test.js",
-    workspaceFolder: fileURLToPath(
-      new URL("test/fixtures/workspace", import.meta.url),
-    ),
+    workspaceFolder: semanticWorkspace,
     env: environment("trusted-repeat"),
     launchArgs: isolatedLaunchArgs("trusted-repeat"),
   },

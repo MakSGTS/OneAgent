@@ -6,6 +6,7 @@ const expected = [
   "README.md",
   "LICENSE",
   "CHANGELOG.md",
+  "dist/symbol-search.js",
   "dist/status.js",
   "dist/mcp-client.js",
   "dist/lifecycle.js",

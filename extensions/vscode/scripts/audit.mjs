@@ -15,7 +15,7 @@ assert.deepEqual(manifest.extensionKind, ["workspace"]);
 assert.equal(manifest.main, "./dist/extension.js");
 assert.deepEqual(
   manifest.contributes.commands.map((entry) => entry.command),
-  ["oneagent.connect", "oneagent.disconnect"],
+  ["oneagent.connect", "oneagent.disconnect", "oneagent.searchSymbols"],
 );
 assert.deepEqual(manifest.contributes.configuration.properties["oneagent.runtime.executable"], {
   type: "string",
@@ -73,7 +73,11 @@ for (const ignored of [
 }
 
 const extensionSource = readFileSync(path.join(extensionRoot, "src/extension.ts"), "utf8");
-for (const commandName of ["oneagent.connect", "oneagent.disconnect"]) {
+for (const commandName of [
+  "oneagent.connect",
+  "oneagent.disconnect",
+  "oneagent.searchSymbols",
+]) {
   assert.ok(extensionSource.includes(commandName));
 }
 assert.ok(extensionSource.includes("oneagent.runtime.executable"));
@@ -82,6 +86,10 @@ for (const forbidden of [
   "createOutputChannel",
   "createDiagnosticCollection",
   "createWebviewPanel",
+  "registerDefinitionProvider",
+  "registerReferenceProvider",
+  "registerDocumentSymbolProvider",
+  "registerWorkspaceSymbolProvider",
   "shell: true",
   "exec(",
   "telemetry",

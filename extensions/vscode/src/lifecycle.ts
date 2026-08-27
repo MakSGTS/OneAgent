@@ -1,10 +1,15 @@
 import type { ConnectionTarget } from "./configuration";
-import { RuntimeClientFailure } from "./mcp-client";
+import {
+  RuntimeClientFailure,
+  type SymbolSearchRequest,
+  type SymbolSearchResult,
+} from "./mcp-client";
 import type { ConnectionState } from "./status";
 
 export interface RuntimeClientPort {
   connect(executable: string, cwd: string): Promise<ConnectionState>;
   disconnect(): Promise<ConnectionState>;
+  symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult>;
 }
 
 export type RuntimeClientFactory = (
@@ -84,6 +89,13 @@ export class ExtensionLifecycle {
       return Promise.resolve(this.currentState);
     }
     return this.disconnect();
+  }
+
+  public symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
+    if (this.disposed || this.deactivating || this.currentState !== "connected") {
+      return Promise.reject(new RuntimeClientFailure("protocol_failure"));
+    }
+    return this.client.symbols(input);
   }
 
   public deactivate(): Promise<void> {

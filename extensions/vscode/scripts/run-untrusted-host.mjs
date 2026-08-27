@@ -44,6 +44,7 @@ const environment = {
     preload: [],
   }),
 };
+delete environment.ELECTRON_RUN_AS_NODE;
 const args = [
   fixture,
   "--no-sandbox",

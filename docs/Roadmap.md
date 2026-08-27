@@ -7075,7 +7075,7 @@ documentation follow-up.
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
-| Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | next |
+| Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | active |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
 
@@ -7767,6 +7767,23 @@ Tasks execute in this exact dependency order:
 | 6 | Public manifest, command, activation, disposable, Runtime reconnect, Chat, panel, and Extension Host integration. | IDE Extension / IDE Extension | Task 5. | Manifest/audit, unit, process, pinned Host, lifecycle, and exact registration/cleanup matrices. | `Integrate Sprint 33 chat and context extension` |
 | 7 | Complete package, cross-platform CI, compatibility, scope, security, and current-state evidence. | IDE Extension / IDE Extension | Task 6. | Frozen install, clean build, complete test/Host/process/package/VSIX/audit matrices, canonical Rust compatibility gate, links, and `git diff --check`. | `Complete Sprint 33 chat and context evidence` |
 | 8 | Fresh-context independent integration review, primary reconciliation, artifact consistency, Sprint 34 hand-off, and conditional Sprint 32 suite retirement. | Review / Review | Task 7 and all validation. | Reviewer and primary complete matrices plus same-reviewer consistency check. | `Complete Sprint 33 AI chat and context panel review` |
+
+Task 1 pins official VS Code 1.134.0 commit
+`474a349ad5b745e512ef86b864d1c74f7264dd7a`, records exact stable Chat,
+Language Model, webview and manifest contracts, and maps them to the existing
+seven-tool Runtime, immutable `oneagent.context`, canonical Symbols selection,
+single-pending-request TypeScript client, trusted single-workspace lifecycle,
+and package/CI boundaries in the
+[AI Chat and Context Panel investigation](architecture/ai-chat-context-panel-investigation.md).
+The decision-ready extension-only candidate uses explicit canonical seed
+selection, one inspectable script-free panel, the request-selected VS Code
+model, exact visible Context plus current prompt, text-only streaming, and
+lifecycle invalidation. Runtime/provider wiring, source inference, hidden
+context, tools/edits, persistence, remote/web/multi-root/EDT, and new
+dependencies remain excluded. Existing Context 11, semantic MCP 6, public MCP
+process 9, extension unit 38, extension process 2, and pinned Host 16 checks
+pass. Sprint 33 is now `active`; exact identifiers, bounds, token admission,
+stream outcomes, invalidation, and failure precedence remain owned by Task 2.
 
 The accepted planning baseline is the commit with subject
 `Plan Sprint 33 AI Chat and Context Panel`. Sprint 33 remains `next` during

@@ -7074,7 +7074,7 @@ documentation follow-up.
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
-| Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | next |
+| Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | active |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
@@ -7530,6 +7530,26 @@ configuration; telemetry; refactoring; and broad performance/security claims.
 | 6 | Implement LSP diagnostics. | Implementation / implementation | Exact accepted bounded diagnostic projection and public process evidence without new diagnostic authority. | Task 5. | `Implement Sprint 32 LSP diagnostics` |
 | 7 | Complete LSP evidence. | Runtime Service / Runtime Service | Cross-platform complete validation, compatibility/dependency/scope audits, CI, and synchronized current-state docs. | Task 6. | `Complete Sprint 32 LSP evidence` |
 | 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 33 hand-off, and conditional Sprint 31 suite retirement. | Task 7 and all validation. | `Complete Sprint 32 LSP adapter review` |
+
+###### Sprint 32 investigation evidence
+
+Task 1 is committed from planning baseline `49b7d02b`. The
+[LSP adapter investigation](architecture/lsp-adapter-investigation.md) pins the
+official LSP 3.17 source and meta-model at immutable Microsoft commit
+`8be2e191506ced923953b94b985c4a1831757b39`, inventories protocol, Runtime,
+Workspace, graph-location, diagnostic, MCP, extension, fixture, dependency, and
+test ownership, and records decision-ready lifecycle, framing, root/URI,
+position, symbol, diagnostic, bound, error, compatibility, and evidence
+candidates for ADR-0054.
+
+The smallest truthful candidate advertises only bounded workspace symbols and
+pull document diagnostics over one immutable startup snapshot. Workspace symbol
+locations provide navigation; go-to-definition, document symbols, mutable
+document synchronization, push/workspace diagnostics, and every unsupported
+language method remain deferred because current typed occurrence/range and
+lifecycle evidence cannot support them without guessing. No production behavior
+or dependency changes in this task. Sprint 32 is now `active`; exact contract
+selection remains owned by Task 2.
 
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
 source/link/structure and `git diff --check` gates. Tasks 3-6 run focused

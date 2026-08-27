@@ -70,7 +70,7 @@ impl RequestId {
         }
     }
 
-    fn from_value(value: &Value) -> Option<Self> {
+    pub(crate) fn from_value(value: &Value) -> Option<Self> {
         match value {
             Value::String(value) => Self::string(value.clone()),
             Value::Number(value) => value
@@ -81,7 +81,7 @@ impl RequestId {
         }
     }
 
-    fn to_value(&self) -> Value {
+    pub(crate) fn to_value(&self) -> Value {
         match &self.kind {
             RequestIdKind::String(value) => Value::String(value.clone()),
             RequestIdKind::Signed(value) => Value::Number(Number::from(*value)),
@@ -635,7 +635,7 @@ fn ensure_response_bound(response: &Response) -> Result<(), EncodeError> {
     encode_response(response).map(|_| ())
 }
 
-fn value_within_nesting_bound(value: &Value, depth: usize) -> bool {
+pub(crate) fn value_within_nesting_bound(value: &Value, depth: usize) -> bool {
     match value {
         Value::Array(values) => {
             depth < MAX_JSON_NESTING_DEPTH
@@ -874,13 +874,13 @@ fn standard_error(id: Option<RequestId>, code: ErrorCode) -> ErrorResponse {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ParseFailure {
+pub(crate) enum ParseFailure {
     Syntax,
     Duplicate,
     Depth,
 }
 
-fn parse_unique_value(input: &str) -> Result<Value, ParseFailure> {
+pub(crate) fn parse_unique_value(input: &str) -> Result<Value, ParseFailure> {
     validate_json_syntax(input)?;
     let disambiguated = disambiguate_literal_number_tokens(input)?;
     let parse_input = disambiguated

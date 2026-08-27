@@ -1,7 +1,13 @@
 //! Protocol contracts used by `OneAgent` clients and services.
 
+mod lsp;
 mod mcp;
 mod server;
+
+pub use lsp::{
+    LSP_SERVER_NAME, LspCapabilities, LspDispatchOutcome, LspEncodeError, LspErrorCode,
+    LspExitStatus, LspHandler, LspHandlerError, LspResponse, LspServer, encode_lsp_response,
+};
 
 pub use mcp::{
     CLIENT_CAPABILITIES_META_KEY, CLIENT_INFO_META_KEY, DecodeOutcome, EncodeError, ErrorCode,

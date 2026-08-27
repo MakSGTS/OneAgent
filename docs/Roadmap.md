@@ -7995,6 +7995,21 @@ shape, Java execution environments, host compatibility, deterministic test
 seams, first-slice workflow, rejected alternatives, migration, and deferred
 scope. It implements no production behavior.
 
+Task 2 accepts [ADR-0056](adr/0056-edt-integration-prototype.md). The accepted
+`extensions/edt` Tycho 5.0.2 reactor builds one JavaSE-17 public-Eclipse-only
+bundle, test fragment, feature, and p2 repository on Maven/JDK 25 without a
+production dependency or private-p2 requirement. Exactly one selected open,
+accessible, local, non-linked, non-virtual project with the EDT configuration
+nature may run one explicitly configured direct `oneagent-mcp` child. One owned
+background job sends an exact bounded `server/discover` request, requires the
+closed MCP 2026-07-28 / OneAgent 0.1.0 response, enforces a 1 MiB frame, 128
+levels, 4 KiB stderr, 5-second response and bounded termination, then publishes
+one fixed redacted UI result. Repeat, cancellation, configuration replacement,
+bundle stop, install/uninstall, PDE, and authorized disposable EDT-host ownership
+and evidence are fixed; Java semantic inference, proprietary EDT APIs, secrets,
+application/pool writes, persistent processes, and broader IDE behavior remain
+deferred.
+
 Task 3 implements only the accepted dependency-free Java Runtime probe. It
 owns one process and its streams, sends the exact bounded newline-framed
 request, validates the exact compatible response projection, rejects malformed,

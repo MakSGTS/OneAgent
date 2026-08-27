@@ -5,6 +5,7 @@ mod config;
 mod error;
 mod health;
 mod http;
+mod lsp;
 mod mcp;
 mod mcp_tools;
 mod service;
@@ -16,6 +17,10 @@ pub use config::{ConfigurationProvider, DefaultConfigurationProvider, RuntimeCon
 pub use error::{BoxError, CleanupFailure, RuntimeError, RuntimeErrorKind};
 pub use health::{RuntimeHealth, RuntimeHealthSnapshot};
 pub use http::HttpService;
+pub use lsp::{
+    LspServerConstructionError, LspStdioError, LspStdioErrorKind, LspStdioOutcome,
+    LspStdioTransport, lsp_server, workspace_root_uri,
+};
 pub use mcp::{McpStdioError, McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
 pub use mcp_tools::{McpSemanticServerError, semantic_server};
 pub use service::{

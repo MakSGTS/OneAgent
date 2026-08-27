@@ -59,9 +59,10 @@ The graph must not know how EDT XML is stored, how files are discovered, or how 
 
 Owns shared low-level concepts:
 
-* source paths;
+* validated UTF-8 source evidence paths;
 * source identifiers;
-* source spans;
+* one-based positions and half-open source spans;
+* typed file or ranged source locations;
 * stable primitive identifiers;
 * common diagnostics;
 * shared naming primitives where appropriate.
@@ -357,12 +358,13 @@ authority. The subsequent
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; the Sprint 29 implementation is present and remains the unique
-`next` target pending integration review.
+follow-ups`; Sprints 29 and 30 are completed, and Sprint 31 implementation and
+production evidence remain active pending integration review.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service
-authority. ADR-0051 governs the additive six-tool semantic slice.
+authority. ADR-0051 governs the original six-tool semantic slice, and ADR-0053
+adds typed source locations plus the seventh `oneagent.symbols` tool.
 `oneagent-protocol` represents MCP revision 2026-07-28 requests, notifications,
 responses, closed errors, bounded JSON payloads, exact `server/discover`, the
 truthful `tools` capability, the single-page lexicographic catalog,
@@ -372,23 +374,30 @@ adapter with a 1 MiB payload limit, notification silence, per-response flush,
 cooperative cancellation, successful EOF completion, and stable controlled
 transport failures. It composes `oneagent.context`, `oneagent.diagnostics`,
 `oneagent.graph`, `oneagent.impact`, `oneagent.query`, and
-`oneagent.validation` over one immutable Workspace startup snapshot. Every
-known call traverses the fail-closed Tool Policy gate; results are bounded,
-deterministic, path-free JSON with equivalent compact text and structured
-content. The tools perform no real side effect and do not expose provenance.
+`oneagent.symbols`, and `oneagent.validation` over one immutable Workspace
+startup snapshot. Every known call traverses the fail-closed Tool Policy gate;
+results are bounded deterministic JSON with equivalent compact text and
+structured content. The original six tools remain path-free. The symbol tool
+projects only unique, lexically confined Workspace-relative forward-slash
+locations for Module, Procedure, Function, and EDT Query nodes and never exposes
+opaque provenance or an absolute source path. The tools perform no real side
+effect.
 
 The separate `oneagent-mcp` process constructs no Runtime `App`, watcher,
 cache, listener, or background task, preserves protocol-only stdout, exits
 successfully at EOF, and reports stable startup or terminal failure categories
 on stderr. Public domain, semantic-library, fixture, dispatch, adapter, and
-real-process evidence covers catalog order, annotations and schemas, all six
-tool families, bounds, policy gating, path redaction, malformed and oversized
-input, unknown methods/tools, LF/CRLF framing, notifications, cancellation,
-transport failures, stdout purity, exit status, repetition, and cleanup.
+real-process evidence covers catalog order, annotations and schemas, all seven
+tool families, bounds, policy gating, path redaction and confinement, malformed
+and oversized input, unknown methods/tools, LF/CRLF
+framing, notifications, cancellation, transport failures, stdout purity, exit
+status, repetition, and cleanup. The desktop VS Code adapter owns one explicit-
+demand Quick Pick and safe navigation projection without semantic matching.
 Additional revisions, remote transports, authentication, snapshot refresh,
-external-client compatibility, packaging, and IDE integration remain deferred.
-Sprint 28 is complete; the Sprint 29 implementation remains the unique `next`
-target pending integration review.
+external-client compatibility, Runtime packaging, LSP/provider APIs,
+references, diagnostics UI, and broader IDE integration remain deferred.
+Sprint 31 implementation and production evidence remain active pending
+integration review.
 
 ## Core principles
 
@@ -934,12 +943,21 @@ Conceptual provenance:
 
 ```rust
 pub struct Provenance {
-    pub source: SourceId,
-    pub span: Option<SourceSpan>,
+    pub source: Option<EntityId>,
+    pub location: Option<SourceLocation>,
     pub producer: ProducerId,
+    pub origin: FactOrigin,
     pub confidence: Confidence,
+    pub resolution: ResolutionState,
 }
 ```
+
+`SourceLocation` keeps a validated producer-observed `SourcePath` and an
+optional one-based half-open `SourceSpan`. File-only Module evidence has no
+span; current Procedure, Function, and EDT Query declarations use a point at
+their declaration line and column 1. Location is independent from opaque source
+identity and participates in provenance equality and hashing. Containment is a
+Runtime projection concern rather than a property asserted by the common value.
 
 Fact origin:
 
@@ -1514,9 +1532,11 @@ SM-8 AI Context Engine
 SM-9 MCP and IDE integration
     implemented: MCP 2026-07-28 discovery, tools/list, and tools/call domain
     implemented: bounded newline-framed stdio process and EOF lifecycle
-    implemented: six read-only graph, diagnostics, impact, query, validation, and context tools
+    implemented: seven read-only graph, diagnostics, impact, query, validation, context, and symbol tools
     implemented: immutable startup snapshot and Tool Policy execution gate
-    deferred: VS Code position seeds
+    implemented: typed Module, Procedure, Function, and EDT Query source locations
+    implemented: explicit VS Code Quick Pick symbol search and safe source navigation
+    deferred: LSP and VS Code definition/reference/document/workspace-symbol providers
     deferred: incremental refresh, remote transport/authentication, and external-client compatibility
 ```
 

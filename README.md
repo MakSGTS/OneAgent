@@ -15,9 +15,10 @@ LM Studio Integration is complete with a `pass` integration review. The
 bounded Sprint 26 Ollama Integration is complete with a `pass` integration
 review. The bounded Sprint 27 Tool Execution Policy is complete with a `pass`
 integration review. The bounded Sprint 28 discovery-only MCP Server is complete
-with a `pass with non-blocking follow-ups` integration review. The Sprint 29
-MCP Semantic Tools implementation is present and remains the unique `next`
-target pending integration review.
+with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
+Semantic Tools and Sprint 30 VS Code Extension Foundation are complete. The
+Sprint 31 Navigation and Symbol Search implementation and production evidence
+are present and remain active pending integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -40,7 +41,7 @@ See
 - `adapters/lm-studio` — implemented explicit bounded LM Studio native model-discovery and composed non-streaming text-generation provider adapter
 - `adapters/ollama` — implemented local-only bounded Ollama native Tags/Show discovery and non-streaming raw generation provider adapter
 - `adapters/filesystem` — implemented filesystem workspace discovery adapter
-- `extensions` — reserved for future IDE extensions; currently empty
+- `extensions/vscode` — desktop VS Code workspace extension with explicit Runtime connection, bounded symbol search, and safe source navigation
 - `docs/adr` — architecture decision records
 
 Runtime builds one all-or-nothing immutable Workspace snapshot from a configured
@@ -64,10 +65,12 @@ success/error schemas. The supported CLI maps its exact commands to those health
 and Graph Query GET routes through one bounded HTTP/1.1 connection, preserves
 Runtime JSON, and distinguishes usage, transport, server, protocol, and output
 failures with stable exit codes. Runtime process management, endpoint discovery,
-configuration files, richer output, alternate transports, packaging, Git,
-LSP, VS Code, external MCP-client compatibility, and AI-provider integration
-remain planned capabilities with explicit ownership. Health remains available
-through exact `GET /health/live` and `GET /health/ready` probes.
+configuration files, richer output, alternate transports, packaging, Git, LSP,
+external MCP-client compatibility, and AI-provider integration remain planned
+capabilities with explicit ownership. The bounded desktop VS Code client uses
+the separate MCP process for explicit connection and symbol-search/navigation
+only. Health remains available through exact `GET /health/live` and
+`GET /health/ready` probes.
 
 The additive `oneagent-analysis` Context Engine borrows one immutable
 `SemanticGraph`, resolves exact node-ID or canonical-name seeds, applies bounded
@@ -123,10 +126,11 @@ without moving policy authority. Sprint 27 is complete with a `pass`
 integration review.
 
 The Sprint 28 foundation implements MCP revision 2026-07-28 without legacy
-initialize or session behavior. Sprint 29 extends that exact revision with a
-truthful `tools` capability and one lexicographically ordered, read-only catalog:
-`oneagent.context`, `oneagent.diagnostics`, `oneagent.graph`,
-`oneagent.impact`, `oneagent.query`, and `oneagent.validation`.
+initialize or session behavior. Sprint 29 adds the semantic-tool boundary, and
+Sprint 31 extends its truthful `tools` capability with this lexicographically
+ordered read-only catalog: `oneagent.context`, `oneagent.diagnostics`,
+`oneagent.graph`, `oneagent.impact`, `oneagent.query`, `oneagent.symbols`, and
+`oneagent.validation`.
 `oneagent-protocol` owns bounded discovery, `tools/list`, `tools/call`, schemas,
 wire errors/results, and asynchronous sequential dispatch. `oneagent-runtime`
 builds one immutable Workspace snapshot from the process working directory,
@@ -134,17 +138,21 @@ composes every known call through the fail-closed Tool Policy execution gate,
 and serves it through the separate newline-framed 1 MiB `oneagent-mcp` stdio
 process. Successful tool results contain both compact JSON text and identical
 structured content; known semantic failures are tool errors, while malformed
-or unknown calls are protocol `Invalid params` errors. Outputs are bounded,
-deterministic, and omit source paths and provenance.
+or unknown calls are protocol `Invalid params` errors. Outputs are bounded and
+deterministic. The six original tools remain path-free; `oneagent.symbols`
+returns only confined Workspace-relative forward-slash source paths and
+one-based locations for the accepted Module, Procedure, Function, and EDT Query
+slice.
 
 The process constructs no long-running Runtime `App`, watcher, cache, HTTP
 listener, background task, remote client, or real side effect. It keeps stdout
 protocol-pure, treats EOF as successful completion, and reports only stable
 startup or transport categories on stderr. Additional protocol revisions,
 remote transports, authentication, snapshot refresh, external-client
-compatibility, packaging, and IDE integration remain deferred. Sprint 28 is
-complete; the Sprint 29 implementation remains the unique `next` target
-pending integration review.
+compatibility, Runtime packaging, LSP/providers, references, diagnostics UI,
+and broader IDE integration remain deferred. The desktop VS Code extension
+supports only the accepted explicit connection and bounded symbol-navigation
+slice.
 
 ## Verify
 

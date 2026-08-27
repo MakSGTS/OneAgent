@@ -59,7 +59,7 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      exact configuration, node, direct-relation, and bounded-traversal
      operations without becoming a background service. A separate bounded MCP
      stdio adapter and `oneagent-mcp` binary build one immutable startup
-     snapshot and serve the six read-only semantic tools without constructing
+     snapshot and serve the seven read-only semantic tools without constructing
      `App`, watching files, or changing Runtime service ownership.
    - `oneagent-cli` is the supported dependency-free client for the accepted
      Runtime health and Graph Query HTTP/1.1 surface. It owns a closed command
@@ -71,11 +71,13 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      asynchronous sequential dispatch contracts. It does not own Runtime I/O,
      semantic tool execution, HTTP, or LSP contracts.
    - `extensions/vscode` is the desktop workspace client for the accepted MCP
-     process boundary. It activates only on its two contributed commands,
+     process boundary. It activates only on its three contributed commands,
      validates one trusted file-backed workspace and one bounded executable,
      owns one directly spawned `oneagent-mcp` child, and derives one status bar
-     item from its closed connection state. Its editor adapter does not own MCP
-     semantics, Runtime installation, workspace discovery, or graph behavior.
+     item from its closed connection state. Its explicit symbol-search command
+     presents Runtime order and opens only revalidated Workspace-relative source
+     locations. Its editor adapter does not own MCP semantics, Runtime
+     installation, workspace discovery, or graph behavior.
 
 `SemanticGraph` is the canonical semantic authority. Adapters may observe source
 formats and contribute provenance-backed facts, but source-specific identities
@@ -101,13 +103,16 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 28 MCP Server review](reviews/sprint-28-mcp-server.md) records
   `pass with non-blocking follow-ups`. The
   [Sprint 29 MCP Semantic Tools review](reviews/sprint-29-mcp-semantic-tools.md)
-  records `pass with non-blocking follow-up`. The Sprint 30 VS Code Extension
-  Foundation implementation and production evidence are present and remain
-  active pending integration review.
-- Semantic MCP tools are implemented in Sprint 29, and the bounded desktop VS
-  Code connection foundation is implemented in Sprint 30. Navigation, symbol
-  search, LSP, chat/context UI, EDT integration, and external-client
-  compatibility remain later work in Sprints 31–35.
+  records `pass with non-blocking follow-up`. The
+  [Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
+  records `pass with non-blocking follow-ups`. Sprint 31 Navigation and Symbol
+  Search implementation and production evidence are present and remain active
+  pending integration review.
+- Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
+  connection foundation is implemented in Sprint 30, and typed source locations
+  plus bounded symbol search and navigation are implemented in Sprint 31. LSP,
+  reference providers, diagnostics and chat/context UI, EDT integration, and
+  external-client compatibility remain later work in Sprints 32–35.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
@@ -161,8 +166,8 @@ the [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; the Sprint 29 implementation is present and remains the unique
-`next` target pending integration review.
+follow-ups`; Sprints 29 and 30 are completed, and Sprint 31 implementation and
+production evidence remain active pending integration review.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -204,8 +209,8 @@ The [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`. The later
 [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; the Sprint 29 implementation is present and remains the unique
-`next` target pending integration review.
+follow-ups`; Sprints 29 and 30 are completed, and Sprint 31 implementation and
+production evidence remain active pending integration review.
 
 ## Implemented Tool Execution Policy boundary
 
@@ -253,8 +258,8 @@ registration, transport, MCP/provider/IDE mapping, sandbox, or cross-process
 replay prevention. The
 [Sprint 27 integration review](reviews/sprint-27-tool-execution-policy.md)
 records `pass`. Sprint 28 is completed with `pass with non-blocking follow-ups`;
-the Sprint 29 implementation is present and remains the unique `next` target
-pending integration review.
+Sprints 29 and 30 are completed, and Sprint 31 implementation and production
+evidence remain active pending integration review.
 
 ## Implemented MCP Server boundary
 
@@ -281,24 +286,29 @@ zero, and startup or terminal failures use stable redacted stderr categories.
 
 The exact lexicographic catalog is `oneagent.context`,
 `oneagent.diagnostics`, `oneagent.graph`, `oneagent.impact`, `oneagent.query`,
-and `oneagent.validation`. All definitions declare read-only, non-destructive
-annotations. Runtime projects canonical Workspace, Graph, Impact, Validation,
-Diagnostics, Query, and Context owners into bounded path-free JSON and sends
-every known call through the fail-closed Tool Policy gate. Results contain
-equivalent compact JSON text and structured content. Known-tool semantic
-failures set `isError`; malformed or unknown calls remain protocol `Invalid
-params` failures. No tool mutates files, graphs, processes, network state, or
-other external state.
+`oneagent.symbols`, and `oneagent.validation`. All definitions declare
+read-only, non-destructive annotations. Runtime projects canonical Workspace,
+Graph, Impact, Validation, Diagnostics, Query, Context, and source-location
+owners into bounded JSON and sends every known call through the fail-closed
+Tool Policy gate. The original six results remain path-free;
+`oneagent.symbols` exposes only confined Workspace-relative forward-slash paths
+and one-based locations for Module, Procedure, Function, and EDT Query nodes.
+Results contain equivalent compact JSON text and structured content. Known-tool
+semantic failures set `isError`; malformed or unknown calls remain protocol
+`Invalid params` failures. No tool mutates files, graphs, processes, network
+state, or other external state.
 
 Public protocol, semantic-library, fixture, adapter, and real-process tests
 cover exact discovery, catalog order, annotations and schemas, validation
-bounds, all six tool families, Tool Policy execution, path redaction,
-malformed and oversized input, unknown methods/tools, notifications, LF/CRLF
+bounds, all seven tool families, Tool Policy execution, path redaction and
+symbol-path confinement, malformed and oversized input, unknown methods/tools,
+notifications, LF/CRLF
 framing, cancellation, transport failures, EOF, stdout purity, exit status,
 repetition, and cleanup. Additional MCP revisions, remote transports,
-authentication, snapshot refresh, external-client compatibility, packaging,
-and IDE integration remain deferred. Sprint 28 is complete; the Sprint 29
-implementation remains the unique `next` target pending integration review.
+authentication, snapshot refresh, external-client compatibility, Runtime
+packaging, LSP/provider APIs, references, diagnostics UI, and broader IDE
+integration remain deferred. Sprint 31 implementation and production evidence
+are present and remain active pending integration review.
 
 ## Accepted OpenAI-compatible provider boundary
 
@@ -708,5 +718,5 @@ records `pass`. The later
 [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`; Sprint 27 Tool Execution Policy is completed with a `pass`
 review. Sprint 28 is completed with `pass with non-blocking follow-ups`; the
-Sprint 29 implementation is present and remains the unique `next` target
-pending integration review.
+later Sprints 29 and 30 are completed, and Sprint 31 implementation and
+production evidence remain active pending integration review.

@@ -7367,6 +7367,38 @@ fields, actual Quick Pick presentation, procedure selection, file-only Module
 opening, missing files, repetition, disposal, and preserved connect/disconnect
 behavior. The package adds no dependency and keeps LSP/provider APIs deferred.
 
+###### Sprint 31 completed evidence
+
+Task 6 completes the public evidence matrix without changing production
+behavior. A clean locked Node 24/pnpm 11.19.0 install, typecheck, compile, 36
+unit tests, 2 public `oneagent-mcp` process tests, and 16 pinned VS Code 1.134.0
+Extension Host tests pass across two trusted lifecycle cycles plus empty,
+virtual, multi-root, and Restricted Mode hosts. The exact package inventory has
+10 files; both clean VSIX builds have the same exact 12-file archive inventory.
+The dependency/license/scope audit covers 39 tracked extension files, 18
+license groups, three current documents, zero production Node dependencies,
+ignored generated/test artifacts, and absent deferred provider, diagnostics,
+chat, and telemetry surfaces.
+
+The canonical Rust format, check, workspace test, all-target/all-feature Clippy,
+and warning-denying Rustdoc gates pass. Public Runtime evidence includes 8 MCP
+process and 5 semantic-tool tests; the complete Workspace, Common, BSL, Graph,
+EDT, Designer XML, protocol, Tool Policy, Runtime, and compatibility suites pass
+without a dependency addition or change to the six existing tool contracts.
+Repository CI runs the complete Rust and extension boundaries on both
+`macos-14` and `windows-latest`. Catalog,
+schema, handler, Tool Policy, manifest, client, package, current-state docs,
+303 local Markdown links, secret/path-leak, generated-artifact, and deferred-
+scope audits agree with the accepted seven-tool, four-kind location matrix.
+
+Sprint 31 remains `active` until Task 7 completes the fresh-context independent
+review, primary reconciliation, repeated complete validation, artifact-
+consistency review, final state transition, and conditional Sprint 30 prompt-
+suite retirement. LSP and VS Code provider APIs, reference search, diagnostics,
+chat/context UI, workspace refresh/watch, remote/web/multi-root support,
+external-client compatibility, Marketplace work, telemetry, edits/refactoring,
+and broad performance/security claims remain deferred.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused
 Common/BSL/Graph/adapter/Workspace tests and the canonical Rust workspace gate.

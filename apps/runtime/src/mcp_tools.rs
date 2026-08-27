@@ -63,7 +63,7 @@ const EDGE_KIND_NAMES: [&str; 11] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct McpSemanticServerError;
 
-/// Builds the complete immutable Sprint 29 semantic MCP server.
+/// Builds the complete immutable Sprint 31 semantic MCP server.
 ///
 /// # Errors
 ///

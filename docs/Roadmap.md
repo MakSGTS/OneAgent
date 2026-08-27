@@ -7642,6 +7642,19 @@ matrix passes 12 protocol-domain, 7 Runtime LSP unit, 5 transport, and 6 real-
 process tests. No dependency, lockfile, public capability, or semantic authority
 changes.
 
+The second bounded remediation closes the follow-up Task 8 findings without
+expanding scope. Runtime now preserves the distinction between unavailable or
+ambiguous location evidence and a present canonical span whose coordinates
+cannot be represented as an LSP `uinteger`: the former remains omitted, while
+the latter propagates through both symbol and diagnostic handlers as the closed
+`Internal error` response. Exact-maximum and one-over production projection
+oracles cover both result families. Document URI validation also rejects raw or
+percent-encoded Windows separators, including `%5C` traversal, before
+containment; the real-process diagnostic matrix proves `InvalidParams`. The
+focused matrix now contains 12 protocol-domain, 8 Runtime LSP unit, 5
+transport, and 6 real-process tests with no dependency or public capability
+change.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
 source/link/structure and `git diff --check` gates. Tasks 3-6 run focused
 protocol/Graph/adapter/Workspace/Runtime/public-process checks plus the

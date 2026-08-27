@@ -318,7 +318,12 @@ async fn public_lsp_process_pulls_located_diagnostics_and_empty_full_reports() {
             "textDocument/diagnostic",
             &diagnostic_params(&format!("{root_uri}/bad%2fname.bsl")),
         )),
-        frame(&request(8, "shutdown")),
+        frame(&request_with_params(
+            8,
+            "textDocument/diagnostic",
+            &diagnostic_params(&format!("{root_uri}/sub%5C..%5Coutside.bsl")),
+        )),
+        frame(&request(9, "shutdown")),
         frame(&notification("exit")),
     ]
     .concat();
@@ -334,7 +339,7 @@ async fn public_lsp_process_pulls_located_diagnostics_and_empty_full_reports() {
     assert!(first.stderr.is_empty());
     assert_eq!(first.stdout, repeated.stdout);
     let responses = decode_frames(&first.stdout);
-    assert_eq!(responses.len(), 8);
+    assert_eq!(responses.len(), 9);
 
     assert_diagnostic_responses(&responses);
 }
@@ -389,7 +394,7 @@ fn assert_diagnostic_responses(responses: &[Value]) {
     assert_eq!(responses[2]["result"], *edt_report);
     assert_eq!(responses[3]["result"], json!({"kind": "full", "items": []}));
     assert_eq!(responses[4]["result"], json!({"kind": "full", "items": []}));
-    for response in &responses[5..7] {
+    for response in &responses[5..8] {
         assert_eq!(
             response["error"],
             json!({"code": -32602, "message": "Invalid params"})

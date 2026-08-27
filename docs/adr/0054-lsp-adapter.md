@@ -171,6 +171,9 @@ root and validates initialize input through the handler boundary:
 
 Canonical file URIs use UTF-8 percent encoding with uppercase hex, forward
 slashes, no query/fragment/user-info, and platform-correct absolute roots.
+Document URIs containing a raw or percent-encoded backslash are non-canonical
+on every platform and are rejected before lexical containment; `%5C` cannot be
+used as a Windows separator or traversal boundary.
 On Windows, Runtime converts canonical drive paths to `file:///C:/...`,
 canonical UNC paths to `file://server/share/...`, and removes the extended
 `\\?\` or `\\?\UNC\` filesystem prefix before URI encoding; other extended
@@ -273,7 +276,10 @@ column. Every emitted zero-based line and character is an LSP `uinteger` in
 `0..=2,147,483,647`; an out-of-range handler projection is an internal error.
 Current declaration points therefore become zero-length ranges at character
 zero and are independent of source encoding. Runtime never reads a line,
-adjusts to an identifier, or claims an exact identifier range.
+adjusts to an identifier, or claims an exact identifier range. Missing,
+ambiguous, conflicting, span-less, or escaping location evidence remains an
+omission; a present canonical span with malformed or out-of-range coordinates
+is not downgraded to an omission and fails the complete request.
 
 The complete result is limited to 100 symbols and the protocol body bound.
 Runtime collects the complete projected candidate set and checks its length
@@ -299,8 +305,10 @@ For the requested URI, Runtime selects recoverable diagnostics whose
 `source_node` exists in the same Configuration and whose source node has exactly
 one distinct typed confined location with a span for that exact URI. A missing
 source node, missing/ambiguous/conflicting/escaping location, or span-less node
-is omitted rather than guessed. The diagnostic's own stable ordering remains
-primary; URI, zero-based range, code, and message provide deterministic ties.
+is omitted rather than guessed. A present canonical source-node span with an
+unrepresentable LSP position is an internal error rather than a successful
+partial report. The diagnostic's own stable ordering remains primary; URI,
+zero-based range, code, and message provide deterministic ties.
 
 Each LSP `Diagnostic` contains:
 
@@ -363,7 +371,9 @@ and resource-cleanup cases as applicable. Numeric conformance evidence covers
 exact and one-over LSP integer/uinteger bounds for request IDs, `processId`,
 progress tokens, and outbound positions, plus fractional rejection. URI
 evidence includes platform-independent drive/UNC oracles and a Windows-only
-canonical-path assertion.
+canonical-path assertion, encoded-separator/traversal rejection, and public
+handler propagation that distinguishes omitted location evidence from invalid
+canonical coordinates.
 
 ## Consequences
 

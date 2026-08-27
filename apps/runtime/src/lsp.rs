@@ -274,7 +274,7 @@ fn project_workspace_symbols(
             if !folded_name.contains(&folded_query) {
                 continue;
             }
-            let Some(location) = lsp_symbol_location(snapshot, configuration, node, root_uri)
+            let Some(location) = lsp_symbol_location(snapshot, configuration, node, root_uri)?
             else {
                 continue;
             };
@@ -343,30 +343,45 @@ fn lsp_symbol_location(
     configuration: &WorkspaceConfigurationSnapshot,
     node: &GraphNode,
     root_uri: &str,
-) -> Option<Value> {
-    let projected = unique_symbol_location(snapshot, configuration, node)?;
-    let path = projected.get("path")?.as_str()?;
-    let span = projected.get("span")?.as_object()?;
-    let start = lsp_position(span.get("start")?)?;
-    let end = lsp_position(span.get("end")?)?;
+) -> Result<Option<Value>, LspHandlerError> {
+    let Some(projected) = unique_symbol_location(snapshot, configuration, node) else {
+        return Ok(None);
+    };
+    let path = projected
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or(LspHandlerError::Internal)?;
+    let Some(span) = projected.get("span").and_then(Value::as_object) else {
+        return Ok(None);
+    };
+    let start = lsp_position(span.get("start").ok_or(LspHandlerError::Internal)?)?;
+    let end = lsp_position(span.get("end").ok_or(LspHandlerError::Internal)?)?;
     let uri = if root_uri.ends_with('/') {
         format!("{root_uri}{}", percent_encode_path(path, false))
     } else {
         format!("{root_uri}/{}", percent_encode_path(path, false))
     };
-    Some(serde_json::json!({
+    Ok(Some(serde_json::json!({
         "uri": uri,
         "range": {"start": start, "end": end}
-    }))
+    })))
 }
 
-fn lsp_position(value: &Value) -> Option<Value> {
-    let line = value.get("line")?.as_u64()?.checked_sub(1)?;
-    let character = value.get("column")?.as_u64()?.checked_sub(1)?;
+fn lsp_position(value: &Value) -> Result<Value, LspHandlerError> {
+    let line = value
+        .get("line")
+        .and_then(Value::as_u64)
+        .and_then(|value| value.checked_sub(1))
+        .ok_or(LspHandlerError::Internal)?;
+    let character = value
+        .get("column")
+        .and_then(Value::as_u64)
+        .and_then(|value| value.checked_sub(1))
+        .ok_or(LspHandlerError::Internal)?;
     if line > LSP_UINTEGER_MAX || character > LSP_UINTEGER_MAX {
-        return None;
+        return Err(LspHandlerError::Internal);
     }
-    Some(serde_json::json!({"line": line, "character": character}))
+    Ok(serde_json::json!({"line": line, "character": character}))
 }
 
 struct DocumentDiagnostic<'a> {
@@ -390,7 +405,8 @@ fn project_document_diagnostics(
                 diagnostic,
                 root_uri,
                 requested_uri,
-            ) else {
+            )?
+            else {
                 continue;
             };
             projected.push(item);
@@ -436,21 +452,52 @@ fn project_document_diagnostic<'a>(
     diagnostic: &'a SemanticDiagnostic,
     root_uri: &str,
     requested_uri: &str,
-) -> Option<DocumentDiagnostic<'a>> {
-    let source_node = configuration.graph().node(diagnostic.source_node()?)?;
-    let location = lsp_symbol_location(snapshot, configuration, source_node, root_uri)?;
-    if location.get("uri")?.as_str()? != requested_uri {
-        return None;
+) -> Result<Option<DocumentDiagnostic<'a>>, LspHandlerError> {
+    let Some(source_node_id) = diagnostic.source_node() else {
+        return Ok(None);
+    };
+    let Some(source_node) = configuration.graph().node(source_node_id) else {
+        return Ok(None);
+    };
+    project_document_diagnostic_from_source_node(
+        snapshot,
+        configuration,
+        diagnostic,
+        source_node,
+        root_uri,
+        requested_uri,
+    )
+}
+
+fn project_document_diagnostic_from_source_node<'a>(
+    snapshot: &WorkspaceSnapshot,
+    configuration: &WorkspaceConfigurationSnapshot,
+    diagnostic: &'a SemanticDiagnostic,
+    source_node: &GraphNode,
+    root_uri: &str,
+    requested_uri: &str,
+) -> Result<Option<DocumentDiagnostic<'a>>, LspHandlerError> {
+    let Some(location) = lsp_symbol_location(snapshot, configuration, source_node, root_uri)?
+    else {
+        return Ok(None);
+    };
+    if location.get("uri").and_then(Value::as_str) != Some(requested_uri) {
+        return Ok(None);
     }
-    let range = location.get("range")?.clone();
-    let start = lsp_position_tuple(range.get("start")?)?;
-    let end = lsp_position_tuple(range.get("end")?)?;
-    Some(DocumentDiagnostic {
+    let range = location
+        .get("range")
+        .cloned()
+        .ok_or(LspHandlerError::Internal)?;
+    let start = lsp_position_tuple(range.get("start").ok_or(LspHandlerError::Internal)?)
+        .ok_or(LspHandlerError::Internal)?;
+    let end = lsp_position_tuple(range.get("end").ok_or(LspHandlerError::Internal)?)
+        .ok_or(LspHandlerError::Internal)?;
+    Ok(Some(DocumentDiagnostic {
         diagnostic,
         range,
         start,
         end,
-    })
+    }))
 }
 
 fn lsp_position_tuple(value: &Value) -> Option<(u64, u64)> {
@@ -519,6 +566,9 @@ fn canonical_relative_uri_path(encoded: &str) -> bool {
     let Ok(decoded) = std::str::from_utf8(&decoded) else {
         return false;
     };
+    if decoded.as_bytes().contains(&b'\\') {
+        return false;
+    }
     decoded
         .split('/')
         .all(|component| !component.is_empty() && component != "." && component != "..")
@@ -741,13 +791,15 @@ mod tests {
         Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
         SemanticDiagnostic,
     };
+    use oneagent_protocol::LspHandlerError;
     use oneagent_workspace::WorkspaceFormat;
 
     use super::{
         complete_document_diagnostic_projection, complete_workspace_symbol_projection,
         enforce_diagnostic_result_bound, enforce_symbol_result_bound, lsp_position,
-        lsp_symbol_kind, lsp_symbol_location, project_document_diagnostic, valid_document_uri,
-        windows_file_uri, workspace_root_uri,
+        lsp_symbol_kind, lsp_symbol_location, project_document_diagnostic,
+        project_document_diagnostic_from_source_node, valid_document_uri, windows_file_uri,
+        workspace_root_uri,
     };
     use crate::WorkspaceSnapshotBuilder;
 
@@ -763,6 +815,14 @@ mod tests {
             SourceSpan::new(point, point).expect("ordered point span")
         });
         SourceLocation::new(path, span)
+    }
+
+    fn location_at(path: SourcePath, line: u32, column: u32) -> SourceLocation {
+        let point = SourcePosition::new(line, column).expect("one-based point");
+        SourceLocation::new(
+            path,
+            Some(SourceSpan::new(point, point).expect("ordered point span")),
+        )
     }
 
     fn provenance(location: SourceLocation, producer: &str) -> Provenance {
@@ -863,21 +923,21 @@ mod tests {
     fn runtime_position_projection_enforces_lsp_uinteger() {
         assert_eq!(
             lsp_position(&serde_json::json!({"line": 2_147_483_648_u64, "column": 1})),
-            Some(serde_json::json!({"line": 2_147_483_647_u64, "character": 0}))
+            Ok(serde_json::json!({"line": 2_147_483_647_u64, "character": 0}))
         );
         assert_eq!(
             lsp_position(&serde_json::json!({"line": 2_147_483_649_u64, "column": 1})),
-            None
+            Err(LspHandlerError::Internal)
         );
         assert_eq!(
             lsp_position(&serde_json::json!({"line": 1, "column": 2_147_483_649_u64})),
-            None
+            Err(LspHandlerError::Internal)
         );
         assert_eq!(
             lsp_position(
                 &serde_json::json!({"line": 2_147_483_647_u64, "column": 2_147_483_647_u64})
             ),
-            Some(serde_json::json!({"line": 2_147_483_646_u64, "character": 2_147_483_646_u64}))
+            Ok(serde_json::json!({"line": 2_147_483_646_u64, "character": 2_147_483_646_u64}))
         );
     }
 
@@ -904,6 +964,7 @@ mod tests {
                 &node("Missing", Vec::new()),
                 &root_uri
             )
+            .expect("missing evidence is not a projection error")
             .is_none()
         );
         assert!(
@@ -916,6 +977,7 @@ mod tests {
                 ),
                 &root_uri
             )
+            .expect("span-less evidence is not a projection error")
             .is_none()
         );
 
@@ -927,6 +989,7 @@ mod tests {
             ],
         );
         let projected = lsp_symbol_location(&snapshot, configuration, &repeated, &root_uri)
+            .expect("valid location projection must not fail")
             .expect("repeated identical location must collapse");
         assert_eq!(
             projected["range"]["start"],
@@ -953,7 +1016,11 @@ mod tests {
                 ),
             ],
         );
-        assert!(lsp_symbol_location(&snapshot, configuration, &conflicting, &root_uri).is_none());
+        assert!(
+            lsp_symbol_location(&snapshot, configuration, &conflicting, &root_uri)
+                .expect("conflicting evidence is not a projection error")
+                .is_none()
+        );
 
         let outside = fixture_root()
             .parent()
@@ -969,7 +1036,82 @@ mod tests {
                 "a",
             )],
         );
-        assert!(lsp_symbol_location(&snapshot, configuration, &escaping, &root_uri).is_none());
+        assert!(
+            lsp_symbol_location(&snapshot, configuration, &escaping, &root_uri)
+                .expect("escaping evidence is not a projection error")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn symbol_and_diagnostic_positions_propagate_exact_lsp_bounds() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let configuration = snapshot
+            .configurations()
+            .iter()
+            .find(|configuration| !configuration.diagnostics().is_empty())
+            .expect("EDT fixture must contain diagnostics");
+        let diagnostic = &configuration.diagnostics()[0];
+        let root_uri = workspace_root_uri(snapshot.root_path()).expect("root URI");
+        let source_path = SourcePath::new(
+            configuration
+                .root_path()
+                .join("Synthetic.bsl")
+                .to_string_lossy(),
+        )
+        .expect("confined synthetic source path");
+        let exact_max = node(
+            "ExactMax",
+            vec![provenance(
+                location_at(source_path.clone(), 2_147_483_648, 1),
+                "a",
+            )],
+        );
+        let exact_location = lsp_symbol_location(&snapshot, configuration, &exact_max, &root_uri)
+            .expect("exact maximum LSP position must project")
+            .expect("exact maximum location");
+        assert_eq!(
+            exact_location["range"]["start"],
+            serde_json::json!({"line": 2_147_483_647_u64, "character": 0})
+        );
+        let requested_uri = exact_location["uri"]
+            .as_str()
+            .expect("projected URI")
+            .to_owned();
+        assert!(
+            project_document_diagnostic_from_source_node(
+                &snapshot,
+                configuration,
+                diagnostic,
+                &exact_max,
+                &root_uri,
+                &requested_uri,
+            )
+            .expect("exact maximum diagnostic position must project")
+            .is_some()
+        );
+
+        let one_over = node(
+            "OneOver",
+            vec![provenance(location_at(source_path, 2_147_483_649, 1), "a")],
+        );
+        assert_eq!(
+            lsp_symbol_location(&snapshot, configuration, &one_over, &root_uri),
+            Err(LspHandlerError::Internal)
+        );
+        assert!(matches!(
+            project_document_diagnostic_from_source_node(
+                &snapshot,
+                configuration,
+                diagnostic,
+                &one_over,
+                &root_uri,
+                &requested_uri,
+            ),
+            Err(LspHandlerError::Internal)
+        ));
     }
 
     #[test]
@@ -988,6 +1130,9 @@ mod tests {
             "file:///workspace/../outside.bsl",
             "file:///workspace/source//Module.bsl",
             "file:///workspace/source%2FModule.bsl",
+            "file:///workspace/source%5CModule.bsl",
+            "file:///workspace/sub%5C..%5Coutside.bsl",
+            "file:///workspace/sub%5c..%5coutside.bsl",
             "file:///workspace/space%20%c3%bc.bsl",
             "file:///workspace/raw ü.bsl",
             "file:///workspace/name?query",
@@ -1023,7 +1168,7 @@ mod tests {
                     &root_uri,
                     &document_uri,
                 )
-                .is_some()
+                .is_ok_and(|projection| projection.is_some())
             })
             .expect("fixture must contain one located diagnostic");
         assert!(
@@ -1034,6 +1179,7 @@ mod tests {
                 &root_uri,
                 &format!("{root_uri}/missing.bsl")
             )
+            .expect("different document is not a projection error")
             .is_none()
         );
 
@@ -1048,6 +1194,7 @@ mod tests {
                 &root_uri,
                 &document_uri
             )
+            .expect("missing source is not a projection error")
             .is_none()
         );
 
@@ -1066,6 +1213,7 @@ mod tests {
                 &root_uri,
                 &document_uri
             )
+            .expect("absent source is not a projection error")
             .is_none()
         );
     }

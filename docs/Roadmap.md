@@ -7878,6 +7878,192 @@ Suggested planning commit message:
 Plan Sprint 33 AI Chat and Context Panel
 ```
 
+#### Sprint 34 EDT Integration Prototype execution plan
+
+Sprint 34 is planned from committed Sprint 33 review head `19ba2671`. The
+[Sprint 33 integration review](reviews/sprint-33-ai-chat-context-panel.md)
+records `pass with non-blocking follow-ups`, Sprint 33 is `completed`, and
+Sprint 34 — EDT Integration Prototype is the unique `next` target.
+
+The mandatory data and testability gate is satisfied. The repository contains
+the real `OneAgent_EDTproject` configuration with the exact
+`com._1c.g5.v8.dt.core.V8ConfigurationNature`, the public `oneagent-mcp`
+newline-framed stdio process and seven-tool catalog, deterministic Runtime
+fixtures, and the completed VS Code process-lifecycle precedent. The authorized
+local environment provides 1C:EDT 2026.1.2.2 / application 1.35.2 on Eclipse
+4.30, the Eclipse 2025-12 plug-in development product, Maven 3.9.16, arm64 JDK
+25 for Maven and headless Equinox, a verified portable x86_64 JDK 17 for the
+x86_64 EDT host, and a read-only p2 pool. The official 1C plug-in example at
+commit `ae9c1f06a01de4f3ee7fe32bf35e284f25e3915f` establishes the Tycho,
+OSGi, feature, repository, command, menu, Java 25, and Eclipse 2025-12
+development conventions. Task 1 must preserve immutable upstream and local
+provenance and resolve exact build and host commands before production work.
+
+The smallest coherent prototype is one native EDT command over the public
+Eclipse workbench and resource APIs. It selects exactly one local EDT
+configuration project, starts the configured `oneagent-mcp` executable with
+that project as its working directory, performs a bounded compatibility probe,
+reports one stable visible outcome, and releases every owned process, stream,
+job, listener, and UI resource. The first slice proves project recognition,
+Runtime process integration, packaging, installation, and user-visible host
+behavior without moving semantic authority or source parsing into Java.
+Investigation and ADR acceptance must fix the exact command, configuration,
+protocol, timeout, concurrency, cancellation, error, lifecycle, installation,
+and compatibility contracts before implementation.
+
+Included scope is pinned official 1C and Eclipse evidence; one accepted ADR;
+an internal dependency-free Java Runtime probe with strict bounded input/output
+and deterministic cleanup; one Eclipse command enabled only for one selected
+local accessible EDT configuration project; stable configuration and redacted
+status/error presentation; activation, repeat invocation, cancellation,
+shutdown, and deactivation ownership; Tycho bundle, feature, p2 repository,
+unit, process, PDE-host, and authorized EDT-host evidence; macOS/Windows build
+coverage that needs no repository secret; local authenticated/private-p2 and
+read-only-pool instructions kept outside tracked credentials; package,
+dependency, license, scope, path, secret, generated-artifact, and current-state
+documentation evidence.
+
+Excluded scope is a new Rust or MCP capability; parsing or semantic inference
+inside Java; direct dependency on non-public EDT implementation API; BSL editor
+navigation, symbol search, Context UI, chat, diagnostics, edits, LSP4E, file
+watching, persistence, automatic startup, multiple simultaneous Runtime
+processes, remote or virtual workspaces, multi-project aggregation, Marketplace
+publication, signing, telemetry, bundled JRE or Runtime binary, stored ITS
+credentials, and broad quality, performance, compatibility, or security claims.
+
+The existing Investigation, Architecture, IDE Extension, Runtime/MCP,
+Implementation, and Review profiles, templates, and workflows express every
+planned evidence, dependency, ownership, validation, and reporting contract.
+No reusable Codex Framework gap exists and no framework change or post-sprint
+framework audit is planned.
+
+Tasks execute in this exact dependency order:
+
+| Order | Task-owned outcome | Profile / Template | Required committed prerequisite | Validation additions | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Pinned EDT/PDE/p2/JDK/Maven/API, repository-boundary, workflow, compatibility, and executable-oracle investigation. | Investigation / Investigation | Sprint 34 planning commit. | Upstream/local provenance, bundle/API/nature/process/toolchain/host/inventory/link gates. | `Investigate Sprint 34 EDT integration prototype` |
+| 2 | Accepted ADR-0056 for the bounded native EDT Runtime-probe workflow. | Architecture / Architecture | Task 1 with no blocking unknown or dependency. | ADR/evidence/API/dependency/scope/consumer/link consistency. | `Define Sprint 34 EDT integration prototype` |
+| 3 | Dependency-free bounded Java Runtime probe client and real `oneagent-mcp` process evidence. | IDE Extension / IDE Extension | Task 2 and accepted ADR-0056. | Java protocol/parser/bounds/timeout/cancellation/process/repetition matrices plus unchanged MCP catalog. | `Implement Sprint 34 EDT Runtime client` |
+| 4 | Native Eclipse command, EDT project gate, configuration, UI result, background execution, and lifecycle ownership. | IDE Extension / IDE Extension | Task 3. | Command/selection/configuration/job/UI/error/cancellation/disposal matrices and PDE host checks. | `Implement Sprint 34 EDT command lifecycle` |
+| 5 | Installable OSGi bundle, feature, p2 repository, and authorized EDT 2026.1 host proof. | IDE Extension / IDE Extension | Task 4. | Tycho clean build, repository inventory, install/uninstall, EDT-host positive/negative/repeated workflow evidence. | `Package Sprint 34 EDT integration prototype` |
+| 6 | Complete cross-platform build, compatibility, package, security, scope, and current-state evidence. | IDE Extension / IDE Extension | Task 5. | Maven/Java/Host/package/CI/Rust compatibility plus dependency/license/secret/path/generated/link audits. | `Complete Sprint 34 EDT integration evidence` |
+| 7 | Fresh-context independent integration review, primary reconciliation, artifact consistency, Sprint 35 hand-off, and conditional Sprint 33 suite retirement. | Review / Review | Task 6 and all validation. | Reviewer and primary complete matrices plus same-reviewer consistency check. | `Complete Sprint 34 EDT integration prototype review` |
+
+```text
+Committed Sprint 34 planning baseline
+    -> Task 1 EDT integration investigation
+    -> Task 2 accepted ADR-0056
+    -> Task 3 bounded dependency-free Runtime probe
+    -> Task 4 EDT command and lifecycle integration
+    -> Task 5 feature, p2 repository, and EDT host proof
+    -> Task 6 complete evidence and current-state docs
+    -> Task 7 integration review and conditional Sprint 33 suite retirement
+    -> Sprint 35 planning eligibility
+```
+
+Task 1 creates only
+`docs/architecture/edt-integration-prototype-investigation.md` and changes the
+Sprint 34 state to `active`. It records exact official source revisions,
+installed product and bundle versions, Java architecture requirements, p2 and
+authentication boundaries, public Eclipse/EDT API choices, EDT project
+identity, existing Runtime protocol and lifecycle behavior, candidate user
+workflow, dependencies, configuration, packaging, CI and local-host oracles,
+positive and negative cases, and every decision ADR-0056 must make. It selects
+no architecture, changes no production behavior, writes no credential, and
+does not modify the authorized p2 pool or application installations.
+
+Task 2 creates `docs/adr/0056-edt-integration-prototype.md` and synchronizes
+only planning-level architecture text required by the decision. It fixes the
+plugin and Runtime ownership boundary, exact project eligibility and selection,
+configuration, process working directory, request and response contract,
+bounds, timeout, concurrency, cancellation, redacted errors, background/UI
+threading, activation and disposal, dependency policy, bundle/feature/repository
+shape, Java execution environments, host compatibility, deterministic test
+seams, first-slice workflow, rejected alternatives, migration, and deferred
+scope. It implements no production behavior.
+
+Task 3 implements only the accepted dependency-free Java Runtime probe. It
+owns one process and its streams, sends the exact bounded newline-framed
+request, validates the exact compatible response projection, rejects malformed,
+duplicated, missing, oversized, timed-out, cancelled, and incompatible input,
+redacts external failures, and terminates cleanly. Pure unit tests and a real
+`oneagent-mcp` fixture prove positive, negative, repeated, EOF, timeout,
+cancellation, exit, stderr, and cleanup behavior. It adds no Eclipse UI,
+project selection, EDT API dependency, semantic tool, or production dependency.
+
+Task 4 composes the committed client into one native Eclipse command. It uses
+only accepted public workbench/resource/runtime APIs, enables the command only
+for exactly one eligible local accessible EDT configuration project, resolves
+and validates the configured executable, runs blocking work in an owned job,
+publishes one stable user-visible result on the UI thread, serializes or rejects
+repeat invocation as accepted, and cancels/disposes all owned state on
+configuration change and bundle stop. It does not add semantic UI, editor
+integration, persistent connection, or package/repository completion.
+
+Task 5 creates the accepted feature and p2 repository and proves that the
+artifact can be installed into and removed from a disposable EDT 2026.1 test
+profile without modifying the authorized application or p2 pool. It verifies
+the exact bundle imports, Java execution environment, command contribution,
+feature/category inventory, deterministic build outputs, positive and negative
+command behavior, repeated activation/invocation, shutdown, and cleanup. It
+does not publish externally, bundle credentials/JRE/Runtime, or broaden the
+first-slice workflow.
+
+Task 6 freezes the Maven/Tycho inputs and validation scripts, adds the bounded
+macOS and Windows CI build/test/package jobs that do not require ITS secrets,
+records optional authenticated official-p2 and local read-only-pool setup,
+synchronizes README, Architecture, Semantic Model, Roadmap, dependency/license
+and provenance evidence, and reruns the full extension and canonical Rust
+compatibility gates. It changes no accepted production behavior.
+
+Task 7 reviews the exact planning-through-Task-6 range and creates
+`docs/reviews/sprint-34-edt-integration-prototype.md` only for `pass` or `pass
+with non-blocking follow-ups` after all focused and complete validation
+succeeds. That decision transitions Sprint 34 to `completed`, makes Sprint 35
+External AI Client Compatibility the unique `next` target, and atomically
+retires the exact Sprint 33 prompt suite in the same review commit. The review
+never silently fixes code. An inventory mismatch, endangered untracked file,
+reviewer mutation or incompleteness, unresolved evidence disagreement, failed
+artifact consistency, or blocking finding stops before the final mutation.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-33-ai-chat-context-panel/`, with these nine tracked
+files and an identical filesystem inventory at planning time:
+
+- `00-sprint-33-execution-loop.md`
+- `01-investigate-ai-chat-context-panel.md`
+- `02-define-ai-chat-context-panel.md`
+- `03-implement-context-runtime-client.md`
+- `04-implement-context-panel.md`
+- `05-implement-ai-chat-participant.md`
+- `06-integrate-chat-context-extension.md`
+- `07-complete-chat-context-evidence.md`
+- `08-sprint-33-integration-review.md`
+
+Sprint 34 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit, or
+review failure. Do not skip, reorder, combine, or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-6, accepted ADR-0056, one
+dependency-free bounded Runtime probe, exact EDT-project and configuration
+gates, deterministic process/UI/lifecycle behavior, installable feature and p2
+repository, public CI evidence, authorized EDT 2026.1 host evidence, preserved
+Rust/MCP semantic authority and existing client behavior, explicit deferred
+scope, the complete repository gate, and a non-blocking Task 7 decision. A
+blocked review keeps Sprint 34 incomplete, preserves the Sprint 33 suite, and
+leaves Sprint 35 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, exact Sprint 33 suite inventory, `git diff --check`, and
+unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 34 EDT Integration Prototype
+```
+
 The v0.6 release integration review follows Sprint 35.
 
 #### v0.7 — Intelligence

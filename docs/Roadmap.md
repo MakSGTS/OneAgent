@@ -8103,6 +8103,49 @@ synchronizes README, Architecture, Semantic Model, Roadmap, dependency/license
 and provenance evidence, and reruns the full extension and canonical Rust
 compatibility gates. It changes no accepted production behavior.
 
+Task 6 checks in the official script-only Maven Wrapper 3.3.4 configuration for
+Maven 3.9.16 with the distribution SHA-256
+`5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce`.
+The `edt` CI job runs on `macos-14` and `windows-latest`, provisions Temurin JDK
+25, builds the public `oneagent-mcp`, supplies the checked-in supported fixture,
+runs the complete Tycho UI and real-process suite without a skipped gate, and
+executes the repository-owned Java p2 auditor. The auditor requires exactly
+seven repository files, four content units, the frozen feature and bundle,
+JavaSE-17 class major 61, the exact public import and extension-point sets, and
+no test, Runtime, JRE, JavaFX, native, credential, private-p2, or personal-path
+content. Existing Rust CI also runs strict Rustdoc on both platforms.
+
+The EDT README freezes the supported user journey, Maven/JDK/Tycho/Eclipse/EDT
+and architecture matrix, clean build and package commands, x86_64 JDK 17 plus
+OpenJFX host boundary, dependency/provenance/license inventory, and deferred
+scope. It documents the official EDT p2 endpoint only as an opt-in untracked
+Maven settings profile whose matching server ID reads username/password
+placeholders from environment variables; CI and the public target never enable
+it. The installed p2 pool workflow is inventory-only because the pool has no
+repository-level metadata; publication, symlinks, target resolution, and every
+write remain forbidden.
+
+Task 6 local verification uses the pinned wrapper on arm64 JDK 25. Two clean
+host runs each pass 38/38 tests with zero failures, errors, or skips. Both
+repositories have the same seven-file inventory; feature SHA-256 remains
+`9078608b97dc1a8c04ca0bacdc77a23948668a621e051c7924281923bde1015a`
+and bundle SHA-256 remains
+`04b6199901a9b66bfd5f80e89e119ab089f2e890465520db80aa57afa65d17b3`.
+The four metadata representations agree after normalizing only their generated
+`p2.timestamp`, and `p2.index` agrees after removing only its generated comment.
+The Java 17 package auditor reports `PASS`. Focused public MCP semantic/process
+and LSP process targets pass 6, 9, and 7 tests. VS Code compatibility passes
+typecheck, 62 unit tests, every pinned Extension Host profile, two public
+Runtime process tests, the 12-file package inventory, two equal 14-file VSIX
+archives, and the 43-file/18-license-group/3-document audit. CI YAML parsing and
+the exact macOS/Windows/JDK/real-process/package matrix audit pass. The canonical
+Rust workspace format, check, test, strict Clippy, and strict Rustdoc gates pass.
+The only PDE shutdown warning remains the platform-owned URI-scheme job; no
+OneAgent resource is reported. Task 6 changes no host artifact, production
+source, manifest, target, feature/category definition, protocol, catalog, or
+other client behavior, so the authorized EDT evidence from Task 5 remains the
+applicable local host result.
+
 Task 7 reviews the exact planning-through-Task-6 range and creates
 `docs/reviews/sprint-34-edt-integration-prototype.md` only for `pass` or `pass
 with non-blocking follow-ups` after all focused and complete validation

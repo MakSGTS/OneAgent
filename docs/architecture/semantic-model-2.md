@@ -363,7 +363,19 @@ also records `pass`. Sprint 28 is completed with `pass with non-blocking
 follow-ups`; Sprints 29–32 are completed, and the subsequent
 [Sprint 33 AI Chat and Context Panel review](../reviews/sprint-33-ai-chat-context-panel.md)
 records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint
-34 EDT Integration Prototype is the unique next target.
+34 EDT Integration Prototype is active pending its integration review.
+
+ADR-0056 governs the implemented native EDT compatibility-probe adapter without
+changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
+one exact local EDT configuration project through public Eclipse APIs and sends
+only the closed MCP 2026-07-28 `server/discover` request to a fresh
+`oneagent-mcp` process. It does not read source artifacts, call a semantic tool,
+project graph facts, import the Rust EDT adapter, or create another Workspace,
+Graph, Analysis, Context, Tool Policy, MCP, LSP, or Coverage authority. Its
+macOS/Windows build matrix, real-process/PDE tests, exact p2 package audit, and
+authorized local EDT 2026.1 workflow therefore provide IDE compatibility
+evidence while preserving the exact seven-tool catalog and all graph-domain and
+EDT Coverage counts. Semantic EDT UI and broader IDE behavior remain deferred.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service

@@ -85,6 +85,13 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      request-selected model exchange. Its editor adapter does not own MCP
      semantics, Runtime installation, workspace discovery, provider secrets, or
      graph behavior.
+   - `extensions/edt` is the bounded native Eclipse/1C:EDT compatibility client.
+     It recognizes one selected local configuration project through public
+     Eclipse APIs and an exact nature string, validates one executable setting,
+     and owns one background `server/discover` probe against a fresh
+     `oneagent-mcp` child. It packages one JavaSE-17 bundle in one feature and p2
+     repository without proprietary EDT imports, semantic behavior, a bundled
+     Runtime/JRE, credentials, or a second protocol owner.
 
 `SemanticGraph` is the canonical semantic authority. Adapters may observe source
 formats and contribute provenance-backed facts, but source-specific identities
@@ -113,16 +120,18 @@ The roadmap assigns future boundaries explicitly:
   records `pass with non-blocking follow-up`. The
   [Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
   records `pass with non-blocking follow-ups`. Sprint 31 Navigation and Symbol
-  Search and Sprint 32 LSP Adapter are completed. Sprint 33 AI Chat and Context
-  Panel implementation and production evidence are present and remain active
-  pending integration review.
+  Search, Sprint 32 LSP Adapter, and Sprint 33 AI Chat and Context Panel are
+  completed. Sprint 34 EDT Integration Prototype implementation, package, and
+  authorized local host evidence are present and remain active pending
+  integration review.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
   editor-neutral LSP workspace-symbol and pull-diagnostic slice is implemented
   in Sprint 32. Explicit semantic Context inspection and bounded request-selected
-  chat are implemented in Sprint 33. Definition/reference providers,
-  diagnostics UI, model tools or edits, EDT IDE integration, and external-client
+  chat are implemented in Sprint 33. The bounded native EDT compatibility probe
+  is implemented in Sprint 34. Definition/reference providers, diagnostics UI,
+  model tools or edits, semantic EDT IDE workflows, and external-client
   compatibility remain later work.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
@@ -379,8 +388,46 @@ output at 65,536 bytes, and owns cancellation plus one concurrent request. The
 extension retains no conversation history, hidden Context, provider identity,
 credential, or source bytes. Model tools and edits, source inference, automatic
 Context collection, Runtime provider wiring, persistence, webview scripts,
-remote/web/multi-root operation, EDT integration, and diagnostics UI remain
-deferred.
+remote/web/multi-root operation and diagnostics UI remain deferred.
+
+## Implemented EDT integration prototype boundary
+
+[ADR-0056](adr/0056-edt-integration-prototype.md) governs the additive Sprint 34
+prototype. The `extensions/edt` Tycho 5.0.2 reactor builds against the frozen
+public Eclipse 2023-12 target with Maven 3.9.16 on JDK 25 and compiles the
+production bundle for Java 17. The bundle imports only public Eclipse and OSGi
+packages, exports no package, and treats the exact EDT configuration nature as
+data. Authenticated 1C p2 access and the installed p2 pool are not production or
+CI inputs.
+
+The public handler accepts exactly one selected open, accessible, non-linked,
+non-virtual local project with that nature. The instance preference supplies one
+bounded bare executable token or absolute executable path. One generation-owned
+Eclipse Job launches that executable directly with the project directory as its
+working directory, sends the exact newline-framed MCP 2026-07-28
+`server/discover` request, accepts only the closed OneAgent 0.1.0 compatibility
+response, and publishes one fixed success or redacted failure on the UI thread.
+Every path owns and bounds the child, streams, readers, stderr, deadline,
+cancellation, job, and stale UI callback; preference replacement, cancellation,
+bundle stop, and host shutdown join or suppress all owned work.
+
+The distributable p2 repository contains exactly one feature and one production
+bundle under the `OneAgent` category. It contains no test fragment, fixture,
+Runtime, JRE, JavaFX, native executable, credential, private-p2 metadata, or
+personal path. Repository-owned macOS and Windows CI builds the real Runtime,
+runs the complete 38-test Tycho/PDE/real-process matrix, and audits the exact p2
+inventory without an ITS secret. Authorized local x86_64 EDT 2026.1 evidence on
+JDK 17 and matching OpenJFX proves positive, repeated, invalid-configuration,
+timeout, cancellation, stop, install, uninstall, and clean-host outcomes while
+leaving application bundles, signatures, and the read-only p2 pool unchanged.
+
+This boundary proves host compatibility only. Java does not read EDT sources,
+call semantic tools, duplicate Workspace or protocol authority, or alter the
+existing seven-tool MCP catalog, LSP process, VS Code client, Runtime services,
+Graph, adapters, or Coverage. Semantic EDT UI, navigation, Context/chat,
+diagnostics, edits, proprietary EDT services, remote/multi-project support,
+automatic Runtime lifecycle, publication, signing, telemetry, and bundled
+toolchains remain deferred.
 
 ## Accepted OpenAI-compatible provider boundary
 

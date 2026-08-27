@@ -39,6 +39,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
   vscode:
     strategy:
       matrix:
@@ -84,3 +89,37 @@ jobs:
 
       - name: Audit extension scope and dependencies
         run: pnpm --dir extensions/vscode run audit
+
+  edt:
+    strategy:
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+          cache-dependency-path: extensions/edt/pom.xml
+
+      - name: Build public Runtime
+        run: cargo build -p oneagent-runtime --bin oneagent-mcp
+
+      - name: Verify EDT extension and real Runtime process
+        shell: bash
+        working-directory: extensions/edt
+        env:
+          ONEAGENT_MCP_EXECUTABLE: ${{ format('{0}/target/debug/oneagent-mcp{1}', github.workspace, runner.os == 'Windows' && '.exe' || '') }}
+          ONEAGENT_MCP_FIXTURE: ${{ format('{0}/apps/runtime/tests/fixtures/workspace_service/edt', github.workspace) }}
+        run: ./mvnw --batch-mode --no-transfer-progress clean verify
+
+      - name: Audit EDT p2 package
+        shell: bash
+        working-directory: extensions/edt
+        run: java scripts/VerifyPackage.java repositories/com.oneagent.edt.repository/target/repository

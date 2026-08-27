@@ -7294,6 +7294,17 @@ refactoring; and broad performance/security claims.
 | 6 | Complete navigation and search evidence. | IDE Extension / IDE Extension | Cross-platform complete Rust/extension/package matrix, compatibility/dependency/scope audits, and synchronized current-state docs. | Task 5. | `Complete Sprint 31 navigation and search evidence` |
 | 7 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 32 hand-off, and conditional Sprint 30 suite retirement. | Task 6 and all validation. | `Complete Sprint 31 navigation and symbol search review` |
 
+###### Sprint 31 investigation evidence
+
+Task 1 is committed from planning baseline `6ac7a073`. The
+[navigation and symbol search investigation](architecture/navigation-symbol-search-investigation.md)
+pins the accepted VS Code 1.134.0 authority, inventories current Common,
+BSL, Graph, adapter, Workspace, MCP, Tool Policy, Runtime, and extension
+location/search ownership, and records bounded producer, protocol, UI, path,
+ordering, cancellation, and deterministic evidence candidates for ADR-0053.
+No production behavior or dependency changes in this task. Sprint 31 is now
+`active`; exact contract selection remains owned by Task 2.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused
 Common/BSL/Graph/adapter/Workspace tests and the canonical Rust workspace gate.

@@ -8019,6 +8019,20 @@ redacts external failures, and terminates cleanly. Pure unit tests and a real
 cancellation, exit, stderr, and cleanup behavior. It adds no Eclipse UI,
 project selection, EDT API dependency, semantic tool, or production dependency.
 
+Task 3 establishes the public Eclipse 2023-12 target, JavaSE-17 bundle, and
+JUnit test fragment in the `extensions/edt` Tycho 5.0.2 reactor. The
+dependency-free Runtime probe sends the exact `server/discover` request,
+accepts only the closed ADR-0056 response, enforces strict UTF-8 JSON with a
+128-level depth bound, a 1,048,576-byte frame, 4,096-byte stderr capture,
+five-second response timeout, bounded termination escalation, cancellation,
+and redacted failures. Host Tycho verification on Maven/JDK 25 passes 15 pure
+tests and one non-skipped real-process test that launches the repository
+`oneagent-mcp` twice from the explicit supported fixture; the focused Rust
+public-process compatibility test passes 1/1 and reasserts the exact unchanged
+seven-tool catalog. The packaged production bundle contains Java 17 bytecode
+and no production dependency, command, UI, preference, feature, repository,
+private-p2 requirement, or Rust/MCP behavior change.
+
 Task 4 composes the committed client into one native Eclipse command. It uses
 only accepted public workbench/resource/runtime APIs, enables the command only
 for exactly one eligible local accessible EDT configuration project, resolves

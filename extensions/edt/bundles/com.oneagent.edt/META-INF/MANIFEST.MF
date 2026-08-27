@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: OneAgent EDT Integration
+Bundle-SymbolicName: com.oneagent.edt;singleton:=true
+Bundle-Version: 0.1.0.qualifier
+Bundle-Vendor: OneAgent
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Bundle-ActivationPolicy: lazy
+Automatic-Module-Name: com.oneagent.edt

@@ -7073,7 +7073,7 @@ documentation follow-up.
 | Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | completed |
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
-| Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | next |
+| Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | active |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | planned |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
@@ -7304,6 +7304,20 @@ location/search ownership, and records bounded producer, protocol, UI, path,
 ordering, cancellation, and deterministic evidence candidates for ADR-0053.
 No production behavior or dependency changes in this task. Sprint 31 is now
 `active`; exact contract selection remains owned by Task 2.
+
+###### Sprint 31 architecture decision
+
+Task 2 accepts [ADR-0053](adr/0053-navigation-symbol-search.md). Common owns
+bounded typed source paths and one-based half-open spans; Graph provenance owns
+optional structured location evidence; the immutable Workspace retains its
+startup root; EDT and Designer XML emit the accepted Module, Procedure,
+Function, and EDT Query slice; and Runtime owns a confined deterministic
+`oneagent.symbols` projection behind the seventh read-only Tool Policy rule.
+The connected desktop extension owns one explicit-demand Quick Pick command,
+strict result/path validation, sequential stale-result suppression, and safe
+selection/reveal. Existing graph identities and six MCP tool behaviors remain;
+the exact catalog addition and repository consumers migrate in Task 4. No new
+production dependency is accepted.
 
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused

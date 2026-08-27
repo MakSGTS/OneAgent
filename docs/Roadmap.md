@@ -7785,6 +7785,20 @@ process 9, extension unit 38, extension process 2, and pinned Host 16 checks
 pass. Sprint 33 is now `active`; exact identifiers, bounds, token admission,
 stream outcomes, invalidation, and failure precedence remain owned by Task 2.
 
+Task 2 accepts [ADR-0055](adr/0055-ai-chat-context-panel.md). The accepted
+contract adds `oneagent.inspectContext`, one non-default `oneagent.chat`
+participant, and one `oneagent.contextPanel` over stable pinned VS Code 1.134.0
+APIs. Context selection uses exact Symbols identity and fixed `both`/depth 2/32
+candidate/16,384-byte Runtime inputs; one generic FIFO preserves the current
+single pending request. The panel is static, script/form/command/resource-free,
+strict-CSP HTML with complete escaping, and closing it clears model-eligible
+Context. Chat sends exactly the visible rendered Context and current 1-8,192
+byte prompt as two messages to the request-selected model after a 32,768-byte
+and model-token admission gate; it consumes escaped text only, caps raw output
+at 65,536 bytes, and owns cancellation and one-request concurrency. No history,
+references, tools, edits, source reads, hidden Context, Runtime provider wiring,
+dependency, or Rust/MCP change is accepted.
+
 The accepted planning baseline is the commit with subject
 `Plan Sprint 33 AI Chat and Context Panel`. Sprint 33 remains `next` during
 planning, becomes `active` when Task 1 starts, and may become `completed` only

@@ -8042,6 +8042,27 @@ repeat invocation as accepted, and cancels/disposes all owned state on
 configuration change and bundle stop. It does not add semantic UI, editor
 integration, persistent connection, or package/repository completion.
 
+Task 4 registers `com.oneagent.edt.commands.probeRuntime`, the `OneAgent`
+command category and preference page, and the instance-scoped
+`runtimeExecutable` setting with default `oneagent-mcp`. Public Eclipse
+adaptation accepts exactly one open, accessible, non-linked, non-virtual local
+project with the exact EDT configuration nature and a readable absolute file
+location; executable validation accepts one bounded bare token or one
+normalized absolute readable executable file. One generation-owned Eclipse
+`Job` runs the Runtime client off the Display thread, forwards external job,
+preference, and bundle cancellation, rejects concurrent invocation, joins on
+disposal, and suppresses stale UI callbacks. Fixed information/error dialogs
+contain no project, path, command, payload, stderr, or exception value. Host
+Tycho UI verification on JDK 25 with the macOS main-thread VM gate passes 37/37
+tests with zero skips: 17 Task 4 pure command/lifecycle tests, four PDE-host
+registry/UI/job/activation tests, the 15 existing pure Runtime tests, and one
+real-process test that probes `oneagent-mcp` twice. The focused Rust public MCP
+process regression passes 1/1. The only host shutdown warning names the
+platform-owned `org.eclipse.urischeme.AutoRegisterSchemeHandlersJob`; no
+OneAgent job is reported. The bundle remains Java 17, uses only accepted public
+Eclipse and OSGi packages, and adds no proprietary EDT API, semantic behavior,
+feature, repository, private-p2 requirement, or Rust/MCP change.
+
 Task 5 creates the accepted feature and p2 repository and proves that the
 artifact can be installed into and removed from a disposable EDT 2026.1 test
 profile without modifying the authorized application or p2 pool. It verifies

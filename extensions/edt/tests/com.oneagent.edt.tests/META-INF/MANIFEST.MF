@@ -6,5 +6,14 @@ Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: OneAgent
 Fragment-Host: com.oneagent.edt;bundle-version="[0.1.0,0.2.0)"
 Require-Bundle: org.junit;bundle-version="[4.13.0,5.0.0)"
+Import-Package: org.eclipse.core.commands,
+ org.eclipse.core.runtime,
+ org.eclipse.core.runtime.preferences,
+ org.eclipse.jface.viewers,
+ org.eclipse.swt.widgets,
+ org.eclipse.ui;ui.workbench=split,
+ org.eclipse.ui.commands,
+ org.osgi.framework,
+ org.osgi.service.prefs
 Bundle-RequiredExecutionEnvironment: JavaSE-17
 Automatic-Module-Name: com.oneagent.edt.tests

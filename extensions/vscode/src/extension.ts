@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import {
   AiChatController,
+  linkCancellationSource,
   type CancellationSource,
   type CancellationToken,
   type ChatModel,
@@ -600,15 +601,11 @@ function toMarkdownString(value: SafeMarkdown): vscode.MarkdownString {
 
 function linkedCancellationSource(parent: CancellationToken): CancellationSource {
   const source = new vscode.CancellationTokenSource();
-  const subscription = (parent as vscode.CancellationToken).onCancellationRequested(() => source.cancel());
-  return {
+  return linkCancellationSource(parent, {
     token: source.token,
     cancel: () => source.cancel(),
-    dispose: () => {
-      subscription.dispose();
-      source.dispose();
-    },
-  };
+    dispose: () => source.dispose(),
+  });
 }
 
 function isModelUnavailableError(error: unknown): boolean {

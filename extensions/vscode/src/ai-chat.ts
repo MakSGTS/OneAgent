@@ -33,6 +33,24 @@ export interface CancellationSource {
   dispose(): void;
 }
 
+export function linkCancellationSource(
+  parent: CancellationToken,
+  source: CancellationSource,
+): CancellationSource {
+  const subscription = parent.onCancellationRequested(() => source.cancel());
+  if (parent.isCancellationRequested) {
+    source.cancel();
+  }
+  return {
+    token: source.token,
+    cancel: () => source.cancel(),
+    dispose: () => {
+      subscription.dispose();
+      source.dispose();
+    },
+  };
+}
+
 export interface ModelResponse {
   readonly text: AsyncIterable<string>;
 }

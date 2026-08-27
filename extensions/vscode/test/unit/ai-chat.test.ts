@@ -9,6 +9,7 @@ import {
   MAX_CHAT_PROMPT_BYTES,
   buildContextMessage,
   escapeMarkdownText,
+  linkCancellationSource,
   type CancellationSource,
   type CancellationToken,
   type ChatModel,
@@ -66,6 +67,21 @@ class TestCancellationSource implements CancellationSource {
 
   public get isDisposed(): boolean {
     return this.disposed;
+  }
+}
+
+class DeferredAlreadyCancelledToken implements CancellationToken {
+  private readonly listeners = new Set<() => void>();
+
+  public readonly isCancellationRequested = true;
+
+  public onCancellationRequested(listener: () => void): Disposable {
+    this.listeners.add(listener);
+    return { dispose: () => this.listeners.delete(listener) };
+  }
+
+  public get listenerCount(): number {
+    return this.listeners.size;
   }
 }
 
@@ -148,7 +164,10 @@ function request(model: ChatModel, overrides: Partial<ChatRequest> = {}): ChatRe
   };
 }
 
-function harness(selected: ContextResult | undefined = context()): {
+function harness(
+  selected: ContextResult | undefined = context(),
+  cancellationFactory?: (parent: CancellationToken) => CancellationSource,
+): {
   readonly controller: AiChatController;
   readonly sources: TestCancellationSource[];
   setConnected(value: boolean): void;
@@ -161,11 +180,11 @@ function harness(selected: ContextResult | undefined = context()): {
     isConnected: () => connected,
     selectedContext: () => selectedContext,
     createUserMessage: (content) => ({ role: "user", content }),
-    createCancellationSource: (parent) => {
+    createCancellationSource: cancellationFactory ?? ((parent) => {
       const source = new TestCancellationSource(parent);
       sources.push(source);
       return source;
-    },
+    }),
     isModelUnavailableError: (error) =>
       error instanceof Error && ["NoPermissions", "Blocked", "NotFound"].includes(error.name),
   });
@@ -450,6 +469,27 @@ test("cancellation is silent before model use and during token, request, and str
   releaseStream();
   assert.deepEqual(await streaming, { category: "cancelled" });
   assert.deepEqual(streamingSink.values.map((value) => value.value), ["first"]);
+});
+
+test("production cancellation adapter synchronously inherits an already-cancelled parent", async () => {
+  const parent = new DeferredAlreadyCancelledToken();
+  const source = new TestCancellationSource();
+  const { controller } = harness(
+    context(),
+    (token) => linkCancellationSource(token, source),
+  );
+  const model = new FakeModel();
+  const sink = new Sink();
+
+  assert.deepEqual(await controller.handle(request(model), sink, parent), {
+    category: "cancelled",
+  });
+  assert.equal(source.cancelCalls, 1);
+  assert.equal(source.isDisposed, true);
+  assert.equal(parent.listenerCount, 0);
+  assert.equal(model.counted.length, 0);
+  assert.equal(model.requests.length, 0);
+  assert.deepEqual(sink.values, []);
 });
 
 test("disposal cancels active work and repeated requests do not retain the model", async () => {

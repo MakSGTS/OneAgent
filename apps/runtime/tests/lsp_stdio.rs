@@ -139,7 +139,12 @@ async fn public_lsp_transport_frames_lifecycle_and_fragmentation_repeatably() {
             json!({
                 "positionEncoding": "utf-16",
                 "textDocumentSync": 0,
-                "workspaceSymbolProvider": true
+                "workspaceSymbolProvider": true,
+                "diagnosticProvider": {
+                    "identifier": "oneagent",
+                    "interFileDependencies": true,
+                    "workspaceDiagnostics": false
+                }
             })
         );
         assert_eq!(

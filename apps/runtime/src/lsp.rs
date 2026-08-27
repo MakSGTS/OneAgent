@@ -5,7 +5,7 @@ use std::fmt;
 use std::future::Future;
 use std::path::Path;
 
-use oneagent_graph::{GraphNode, NodeKind};
+use oneagent_graph::{GraphNode, NodeKind, SemanticDiagnostic, SemanticDiagnosticSeverity};
 use oneagent_protocol::{
     LspCapabilities, LspDispatchOutcome, LspExitStatus, LspHandler, LspHandlerError, LspServer,
     MAX_MESSAGE_BYTES, encode_lsp_response,
@@ -22,6 +22,7 @@ const READ_SCRATCH_BYTES: usize = 8_192;
 const HEADER_DELIMITER: &[u8] = b"\r\n\r\n";
 const CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
 const MAX_SYMBOL_RESULTS: usize = 100;
+const MAX_DIAGNOSTIC_RESULTS: usize = 100;
 
 /// Successful terminal outcomes for an LSP stdio stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,8 +154,11 @@ impl LspHandler for RuntimeLspHandler {
         project_workspace_symbols(&self.snapshot, &self.root_uri, query)
     }
 
-    fn document_diagnostics(&self, _uri: &str) -> Result<Value, LspHandlerError> {
-        Err(LspHandlerError::Internal)
+    fn document_diagnostics(&self, uri: &str) -> Result<Value, LspHandlerError> {
+        if !valid_document_uri(&self.root_uri, uri) {
+            return Err(LspHandlerError::InvalidParams);
+        }
+        project_document_diagnostics(&self.snapshot, &self.root_uri, uri)
     }
 }
 
@@ -167,7 +171,9 @@ impl LspHandler for RuntimeLspHandler {
 pub fn lsp_server(snapshot: WorkspaceSnapshot) -> Result<LspServer, LspServerConstructionError> {
     let root_uri = workspace_root_uri(snapshot.root_path())?;
     Ok(LspServer::with_capabilities(
-        LspCapabilities::lifecycle_only().with_workspace_symbols(),
+        LspCapabilities::lifecycle_only()
+            .with_workspace_symbols()
+            .with_diagnostics(),
         RuntimeLspHandler { snapshot, root_uri },
     ))
 }
@@ -329,6 +335,162 @@ fn lsp_position(value: &Value) -> Option<Value> {
     u32::try_from(line).ok()?;
     u32::try_from(character).ok()?;
     Some(serde_json::json!({"line": line, "character": character}))
+}
+
+struct DocumentDiagnostic<'a> {
+    diagnostic: &'a SemanticDiagnostic,
+    range: Value,
+    start: (u64, u64),
+    end: (u64, u64),
+}
+
+fn project_document_diagnostics(
+    snapshot: &WorkspaceSnapshot,
+    root_uri: &str,
+    requested_uri: &str,
+) -> Result<Value, LspHandlerError> {
+    let mut projected = Vec::new();
+    for configuration in snapshot.configurations() {
+        for diagnostic in configuration.diagnostics() {
+            let Some(item) = project_document_diagnostic(
+                snapshot,
+                configuration,
+                diagnostic,
+                root_uri,
+                requested_uri,
+            ) else {
+                continue;
+            };
+            projected.push(item);
+            enforce_diagnostic_result_bound(projected.len())?;
+        }
+    }
+    projected.sort_by(|left, right| {
+        (
+            left.diagnostic,
+            requested_uri,
+            left.start,
+            left.end,
+            left.diagnostic.code().as_str(),
+            left.diagnostic.message(),
+        )
+            .cmp(&(
+                right.diagnostic,
+                requested_uri,
+                right.start,
+                right.end,
+                right.diagnostic.code().as_str(),
+                right.diagnostic.message(),
+            ))
+    });
+    let items = projected
+        .into_iter()
+        .map(|item| {
+            serde_json::json!({
+                "range": item.range,
+                "severity": lsp_diagnostic_severity(item.diagnostic.severity()),
+                "code": item.diagnostic.code().as_str(),
+                "source": "oneagent",
+                "message": item.diagnostic.message()
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({"kind": "full", "items": items}))
+}
+
+fn project_document_diagnostic<'a>(
+    snapshot: &WorkspaceSnapshot,
+    configuration: &WorkspaceConfigurationSnapshot,
+    diagnostic: &'a SemanticDiagnostic,
+    root_uri: &str,
+    requested_uri: &str,
+) -> Option<DocumentDiagnostic<'a>> {
+    let source_node = configuration.graph().node(diagnostic.source_node()?)?;
+    let location = lsp_symbol_location(snapshot, configuration, source_node, root_uri)?;
+    if location.get("uri")?.as_str()? != requested_uri {
+        return None;
+    }
+    let range = location.get("range")?.clone();
+    let start = lsp_position_tuple(range.get("start")?)?;
+    let end = lsp_position_tuple(range.get("end")?)?;
+    Some(DocumentDiagnostic {
+        diagnostic,
+        range,
+        start,
+        end,
+    })
+}
+
+fn lsp_position_tuple(value: &Value) -> Option<(u64, u64)> {
+    Some((
+        value.get("line")?.as_u64()?,
+        value.get("character")?.as_u64()?,
+    ))
+}
+
+const fn lsp_diagnostic_severity(severity: SemanticDiagnosticSeverity) -> u8 {
+    match severity {
+        SemanticDiagnosticSeverity::Error => 1,
+        SemanticDiagnosticSeverity::Warning => 2,
+    }
+}
+
+fn enforce_diagnostic_result_bound(count: usize) -> Result<(), LspHandlerError> {
+    (count <= MAX_DIAGNOSTIC_RESULTS)
+        .then_some(())
+        .ok_or(LspHandlerError::RequestFailed)
+}
+
+fn valid_document_uri(root_uri: &str, uri: &str) -> bool {
+    if uri == root_uri {
+        return true;
+    }
+    let relative = if root_uri.ends_with('/') {
+        uri.strip_prefix(root_uri)
+    } else {
+        uri.strip_prefix(root_uri)
+            .and_then(|relative| relative.strip_prefix('/'))
+    };
+    relative.is_some_and(canonical_relative_uri_path)
+}
+
+fn canonical_relative_uri_path(encoded: &str) -> bool {
+    if encoded.is_empty() {
+        return false;
+    }
+    let bytes = encoded.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let Some(high) = bytes.get(index + 1).and_then(|byte| hex_value(*byte)) else {
+                return false;
+            };
+            let Some(low) = bytes.get(index + 2).and_then(|byte| hex_value(*byte)) else {
+                return false;
+            };
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    let Ok(decoded) = std::str::from_utf8(&decoded) else {
+        return false;
+    };
+    decoded
+        .split('/')
+        .all(|component| !component.is_empty() && component != "." && component != "..")
+        && percent_encode_path(decoded) == encoded
+}
+
+const fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 /// Stateful Content-Length adapter around a transport-independent LSP server.
@@ -537,11 +699,13 @@ mod tests {
     };
     use oneagent_graph::{
         Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
+        SemanticDiagnostic,
     };
     use oneagent_workspace::WorkspaceFormat;
 
     use super::{
-        enforce_symbol_result_bound, lsp_symbol_kind, lsp_symbol_location, workspace_root_uri,
+        enforce_diagnostic_result_bound, enforce_symbol_result_bound, lsp_symbol_kind,
+        lsp_symbol_location, project_document_diagnostic, valid_document_uri, workspace_root_uri,
     };
     use crate::WorkspaceSnapshotBuilder;
 
@@ -694,5 +858,103 @@ mod tests {
             )],
         );
         assert!(lsp_symbol_location(&snapshot, configuration, &escaping, &root_uri).is_none());
+    }
+
+    #[test]
+    fn document_uri_and_diagnostic_bounds_are_canonical_and_exact() {
+        let root = "file:///workspace";
+        for accepted in [
+            "file:///workspace",
+            "file:///workspace/source/Module.bsl",
+            "file:///workspace/space%20%C3%BC.bsl",
+        ] {
+            assert!(valid_document_uri(root, accepted), "{accepted}");
+        }
+        for rejected in [
+            "file:///other/Module.bsl",
+            "file:///workspace-other/Module.bsl",
+            "file:///workspace/../outside.bsl",
+            "file:///workspace/source//Module.bsl",
+            "file:///workspace/source%2FModule.bsl",
+            "file:///workspace/space%20%c3%bc.bsl",
+            "file:///workspace/raw ü.bsl",
+            "file:///workspace/name?query",
+            "file:///workspace/name#fragment",
+        ] {
+            assert!(!valid_document_uri(root, rejected), "{rejected}");
+        }
+        assert!(enforce_diagnostic_result_bound(100).is_ok());
+        assert!(enforce_diagnostic_result_bound(101).is_err());
+    }
+
+    #[test]
+    fn document_diagnostics_require_existing_located_source_nodes() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let configuration = snapshot
+            .configurations()
+            .iter()
+            .find(|configuration| !configuration.diagnostics().is_empty())
+            .expect("EDT fixture must contain diagnostics");
+        let root_uri = workspace_root_uri(snapshot.root_path()).expect("root URI");
+        let document_uri =
+            format!("{root_uri}/edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+        let located = configuration
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| {
+                project_document_diagnostic(
+                    &snapshot,
+                    configuration,
+                    diagnostic,
+                    &root_uri,
+                    &document_uri,
+                )
+                .is_some()
+            })
+            .expect("fixture must contain one located diagnostic");
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                located,
+                &root_uri,
+                &format!("{root_uri}/missing.bsl")
+            )
+            .is_none()
+        );
+
+        let missing_source = located
+            .clone()
+            .with_source_node(EntityId::new("missing.source").expect("missing source ID"));
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                &missing_source,
+                &root_uri,
+                &document_uri
+            )
+            .is_none()
+        );
+
+        let absent_source = SemanticDiagnostic::new(
+            located.code(),
+            located.severity(),
+            located.kind(),
+            located.message(),
+            located.reference().clone(),
+        );
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                &absent_source,
+                &root_uri,
+                &document_uri
+            )
+            .is_none()
+        );
     }
 }

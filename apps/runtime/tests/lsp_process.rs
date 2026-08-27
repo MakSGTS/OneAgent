@@ -114,7 +114,12 @@ async fn public_lsp_process_completes_lifecycle_with_pure_framed_stdout() {
         json!({
             "positionEncoding": "utf-16",
             "textDocumentSync": 0,
-            "workspaceSymbolProvider": true
+            "workspaceSymbolProvider": true,
+            "diagnosticProvider": {
+                "identifier": "oneagent",
+                "interFileDependencies": true,
+                "workspaceDiagnostics": false
+            }
         })
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -204,6 +209,130 @@ async fn public_lsp_process_projects_edt_and_designer_workspace_symbols() {
         responses[4]["error"],
         json!({"code": -32602, "message": "Invalid params"})
     );
+}
+
+#[tokio::test]
+async fn public_lsp_process_pulls_located_diagnostics_and_empty_full_reports() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service");
+    let root_uri = workspace_root_uri(&root).expect("fixture root URI must encode");
+    let edt_uri = format!("{root_uri}/edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let designer_uri =
+        format!("{root_uri}/designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl");
+    let diagnostic_params = |uri: &str| json!({"textDocument": {"uri": uri}});
+    let input = [
+        frame(&initialize(&root_uri)),
+        frame(&notification("initialized")),
+        frame(&request_with_params(
+            2,
+            "textDocument/diagnostic",
+            &diagnostic_params(&edt_uri),
+        )),
+        frame(&request_with_params(
+            3,
+            "textDocument/diagnostic",
+            &json!({
+                "textDocument": {"uri": edt_uri},
+                "identifier": "oneagent",
+                "previousResultId": "ignored"
+            }),
+        )),
+        frame(&request_with_params(
+            4,
+            "textDocument/diagnostic",
+            &diagnostic_params(&designer_uri),
+        )),
+        frame(&request_with_params(
+            5,
+            "textDocument/diagnostic",
+            &diagnostic_params(&format!("{root_uri}/missing.bsl")),
+        )),
+        frame(&request_with_params(
+            6,
+            "textDocument/diagnostic",
+            &diagnostic_params("file:///outside.bsl"),
+        )),
+        frame(&request_with_params(
+            7,
+            "textDocument/diagnostic",
+            &diagnostic_params(&format!("{root_uri}/bad%2fname.bsl")),
+        )),
+        frame(&request(8, "shutdown")),
+        frame(&notification("exit")),
+    ]
+    .concat();
+
+    let first = run_process(&root, &input).await;
+    let repeated = run_process(&root, &input).await;
+    assert!(
+        first.status.success(),
+        "stdout={}, stderr={}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(first.stderr.is_empty());
+    assert_eq!(first.stdout, repeated.stdout);
+    let responses = decode_frames(&first.stdout);
+    assert_eq!(responses.len(), 8);
+
+    assert_diagnostic_responses(&responses);
+}
+
+fn assert_diagnostic_responses(responses: &[Value]) {
+    let edt_report = &responses[1]["result"];
+    assert_eq!(edt_report["kind"], "full");
+    assert!(edt_report.get("resultId").is_none());
+    let diagnostics = edt_report["items"]
+        .as_array()
+        .expect("diagnostic items must be an array");
+    assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic["severity"] == 1
+            && diagnostic["source"] == "oneagent"
+            && diagnostic["range"]["start"]["character"] == 0
+            && diagnostic["range"]["start"] == diagnostic["range"]["end"]
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["code"] == "semantic.reference.unresolved"
+            && diagnostic["message"] == "semantic reference target could not be resolved"
+    }));
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|diagnostic| (
+                diagnostic["code"].as_str().expect("diagnostic code"),
+                diagnostic["message"].as_str().expect("diagnostic message"),
+                diagnostic["range"]["start"]["line"]
+                    .as_u64()
+                    .expect("diagnostic line")
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "semantic.reference.unresolved",
+                "semantic reference target could not be resolved",
+                0
+            ),
+            (
+                "semantic.reference.unresolved",
+                "semantic reference target could not be resolved",
+                0
+            ),
+            (
+                "semantic.reference.unresolved",
+                "query source metadata target could not be resolved",
+                6
+            )
+        ]
+    );
+    assert_eq!(responses[2]["result"], *edt_report);
+    assert_eq!(responses[3]["result"], json!({"kind": "full", "items": []}));
+    assert_eq!(responses[4]["result"], json!({"kind": "full", "items": []}));
+    for response in &responses[5..7] {
+        assert_eq!(
+            response["error"],
+            json!({"code": -32602, "message": "Invalid params"})
+        );
+    }
 }
 
 #[tokio::test]

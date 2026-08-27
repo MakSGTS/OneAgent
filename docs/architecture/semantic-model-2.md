@@ -360,8 +360,9 @@ authority. The subsequent
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; Sprints 29–31 are completed, and Sprint 32 LSP implementation and
-production evidence remain active pending integration review.
+follow-ups`; Sprints 29–32 are completed, and Sprint 33 AI Chat and Context
+Panel implementation and production evidence remain active pending integration
+review.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service
@@ -393,12 +394,26 @@ real-process evidence covers catalog order, annotations and schemas, all seven
 tool families, bounds, policy gating, path redaction and confinement, malformed
 and oversized input, unknown methods/tools, LF/CRLF
 framing, notifications, cancellation, transport failures, stdout purity, exit
-status, repetition, and cleanup. The desktop VS Code adapter owns one explicit-
-demand Quick Pick and safe navigation projection without semantic matching.
+status, repetition, and cleanup. The desktop VS Code adapter owns explicit-
+demand Quick Pick navigation and Context selection without semantic matching.
 Additional revisions, remote transports, authentication, snapshot refresh,
 external-client compatibility, Runtime packaging, references, diagnostics UI,
 and broader IDE integration remain deferred. The additive LSP process does not
 migrate or alter this MCP boundary.
+
+ADR-0055 governs the implemented extension-only Context inspection and AI chat
+projection. The adapter selects exact canonical symbol identity, calls the
+existing `oneagent.context` tool with fixed `both`, depth 2, 32-candidate, and
+16,384-byte inputs, and retains one immutable generation only while its escaped,
+script-free, strict-CSP read-only panel is live. The non-default
+`oneagent.chat` participant sends exactly that visible rendered Context and the
+current 1–8,192-byte prompt as two messages to the request-selected VS Code
+model after 32,768-byte and model-token admission. It accepts text fragments
+only and caps raw output at 65,536 bytes. Disconnect, connection replacement,
+panel close, cancellation, and deactivation invalidate owned state. The adapter
+does not read source for Context, retain history, infer hidden Context, expose
+model tools or edits, or own provider discovery, credentials, or Runtime
+provider wiring.
 
 ADR-0054 governs the implemented editor-neutral LSP projection. The separate
 `oneagent-lsp` process owns one immutable Workspace startup snapshot and a
@@ -1551,8 +1566,11 @@ SM-9 MCP and IDE integration
     implemented: immutable startup snapshot and Tool Policy execution gate
     implemented: typed Module, Procedure, Function, and EDT Query source locations
     implemented: explicit VS Code Quick Pick symbol search and safe source navigation
+    implemented: explicit semantic Context selection and read-only panel presentation
+    implemented: bounded request-selected VS Code chat over the visible Context
     implemented: bounded LSP 3.17 lifecycle and Content-Length stdio process
     implemented: LSP workspace symbols and full pull document diagnostics
+    deferred: model tools/edits, history, source inference, automatic Context, and Runtime provider wiring
     deferred: VS Code LSP migration and definition/reference/document-symbol providers
     deferred: incremental refresh, remote transport/authentication, and external-client compatibility
 ```

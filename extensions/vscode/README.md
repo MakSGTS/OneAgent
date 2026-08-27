@@ -30,6 +30,7 @@ working-directory overrides, downloads, updates, or fallback executables.
 - `OneAgent: Connect`
 - `OneAgent: Disconnect`
 - `OneAgent: Search Symbols`
+- `OneAgent: Inspect Semantic Context`
 
 Connection readiness sends the accepted stateless `server/discover` and
 `tools/list` MCP requests and requires the exact seven read-only OneAgent tools.
@@ -54,6 +55,32 @@ invalidate late results and dispose the invocation. The extension does not
 perform semantic matching, ranking, provenance parsing, source inspection, or
 filesystem fallback.
 
+## Semantic Context and chat
+
+`OneAgent: Inspect Semantic Context` requires an existing connected Runtime and
+never reads source or connects automatically. It presents the canonical symbol
+catalog, then calls `oneagent.context` for the selected exact identity with
+fixed `both`, depth 2, 32-candidate, and 16,384-byte inputs. Symbol and Context
+requests share one FIFO so the MCP transport retains exactly one pending
+request.
+
+The resulting semantic-only bundle appears in one read-only
+`oneagent.contextPanel`. Its HTML completely escapes Runtime-owned values and
+uses a strict content security policy with no scripts, forms, commands, or
+resources. Closing or replacing the panel, disconnecting or replacing the
+Runtime, or deactivating the extension invalidates the generation and prevents
+chat from using stale Context.
+
+The non-default `@oneagent` participant requires one live visible Context
+generation and a 1–8,192 UTF-8 byte prompt. It sends exactly two user messages —
+the rendered Context and current prompt — to the model selected by that VS Code
+chat request. The assembled request is limited to 32,768 bytes and admitted
+against the selected model token budget. Only text fragments are streamed as
+escaped untrusted Markdown text, and raw output is limited to 65,536 bytes. Cancellation
+and one concurrent request are enforced. No conversation history, references,
+model tools or edits, hidden Context, source inference, provider discovery,
+credentials, or Runtime provider wiring are retained or exposed.
+
 ## Connection status
 
 The left status bar item reports one of five fixed states without executable,
@@ -76,14 +103,16 @@ needed, and does not leave background reconnect work.
 
 The package uses Node.js 24, pnpm `11.19.0`, TypeScript `7.0.2`, and a pinned VS
 Code `1.134.0` Extension Host. There are no production Node dependencies.
-The Extension Host gate runs two isolated trusted lifecycle cycles plus
-Restricted Mode, empty, virtual, and multi-root workspace cases. Unsupported
-hosts must fail before spawning a Runtime process; both trusted cases cover
+The Extension Host gate runs 18 checks across two isolated trusted lifecycle
+cycles plus Restricted Mode, empty, virtual, and multi-root workspace cases.
+Unsupported hosts must fail before spawning a Runtime process; both trusted
+cases cover
 configuration precedence, connection replacement, all five actual status item
 presentations, command and configuration ownership, real symbol results,
 Quick Pick presentation, file and point navigation, missing files, replacement,
-explicit disposal, and repeatable deactivation. The observation API used by
-those tests is disabled in a production Extension Host.
+explicit Context selection and rendering, chat registration and lifecycle
+invalidation, explicit disposal, and repeatable deactivation. The observation
+API used by those tests is disabled in a production Extension Host.
 
 From the repository root, build the public Runtime and install the locked
 development dependencies:
@@ -108,13 +137,17 @@ On Windows, set `ONEAGENT_MCP_BIN` to the absolute
 `target/debug/oneagent-mcp.exe` path. The pinned Extension Host configuration
 selects the same platform-specific repository binary automatically.
 
-The VSIX contains only the manifest, license, README, changelog, and six
-compiled production JavaScript modules. Source, tests, lockfiles, caches,
-workspace files, Rust artifacts, secrets, and local configuration are excluded.
+The package inventory contains 12 files. Each clean verification VSIX contains
+the same 14 archive files, including only packaging metadata plus the manifest,
+license, README, changelog, and eight compiled production JavaScript modules.
+Source, tests, lockfiles, caches, workspace files, Rust artifacts, secrets, and
+local configuration are excluded.
 
 ## Deferred scope
 
-LSP providers, definition/reference APIs, diagnostics UI, chat/context UI, EDT
-integration, remote and web extension hosts, multi-root operation, Runtime
-installation or updates, Marketplace publication/signing, telemetry,
-authentication, and external-client compatibility are not included.
+LSP migration, definition/reference APIs, diagnostics UI, model tools or edits,
+conversation persistence, source inference, automatic Context collection,
+Runtime provider wiring, EDT integration, remote and web extension hosts,
+multi-root operation, Runtime installation or updates, Marketplace
+publication/signing, telemetry, authentication, and external-client
+compatibility are not included.

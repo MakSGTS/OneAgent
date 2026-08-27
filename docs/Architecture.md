@@ -74,13 +74,17 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      and dispatch contracts. It does not own Runtime I/O, semantic projection,
      HTTP, or editor UI.
    - `extensions/vscode` is the desktop workspace client for the accepted MCP
-     process boundary. It activates only on its three contributed commands,
+     process boundary. It exposes four contributed commands and one non-default
+     chat participant,
      validates one trusted file-backed workspace and one bounded executable,
      owns one directly spawned `oneagent-mcp` child, and derives one status bar
      item from its closed connection state. Its explicit symbol-search command
      presents Runtime order and opens only revalidated Workspace-relative source
-     locations. Its editor adapter does not own MCP semantics, Runtime
-     installation, workspace discovery, or graph behavior.
+     locations. Its explicit Context command projects a canonical symbol through
+     the existing Runtime tool into one read-only panel and a bounded
+     request-selected model exchange. Its editor adapter does not own MCP
+     semantics, Runtime installation, workspace discovery, provider secrets, or
+     graph behavior.
 
 `SemanticGraph` is the canonical semantic authority. Adapters may observe source
 formats and contribute provenance-backed facts, but source-specific identities
@@ -109,14 +113,17 @@ The roadmap assigns future boundaries explicitly:
   records `pass with non-blocking follow-up`. The
   [Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
   records `pass with non-blocking follow-ups`. Sprint 31 Navigation and Symbol
-  Search is completed. Sprint 32 LSP Adapter implementation and production
-  evidence are present and remain active pending integration review.
+  Search and Sprint 32 LSP Adapter are completed. Sprint 33 AI Chat and Context
+  Panel implementation and production evidence are present and remain active
+  pending integration review.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
   editor-neutral LSP workspace-symbol and pull-diagnostic slice is implemented
-  in Sprint 32. Definition/reference providers, diagnostics UI, chat/context UI,
-  EDT IDE integration, and external-client compatibility remain later work.
+  in Sprint 32. Explicit semantic Context inspection and bounded request-selected
+  chat are implemented in Sprint 33. Definition/reference providers,
+  diagnostics UI, model tools or edits, EDT IDE integration, and external-client
+  compatibility remain later work.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
@@ -346,6 +353,34 @@ adapters, and the VS Code MCP experience remain unchanged. Mutable documents,
 source reads after startup, definition/references/completion/edits,
 push/workspace diagnostics, dynamic registration, remote transport, multi-root,
 external-client claims, and IDE migration remain deferred.
+
+## Implemented VS Code AI chat and Context panel boundary
+
+[ADR-0055](adr/0055-ai-chat-context-panel.md) governs the extension-only Sprint
+33 slice. `OneAgent: Inspect Semantic Context` requires the existing explicit
+connection, presents canonical Runtime symbols, and calls `oneagent.context`
+with exact symbol identity plus fixed `both`, depth 2, 32-candidate, and
+16,384-byte inputs. One generic FIFO serializes symbol and Context calls over
+the single-pending-request transport. The controller retains one immutable
+generation only while its matching panel remains live.
+
+`oneagent.contextPanel` renders that generation as fully escaped, static,
+script-free, form-free, command-free, resource-free HTML under a strict content
+security policy. Closing or replacing the panel, disconnecting or replacing
+the Runtime, or deactivating the extension invalidates the generation and makes
+it unavailable to chat.
+
+The non-default `oneagent.chat` participant sends exactly two user messages to
+the model selected by the current VS Code request: the visible rendered Context
+and the current 1–8,192-byte prompt. Admission enforces a 32,768-byte assembled
+message bound and the selected model token budget. Response handling consumes
+text fragments only, renders them as escaped untrusted Markdown text, caps raw
+output at 65,536 bytes, and owns cancellation plus one concurrent request. The
+extension retains no conversation history, hidden Context, provider identity,
+credential, or source bytes. Model tools and edits, source inference, automatic
+Context collection, Runtime provider wiring, persistence, webview scripts,
+remote/web/multi-root operation, EDT integration, and diagnostics UI remain
+deferred.
 
 ## Accepted OpenAI-compatible provider boundary
 

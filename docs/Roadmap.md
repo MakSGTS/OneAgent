@@ -7799,6 +7799,51 @@ at 65,536 bytes, and owns cancellation and one-request concurrency. No history,
 references, tools, edits, source reads, hidden Context, Runtime provider wiring,
 dependency, or Rust/MCP change is accepted.
 
+Task 3 implements a strict TypeScript Context request/result boundary over the
+unchanged `oneagent.context` tool. The client always sends exact symbol identity
+with fixed `both`, depth 2, 32-candidate, and 16,384-byte inputs, rejects
+malformed or incompatible results, and uses one generic FIFO for every semantic
+request so the transport retains exactly one pending request. Public unit and
+real-process evidence covers success, semantic failures, bounds, ordering,
+repetition, cancellation, disconnect, and cleanup without changing the
+seven-tool catalog or Rust protocol behavior.
+
+Task 4 implements immutable Context generations and one read-only panel. The
+renderer completely escapes Runtime-owned values and emits static HTML with a
+strict content security policy and no script, form, command, or resource
+surface. Panel close, replacement, disconnect, connection replacement, and
+deactivation clear model-eligible Context; late results cannot revive stale
+state.
+
+Task 5 implements the non-default `oneagent.chat` controller. It sends exactly
+the visible rendered Context and current 1–8,192-byte prompt as two user
+messages to the request-selected model after the accepted 32,768-byte and model-
+token admission gate, accepts text fragments only, caps raw output at 65,536
+bytes, and owns cancellation plus one-request concurrency. Missing or stale
+Context, model failures, malformed fragments, bounds, cancellation, repetition,
+and cleanup are covered without retained history, references, tools, edits,
+source reads, hidden Context, or provider secrets.
+
+Task 6 registers `oneagent.inspectContext`, `oneagent.chat`, and
+`oneagent.contextPanel` in the public extension lifecycle. Manifest, command,
+panel, participant, Runtime reconnect/invalidation, disposal, and exact
+registration ownership are covered while existing connection, status, symbol
+navigation, restricted/empty/virtual/multi-root rejection, and package behavior
+remain unchanged.
+
+Task 7 completes current-state, package, compatibility, scope, and security
+evidence. The extension matrix passes 61 unit tests, 2 real-process tests, and
+18 pinned Extension Host checks; the package inventory contains 12 files, two
+clean VSIX builds each contain the same 14 files, and the audit covers 43
+tracked extension files, 18 license groups, and 3 linked documents. Focused
+Rust compatibility passes 11 Context Engine, 6 semantic MCP, and 9 public MCP
+process tests. Frozen install, clean compile, typecheck, canonical workspace
+format/check/test/clippy/rustdoc, link, scope, secret/path, catalog, manifest,
+package, and diff gates pass. CI now runs the focused Context/MCP compatibility
+matrix explicitly on macOS 14 and Windows in addition to the complete Rust and
+extension jobs. No production dependency, lockfile, Rust behavior, MCP catalog,
+or Coverage Registry entry changes.
+
 The accepted planning baseline is the commit with subject
 `Plan Sprint 33 AI Chat and Context Panel`. Sprint 33 remains `next` during
 planning, becomes `active` when Task 1 starts, and may become `completed` only

@@ -17,8 +17,9 @@ review. The bounded Sprint 27 Tool Execution Policy is complete with a `pass`
 integration review. The bounded Sprint 28 discovery-only MCP Server is complete
 with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
 Semantic Tools, Sprint 30 VS Code Extension Foundation, and Sprint 31 Navigation
-and Symbol Search are complete. The Sprint 32 LSP Adapter implementation and
-production evidence are present and remain active pending integration review.
+and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The
+Sprint 33 AI Chat and Context Panel implementation and production evidence are
+present and remain active pending integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -41,7 +42,7 @@ See
 - `adapters/lm-studio` — implemented explicit bounded LM Studio native model-discovery and composed non-streaming text-generation provider adapter
 - `adapters/ollama` — implemented local-only bounded Ollama native Tags/Show discovery and non-streaming raw generation provider adapter
 - `adapters/filesystem` — implemented filesystem workspace discovery adapter
-- `extensions/vscode` — desktop VS Code workspace extension with explicit Runtime connection, bounded symbol search, and safe source navigation
+- `extensions/vscode` — desktop VS Code workspace extension with explicit Runtime connection, bounded symbol search, safe source navigation, inspectable semantic Context, and request-selected AI chat
 - `docs/adr` — architecture decision records
 
 Runtime builds one all-or-nothing immutable Workspace snapshot from a configured
@@ -78,9 +79,9 @@ deterministic graph selection with retained provenance paths, and returns an
 owned semantic-only bundle under an explicit UTF-8 byte budget. Candidate and
 budget omissions are reported separately, and exact two-line item fragments
 make the result reproducible. Source text/ranges, tokenizers, providers/models,
-persistence, direct Context-owned transports, and IDE integration remain
-deferred. Runtime adapts this engine only through the bounded read-only MCP
-context tool described below.
+persistence, direct Context-owned transports, automatic Context collection,
+and source-derived IDE integration remain deferred. Runtime adapts this engine
+only through the bounded read-only MCP context tool described below.
 
 The additive std-only `oneagent-llm` crate owns provider-scoped identities,
 canonical model catalogs, the closed `TextGeneration` capability, bounded
@@ -151,8 +152,8 @@ startup or transport categories on stderr. Additional protocol revisions,
 remote transports, authentication, snapshot refresh, external-client
 compatibility, Runtime packaging, references, diagnostics UI,
 and broader IDE integration remain deferred. The desktop VS Code extension
-supports only the accepted explicit connection and bounded symbol-navigation
-slice.
+also consumes the accepted Context and symbol tools through the bounded
+Sprint 33 UI described below.
 
 Sprint 32 adds an independent bounded LSP 3.17 process without migrating the
 VS Code extension. `oneagent-lsp` builds one immutable startup snapshot, accepts
@@ -167,6 +168,22 @@ startup, emits protocol frames only on stdout, treats EOF before `exit` as a
 failure, adds no dependency, and does not claim definition, references,
 completion, edits, mutable documents, workspace diagnostics, remote transport,
 or external-client compatibility.
+
+Sprint 33 adds an extension-only semantic Context and AI chat slice without
+changing Rust, MCP, or provider authority. `OneAgent: Inspect Semantic Context` starts
+from an explicitly selected canonical symbol and calls `oneagent.context` with
+fixed `both`, depth 2, 32-candidate, and 16,384-byte bounds. The resulting
+semantic-only bundle is shown in one escaped, script-free, strict-CSP read-only
+panel; closing the panel, disconnecting, replacing the Runtime connection, or
+deactivating the extension invalidates model-eligible Context.
+
+The non-default `@oneagent` participant sends exactly the visible rendered
+Context and the current 1–8,192-byte user prompt as two messages to the model
+selected by the VS Code chat request. Admission enforces a 32,768-byte message
+bound and the selected model token limit, accepts text fragments only, and caps
+raw output at 65,536 bytes. The extension does not read source for Context,
+retain conversation history, expose model tools or edits, infer hidden Context,
+or own provider discovery, credentials, or Runtime provider wiring.
 
 ## Verify
 

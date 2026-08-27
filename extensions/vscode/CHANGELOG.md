@@ -10,3 +10,10 @@
   CI evidence.
 - Add explicit connected symbol search with bounded Quick Pick requests and
   workspace-confined source navigation.
+- Add explicit bounded semantic Context selection and an escaped, script-free,
+  read-only Context panel.
+- Add the non-default `@oneagent` participant with request-selected model use,
+  exact visible Context, bounded prompt and output, cancellation, and lifecycle
+  invalidation.
+- Add complete unit, real-process, 18-check pinned Extension Host, package,
+  repeatable VSIX, audit, and cross-platform Context/MCP compatibility evidence.

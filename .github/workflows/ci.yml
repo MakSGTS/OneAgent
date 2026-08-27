@@ -30,6 +30,12 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Test Context and MCP compatibility
+        run: |
+          cargo test -p oneagent-analysis --test context_engine
+          cargo test -p oneagent-runtime --test mcp_semantic_tools
+          cargo test -p oneagent-runtime --test mcp_process
+
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 

@@ -7551,6 +7551,26 @@ lifecycle evidence cannot support them without guessing. No production behavior
 or dependency changes in this task. Sprint 32 is now `active`; exact contract
 selection remains owned by Task 2.
 
+###### Sprint 32 architecture decision
+
+Task 2 accepts [ADR-0054](adr/0054-lsp-adapter.md). One dedicated
+`oneagent-lsp` process implements the pinned LSP 3.17 Content-Length stdio and
+initialize/initialized/shutdown/exit lifecycle over one immutable startup
+snapshot. Protocol owns bounded JSON-RPC values, lifecycle, truthful static
+capabilities, dispatch, validation, and errors; Runtime owns framing, root/file-
+URI confinement, semantic projection, process channels, exit status, and
+public-process evidence. No dependency or existing MCP/HTTP/CLI/VS Code
+behavior changes.
+
+The accepted first slice advertises UTF-16 positions, no document sync,
+`workspaceSymbolProvider`, and pull-only `diagnosticProvider`. It returns only
+complete located Procedure, Function, and EDT Query workspace symbols, fails
+closed instead of silently truncating beyond 100, and projects only recoverable
+diagnostics whose source node has one exact confined typed span. Results use
+full diagnostic reports without result IDs. Module symbols, definition,
+document symbols, mutable documents, publish/workspace diagnostics, external
+clients, and every other LSP feature remain deferred.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
 source/link/structure and `git diff --check` gates. Tasks 3-6 run focused
 protocol/Graph/adapter/Workspace/Runtime/public-process checks plus the

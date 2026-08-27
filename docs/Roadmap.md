@@ -7075,8 +7075,8 @@ documentation follow-up.
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
-| Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | active |
-| Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
+| Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | completed |
+| Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | next |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
@@ -7832,7 +7832,7 @@ navigation, restricted/empty/virtual/multi-root rejection, and package behavior
 remain unchanged.
 
 Task 7 completes current-state, package, compatibility, scope, and security
-evidence. The extension matrix passes 61 unit tests, 2 real-process tests, and
+evidence. The extension matrix passes 62 unit tests, 2 real-process tests, and
 18 pinned Extension Host checks; the package inventory contains 12 files, two
 clean VSIX builds each contain the same 14 files, and the audit covers 43
 tracked extension files, 18 license groups, and 3 linked documents. Focused
@@ -7844,29 +7844,33 @@ matrix explicitly on macOS 14 and Windows in addition to the complete Rust and
 extension jobs. No production dependency, lockfile, Rust behavior, MCP catalog,
 or Coverage Registry entry changes.
 
+Task 8 records `pass with non-blocking follow-ups` in the
+[Sprint 33 integration review](reviews/sprint-33-ai-chat-context-panel.md) for
+the exact `8e33c95c..4368a7c5` range. The first clean CI Host gate supplied
+18/18 checks with six zero exits on both macOS and Windows. The repeated
+independent review then found that an already-cancelled parent could reach the
+model before VS Code delivered its deferred cancellation callback. Remediation
+commit `4368a7c5` adds a race-safe shared production adapter and a regression
+that proves zero token-count and request calls. The final fresh-context
+reviewer found no remaining production blocker, and the same reviewer passed
+artifact consistency. Windows `vsce.cmd` spawning and absent clean-checkout EDT
+fixtures remain explicit non-blocking CI-infrastructure follow-ups. Sprint 33
+is `completed`, Sprint 34 — EDT Integration Prototype is the unique `next`
+target, and the exact nine-file Sprint 32 prompt suite is retired in the Task 8
+commit.
+
 The accepted planning baseline is the commit with subject
-`Plan Sprint 33 AI Chat and Context Panel`. Sprint 33 remains `next` during
-planning, becomes `active` when Task 1 starts, and may become `completed` only
-after Task 8 records `pass` or `pass with non-blocking follow-ups`, required
-validation succeeds, and the same independent reviewer passes artifact
-consistency. `already_complete` requires committed evidence plus every current
-criterion and validation; it never creates an empty commit. Missing or mutable
-API authority, an unapproved dependency, invented Context or model semantics,
-unsafe HTML, source access, unbounded prompt/output, stale Context after
-disconnect, protocol/catalog drift, leaked resources, zero matched tests,
-failed validation or commit, reviewer mutation or incompleteness, unresolved
-evidence disagreement, or failed artifact consistency stops execution.
+`Plan Sprint 33 AI Chat and Context Panel`. Sprint 33 was `next` during
+planning, became `active` when Task 1 started, and is `completed` after the
+non-blocking Task 8 decision, complete primary validation, and passing
+same-reviewer artifact consistency.
 
 The exact current prompt suite is
 `docs/codex/prompts/sprint-33-ai-chat-context-panel/`. The verified immediately
-preceding suite is the nine tracked files under
-`docs/codex/prompts/sprint-32-lsp-adapter/`; only Task 8 may retire them after a
+preceding nine-file suite under
+`docs/codex/prompts/sprint-32-lsp-adapter/` is retired by Task 8 after the
 non-blocking effective review decision, complete validation, and passing
-same-reviewer artifact consistency. A successful review records
-`docs/reviews/sprint-33-ai-chat-context-panel.md`, transitions Sprint 33 to
-`completed`, makes Sprint 34 — EDT Integration Prototype the unique `next`
-target, and atomically retires that exact preceding suite in the final review
-commit.
+same-reviewer artifact consistency.
 
 Suggested planning commit message:
 

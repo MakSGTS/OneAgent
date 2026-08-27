@@ -360,9 +360,10 @@ authority. The subsequent
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; Sprints 29–32 are completed, and Sprint 33 AI Chat and Context
-Panel implementation and production evidence remain active pending integration
-review.
+follow-ups`; Sprints 29–32 are completed, and the subsequent
+[Sprint 33 AI Chat and Context Panel review](../reviews/sprint-33-ai-chat-context-panel.md)
+records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint
+34 EDT Integration Prototype is the unique next target.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service

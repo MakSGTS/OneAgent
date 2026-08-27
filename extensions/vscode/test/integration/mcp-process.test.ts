@@ -43,6 +43,25 @@ test("public oneagent-mcp handshake and EOF shutdown repeat without orphaned cli
         },
       },
     });
+    const selected = symbols.results[0];
+    assert.ok(selected);
+    const context = await client.context({
+      configurationId: selected.configurationId,
+      nodeId: selected.nodeId,
+    });
+    assert.equal(context.configurationId, selected.configurationId);
+    assert.equal(context.budgetBytes, 16_384);
+    assert.equal(context.usedBytes + context.remainingBytes, context.budgetBytes);
+    assert.equal(Buffer.byteLength(context.rendered, "utf8"), context.usedBytes);
+    assert.equal(
+      context.items.reduce((total, item) => total + item.costBytes, 0),
+      context.usedBytes,
+    );
+    assert.deepEqual(
+      context.items.filter((item) => item.reason === "seed").map((item) => item.nodeId),
+      [selected.nodeId],
+    );
+    assert.ok(context.items.some((item) => item.reason === "related"));
     assert.equal(await client.disconnect(), "disconnected");
     assert.deepEqual(states, ["connecting", "connected", "disconnecting", "disconnected"]);
   }

@@ -4,6 +4,9 @@ import { PassThrough, Writable } from "node:stream";
 import test from "node:test";
 
 import {
+  CONTEXT_BUDGET_BYTES,
+  CONTEXT_MAX_CANDIDATES,
+  CONTEXT_MAX_DEPTH,
   MAX_FRAME_BYTES,
   MAX_JSON_DEPTH,
   MAX_STDERR_BYTES,
@@ -181,6 +184,48 @@ function symbolResult(
   };
 }
 
+function contextContent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    configurationId: "configuration-id",
+    rendered: "seed",
+    items: [
+      {
+        nodeId: "node-id",
+        name: "SeedProcedure",
+        kind: "procedure",
+        depth: 0,
+        seedId: "node-id",
+        reason: "seed",
+        relations: [],
+        costBytes: 4,
+      },
+    ],
+    budgetBytes: CONTEXT_BUDGET_BYTES,
+    usedBytes: 4,
+    remainingBytes: CONTEXT_BUDGET_BYTES - 4,
+    candidateTruncated: false,
+    candidateOmitted: 0,
+    budgetTruncated: false,
+    budgetOmitted: 0,
+    ...overrides,
+  };
+}
+
+function contextResult(
+  id: number,
+  structuredContent: unknown = contextContent(),
+): unknown {
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      resultType: "complete",
+      content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    },
+  };
+}
+
 function symbolResponder(process: FakeProcess, request: Request): void {
   if (request.method === "tools/call") {
     process.send(symbolResult(request.id));
@@ -309,6 +354,242 @@ test("serializes repeated symbol calls without failing the connected process", a
   await second;
   assert.equal(client.state, "connected");
   await client.disconnect();
+});
+
+test("calls context with fixed arguments and accepts repeated reordered bounded results", async () => {
+  let contextCalls = 0;
+  const process = new FakeProcess((owner, request) => {
+    if (request.method !== "tools/call") {
+      compatibleResponder(owner, request);
+      return;
+    }
+    contextCalls += 1;
+    const content = contextContent();
+    const reordered = Object.fromEntries(Object.entries(content).reverse());
+    owner.send(contextResult(request.id, contextCalls === 1 ? content : reordered));
+  });
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = await client.context({
+      configurationId: "configuration-id",
+      nodeId: "node-id",
+    });
+    assert.equal(result.items[0]?.nodeId, "node-id");
+    assert.equal(result.usedBytes, Buffer.byteLength(result.rendered, "utf8"));
+  }
+  assert.deepEqual(process.requests[2]?.params.arguments, {
+    configurationId: "configuration-id",
+    nodeId: "node-id",
+    direction: "both",
+    maxDepth: CONTEXT_MAX_DEPTH,
+    maxCandidates: CONTEXT_MAX_CANDIDATES,
+    budgetBytes: CONTEXT_BUDGET_BYTES,
+  });
+  assert.equal(process.requests[2]?.params.name, "oneagent.context");
+  await client.disconnect();
+});
+
+test("accepts exactly 32 context items and rejects one over the bound", async () => {
+  const items = Array.from({ length: CONTEXT_MAX_CANDIDATES }, (_, index) =>
+    index === 0
+      ? {
+          nodeId: "node-id",
+          name: "Seed",
+          kind: "procedure",
+          depth: 0,
+          seedId: "node-id",
+          reason: "seed",
+          relations: [],
+          costBytes: 1,
+        }
+      : {
+          nodeId: `related-${index}`,
+          name: `Related ${index}`,
+          kind: "module",
+          depth: 1,
+          seedId: "node-id",
+          reason: "related",
+          relations: [{ direction: "outgoing", edgeKind: "calls", edgeId: `edge-${index}` }],
+          costBytes: 1,
+        });
+  let content = contextContent({
+    rendered: "x".repeat(CONTEXT_MAX_CANDIDATES),
+    items,
+    usedBytes: CONTEXT_MAX_CANDIDATES,
+    remainingBytes: CONTEXT_BUDGET_BYTES - CONTEXT_MAX_CANDIDATES,
+  });
+  const process = new FakeProcess((owner, request) => {
+    if (request.method === "tools/call") {
+      owner.send(contextResult(request.id, content));
+    } else {
+      compatibleResponder(owner, request);
+    }
+  });
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+  assert.equal((await client.context({ configurationId: "configuration-id", nodeId: "node-id" })).items.length, 32);
+  content = { ...content, items: [...items, items[1]] };
+  assert.equal(
+    await failureCode(client.context({ configurationId: "configuration-id", nodeId: "node-id" })),
+    "protocol_failure",
+  );
+  assert.equal(client.state, "failed");
+});
+
+test("serializes symbols and context through one FIFO and settles queued work on disconnect", async () => {
+  let held: Request | undefined;
+  const process = new FakeProcess((owner, request) => {
+    if (request.method === "tools/call") {
+      held = request;
+    } else {
+      compatibleResponder(owner, request);
+    }
+  });
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+
+  const symbol = client.symbols({ query: "first" });
+  await Promise.resolve();
+  const context = client.context({ configurationId: "configuration-id", nodeId: "node-id" });
+  await Promise.resolve();
+  assert.equal(process.requests.length, 3);
+  assert.equal(held?.params.name, "oneagent.symbols");
+  const symbolRequest = held;
+  assert.ok(symbolRequest);
+  process.send(symbolResult(symbolRequest.id));
+  await symbol;
+  await Promise.resolve();
+  assert.equal(process.requests.length, 4);
+  assert.equal(held?.params.name, "oneagent.context");
+  const contextRequest = held;
+  assert.ok(contextRequest);
+  process.send(contextResult(contextRequest.id));
+  await context;
+
+  const pendingCode = failureCode(client.symbols({ query: "pending" }));
+  await Promise.resolve();
+  const queuedCode = failureCode(client.context({ configurationId: "configuration-id", nodeId: "node-id" }));
+  await Promise.resolve();
+  const requestCount = process.requests.length;
+  assert.equal(await client.disconnect(), "disconnected");
+  assert.equal(await pendingCode, "process_exited");
+  assert.equal(await queuedCode, "protocol_failure");
+  assert.equal(process.requests.length, requestCount);
+});
+
+test("rejects invalid context identities locally without touching the process", async () => {
+  const process = new FakeProcess(symbolResponder);
+  const client = new RuntimeClient({ processFactory: factoryFor(process) });
+  await client.connect("runtime", "/workspace");
+  for (const input of [
+    { configurationId: "", nodeId: "node-id" },
+    { configurationId: "configuration-id", nodeId: " " },
+    { configurationId: "x".repeat(65_537), nodeId: "node-id" },
+  ]) {
+    assert.equal(await failureCode(client.context(input)), "protocol_failure");
+  }
+  assert.equal(process.requests.length, 2);
+  await client.disconnect();
+});
+
+test("keeps context tool errors bounded and aborts malformed context results", async () => {
+  const toolError = { code: "not_found", message: "The semantic node was not found." };
+  const toolProcess = new FakeProcess((owner, request) => {
+    if (request.method !== "tools/call") {
+      compatibleResponder(owner, request);
+      return;
+    }
+    owner.send({
+      jsonrpc: "2.0",
+      id: request.id,
+      result: {
+        resultType: "complete",
+        content: [{ type: "text", text: JSON.stringify(toolError) }],
+        structuredContent: toolError,
+        isError: true,
+      },
+    });
+  });
+  const toolClient = new RuntimeClient({ processFactory: factoryFor(toolProcess) });
+  await toolClient.connect("runtime", "/workspace");
+  assert.equal(
+    await failureCode(toolClient.context({ configurationId: "configuration-id", nodeId: "node-id" })),
+    "tool_failure",
+  );
+  assert.equal(toolClient.state, "connected");
+  await toolClient.disconnect();
+
+  const base = contextContent();
+  const missingItems = Object.fromEntries(
+    Object.entries(base).filter(([key]) => key !== "items"),
+  );
+  for (const malformed of [
+    { ...base, extra: true },
+    missingItems,
+    { ...base, configurationId: "other" },
+    { ...base, budgetBytes: CONTEXT_BUDGET_BYTES - 1 },
+    { ...base, usedBytes: 3 },
+    { ...base, candidateTruncated: true },
+    { ...base, budgetOmitted: 1 },
+    { ...base, items: [] },
+    { ...base, items: [{ ...(base.items as Record<string, unknown>[])[0], kind: "class" }] },
+    { ...base, items: [{ ...(base.items as Record<string, unknown>[])[0], seedId: "other" }] },
+    { ...base, items: [{ ...(base.items as Record<string, unknown>[])[0], relations: [{}] }] },
+    { ...base, items: [{ ...(base.items as Record<string, unknown>[])[0], costBytes: 5 }] },
+  ]) {
+    const process = new FakeProcess((owner, request) => {
+      if (request.method === "tools/call") {
+        owner.send(contextResult(request.id, malformed));
+      } else {
+        compatibleResponder(owner, request);
+      }
+    });
+    const client = new RuntimeClient({ processFactory: factoryFor(process) });
+    await client.connect("runtime", "/workspace");
+    assert.equal(
+      await failureCode(client.context({ configurationId: "configuration-id", nodeId: "node-id" })),
+      "protocol_failure",
+    );
+    assert.equal(client.state, "failed");
+  }
+});
+
+test("aborts timed-out and exited context operations without exposing inputs", async () => {
+  const scheduler = new FakeScheduler();
+  const timedOutProcess = new FakeProcess((owner, request) => {
+    if (request.method !== "tools/call") {
+      compatibleResponder(owner, request);
+    }
+  });
+  const timedOutClient = new RuntimeClient({
+    processFactory: factoryFor(timedOutProcess),
+    scheduler,
+  });
+  await timedOutClient.connect("runtime", "/workspace");
+  const timedOut = failureCode(
+    timedOutClient.context({ configurationId: "configuration-id", nodeId: "node-id" }),
+  );
+  await Promise.resolve();
+  scheduler.fire(REQUEST_TIMEOUT_MS);
+  assert.equal(await timedOut, "startup_timeout");
+  assert.equal(timedOutClient.state, "failed");
+
+  const exitedProcess = new FakeProcess((owner, request) => {
+    if (request.method === "tools/call") {
+      owner.emitExit(12);
+    } else {
+      compatibleResponder(owner, request);
+    }
+  });
+  const exitedClient = new RuntimeClient({ processFactory: factoryFor(exitedProcess) });
+  await exitedClient.connect("runtime", "/workspace");
+  assert.equal(
+    await failureCode(exitedClient.context({ configurationId: "configuration-id", nodeId: "node-id" })),
+    "process_exited",
+  );
+  assert.equal(exitedClient.state, "failed");
 });
 
 test("rejects invalid symbol requests locally without touching the process", async () => {

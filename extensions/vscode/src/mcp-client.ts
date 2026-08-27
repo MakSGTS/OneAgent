@@ -23,6 +23,9 @@ const TOOL_NAMES = [
 
 export const MAX_SYMBOL_QUERY_BYTES = 256;
 export const MAX_SYMBOL_PATH_BYTES = 4_096;
+export const CONTEXT_MAX_DEPTH = 2;
+export const CONTEXT_MAX_CANDIDATES = 32;
+export const CONTEXT_BUDGET_BYTES = 16_384;
 
 export type SymbolKind = "module" | "procedure" | "function" | "query";
 
@@ -61,6 +64,81 @@ export interface SymbolSearchResult {
   readonly truncated: boolean;
 }
 
+export type ContextNodeKind =
+  | "metadata"
+  | "module"
+  | "procedure"
+  | "function"
+  | "query"
+  | "data_composition_schema"
+  | "data_set"
+  | "data_composition_field"
+  | "xdto_type"
+  | "http_service_url_template"
+  | "http_service_method"
+  | "web_service_operation"
+  | "web_service_parameter"
+  | "form"
+  | "command"
+  | "attribute"
+  | "standard_attribute"
+  | "tabular_section"
+  | "dimension"
+  | "resource"
+  | "measure"
+  | "role"
+  | "access_right"
+  | "subsystem"
+  | "unknown";
+
+export type ContextEdgeKind =
+  | "contains"
+  | "calls"
+  | "references"
+  | "reads"
+  | "writes"
+  | "grants"
+  | "includes"
+  | "extends"
+  | "depends_on"
+  | "opens"
+  | "triggers";
+
+export interface ContextRequest {
+  readonly configurationId: string;
+  readonly nodeId: string;
+}
+
+export interface ContextRelation {
+  readonly direction: "incoming" | "outgoing";
+  readonly edgeKind: ContextEdgeKind;
+  readonly edgeId: string;
+}
+
+export interface ContextResultItem {
+  readonly nodeId: string;
+  readonly name: string;
+  readonly kind: ContextNodeKind;
+  readonly depth: number;
+  readonly seedId: string;
+  readonly reason: "seed" | "related";
+  readonly relations: readonly ContextRelation[];
+  readonly costBytes: number;
+}
+
+export interface ContextResult {
+  readonly configurationId: string;
+  readonly rendered: string;
+  readonly items: readonly ContextResultItem[];
+  readonly budgetBytes: number;
+  readonly usedBytes: number;
+  readonly remainingBytes: number;
+  readonly candidateTruncated: boolean;
+  readonly candidateOmitted: number;
+  readonly budgetTruncated: boolean;
+  readonly budgetOmitted: number;
+}
+
 export type RuntimeFailureCode =
   | "invalid_configuration"
   | "unsupported_workspace"
@@ -82,7 +160,7 @@ const FAILURE_MESSAGES: Readonly<Record<RuntimeFailureCode, string>> = {
   incompatible_server: "OneAgent Runtime is not compatible with this extension.",
   stderr_overflow: "OneAgent Runtime diagnostics exceeded the safety limit.",
   process_exited: "OneAgent Runtime stopped unexpectedly.",
-  tool_failure: "OneAgent symbol search failed.",
+  tool_failure: "OneAgent semantic operation failed.",
   shutdown_failed: "OneAgent Runtime could not be stopped.",
 };
 
@@ -166,7 +244,7 @@ export class RuntimeClient {
   private exitWaiters = new Set<(exited: boolean) => void>();
   private stopping = false;
   private stopPromise: Promise<boolean> | undefined;
-  private symbolRequestTail: Promise<void> = Promise.resolve();
+  private semanticOperationTail: Promise<void> = Promise.resolve();
 
   public constructor(options: RuntimeClientOptions = {}) {
     this.processFactory = options.processFactory ?? spawnRuntimeProcess;
@@ -253,12 +331,14 @@ export class RuntimeClient {
     if (this.currentState !== "connected" || !isSymbolSearchRequest(input)) {
       return Promise.reject(new RuntimeClientFailure("protocol_failure"));
     }
-    const operation = this.symbolRequestTail.then(() => this.executeSymbols(input));
-    this.symbolRequestTail = operation.then(
-      () => undefined,
-      () => undefined,
-    );
-    return operation;
+    return this.enqueueSemanticOperation(() => this.executeSymbols(input));
+  }
+
+  public context(input: ContextRequest): Promise<ContextResult> {
+    if (this.currentState !== "connected" || !isContextRequest(input)) {
+      return Promise.reject(new RuntimeClientFailure("protocol_failure"));
+    }
+    return this.enqueueSemanticOperation(() => this.executeContext(input));
   }
 
   private async executeSymbols(input: SymbolSearchRequest): Promise<SymbolSearchResult> {
@@ -299,6 +379,51 @@ export class RuntimeClient {
       throw failure;
     }
     return decoded;
+  }
+
+  private async executeContext(input: ContextRequest): Promise<ContextResult> {
+    if (this.currentState !== "connected") {
+      throw new RuntimeClientFailure("protocol_failure");
+    }
+    let result: unknown;
+    try {
+      result = await this.request("tools/call", {
+        name: "oneagent.context",
+        arguments: {
+          configurationId: input.configurationId,
+          nodeId: input.nodeId,
+          direction: "both",
+          maxDepth: CONTEXT_MAX_DEPTH,
+          maxCandidates: CONTEXT_MAX_CANDIDATES,
+          budgetBytes: CONTEXT_BUDGET_BYTES,
+        },
+      });
+    } catch (error) {
+      const failure = asRuntimeFailure(error);
+      if (this.currentState === "connected") {
+        this.abort(failure);
+      }
+      throw failure;
+    }
+    const decoded = decodeContextToolResult(result, input);
+    if (decoded === "tool_failure") {
+      throw new RuntimeClientFailure("tool_failure");
+    }
+    if (decoded === undefined) {
+      const failure = new RuntimeClientFailure("protocol_failure");
+      this.abort(failure);
+      throw failure;
+    }
+    return decoded;
+  }
+
+  private enqueueSemanticOperation<Result>(operation: () => Promise<Result>): Promise<Result> {
+    const queued = this.semanticOperationTail.then(operation);
+    this.semanticOperationTail = queued.then(
+      () => undefined,
+      () => undefined,
+    );
+    return queued;
   }
 
   private async request(
@@ -649,6 +774,10 @@ function isCompatibleToolList(value: unknown): boolean {
   );
 }
 
+function isContextRequest(value: ContextRequest): boolean {
+  return isNonEmptyBoundedText(value.configurationId) && isNonEmptyBoundedText(value.nodeId);
+}
+
 function isSymbolSearchRequest(value: SymbolSearchRequest): boolean {
   if (
     typeof value.query !== "string" ||
@@ -711,6 +840,180 @@ function decodeSymbolToolResult(
     return isToolError(value.structuredContent) ? "tool_failure" : undefined;
   }
   return decodeSymbolSearchResult(value.structuredContent, limit);
+}
+
+function decodeContextToolResult(
+  value: unknown,
+  request: ContextRequest,
+): ContextResult | "tool_failure" | undefined {
+  if (!isRecord(value) || value.resultType !== "complete") {
+    return undefined;
+  }
+  const expectedKeys = value.isError === true
+    ? ["content", "isError", "resultType", "structuredContent"]
+    : ["content", "resultType", "structuredContent"];
+  if (!hasExactKeys(value, expectedKeys) || !Array.isArray(value.content) || value.content.length !== 1) {
+    return undefined;
+  }
+  const block = value.content[0];
+  if (
+    !isRecord(block) ||
+    !hasExactKeys(block, ["text", "type"]) ||
+    block.type !== "text" ||
+    typeof block.text !== "string"
+  ) {
+    return undefined;
+  }
+  let textValue: unknown;
+  try {
+    textValue = new UniqueJsonParser(block.text).parse();
+  } catch {
+    return undefined;
+  }
+  if (!jsonEqual(textValue, value.structuredContent)) {
+    return undefined;
+  }
+  if (value.isError === true) {
+    return isToolError(value.structuredContent) ? "tool_failure" : undefined;
+  }
+  return decodeContextResult(value.structuredContent, request);
+}
+
+function decodeContextResult(value: unknown, request: ContextRequest): ContextResult | undefined {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "budgetBytes",
+      "budgetOmitted",
+      "budgetTruncated",
+      "candidateOmitted",
+      "candidateTruncated",
+      "configurationId",
+      "items",
+      "remainingBytes",
+      "rendered",
+      "usedBytes",
+    ]) ||
+    value.configurationId !== request.configurationId ||
+    typeof value.rendered !== "string" ||
+    !Array.isArray(value.items) ||
+    value.items.length < 1 ||
+    value.items.length > CONTEXT_MAX_CANDIDATES ||
+    value.budgetBytes !== CONTEXT_BUDGET_BYTES ||
+    !isNonNegativeSafeInteger(value.usedBytes) ||
+    !isNonNegativeSafeInteger(value.remainingBytes) ||
+    value.usedBytes > CONTEXT_BUDGET_BYTES ||
+    value.remainingBytes > CONTEXT_BUDGET_BYTES ||
+    value.usedBytes + value.remainingBytes !== CONTEXT_BUDGET_BYTES ||
+    Buffer.byteLength(value.rendered, "utf8") !== value.usedBytes ||
+    typeof value.candidateTruncated !== "boolean" ||
+    !isNonNegativeSafeInteger(value.candidateOmitted) ||
+    value.candidateTruncated !== (value.candidateOmitted !== 0) ||
+    typeof value.budgetTruncated !== "boolean" ||
+    !isNonNegativeSafeInteger(value.budgetOmitted) ||
+    value.budgetTruncated !== (value.budgetOmitted !== 0)
+  ) {
+    return undefined;
+  }
+
+  const items: ContextResultItem[] = [];
+  const nodeIds = new Set<string>();
+  let seedCount = 0;
+  let costBytes = 0;
+  for (const rawItem of value.items) {
+    const item = decodeContextItem(rawItem, request.nodeId);
+    if (item === undefined || nodeIds.has(item.nodeId)) {
+      return undefined;
+    }
+    nodeIds.add(item.nodeId);
+    if (item.reason === "seed") {
+      seedCount += 1;
+    }
+    costBytes += item.costBytes;
+    if (!Number.isSafeInteger(costBytes) || costBytes > CONTEXT_BUDGET_BYTES) {
+      return undefined;
+    }
+    items.push(item);
+  }
+  if (seedCount !== 1 || costBytes !== value.usedBytes) {
+    return undefined;
+  }
+  return {
+    configurationId: value.configurationId,
+    rendered: value.rendered,
+    items,
+    budgetBytes: value.budgetBytes,
+    usedBytes: value.usedBytes,
+    remainingBytes: value.remainingBytes,
+    candidateTruncated: value.candidateTruncated,
+    candidateOmitted: value.candidateOmitted,
+    budgetTruncated: value.budgetTruncated,
+    budgetOmitted: value.budgetOmitted,
+  };
+}
+
+function decodeContextItem(value: unknown, selectedNodeId: string): ContextResultItem | undefined {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "costBytes",
+      "depth",
+      "kind",
+      "name",
+      "nodeId",
+      "reason",
+      "relations",
+      "seedId",
+    ]) ||
+    !isNonEmptyBoundedText(value.nodeId) ||
+    !isNonEmptyBoundedText(value.name) ||
+    !isContextNodeKind(value.kind) ||
+    !isNonNegativeSafeInteger(value.depth) ||
+    value.depth > CONTEXT_MAX_DEPTH ||
+    value.seedId !== selectedNodeId ||
+    (value.reason !== "seed" && value.reason !== "related") ||
+    !Array.isArray(value.relations) ||
+    value.relations.length !== value.depth ||
+    !isNonNegativeSafeInteger(value.costBytes)
+  ) {
+    return undefined;
+  }
+  const isSelectedSeed =
+    value.nodeId === selectedNodeId && value.depth === 0 && value.reason === "seed";
+  if (!isSelectedSeed && (value.nodeId === selectedNodeId || value.depth === 0 || value.reason !== "related")) {
+    return undefined;
+  }
+  const relations: ContextRelation[] = [];
+  for (const relation of value.relations) {
+    const decoded = decodeContextRelation(relation);
+    if (decoded === undefined) {
+      return undefined;
+    }
+    relations.push(decoded);
+  }
+  return {
+    nodeId: value.nodeId,
+    name: value.name,
+    kind: value.kind,
+    depth: value.depth,
+    seedId: value.seedId,
+    reason: value.reason,
+    relations,
+    costBytes: value.costBytes,
+  };
+}
+
+function decodeContextRelation(value: unknown): ContextRelation | undefined {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["direction", "edgeId", "edgeKind"]) ||
+    (value.direction !== "incoming" && value.direction !== "outgoing") ||
+    !isContextEdgeKind(value.edgeKind) ||
+    !isNonEmptyBoundedText(value.edgeId)
+  ) {
+    return undefined;
+  }
+  return { direction: value.direction, edgeKind: value.edgeKind, edgeId: value.edgeId };
 }
 
 function decodeSymbolSearchResult(value: unknown, limit: number): SymbolSearchResult | undefined {
@@ -828,6 +1131,56 @@ function isUnsigned32(value: unknown): value is number {
 
 function isSymbolKind(value: unknown): value is SymbolKind {
   return value === "module" || value === "procedure" || value === "function" || value === "query";
+}
+
+function isContextNodeKind(value: unknown): value is ContextNodeKind {
+  return [
+    "metadata",
+    "module",
+    "procedure",
+    "function",
+    "query",
+    "data_composition_schema",
+    "data_set",
+    "data_composition_field",
+    "xdto_type",
+    "http_service_url_template",
+    "http_service_method",
+    "web_service_operation",
+    "web_service_parameter",
+    "form",
+    "command",
+    "attribute",
+    "standard_attribute",
+    "tabular_section",
+    "dimension",
+    "resource",
+    "measure",
+    "role",
+    "access_right",
+    "subsystem",
+    "unknown",
+  ].includes(value as ContextNodeKind);
+}
+
+function isContextEdgeKind(value: unknown): value is ContextEdgeKind {
+  return [
+    "contains",
+    "calls",
+    "references",
+    "reads",
+    "writes",
+    "grants",
+    "includes",
+    "extends",
+    "depends_on",
+    "opens",
+    "triggers",
+  ].includes(value as ContextEdgeKind);
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 export function isSafeRelativeSymbolPath(value: unknown): value is string {

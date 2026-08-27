@@ -87,6 +87,7 @@ fn assert_catalog(listed: &Value) {
             "oneagent.graph",
             "oneagent.impact",
             "oneagent.query",
+            "oneagent.symbols",
             "oneagent.validation"
         ]
     );
@@ -124,6 +125,17 @@ fn assert_catalog(listed: &Value) {
             "opens",
             "triggers"
         ])
+    );
+    let symbols = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.symbols")
+        .expect("symbols definition");
+    assert_eq!(symbols["inputSchema"]["required"], json!(["query"]));
+    assert_eq!(
+        symbols["inputSchema"]["properties"]["kinds"]["items"]["enum"],
+        json!(["module", "procedure", "function", "query"])
     );
 }
 
@@ -170,6 +182,9 @@ fn tool_cases(
             "maxDepth": 1,
             "maxCandidates": 4,
             "budgetBytes": 4096
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "e", "limit": 2
         }}),
     ]
 }
@@ -300,6 +315,20 @@ fn assert_projection(offset: usize, content: &Value) {
             );
             assert!(items.iter().any(|item| item["reason"] == "related"));
         }
+        8 => {
+            let results = content["results"].as_array().expect("symbol results");
+            assert_eq!(results.len(), 2);
+            assert_eq!(content["total"], 5);
+            assert_eq!(content["truncated"], true);
+            assert!(results.iter().all(|result| {
+                result["configurationId"].is_string()
+                    && result["configurationName"].is_string()
+                    && result["nodeId"].is_string()
+                    && result["name"].is_string()
+                    && result["kind"].is_string()
+                    && result["location"]["path"].is_string()
+            }));
+        }
         _ => {}
     }
 }
@@ -356,6 +385,22 @@ async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
             "operation": "relations",
             "nodeId": node_id,
             "edgeKinds": ["calls", "calls"]
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {"query": ""}}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "kinds": []
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "kinds": ["module", "module"]
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "kinds": ["metadata"]
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "configurationId": "missing"
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "extra": true
         }}),
     ] {
         let response = dispatch(&server, &request(30, "tools/call", &fields)).await;
@@ -414,6 +459,9 @@ async fn public_semantic_tools_enforce_exact_and_one_over_bounds() {
             "configurationId": configuration_id, "nodeId": node_id,
             "maxDepth": 4, "maxCandidates": 128, "budgetBytes": 32768
         }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x".repeat(256), "limit": 100
+        }}),
     ];
     for fields in &exact {
         let response = dispatch(&server, &request(40, "tools/call", fields)).await;
@@ -441,6 +489,12 @@ async fn public_semantic_tools_enforce_exact_and_one_over_bounds() {
             "configurationId": configuration_id, "nodeId": node_id,
             "budgetBytes": 32769
         }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x".repeat(257)
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "x", "limit": 101
+        }}),
     ];
     for fields in &one_over {
         let response = dispatch(&server, &request(41, "tools/call", fields)).await;
@@ -449,6 +503,100 @@ async fn public_semantic_tools_enforce_exact_and_one_over_bounds() {
             "{response}"
         );
     }
+}
+
+#[tokio::test]
+async fn symbol_search_preserves_matching_filtering_ordering_and_locations() {
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let designer_id = snapshot
+        .configurations()
+        .iter()
+        .find(|configuration| configuration.configuration_name().as_str() == "DNSWorldEdition")
+        .expect("Designer fixture")
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    let all = dispatch(
+        &server,
+        &request(
+            60,
+            "tools/call",
+            &json!({"name": "oneagent.symbols", "arguments": {
+                "query": "e", "limit": 100
+            }}),
+        ),
+    )
+    .await;
+    let results = all["result"]["structuredContent"]["results"]
+        .as_array()
+        .expect("symbol results");
+    assert_eq!(results.len(), 5);
+    assert_eq!(
+        results
+            .iter()
+            .map(|result| result["name"].as_str().expect("symbol name"))
+            .collect::<Vec<_>>(),
+        [
+            "DynamicSecurityOverridable",
+            "FillSecurityCollection",
+            "ObjectModule",
+            "Query",
+            "ReadMissingCatalog"
+        ]
+    );
+    assert!(
+        results.iter().any(|result| {
+            result["kind"] == "module" && result["location"].get("span").is_none()
+        })
+    );
+    assert!(results.iter().any(|result| {
+        result["kind"] == "procedure"
+            && result["location"]["span"]["start"]["line"].is_u64()
+            && result["location"]["span"]["start"]["column"] == 1
+    }));
+
+    let filtered = dispatch(
+        &server,
+        &request(
+            61,
+            "tools/call",
+            &json!({"name": "oneagent.symbols", "arguments": {
+                "query": "SECURITY", "configurationId": designer_id,
+                "kinds": ["procedure"]
+            }}),
+        ),
+    )
+    .await;
+    assert_eq!(filtered["result"]["structuredContent"]["total"], 1);
+    assert_eq!(
+        filtered["result"]["structuredContent"]["results"][0]["name"],
+        "FillSecurityCollection"
+    );
+
+    let whitespace = dispatch(
+        &server,
+        &request(
+            62,
+            "tools/call",
+            &json!({"name": "oneagent.symbols", "arguments": {
+                "query": " "
+            }}),
+        ),
+    )
+    .await;
+    assert_eq!(
+        whitespace["result"]["structuredContent"]["results"],
+        json!([])
+    );
+    assert_eq!(whitespace["result"]["structuredContent"]["total"], 0);
+    assert_eq!(
+        whitespace["result"]["structuredContent"]["truncated"],
+        false
+    );
 }
 
 #[tokio::test]

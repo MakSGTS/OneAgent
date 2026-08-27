@@ -92,7 +92,7 @@ fn semantic_calls(
     node_id: &str,
     diagnostic_configuration: &str,
     current_configuration: &str,
-) -> [Value; 6] {
+) -> [Value; 7] {
     [
         json!({"name": "oneagent.graph", "arguments": {"limit": 1}}),
         json!({"name": "oneagent.query", "arguments": {
@@ -117,6 +117,9 @@ fn semantic_calls(
             "maxDepth": 1,
             "maxCandidates": 4,
             "budgetBytes": 4096
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "e", "kinds": ["module", "procedure", "function", "query"], "limit": 2
         }}),
     ]
 }
@@ -176,6 +179,7 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
                 "oneagent.graph",
                 "oneagent.impact",
                 "oneagent.query",
+                "oneagent.symbols",
                 "oneagent.validation"
             ]
         );
@@ -280,21 +284,33 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
 }
 
 fn assert_semantic_responses(responses: &[Value]) {
-    assert_eq!(responses.len(), 10);
-    for response in &responses[..6] {
+    assert_eq!(responses.len(), 11);
+    for response in &responses[..7] {
         assert!(response["result"].get("isError").is_none(), "{response}");
         assert!(response["result"].get("structuredContent").is_some());
     }
-    assert_eq!(responses[6]["result"]["isError"], true);
+    let symbols = &responses[6]["result"]["structuredContent"];
+    assert_eq!(symbols["total"], 5);
     assert_eq!(
-        responses[7],
+        symbols["results"].as_array().expect("symbol results").len(),
+        2
+    );
+    assert!(symbols.to_string().contains("Module.bsl"));
+    assert!(
+        !symbols
+            .to_string()
+            .contains(fixture_root().to_str().expect("UTF-8 fixture path"))
+    );
+    assert_eq!(responses[7]["result"]["isError"], true);
+    assert_eq!(
+        responses[8],
         json!({
             "jsonrpc": "2.0",
             "id": 21,
             "error": {"code": -32602, "message": "Invalid params"}
         })
     );
-    for response in &responses[8..] {
+    for response in &responses[9..] {
         assert_eq!(response["result"]["isError"], true);
         assert_eq!(
             response["result"]["structuredContent"]["code"],
@@ -316,6 +332,95 @@ fn request_with_fields(id: u64, method: &str, fields: &Value) -> String {
         }),
     );
     json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()
+}
+
+#[tokio::test]
+async fn public_mcp_process_symbols_cover_all_supported_kinds_and_source_formats() {
+    let temporary = tempdir().expect("temporary symbol Workspace must be created");
+    copy_tree(&fixture_root(), temporary.path());
+    for path in [
+        temporary
+            .path()
+            .join("designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl"),
+        temporary
+            .path()
+            .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl"),
+    ] {
+        let mut source = fs::read_to_string(&path).expect("module source must be readable");
+        source.push_str(
+            "\nProcedure SearchProcedure()\nEndProcedure\n\nFunction SearchFunction()\nEndFunction\n\nФункция Поиск()\nКонецФункции\n",
+        );
+        fs::write(path, source).expect("extended module source must be written");
+    }
+    let edt_module = temporary
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let mut source = fs::read_to_string(&edt_module).expect("EDT module must be readable");
+    source.push_str(
+        "\nProcedure BuildSearchQuery()\nSearchQuery = New Query(\"SELECT Ref FROM Catalog.MissingRuntimeFixture\");\nEndProcedure\n",
+    );
+    fs::write(edt_module, source).expect("EDT Query source must be written");
+
+    let calls = [
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "o", "kinds": ["module"], "limit": 100
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "SearchProcedure", "kinds": ["procedure"], "limit": 100
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "searchfunction", "kinds": ["function"], "limit": 100
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "SearchQuery", "kinds": ["query"], "limit": 100
+        }}),
+        json!({"name": "oneagent.symbols", "arguments": {
+            "query": "поиск", "kinds": ["function"], "limit": 100
+        }}),
+    ];
+    let input = format!(
+        "{}\n",
+        calls
+            .iter()
+            .enumerate()
+            .map(|(offset, fields)| request_with_fields(
+                60 + u64::try_from(offset).expect("small offset"),
+                "tools/call",
+                fields
+            ))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    let output = run_process_in(temporary.path(), input.as_bytes()).await;
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let responses = String::from_utf8(output.stdout)
+        .expect("stdout must be UTF-8 JSON lines")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("symbol response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(responses.len(), 5);
+    assert_eq!(responses[0]["result"]["structuredContent"]["total"], 2);
+    assert_eq!(responses[1]["result"]["structuredContent"]["total"], 2);
+    assert_eq!(responses[2]["result"]["structuredContent"]["total"], 2);
+    assert_eq!(responses[3]["result"]["structuredContent"]["total"], 1);
+    assert_eq!(responses[4]["result"]["structuredContent"]["total"], 2);
+    let duplicate_name_ids = responses[2]["result"]["structuredContent"]["results"]
+        .as_array()
+        .expect("duplicate-name function results")
+        .iter()
+        .map(|result| {
+            result["configurationId"]
+                .as_str()
+                .expect("configuration ID")
+        })
+        .collect::<Vec<_>>();
+    assert!(duplicate_name_ids.windows(2).all(|pair| pair[0] < pair[1]));
+    for response in responses {
+        let serialized = response["result"]["structuredContent"].to_string();
+        assert!(!serialized.contains(temporary.path().to_str().expect("UTF-8 temp path")));
+        assert!(response["result"].get("isError").is_none(), "{response}");
+    }
 }
 
 #[tokio::test]

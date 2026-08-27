@@ -1,18 +1,19 @@
 //! Read-only semantic MCP tools over immutable workspace snapshots.
 
 use std::collections::{BTreeSet, VecDeque};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use oneagent_analysis::context::{
     ContextEngine, ContextError, ContextInclusionReason, ContextIntent, ContextPolicy,
     ContextRelationDirection, ContextRequest, ContextSeed, ContextTraversalDirection,
 };
-use oneagent_common::EntityId;
+use oneagent_common::{EntityId, SourceLocation};
 use oneagent_graph::{
     EdgeKind, GraphEdge, GraphNode, ImpactNodeStatus, ImpactPropagationDirection, ImpactReasonKind,
-    ImpactSeedKind, ImpactSnapshot, NodeId, SemanticDiagnosticKind, SemanticDiagnosticSeverity,
-    SemanticGraphQuery, SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity,
-    SemanticImpactAnalyzer, SemanticImpactOptions,
+    ImpactSeedKind, ImpactSnapshot, NodeId, NodeKind, SemanticDiagnosticKind,
+    SemanticDiagnosticSeverity, SemanticGraphQuery, SemanticGraphValidationIssueKind,
+    SemanticGraphValidationSeverity, SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use oneagent_protocol::{
     McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome, McpToolDefinition,
@@ -36,12 +37,14 @@ const VALIDATION: &str = "oneagent.validation";
 const DIAGNOSTICS: &str = "oneagent.diagnostics";
 const IMPACT: &str = "oneagent.impact";
 const CONTEXT: &str = "oneagent.context";
+const SYMBOLS: &str = "oneagent.symbols";
 const ACTOR: &str = "oneagent.mcp";
 const REQUEST: &str = "oneagent.mcp.request";
 const REVISION: &str = "oneagent.mcp.read-only.v1";
 const DEFAULT_LIMIT: usize = 50;
 const MAX_LIMIT: usize = 100;
 const MAX_DEPTH: usize = 4;
+const MAX_SYMBOL_QUERY_BYTES: usize = 256;
 const EDGE_KIND_NAMES: [&str; 11] = [
     "contains",
     "calls",
@@ -66,7 +69,15 @@ pub struct McpSemanticServerError;
 ///
 /// Returns a closed error when a fixed catalog or policy invariant fails.
 pub fn semantic_server(snapshot: WorkspaceSnapshot) -> Result<McpServer, McpSemanticServerError> {
-    let names = [CONTEXT, DIAGNOSTICS, GRAPH, IMPACT, QUERY, VALIDATION];
+    let names = [
+        CONTEXT,
+        DIAGNOSTICS,
+        GRAPH,
+        IMPACT,
+        QUERY,
+        SYMBOLS,
+        VALIDATION,
+    ];
     let mut catalog = definitions()?;
     catalog.extend(impact_context_definitions()?);
     build_server(snapshot, catalog, &names)
@@ -175,6 +186,26 @@ fn definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
                     "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
                 },
                 "required": ["configurationId", "operation", "nodeId"],
+                "additionalProperties": false
+            }),
+        ),
+        (
+            SYMBOLS,
+            "Search bounded navigable symbols in immutable OneAgent semantic graphs.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "minLength": 1},
+                    "configurationId": {"type": "string"},
+                    "kinds": {
+                        "type": "array",
+                        "items": {"enum": ["module", "procedure", "function", "query"]},
+                        "minItems": 1,
+                        "uniqueItems": true
+                    },
+                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+                },
+                "required": ["query"],
                 "additionalProperties": false
             }),
         ),
@@ -381,8 +412,218 @@ fn project(
         DIAGNOSTICS => diagnostics(snapshot, arguments),
         IMPACT => impact(snapshot, arguments),
         CONTEXT => context(snapshot, arguments),
+        SYMBOLS => symbols(snapshot, arguments),
         _ => Err(INVALID),
     }
+}
+
+struct SymbolResult<'a> {
+    configuration: &'a WorkspaceConfigurationSnapshot,
+    node: &'a GraphNode,
+    folded_name: String,
+    kind: &'static str,
+    location: Value,
+}
+
+fn symbols(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+) -> Result<Value, SemanticError> {
+    fields(arguments, &["query", "configurationId", "kinds", "limit"])?;
+    let query = string(arguments, "query")?;
+    if query.len() > MAX_SYMBOL_QUERY_BYTES {
+        return Err(INVALID);
+    }
+    let folded_query = query.to_lowercase();
+    let selected = optional_string(arguments, "configurationId")?;
+    if let Some(id) = selected {
+        configuration(snapshot, id)?;
+    }
+    let accepted_kinds = symbol_kinds(arguments)?;
+    let limit = limit(arguments)?;
+    let mut results = Vec::new();
+
+    for configuration in snapshot.configurations().iter().filter(|configuration| {
+        selected.is_none_or(|id| id == configuration.configuration_id().as_str())
+    }) {
+        for node in configuration.graph().nodes() {
+            let Some(kind) = symbol_kind(node.kind()) else {
+                continue;
+            };
+            if !accepted_kinds.contains(kind) {
+                continue;
+            }
+            let folded_name = node.name().as_str().to_lowercase();
+            if !folded_name.contains(&folded_query) {
+                continue;
+            }
+            let Some(location) = unique_symbol_location(snapshot, configuration, node) else {
+                continue;
+            };
+            results.push(SymbolResult {
+                configuration,
+                node,
+                folded_name,
+                kind,
+                location,
+            });
+        }
+    }
+
+    results.sort_by(|left, right| {
+        (
+            left.folded_name.as_str(),
+            left.node.name().as_str(),
+            left.kind,
+            left.node.id().as_str(),
+            left.configuration.configuration_id().as_str(),
+        )
+            .cmp(&(
+                right.folded_name.as_str(),
+                right.node.name().as_str(),
+                right.kind,
+                right.node.id().as_str(),
+                right.configuration.configuration_id().as_str(),
+            ))
+    });
+    let total = u64::try_from(results.len()).map_err(|_| EXECUTION_FAILED)?;
+    results.truncate(limit);
+    let values = results
+        .into_iter()
+        .map(|result| {
+            json!({
+                "configurationId": result.configuration.configuration_id().as_str(),
+                "configurationName": result.configuration.configuration_name().as_str(),
+                "nodeId": result.node.id().as_str(),
+                "name": result.node.name().as_str(),
+                "kind": result.kind,
+                "location": result.location
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "results": values,
+        "total": total,
+        "truncated": total > u64::try_from(limit).map_err(|_| EXECUTION_FAILED)?
+    }))
+}
+
+fn symbol_kinds(arguments: &Map<String, Value>) -> Result<BTreeSet<&'static str>, SemanticError> {
+    let Some(value) = arguments.get("kinds") else {
+        return Ok(BTreeSet::from(["module", "procedure", "function", "query"]));
+    };
+    let values = value
+        .as_array()
+        .filter(|values| !values.is_empty())
+        .ok_or(INVALID)?;
+    let mut kinds = BTreeSet::new();
+    for value in values {
+        let kind = value.as_str().and_then(symbol_kind_name).ok_or(INVALID)?;
+        if !kinds.insert(kind) {
+            return Err(INVALID);
+        }
+    }
+    Ok(kinds)
+}
+
+const fn symbol_kind(kind: NodeKind) -> Option<&'static str> {
+    match kind {
+        NodeKind::Module => Some("module"),
+        NodeKind::Procedure => Some("procedure"),
+        NodeKind::Function => Some("function"),
+        NodeKind::Query => Some("query"),
+        _ => None,
+    }
+}
+
+const fn symbol_kind_name(value: &str) -> Option<&'static str> {
+    match value.as_bytes() {
+        b"module" => Some("module"),
+        b"procedure" => Some("procedure"),
+        b"function" => Some("function"),
+        b"query" => Some("query"),
+        _ => None,
+    }
+}
+
+fn unique_symbol_location(
+    snapshot: &WorkspaceSnapshot,
+    configuration: &WorkspaceConfigurationSnapshot,
+    node: &GraphNode,
+) -> Option<Value> {
+    let locations = node
+        .provenance()
+        .iter()
+        .filter_map(oneagent_graph::Provenance::location)
+        .collect::<BTreeSet<_>>();
+    if locations.len() != 1 {
+        return None;
+    }
+    project_symbol_location(snapshot, configuration, locations.into_iter().next()?)
+}
+
+fn project_symbol_location(
+    snapshot: &WorkspaceSnapshot,
+    configuration: &WorkspaceConfigurationSnapshot,
+    location: &SourceLocation,
+) -> Option<Value> {
+    let source = Path::new(location.path().as_str());
+    let candidate = if source.is_absolute() {
+        source.to_path_buf()
+    } else {
+        configuration.root_path().join(source)
+    };
+    let candidate = lexical_normalize(&candidate)?;
+    let configuration_root = lexical_normalize(configuration.root_path())?;
+    let workspace_root = lexical_normalize(snapshot.root_path())?;
+    candidate.strip_prefix(&configuration_root).ok()?;
+    let relative = candidate.strip_prefix(&workspace_root).ok()?;
+    let path = relative_path(relative)?;
+    let span = location.span().map(|span| {
+        json!({
+            "start": {"line": span.start().line(), "column": span.start().column()},
+            "end": {"line": span.end().line(), "column": span.end().column()}
+        })
+    });
+    let mut value = Map::new();
+    value.insert("path".to_owned(), Value::String(path));
+    if let Some(span) = span {
+        value.insert("span".to_owned(), span);
+    }
+    Some(Value::Object(value))
+}
+
+fn lexical_normalize(path: &Path) -> Option<PathBuf> {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::Normal(value) => normalized.push(value),
+        }
+    }
+    Some(normalized)
+}
+
+fn relative_path(path: &Path) -> Option<String> {
+    let components = path
+        .components()
+        .map(|component| match component {
+            Component::Normal(value) => value.to_str(),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    if components.is_empty() {
+        return None;
+    }
+    let path = components.join("/");
+    (path.len() <= oneagent_common::MAX_SOURCE_PATH_BYTES).then_some(path)
 }
 
 fn graph(
@@ -1096,15 +1337,37 @@ const fn diagnostic_kind(value: SemanticDiagnosticKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use std::sync::Arc;
 
+    use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
+    use oneagent_graph::{
+        Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
+    };
     use oneagent_protocol::{McpToolCallHandler, McpToolCallOutcome};
     use oneagent_tool_policy::{PolicyRevision, ToolPolicy};
     use serde_json::Map;
     use tempfile::tempdir;
 
-    use super::{GRAPH, Handler};
+    use super::{GRAPH, Handler, SYMBOLS, project_symbol_location, unique_symbol_location};
     use crate::WorkspaceSnapshotBuilder;
+
+    fn fixture_root() -> &'static Path {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/workspace_service")
+            .leak()
+    }
+
+    fn provenance(location: SourceLocation, producer: &str) -> Provenance {
+        Provenance::new_with_location(
+            None,
+            Some(location),
+            ProducerId::new(producer),
+            FactOrigin::Declared,
+            Confidence::Exact,
+            ResolutionState::NotApplicable,
+        )
+    }
 
     #[tokio::test]
     async fn denied_policy_cannot_bypass_the_semantic_executor_gate() {
@@ -1121,11 +1384,112 @@ mod tests {
             .expect("empty policy must deny by default"),
         };
 
-        let outcome = handler.call(GRAPH, &Map::new()).await;
-        assert!(matches!(
-            outcome,
-            McpToolCallOutcome::Error { ref code, ref message }
-                if code == "policy_denied" && message == "The semantic tool request was denied."
-        ));
+        for tool in [GRAPH, SYMBOLS] {
+            let outcome = handler.call(tool, &Map::new()).await;
+            assert!(matches!(
+                outcome,
+                McpToolCallOutcome::Error { ref code, ref message }
+                    if code == "policy_denied" && message == "The semantic tool request was denied."
+            ));
+        }
+    }
+
+    #[test]
+    fn symbol_locations_require_one_distinct_confined_location() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let configuration = &snapshot.configurations()[0];
+        let path = SourcePath::new(
+            configuration
+                .root_path()
+                .join("Module.bsl")
+                .to_string_lossy(),
+        )
+        .expect("confined source path");
+        let location = SourceLocation::new(path, None);
+
+        let missing = GraphNode::new(
+            EntityId::new("missing").expect("node id"),
+            EntityName::new("Missing").expect("node name"),
+            NodeKind::Module,
+        );
+        assert!(unique_symbol_location(&snapshot, configuration, &missing).is_none());
+
+        let repeated = GraphNode::new_with_provenance(
+            EntityId::new("repeated").expect("node id"),
+            EntityName::new("Repeated").expect("node name"),
+            NodeKind::Module,
+            vec![
+                provenance(location.clone(), "producer-a"),
+                provenance(location.clone(), "producer-b"),
+            ],
+        );
+        assert_eq!(
+            unique_symbol_location(&snapshot, configuration, &repeated)
+                .expect("identical locations must collapse")["path"],
+            format!(
+                "{}/Module.bsl",
+                configuration
+                    .root_path()
+                    .file_name()
+                    .expect("root name")
+                    .to_string_lossy()
+            )
+        );
+
+        let conflicting = GraphNode::new_with_provenance(
+            EntityId::new("conflicting").expect("node id"),
+            EntityName::new("Conflicting").expect("node name"),
+            NodeKind::Module,
+            vec![
+                provenance(location, "producer-a"),
+                provenance(
+                    SourceLocation::new(
+                        SourcePath::new(
+                            configuration
+                                .root_path()
+                                .join("Other.bsl")
+                                .to_string_lossy(),
+                        )
+                        .expect("second confined source path"),
+                        None,
+                    ),
+                    "producer-b",
+                ),
+            ],
+        );
+        assert!(unique_symbol_location(&snapshot, configuration, &conflicting).is_none());
+    }
+
+    #[test]
+    fn symbol_location_projection_rejects_workspace_and_configuration_escape() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let configuration = &snapshot.configurations()[0];
+        let outside_workspace = snapshot
+            .root_path()
+            .parent()
+            .expect("fixture root parent")
+            .join("outside.bsl");
+        let outside = SourceLocation::new(
+            SourcePath::new(outside_workspace.to_string_lossy()).expect("absolute source path"),
+            None,
+        );
+        assert!(project_symbol_location(&snapshot, configuration, &outside).is_none());
+
+        let other_configuration = &snapshot.configurations()[1];
+        let cross_configuration = SourceLocation::new(
+            SourcePath::new(
+                other_configuration
+                    .root_path()
+                    .join("Module.bsl")
+                    .to_string_lossy(),
+            )
+            .expect("cross-configuration source path"),
+            None,
+        );
+        assert!(project_symbol_location(&snapshot, configuration, &cross_configuration).is_none());
     }
 }

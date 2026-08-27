@@ -7331,6 +7331,23 @@ covers static Query declarations. Real fixtures prove exact lines, repeated buil
 trips, missing-location compatibility, and unchanged graph identities without
 adding a dependency or MCP/extension behavior.
 
+###### Sprint 31 navigation MCP implementation
+
+Task 4 adds the seventh lexicographically ordered read-only
+`oneagent.symbols` tool and its exact Tool Policy allow rule without changing
+the MCP revision, framing, immutable startup snapshot, or the six existing
+tool contracts. Runtime applies the accepted UTF-8 byte bounds, Unicode
+lowercase substring matching, optional Configuration and kind filters, exact
+five-part ordering, limit/truncation semantics, identical-location
+deduplication, and lexical confinement under both Configuration and Workspace
+roots. Results expose only Workspace-relative forward-slash paths and
+one-based spans. In-memory and public-process evidence covers all four symbol
+kinds, both source formats, multi-Configuration filtering, case and whitespace
+behavior, exact/one-over bounds, missing/conflicting locations, path escape,
+policy denial, repeated/reordered requests, channel purity, EOF cleanup, and
+the unchanged existing tool families. No dependency, source content,
+filesystem fallback, TypeScript behavior, or LSP surface is added.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused
 Common/BSL/Graph/adapter/Workspace tests and the canonical Rust workspace gate.

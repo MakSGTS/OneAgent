@@ -7193,6 +7193,135 @@ Suggested planning commit message:
 Plan Sprint 30 VS Code Extension Foundation
 ```
 
+##### Sprint 31 Navigation and Symbol Search execution plan
+
+Sprint 31 is planned from committed Sprint 30 review head `4b3198d1`. The
+[Sprint 30 review](reviews/sprint-30-vscode-extension-foundation.md) records a
+non-blocking decision, Sprint 30 is `completed`, and Sprint 31 is the unique
+`next` target. The live extension already owns one explicit-demand connection
+to the immutable public `oneagent-mcp` process, while the accepted MCP catalog
+returns source-independent graph projections and deliberately omits source and
+provenance paths. Semantic Model 2.0 assigns source paths and spans to Common
+and requires them for navigation, but the live Common crate has no public
+source-path/span primitive and EDT BSL declaration lines are not preserved in
+`GraphNode` evidence. Those confirmed gaps are explicit prerequisites, not UI
+implementation details.
+
+Repository-owned EDT and Designer XML fixtures, BSL declaration locations,
+graph provenance, Workspace roots, MCP in-memory/public-process tests, and
+pinned VS Code 1.134.0 Extension Host/package evidence are sufficient for a
+bounded investigation and deterministic implementation plan. Task 1 must pin
+the exact editor APIs and inventory current source-location evidence, producers,
+consumers, path-confinement rules, symbol families, matching/ordering candidates,
+protocol choices, and test oracles. Task 2 must accept ADR-0053 before any
+production location, protocol, or UI behavior changes.
+
+Framework readiness is complete through the existing Investigation,
+Architecture, Graph Implementation, MCP Protocol, IDE Extension, and Review
+profiles, templates, and workflows. They already cover public graph models,
+producer evidence, protocol/Tool Policy compatibility, cross-language editor
+integration, packaging, and independent review. No reusable framework change or
+post-sprint framework audit is planned.
+
+The complete Sprint 31 prompt suite is owned by
+`docs/codex/prompts/sprint-31-navigation-symbol-search/`. The immediately
+preceding suite is exactly
+`docs/codex/prompts/sprint-30-vscode-extension-foundation/`, containing these
+eight tracked files with an identical filesystem inventory and no untracked
+addition at planning time:
+
+- `00-sprint-30-execution-loop.md`
+- `01-investigate-vscode-extension-foundation.md`
+- `02-define-vscode-extension-foundation.md`
+- `03-establish-vscode-extension-package.md`
+- `04-implement-mcp-runtime-client.md`
+- `05-integrate-vscode-runtime-lifecycle.md`
+- `06-complete-vscode-extension-evidence.md`
+- `07-sprint-30-integration-review.md`
+
+Only Task 7 may retire those exact files, after a non-blocking independent and
+primary review, successful complete validation, and a passing same-reviewer
+artifact-consistency check.
+
+###### Sprint 31 objective
+
+Add one bounded semantic symbol-search and source-navigation experience to the
+supported desktop VS Code workspace extension, backed by canonical graph facts,
+typed source locations, and the public `oneagent-mcp` process, without adding
+LSP, diagnostics UI, editor-neutral protocol behavior, mutable workspace
+reload, or TypeScript-owned semantics.
+
+Included scope is:
+
+- pinned investigation of VS Code navigation/Quick Pick APIs, repository
+  source-location evidence, symbol families, graph/provenance ownership,
+  Workspace confinement, MCP/Tool Policy compatibility, and deterministic
+  oracles;
+- accepted ADR-0053 for typed source paths/spans, producer coverage, symbol
+  search matching/order/bounds, navigation projection, protocol/errors,
+  sensitive-data policy, VS Code UX, compatibility, and deferrals;
+- the smallest accepted Common/Graph source-location prerequisite and bounded
+  production producer slice with deterministic real-fixture evidence;
+- bounded transport-neutral and MCP symbol-search/navigation projection with
+  truthful catalog/schema/handler/Tool Policy/public-process evidence;
+- explicit-demand VS Code commands, Quick Pick selection, safe workspace-
+  relative document opening, coordinate conversion, cancellation, failure,
+  repetition, and cleanup through public Extension Host and real-process tests;
+- cross-platform CI, package, dependency, compatibility, scope, and current-
+  state evidence; and
+- one mandatory fresh-context read-only integration reviewer, primary
+  reconciliation, artifact consistency, Sprint 32 hand-off, and conditional
+  Sprint 30 prompt-suite retirement.
+
+Excluded scope is LSP and VS Code definition/reference/document/workspace-symbol
+providers; reference-search UI; fuzzy or relevance scoring without an accepted
+deterministic contract; source-content disclosure; filesystem search or graph
+mutation; TypeScript semantic inference or opaque-provenance parsing; workspace
+watch/reload changes; automatic Runtime connection or installation; diagnostics;
+chat/context UI; EDT plugin integration; remote/web/multi-root support; external
+client compatibility; Marketplace publication/signing; telemetry; edits and
+refactoring; and broad performance/security claims.
+
+###### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate navigation and symbol search. | Investigation / investigation | Pinned editor/API evidence, source-location and consumer inventory, ownership/compatibility map, first-slice candidates, and deterministic test matrix. | Sprint 31 planning baseline. | `Investigate Sprint 31 navigation and symbol search` |
+| 2 | Define navigation and symbol search. | Architecture / architecture | Accepted ADR-0053 for locations, producers, search, navigation, path confinement, MCP/Tool Policy, VS Code UX, compatibility, evidence, and deferrals. | Task 1. | `Define Sprint 31 navigation and symbol search` |
+| 3 | Implement the source-location model. | Graph Implementation / graph model | Accepted typed source-location graph prerequisite and bounded production producer evidence. | Accepted ADR-0053. | `Implement Sprint 31 source location model` |
+| 4 | Implement navigation MCP tools. | MCP Protocol / MCP Protocol | Bounded deterministic symbol search/navigation projection with truthful Tool Policy, schemas, errors, and public process evidence. | Task 3. | `Implement Sprint 31 navigation MCP tools` |
+| 5 | Integrate VS Code navigation and search. | IDE Extension / IDE Extension | Explicit-demand Quick Pick symbol search and safe source navigation with cancellation, failures, repetition, cleanup, Extension Host, and real-process evidence. | Task 4. | `Integrate Sprint 31 VS Code navigation and search` |
+| 6 | Complete navigation and search evidence. | IDE Extension / IDE Extension | Cross-platform complete Rust/extension/package matrix, compatibility/dependency/scope audits, and synchronized current-state docs. | Task 5. | `Complete Sprint 31 navigation and search evidence` |
+| 7 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 32 hand-off, and conditional Sprint 30 suite retirement. | Task 6 and all validation. | `Complete Sprint 31 navigation and symbol search review` |
+
+Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
+source/link, structure, and `git diff --check` gates. Task 3 runs focused
+Common/BSL/Graph/adapter/Workspace tests and the canonical Rust workspace gate.
+Task 4 runs focused Graph/Workspace/Tool Policy/protocol/Runtime/public-process
+tests and the canonical Rust gate. Task 5 runs non-zero typecheck, build, unit,
+Extension Host, real-process, package/inventory, and required Rust gates. Task 6
+runs both complete clean extension and canonical Rust workspace matrices plus
+API/catalog/schema/handler/policy/manifest/dependency/scope audits. Task 7 gives
+the exact planning-through-Task-6 range to one fresh-context read-only reviewer,
+then the primary independently inspects and reruns the complete matrix. The
+same reviewer must pass the drafted artifact before Roadmap transition or
+prompt retirement.
+
+Sprint 31 remains `next` during planning, becomes `active` when Task 1 starts,
+and may become `completed` only after Task 7. Missing or contradictory source-
+location evidence, an unapproved dependency, guessed or escaping source paths,
+ambiguous coordinate semantics, unstable search ordering, unbounded results,
+catalog/schema/handler/Tool Policy disagreement, absolute-path leakage,
+TypeScript semantic duplication, zero matched tests, failed validation or
+commit, reviewer mutation or incompleteness, unresolved evidence disagreement,
+or failed artifact consistency stops execution.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 31 Navigation and Symbol Search
+```
+
 The v0.6 release integration review follows Sprint 35.
 
 #### v0.7 — Intelligence

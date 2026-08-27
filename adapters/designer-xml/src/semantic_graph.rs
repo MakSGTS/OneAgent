@@ -3,7 +3,7 @@
 use oneagent_bsl::{
     BslDeclarationExtractor, BslParseError, BslSymbolKind, LineBslDeclarationExtractor,
 };
-use oneagent_common::EntityId;
+use oneagent_common::{EntityId, SourceLocation, SourcePath, SourcePosition, SourceSpan};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphError, GraphNode, GraphNodePayload,
     GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph,
@@ -124,7 +124,9 @@ fn emit_module_and_declarations(
             module.kind().as_str()
         ),
     )?;
-    let module_provenance = parsed_provenance(module_source.clone(), GRAPH_PRODUCER);
+    let module_location = file_location(module.source().artifact_path())?;
+    let module_provenance = parsed_provenance(module_source.clone(), GRAPH_PRODUCER)
+        .with_location(module_location.clone());
     insert_unique_node(
         graph,
         GraphNode::new_with_provenance(
@@ -150,7 +152,9 @@ fn emit_module_and_declarations(
             symbol.line()
         ))
         .map_err(|_| DesignerXmlGraphError::InvalidSourceIdentifier)?;
-        let provenance = parsed_provenance(symbol_source, BSL_PRODUCER);
+        let provenance = parsed_provenance(symbol_source, BSL_PRODUCER).with_location(
+            declaration_location(module.source().artifact_path(), symbol.line())?,
+        );
         let kind = match symbol.kind() {
             BslSymbolKind::Procedure => NodeKind::Procedure,
             BslSymbolKind::Function => NodeKind::Function,
@@ -246,6 +250,26 @@ fn parsed_provenance(source: EntityId, producer: &'static str) -> Provenance {
     )
 }
 
+fn file_location(path: &Path) -> Result<SourceLocation, DesignerXmlGraphError> {
+    let path = path
+        .to_str()
+        .ok_or(DesignerXmlGraphError::InvalidSourceLocation)
+        .and_then(|path| {
+            SourcePath::new(path).map_err(|_| DesignerXmlGraphError::InvalidSourceLocation)
+        })?;
+    Ok(SourceLocation::new(path, None))
+}
+
+fn declaration_location(path: &Path, line: usize) -> Result<SourceLocation, DesignerXmlGraphError> {
+    let path = file_location(path)?.path().clone();
+    let line = u32::try_from(line).map_err(|_| DesignerXmlGraphError::InvalidSourceLocation)?;
+    let position =
+        SourcePosition::new(line, 1).map_err(|_| DesignerXmlGraphError::InvalidSourceLocation)?;
+    let span = SourceSpan::new(position, position)
+        .map_err(|_| DesignerXmlGraphError::InvalidSourceLocation)?;
+    Ok(SourceLocation::new(path, Some(span)))
+}
+
 /// Fatal errors produced by the Designer XML semantic builder.
 #[derive(Debug)]
 pub enum DesignerXmlGraphError {
@@ -264,6 +288,8 @@ pub enum DesignerXmlGraphError {
     },
     /// A provenance source identifier could not be represented.
     InvalidSourceIdentifier,
+    /// A module path or declaration position could not become typed evidence.
+    InvalidSourceLocation,
     /// Typed graph payload construction failed.
     NodePayload(GraphNodePayloadError),
     /// Graph endpoint validation failed.
@@ -333,6 +359,9 @@ impl Display for DesignerXmlGraphError {
             Self::InvalidSourceIdentifier => {
                 formatter.write_str("invalid Designer XML provenance source identifier")
             }
+            Self::InvalidSourceLocation => {
+                formatter.write_str("invalid Designer XML source location")
+            }
             Self::NodePayload(source) => write!(formatter, "invalid graph payload: {source}"),
             Self::Graph(source) => write!(formatter, "Designer XML graph failed: {source}"),
             Self::Bsl(source) => write!(formatter, "Designer XML BSL failed: {source}"),
@@ -358,6 +387,7 @@ impl std::error::Error for DesignerXmlGraphError {
             Self::Graph(source) => Some(source),
             Self::Bsl(source) => Some(source),
             Self::InvalidSourceIdentifier
+            | Self::InvalidSourceLocation
             | Self::DuplicateNode(_)
             | Self::DuplicateContains { .. } => None,
         }
@@ -451,6 +481,28 @@ mod tests {
         assert!(graph.nodes_by_kind(NodeKind::Function).is_empty());
         assert!(graph.nodes_by_kind(NodeKind::Query).is_empty());
         assert!(graph.edges().all(|edge| edge.kind() == EdgeKind::Contains));
+
+        let module = graph.nodes_by_kind(NodeKind::Module)[0];
+        let procedure = graph.nodes_by_kind(NodeKind::Procedure)[0];
+        let module_location = module.provenance()[0]
+            .location()
+            .expect("module location must exist");
+        let procedure_location = procedure.provenance()[0]
+            .location()
+            .expect("procedure location must exist");
+        assert!(
+            module_location
+                .path()
+                .as_str()
+                .ends_with("/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl")
+        );
+        assert_eq!(module_location.span(), None);
+        let point = procedure_location
+            .span()
+            .expect("declaration point must exist");
+        assert_eq!(point.start().line(), 5);
+        assert_eq!(point.start().column(), 1);
+        assert_eq!(point.start(), point.end());
     }
 
     #[test]
@@ -498,6 +550,10 @@ mod tests {
 
         let diff = first.diff(&second);
         assert_eq!(diff.summary().total_changes(), 0);
+        assert_eq!(
+            first.nodes().collect::<Vec<_>>(),
+            second.nodes().collect::<Vec<_>>()
+        );
         assert!(first.nodes().all(|node| {
             node.provenance().iter().all(|provenance| {
                 provenance.confidence() == oneagent_graph::Confidence::Exact

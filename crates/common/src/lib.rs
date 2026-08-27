@@ -1,5 +1,12 @@
 //! Shared domain primitives for `OneAgent`.
 
+mod source;
+
+pub use source::{
+    MAX_SOURCE_PATH_BYTES, SourceLocation, SourcePath, SourcePathError, SourcePathErrorKind,
+    SourcePosition, SourcePositionError, SourceSpan, SourceSpanError,
+};
+
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 

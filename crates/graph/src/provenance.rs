@@ -1,6 +1,6 @@
 //! Provenance model for graph facts.
 
-use oneagent_common::EntityId;
+use oneagent_common::{EntityId, SourceLocation};
 use std::fmt::{self, Display, Formatter};
 
 /// Stable identifier of a graph fact producer.
@@ -101,12 +101,11 @@ pub enum ResolutionState {
 
 /// Provenance attached to a graph fact.
 ///
-/// Source identity is currently represented by an optional [`EntityId`]
-/// because `oneagent-common` does not yet provide source-specific identity or
-/// span types.
+/// Opaque source identity and typed source location are independent evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Provenance {
     source: Option<EntityId>,
+    location: Option<SourceLocation>,
     producer: ProducerId,
     origin: FactOrigin,
     confidence: Confidence,
@@ -123,8 +122,22 @@ impl Provenance {
         confidence: Confidence,
         resolution: ResolutionState,
     ) -> Self {
+        Self::new_with_location(source, None, producer, origin, confidence, resolution)
+    }
+
+    /// Creates provenance with optional structured source location evidence.
+    #[must_use]
+    pub const fn new_with_location(
+        source: Option<EntityId>,
+        location: Option<SourceLocation>,
+        producer: ProducerId,
+        origin: FactOrigin,
+        confidence: Confidence,
+        resolution: ResolutionState,
+    ) -> Self {
         Self {
             source,
+            location,
             producer,
             origin,
             confidence,
@@ -132,10 +145,23 @@ impl Provenance {
         }
     }
 
+    /// Attaches structured source location evidence.
+    #[must_use]
+    pub fn with_location(mut self, location: SourceLocation) -> Self {
+        self.location = Some(location);
+        self
+    }
+
     /// Returns the optional source entity identifier.
     #[must_use]
     pub const fn source(&self) -> Option<&EntityId> {
         self.source.as_ref()
+    }
+
+    /// Returns optional structured source location evidence.
+    #[must_use]
+    pub const fn location(&self) -> Option<&SourceLocation> {
+        self.location.as_ref()
     }
 
     /// Returns the fact producer identifier.
@@ -165,7 +191,7 @@ impl Provenance {
 
 #[cfg(test)]
 mod tests {
-    use oneagent_common::EntityId;
+    use oneagent_common::{EntityId, SourceLocation, SourcePath};
 
     use super::{Confidence, FactOrigin, ProducerId, Provenance, ResolutionState};
 
@@ -214,10 +240,57 @@ mod tests {
         );
 
         assert_eq!(provenance.source(), Some(&source));
+        assert_eq!(provenance.location(), None);
         assert_eq!(provenance.producer(), &producer);
         assert_eq!(provenance.origin(), FactOrigin::Resolved);
         assert_eq!(provenance.confidence(), Confidence::High);
         assert_eq!(provenance.resolution(), ResolutionState::Resolved);
+    }
+
+    #[test]
+    fn provenance_preserves_optional_location_without_changing_source_identity() {
+        let source = source_id("oneagent://source/modules/Sales.bsl");
+        let location = SourceLocation::new(
+            SourcePath::new("src/CommonModules/Sales/Module.bsl").expect("source path must pass"),
+            None,
+        );
+        let provenance = Provenance::new(
+            Some(source.clone()),
+            ProducerId::new("oneagent.graph.bsl-declaration-contributor"),
+            FactOrigin::Declared,
+            Confidence::Exact,
+            ResolutionState::NotApplicable,
+        )
+        .with_location(location.clone());
+
+        assert_eq!(provenance.source(), Some(&source));
+        assert_eq!(provenance.location(), Some(&location));
+    }
+
+    #[test]
+    fn location_participates_in_provenance_equality() {
+        let provenance = Provenance::new(
+            Some(source_id("source")),
+            ProducerId::new("producer"),
+            FactOrigin::Declared,
+            Confidence::Exact,
+            ResolutionState::NotApplicable,
+        );
+        let first = provenance.clone().with_location(SourceLocation::new(
+            SourcePath::new("src/First.bsl").expect("source path must pass"),
+            None,
+        ));
+        let repeated = provenance.clone().with_location(SourceLocation::new(
+            SourcePath::new("src/First.bsl").expect("source path must pass"),
+            None,
+        ));
+        let conflicting = provenance.with_location(SourceLocation::new(
+            SourcePath::new("src/Second.bsl").expect("source path must pass"),
+            None,
+        ));
+
+        assert_eq!(first, repeated);
+        assert_ne!(first, conflicting);
     }
 
     #[test]

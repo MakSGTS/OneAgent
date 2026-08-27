@@ -5,7 +5,9 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
-use oneagent_common::{EntityId, EntityName};
+use oneagent_common::{
+    EntityId, EntityName, SourceLocation, SourcePath, SourcePosition, SourceSpan,
+};
 use oneagent_graph::{
     AccessRightPayload, AccessRightRowRestriction, Confidence, DataCompositionFieldPayload,
     DataCompositionSchemaPayload, DataSetKind, DataSetPayload, EdgeKind, FactOrigin, GraphEdge,
@@ -35,7 +37,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 1;
+const SEMANTIC_VERSION: u32 = 2;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -877,10 +879,34 @@ enum WebServiceParameterDirectionDto {
 #[serde(deny_unknown_fields)]
 struct ProvenanceDto {
     source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    location: Option<SourceLocationDto>,
     producer: String,
     origin: FactOriginDto,
     confidence: ConfidenceDto,
     resolution: ResolutionStateDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceLocationDto {
+    path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    span: Option<SourceSpanDto>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceSpanDto {
+    start: SourcePositionDto,
+    end: SourcePositionDto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourcePositionDto {
+    line: u32,
+    column: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1664,6 +1690,7 @@ impl From<&Provenance> for ProvenanceDto {
     fn from(value: &Provenance) -> Self {
         Self {
             source: value.source().map(|source| source.as_str().to_owned()),
+            location: value.location().map(Into::into),
             producer: value.producer().as_str().to_owned(),
             origin: value.origin().into(),
             confidence: value.confidence().into(),
@@ -1676,13 +1703,70 @@ impl TryFrom<ProvenanceDto> for Provenance {
     type Error = WorkspaceCacheCodecError;
 
     fn try_from(value: ProvenanceDto) -> Result<Self, Self::Error> {
-        Ok(Self::new(
+        Ok(Self::new_with_location(
             value.source.map(entity_id).transpose()?,
+            value.location.map(SourceLocation::try_from).transpose()?,
             ProducerId::new(value.producer),
             value.origin.into(),
             value.confidence.into(),
             value.resolution.into(),
         ))
+    }
+}
+
+impl From<&SourceLocation> for SourceLocationDto {
+    fn from(value: &SourceLocation) -> Self {
+        Self {
+            path: value.path().as_str().to_owned(),
+            span: value.span().map(Into::into),
+        }
+    }
+}
+
+impl TryFrom<SourceLocationDto> for SourceLocation {
+    type Error = WorkspaceCacheCodecError;
+
+    fn try_from(value: SourceLocationDto) -> Result<Self, Self::Error> {
+        let path = SourcePath::new(value.path)
+            .map_err(|_| invalid("workspace cache source path is invalid"))?;
+        let span = value.span.map(SourceSpan::try_from).transpose()?;
+        Ok(Self::new(path, span))
+    }
+}
+
+impl From<SourceSpan> for SourceSpanDto {
+    fn from(value: SourceSpan) -> Self {
+        Self {
+            start: value.start().into(),
+            end: value.end().into(),
+        }
+    }
+}
+
+impl TryFrom<SourceSpanDto> for SourceSpan {
+    type Error = WorkspaceCacheCodecError;
+
+    fn try_from(value: SourceSpanDto) -> Result<Self, Self::Error> {
+        Self::new(value.start.try_into()?, value.end.try_into()?)
+            .map_err(|_| invalid("workspace cache source span is invalid"))
+    }
+}
+
+impl From<SourcePosition> for SourcePositionDto {
+    fn from(value: SourcePosition) -> Self {
+        Self {
+            line: value.line(),
+            column: value.column(),
+        }
+    }
+}
+
+impl TryFrom<SourcePositionDto> for SourcePosition {
+    type Error = WorkspaceCacheCodecError;
+
+    fn try_from(value: SourcePositionDto) -> Result<Self, Self::Error> {
+        Self::new(value.line, value.column)
+            .map_err(|_| invalid("workspace cache source position is invalid"))
     }
 }
 
@@ -2074,7 +2158,10 @@ impl WorkspaceDto {
             previous_id = Some(configuration.configuration_id().clone());
             configurations.push(configuration);
         }
-        let snapshot = WorkspaceSnapshot { configurations };
+        let snapshot = WorkspaceSnapshot {
+            root_path: workspace_root.to_path_buf(),
+            configurations,
+        };
         let reconstructed = Self::from_snapshot(workspace_root, &snapshot)?;
         if reconstructed != expected {
             return Err(inconsistent(
@@ -2349,6 +2436,7 @@ mod tests {
         )
         .expect("diagnostic-rich snapshot must be valid");
         WorkspaceSnapshot {
+            root_path: root.to_path_buf(),
             configurations: vec![configuration],
         }
     }
@@ -2383,7 +2471,8 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 1);
+        assert_eq!(envelope.semantic_version, 2);
+        assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
     }
@@ -2421,7 +2510,12 @@ mod tests {
             assert_eq!(expected.configuration_id(), actual.configuration_id());
             assert_eq!(expected.configuration_name(), actual.configuration_name());
             assert_eq!(expected.report(), actual.report());
+            assert_eq!(
+                expected.graph().nodes().collect::<Vec<_>>(),
+                actual.graph().nodes().collect::<Vec<_>>()
+            );
         }
+        assert_eq!(decoded.root_path(), root);
     }
 
     #[test]
@@ -2432,6 +2526,7 @@ mod tests {
 
         for configuration in clean.configurations() {
             let single = WorkspaceSnapshot {
+                root_path: root.clone(),
                 configurations: vec![configuration.clone()],
             };
             let bytes = WorkspaceCacheCodec::encode(&source, &root, &single)
@@ -2459,6 +2554,7 @@ mod tests {
             &source,
             &root,
             &WorkspaceSnapshot {
+                root_path: root.clone(),
                 configurations: reordered,
             },
         )

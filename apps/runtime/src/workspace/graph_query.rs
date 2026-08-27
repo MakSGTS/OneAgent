@@ -1099,7 +1099,10 @@ mod tests {
 
     fn snapshot(mut configurations: Vec<WorkspaceConfigurationSnapshot>) -> WorkspaceSnapshot {
         configurations.sort_by(|left, right| left.configuration_id.cmp(&right.configuration_id));
-        WorkspaceSnapshot { configurations }
+        WorkspaceSnapshot {
+            root_path: std::path::PathBuf::new(),
+            configurations,
+        }
     }
 
     fn service(

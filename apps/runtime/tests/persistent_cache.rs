@@ -476,7 +476,7 @@ async fn public_persistent_cache_invalidates_rejects_and_cleanly_recovers() {
         ("schema_version", 0),
         ("schema_version", 2),
         ("semantic_version", 0),
-        ("semantic_version", 2),
+        ("semantic_version", 3),
     ] {
         set_cache_version(root.path(), field, version);
         let recovered = run_once(root.path()).await;

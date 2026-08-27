@@ -100,7 +100,7 @@ pub use bsl_graph::{
 pub use coverage::{EdtSemanticCoverageRegistry, EdtSemanticCoverageReport};
 pub use form_navigation_emission::EdtFormNavigationEmissionError;
 
-use oneagent_common::{EntityId, EntityName};
+use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -1322,7 +1322,7 @@ fn collect_metadata_descriptor(
             module.id().clone(),
             module.name().clone(),
             NodeKind::Module,
-            parsed_provenance(module_source.clone()),
+            parsed_provenance_with_file_location(module_source.clone(), module.path())?,
         );
 
         insert_edge(
@@ -1410,7 +1410,7 @@ fn emit_form_command_modules(
             module.id().clone(),
             module.name().clone(),
             NodeKind::Module,
-            parsed_provenance(module_source),
+            parsed_provenance_with_file_location(module_source, module.path())?,
         );
         insert_edge(
             graph,
@@ -2612,6 +2612,17 @@ fn parsed_provenance(source: EntityId) -> Provenance {
     )
 }
 
+fn parsed_provenance_with_file_location(
+    source: EntityId,
+    path: &Path,
+) -> Result<Provenance, EdtGraphError> {
+    let path = path
+        .to_str()
+        .ok_or(EdtGraphError::InvalidSourceLocation)
+        .and_then(|path| SourcePath::new(path).map_err(|_| EdtGraphError::InvalidSourceLocation))?;
+    Ok(parsed_provenance(source).with_location(SourceLocation::new(path, None)))
+}
+
 fn declared_provenance(source: EntityId) -> Provenance {
     graph_provenance(
         source,
@@ -3111,6 +3122,8 @@ pub enum EdtGraphError {
     InvalidIdentifier,
     /// A stable name could not be created.
     InvalidName,
+    /// A module path could not become typed source evidence.
+    InvalidSourceLocation,
     /// Semantic graph validation failed.
     /// A top-level metadata descriptor could not be read.
     MetadataObject(EdtMetadataObjectError),
@@ -3331,6 +3344,9 @@ impl Display for EdtGraphError {
             }
             Self::InvalidIdentifier => formatter.write_str("failed to create EDT graph identifier"),
             Self::InvalidName => formatter.write_str("failed to create EDT graph name"),
+            Self::InvalidSourceLocation => {
+                formatter.write_str("failed to create EDT source location")
+            }
             Self::Graph(error) => write!(formatter, "semantic graph error: {error}"),
             Self::ReferenceRequest(error) => {
                 write!(formatter, "semantic reference request error: {error}")
@@ -3464,6 +3480,7 @@ impl std::error::Error for EdtGraphError {
             Self::DataSetPayload(error) => Some(error),
             Self::InvalidIdentifier
             | Self::InvalidName
+            | Self::InvalidSourceLocation
             | Self::InvalidXdtoServiceRequest
             | Self::InvalidMetadataReferenceRequest { .. }
             | Self::InvalidSubsystemDescriptorDirectory { .. }
@@ -5383,6 +5400,19 @@ mod graph_tests {
                     "/src/Documents/Sales/ObjectModule.bsl#bsl_query=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite:query:Query;owner=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module:procedure:BeforeWrite;binding=Query"
                 )
         );
+        let location = query.provenance()[0]
+            .location()
+            .expect("query location must exist");
+        assert!(
+            location
+                .path()
+                .as_str()
+                .ends_with("/src/Documents/Sales/ObjectModule.bsl")
+        );
+        let point = location.span().expect("query declaration point must exist");
+        assert_eq!(point.start().line(), 2);
+        assert_eq!(point.start().column(), 1);
+        assert_eq!(point.start(), point.end());
     }
 
     fn assert_query_data_dependencies(graph: &SemanticGraph, query_ids: [&NodeId; 2]) {
@@ -5662,6 +5692,7 @@ mod graph_tests {
                 .as_str()
                 .ends_with("/src/Documents/Sales/ObjectModule.bsl")
         );
+        assert_edt_source_locations(object_module, before_write);
 
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].target(), check_access.id());
@@ -5705,6 +5736,29 @@ mod graph_tests {
         assert!(module_edge_source.contains(
             "/src/Documents/Sales/ObjectModule.bsl#metadata_object=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;edge=contains;source=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee;target=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:object_module"
         ));
+    }
+
+    fn assert_edt_source_locations(object_module: &GraphNode, before_write: &GraphNode) {
+        let module_location = object_module.provenance()[0]
+            .location()
+            .expect("module location must exist");
+        assert!(
+            module_location
+                .path()
+                .as_str()
+                .ends_with("/src/Documents/Sales/ObjectModule.bsl")
+        );
+        assert_eq!(module_location.span(), None);
+
+        let procedure_location = before_write.provenance()[0]
+            .location()
+            .expect("procedure location must exist");
+        let point = procedure_location
+            .span()
+            .expect("procedure declaration point must exist");
+        assert_eq!(point.start().line(), 1);
+        assert_eq!(point.start().column(), 1);
+        assert_eq!(point.start(), point.end());
     }
 
     #[test]

@@ -7319,6 +7319,18 @@ selection/reveal. Existing graph identities and six MCP tool behaviors remain;
 the exact catalog addition and repository consumers migrate in Task 4. No new
 production dependency is accepted.
 
+###### Sprint 31 source-location implementation
+
+Task 3 implements the accepted Common `SourcePath`, one-based
+`SourcePosition`, half-open `SourceSpan`, and `SourceLocation` values; optional
+typed location evidence in Graph provenance; immutable Workspace-root
+retention; and lossless cache persistence with a semantic-version bump.
+Production EDT and Designer XML graphs now attach file locations to Module
+nodes and declaration-point locations to Procedure/Function nodes; EDT also
+covers static Query declarations. Real fixtures prove exact lines, repeated builds, cache round
+trips, missing-location compatibility, and unchanged graph identities without
+adding a dependency or MCP/extension behavior.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused
 Common/BSL/Graph/adapter/Workspace tests and the canonical Rust workspace gate.

@@ -7,7 +7,9 @@ use oneagent_bsl::{
     LineBslQueryExtractor, LocalBslCallResolver, QualifiedBslCallResolver, QueryLanguageDiagnostic,
     QueryLanguageDiagnosticKind, QueryLanguageParser, UnresolvedBslCall, UnresolvedCrossModuleCall,
 };
-use oneagent_common::{EntityId, EntityName, EntityNameError};
+use oneagent_common::{
+    EntityId, EntityName, EntityNameError, SourceLocation, SourcePath, SourcePosition, SourceSpan,
+};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphEdge, GraphError, NodeKind, ProducerId, Provenance,
     ResolutionError, ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode,
@@ -46,6 +48,7 @@ pub struct AnalyzedBslModule {
     calls: Vec<BslCall>,
     queries: Vec<BslQuery>,
     source: Option<EntityId>,
+    source_path: Option<SourcePath>,
 }
 
 impl AnalyzedBslModule {
@@ -89,6 +92,26 @@ impl AnalyzedBslModule {
         queries: Vec<BslQuery>,
         source: Option<EntityId>,
     ) -> Self {
+        Self::new_with_source_queries_and_path(
+            module_id,
+            module_name,
+            symbols,
+            calls,
+            queries,
+            source,
+            None,
+        )
+    }
+
+    const fn new_with_source_queries_and_path(
+        module_id: EntityId,
+        module_name: EntityName,
+        symbols: Vec<BslSymbol>,
+        calls: Vec<BslCall>,
+        queries: Vec<BslQuery>,
+        source: Option<EntityId>,
+        source_path: Option<SourcePath>,
+    ) -> Self {
         Self {
             module_id,
             module_name,
@@ -96,6 +119,7 @@ impl AnalyzedBslModule {
             calls,
             queries,
             source,
+            source_path,
         }
     }
 
@@ -135,6 +159,12 @@ impl AnalyzedBslModule {
         self.source.as_ref()
     }
 
+    /// Returns the validated source evidence path when analysis observed one.
+    #[must_use]
+    pub const fn source_path(&self) -> Option<&SourcePath> {
+        self.source_path.as_ref()
+    }
+
     fn as_module_symbols(&self) -> BslModuleSymbols {
         BslModuleSymbols::new(
             self.module_id.clone(),
@@ -168,13 +198,22 @@ pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule,
         .extract_queries(module.id(), &source)
         .map_err(EdtBslGraphError::ParseQueries)?;
 
-    Ok(AnalyzedBslModule::new_with_source_and_queries(
+    let source_path = SourcePath::new(
+        module
+            .path()
+            .to_str()
+            .ok_or(EdtBslGraphError::InvalidSourceLocation)?,
+    )
+    .map_err(|_| EdtBslGraphError::InvalidSourceLocation)?;
+
+    Ok(AnalyzedBslModule::new_with_source_queries_and_path(
         module.id().clone(),
         module.name().clone(),
         symbols,
         calls,
         queries,
         Some(source_id_from_path(module.path())?),
+        Some(source_path),
     ))
 }
 
@@ -339,7 +378,10 @@ fn insert_declarations(
             symbol.id().clone(),
             symbol.name().clone(),
             node_kind,
-            declared_provenance(module.source()),
+            declared_provenance_with_location(
+                module.source(),
+                declaration_location(module, symbol.line())?,
+            ),
         );
 
         graph
@@ -347,7 +389,10 @@ fn insert_declarations(
                 module.module_id().clone(),
                 symbol.id().clone(),
                 EdgeKind::Contains,
-                declared_provenance(module.source()),
+                declared_provenance_with_location(
+                    module.source(),
+                    declaration_location(module, symbol.line())?,
+                ),
             )
             .map_err(EdtBslGraphError::Graph)?;
     }
@@ -364,7 +409,7 @@ fn insert_queries(
             query.id().clone(),
             query.binding_name().clone(),
             NodeKind::Query,
-            query_provenance(module.source(), query),
+            query_provenance(module, query)?,
         );
 
         graph
@@ -372,7 +417,7 @@ fn insert_queries(
                 query.owner_id().clone(),
                 query.id().clone(),
                 EdgeKind::Contains,
-                query_provenance(module.source(), query),
+                query_provenance(module, query)?,
             )
             .map_err(EdtBslGraphError::Graph)?;
     }
@@ -924,6 +969,13 @@ fn declared_provenance(source: Option<&EntityId>) -> Provenance {
     )
 }
 
+fn declared_provenance_with_location(
+    source: Option<&EntityId>,
+    location: Option<SourceLocation>,
+) -> Provenance {
+    with_optional_location(declared_provenance(source), location)
+}
+
 fn resolved_provenance(source: Option<&EntityId>) -> Provenance {
     bsl_provenance(
         source,
@@ -954,8 +1006,11 @@ fn unresolved_call_provenance(source: Option<&EntityId>, call: &BslCall) -> Prov
     )
 }
 
-fn query_provenance(source: Option<&EntityId>, query: &BslQuery) -> Provenance {
-    let source = source.map_or_else(
+fn query_provenance(
+    module: &AnalyzedBslModule,
+    query: &BslQuery,
+) -> Result<Provenance, EdtBslGraphError> {
+    let source = module.source().map_or_else(
         || query.id().clone(),
         |source| {
             EntityId::new(format!(
@@ -969,12 +1024,38 @@ fn query_provenance(source: Option<&EntityId>, query: &BslQuery) -> Provenance {
         },
     );
 
-    bsl_provenance(
+    let provenance = bsl_provenance(
         Some(&source),
         FactOrigin::Declared,
         Confidence::Exact,
         ResolutionState::NotApplicable,
-    )
+    );
+    Ok(with_optional_location(
+        provenance,
+        declaration_location(module, query.line())?,
+    ))
+}
+
+fn declaration_location(
+    module: &AnalyzedBslModule,
+    line: usize,
+) -> Result<Option<SourceLocation>, EdtBslGraphError> {
+    let Some(path) = module.source_path().cloned() else {
+        return Ok(None);
+    };
+    let line = u32::try_from(line).map_err(|_| EdtBslGraphError::InvalidSourceLocation)?;
+    let position =
+        SourcePosition::new(line, 1).map_err(|_| EdtBslGraphError::InvalidSourceLocation)?;
+    let span =
+        SourceSpan::new(position, position).map_err(|_| EdtBslGraphError::InvalidSourceLocation)?;
+    Ok(Some(SourceLocation::new(path, Some(span))))
+}
+
+fn with_optional_location(provenance: Provenance, location: Option<SourceLocation>) -> Provenance {
+    match location {
+        Some(location) => provenance.with_location(location),
+        None => provenance,
+    }
 }
 
 fn bsl_provenance(
@@ -1034,6 +1115,9 @@ pub enum EdtBslGraphError {
 
     /// A module source identifier could not be created.
     InvalidSourceIdentifier,
+
+    /// A module source path or declaration position could not become typed evidence.
+    InvalidSourceLocation,
 }
 
 impl Display for EdtBslGraphError {
@@ -1079,6 +1163,9 @@ impl Display for EdtBslGraphError {
             Self::InvalidSourceIdentifier => {
                 formatter.write_str("EDT BSL source identifier is invalid")
             }
+            Self::InvalidSourceLocation => {
+                formatter.write_str("EDT BSL source location is invalid")
+            }
         }
     }
 }
@@ -1093,7 +1180,9 @@ impl std::error::Error for EdtBslGraphError {
             Self::Graph(error) => Some(error),
             Self::InvalidQuerySourceTargetName(error) => Some(error),
             Self::ReferenceRequest(error) => Some(error),
-            Self::InvalidSourceIdentifier | Self::InvalidQuerySourceRequest { .. } => None,
+            Self::InvalidSourceIdentifier
+            | Self::InvalidSourceLocation
+            | Self::InvalidQuerySourceRequest { .. } => None,
         }
     }
 }

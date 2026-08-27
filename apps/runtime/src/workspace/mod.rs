@@ -1025,10 +1025,17 @@ impl WorkspaceConfigurationSnapshot {
 /// Complete immutable semantic state for one configured Workspace root.
 #[derive(Debug, Default, Clone)]
 pub struct WorkspaceSnapshot {
+    root_path: PathBuf,
     configurations: Vec<WorkspaceConfigurationSnapshot>,
 }
 
 impl WorkspaceSnapshot {
+    /// Returns the startup Workspace root retained by this immutable snapshot.
+    #[must_use]
+    pub fn root_path(&self) -> &Path {
+        &self.root_path
+    }
+
     /// Returns configuration snapshots in canonical Configuration identity order.
     #[must_use]
     pub fn configurations(&self) -> &[WorkspaceConfigurationSnapshot] {
@@ -1117,6 +1124,7 @@ where
         }
 
         Ok(WorkspaceSnapshot {
+            root_path: root.to_path_buf(),
             configurations: configurations.into_values().collect(),
         })
     }
@@ -1587,6 +1595,7 @@ mod tests {
         assert!(snapshot.is_empty());
         assert_eq!(snapshot.len(), 0);
         assert!(snapshot.configurations().is_empty());
+        assert_eq!(snapshot.root_path(), root.path());
     }
 
     #[test]
@@ -1612,6 +1621,8 @@ mod tests {
             .expect("repeated Workspace must build");
 
         assert_eq!(first.len(), 2);
+        assert_eq!(first.root_path(), root.path());
+        assert_eq!(repeated.root_path(), root.path());
         assert_eq!(
             first.configurations()[0].configuration_name().as_str(),
             "EdtConfiguration"

@@ -15,8 +15,19 @@ assert.deepEqual(manifest.extensionKind, ["workspace"]);
 assert.equal(manifest.main, "./dist/extension.js");
 assert.deepEqual(
   manifest.contributes.commands.map((entry) => entry.command),
-  ["oneagent.connect", "oneagent.disconnect", "oneagent.searchSymbols"],
+  [
+    "oneagent.connect",
+    "oneagent.disconnect",
+    "oneagent.searchSymbols",
+    "oneagent.inspectContext",
+  ],
 );
+assert.deepEqual(manifest.contributes.chatParticipants, [{
+  id: "oneagent.chat",
+  name: "oneagent",
+  fullName: "OneAgent",
+  description: "Ask the selected model about explicitly inspected OneAgent semantic context.",
+}]);
 assert.deepEqual(manifest.contributes.configuration.properties["oneagent.runtime.executable"], {
   type: "string",
   default: "oneagent-mcp",
@@ -77,6 +88,9 @@ for (const commandName of [
   "oneagent.connect",
   "oneagent.disconnect",
   "oneagent.searchSymbols",
+  "oneagent.inspectContext",
+  "oneagent.chat",
+  "oneagent.contextPanel",
 ]) {
   assert.ok(extensionSource.includes(commandName));
 }
@@ -85,7 +99,6 @@ for (const forbidden of [
   "onStartupFinished",
   "createOutputChannel",
   "createDiagnosticCollection",
-  "createWebviewPanel",
   "registerDefinitionProvider",
   "registerReferenceProvider",
   "registerDocumentSymbolProvider",
@@ -95,6 +108,18 @@ for (const forbidden of [
   "telemetry",
 ]) {
   assert.equal(extensionSource.includes(forbidden), false, `${forbidden} is deferred`);
+}
+assert.equal((extensionSource.match(/createWebviewPanel/gu) ?? []).length, 1);
+assert.equal((extensionSource.match(/createChatParticipant/gu) ?? []).length, 1);
+for (const required of [
+  "enableScripts: false",
+  "enableForms: false",
+  "enableCommandUris: false",
+  "localResourceRoots: []",
+  "default-src 'none'",
+  "LanguageModelChatMessage.User",
+]) {
+  assert.ok(extensionSource.includes(required), `${required} must remain explicit`);
 }
 
 const testGroups = [

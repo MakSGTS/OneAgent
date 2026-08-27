@@ -54,6 +54,12 @@ suite("OneAgent package activation", () => {
     assert.equal(extension.packageJSON.engines.vscode, "^1.134.0");
     assert.deepEqual(extension.packageJSON.activationEvents, []);
     assert.equal(extension.packageJSON.extensionKind[0], "workspace");
+    assert.deepEqual(extension.packageJSON.contributes.chatParticipants, [{
+      id: "oneagent.chat",
+      name: "oneagent",
+      fullName: "OneAgent",
+      description: "Ask the selected model about explicitly inspected OneAgent semantic context.",
+    }]);
 
     const configured = configuration().get("executable");
     assert.equal(configured, "oneagent-mcp");
@@ -69,10 +75,16 @@ suite("OneAgent package activation", () => {
     assert.equal(commands.includes("oneagent.connect"), true);
     assert.equal(commands.includes("oneagent.disconnect"), true);
     assert.equal(commands.includes("oneagent.searchSymbols"), true);
+    assert.equal(commands.includes("oneagent.inspectContext"), true);
     assert.equal(
       await vscode.commands.executeCommand("oneagent.searchSymbols"),
       "not_connected",
     );
+    assert.equal(
+      await vscode.commands.executeCommand("oneagent.inspectContext"),
+      "not_connected",
+    );
+    assert.equal(testApi.chat().registered, true);
   });
 
   test("rejects invalid configuration before process creation", async () => {
@@ -248,6 +260,84 @@ suite("OneAgent package activation", () => {
     assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
   });
 
+  test("inspects, reuses, closes, and invalidates Context for the registered participant", async () => {
+    const executable = process.env.ONEAGENT_MCP_BIN;
+    assert.ok(executable);
+    await configuration().update(
+      "executable",
+      executable,
+      vscode.ConfigurationTarget.Global,
+    );
+    assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "connected");
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.inspectContext"), "shown");
+    const first = testApi.context();
+    assert.ok(first);
+    assert.deepEqual(first.snapshot(), {
+      title: "OneAgent: Inspect Semantic Context",
+      placeholder: "Type a symbol name for semantic context",
+      busy: false,
+      disposed: false,
+      items: [],
+    });
+    await first.input("FillSecurity");
+    assert.deepEqual(first.snapshot().items, [{
+      label: "FillSecurityCollection",
+      description: "procedure — DNSWorldEdition",
+      detail: "designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl:5",
+    }]);
+    await first.accept(0);
+    const firstPanel = testApi.panel();
+    assert.equal(firstPanel.open, true);
+    assert.equal(firstPanel.createCount, 1);
+    assert.ok(firstPanel.html.includes("OneAgent Semantic Context"));
+    assert.ok(firstPanel.html.includes("FillSecurityCollection"));
+    assert.ok(firstPanel.html.includes("default-src 'none'"));
+    assert.equal(/<script|<form|<iframe|command:/iu.test(firstPanel.html), false);
+
+    assert.deepEqual(await testApi.chat().request("Explain it", ["**answer**", " <tag>"]), {
+      category: "complete",
+      markdown: ["\\*\\*answer\\*\\*", " &lt;tag&gt;"],
+    });
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.inspectContext"), "shown");
+    const replacement = testApi.context();
+    assert.ok(replacement);
+    assert.equal(testApi.panel().open, true);
+    assert.equal(testApi.panel().createCount, 1);
+    await replacement.input("DynamicSecurityOverridable");
+    await replacement.accept(0);
+    const replacedPanel = testApi.panel();
+    assert.equal(replacedPanel.open, true);
+    assert.equal(replacedPanel.createCount, 1, "replacement must reuse the owned panel");
+    assert.ok(replacedPanel.html.includes("DynamicSecurityOverridable"));
+
+    replacedPanel.close();
+    assert.equal(testApi.panel().open, false);
+    assert.deepEqual(await testApi.chat().request("late", ["must not run"]), {
+      category: "context_required",
+      markdown: ["Inspect semantic context before asking OneAgent."],
+    });
+
+    assert.equal(await vscode.commands.executeCommand("oneagent.inspectContext"), "shown");
+    const beforeDisconnect = testApi.context();
+    assert.ok(beforeDisconnect);
+    await beforeDisconnect.input("FillSecurity");
+    await beforeDisconnect.accept(0);
+    assert.equal(testApi.panel().open, true);
+    await configuration().update(
+      "executable",
+      path.join(path.dirname(executable), "replacement-oneagent-mcp"),
+      vscode.ConfigurationTarget.Global,
+    );
+    assert.equal(await vscode.commands.executeCommand("oneagent.disconnect"), "disconnected");
+    assert.equal(testApi.panel().open, false);
+    assert.deepEqual(await testApi.chat().request("after disconnect", ["must not run"]), {
+      category: "context_required",
+      markdown: ["Inspect semantic context before asking OneAgent."],
+    });
+  });
+
   test("deactivation waits for cleanup and is repeatable", async () => {
     const executable = process.env.ONEAGENT_MCP_BIN;
     assert.ok(executable);
@@ -267,10 +357,15 @@ suite("OneAgent package activation", () => {
       connect: true,
       disconnect: true,
       search: true,
+      inspect: true,
+      semantic: true,
+      participant: true,
       configuration: true,
     });
     await assert.rejects(vscode.commands.executeCommand("oneagent.connect"));
     await assert.rejects(vscode.commands.executeCommand("oneagent.disconnect"));
     await assert.rejects(vscode.commands.executeCommand("oneagent.searchSymbols"));
+    await assert.rejects(vscode.commands.executeCommand("oneagent.inspectContext"));
+    assert.equal(testApi.chat().registered, false);
   });
 });

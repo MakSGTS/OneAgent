@@ -42,6 +42,18 @@
       {
         "command": "oneagent.searchSymbols",
         "title": "OneAgent: Search Symbols"
+      },
+      {
+        "command": "oneagent.inspectContext",
+        "title": "OneAgent: Inspect Semantic Context"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "oneagent.chat",
+        "name": "oneagent",
+        "fullName": "OneAgent",
+        "description": "Ask the selected model about explicitly inspected OneAgent semantic context."
       }
     ],
     "configuration": {

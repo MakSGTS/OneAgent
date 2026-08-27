@@ -11,7 +11,9 @@ const expected = [
   "dist/mcp-client.js",
   "dist/lifecycle.js",
   "dist/extension.js",
+  "dist/context-panel.js",
   "dist/configuration.js",
+  "dist/ai-chat.js",
 ];
 
 function inventory() {

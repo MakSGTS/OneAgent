@@ -14,7 +14,9 @@ const expected = [
   "extension/dist/mcp-client.js",
   "extension/dist/lifecycle.js",
   "extension/dist/extension.js",
+  "extension/dist/context-panel.js",
   "extension/dist/configuration.js",
+  "extension/dist/ai-chat.js",
 ];
 
 const outputs = ["oneagent-first.vsix", "oneagent-second.vsix"];

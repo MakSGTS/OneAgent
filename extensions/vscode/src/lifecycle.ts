@@ -1,6 +1,8 @@
 import type { ConnectionTarget } from "./configuration";
 import {
   RuntimeClientFailure,
+  type ContextRequest,
+  type ContextResult,
   type SymbolSearchRequest,
   type SymbolSearchResult,
 } from "./mcp-client";
@@ -10,6 +12,7 @@ export interface RuntimeClientPort {
   connect(executable: string, cwd: string): Promise<ConnectionState>;
   disconnect(): Promise<ConnectionState>;
   symbols(input: SymbolSearchRequest): Promise<SymbolSearchResult>;
+  context(input: ContextRequest): Promise<ContextResult>;
 }
 
 export type RuntimeClientFactory = (
@@ -19,6 +22,7 @@ export type RuntimeClientFactory = (
 export interface LifecycleOptions {
   readonly readTarget: () => ConnectionTarget;
   readonly renderState: (state: ConnectionState) => void;
+  readonly invalidateSemanticState: () => void;
   readonly createClient: RuntimeClientFactory;
 }
 
@@ -98,6 +102,13 @@ export class ExtensionLifecycle {
     return this.client.symbols(input);
   }
 
+  public context(input: ContextRequest): Promise<ContextResult> {
+    if (this.disposed || this.deactivating || this.currentState !== "connected") {
+      return Promise.reject(new RuntimeClientFailure("protocol_failure"));
+    }
+    return this.client.context(input);
+  }
+
   public deactivate(): Promise<void> {
     if (this.disposed) {
       return Promise.resolve();
@@ -159,6 +170,9 @@ export class ExtensionLifecycle {
   private transition(state: ConnectionState): void {
     if (this.currentState === state) {
       return;
+    }
+    if (state !== "connected") {
+      this.options.invalidateSemanticState();
     }
     this.currentState = state;
     this.options.renderState(state);

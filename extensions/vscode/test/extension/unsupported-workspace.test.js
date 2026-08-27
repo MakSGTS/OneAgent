@@ -37,6 +37,10 @@ suite("OneAgent unsupported workspace hosts", () => {
       await vscode.commands.executeCommand("oneagent.searchSymbols"),
       "not_connected",
     );
+    assert.equal(
+      await vscode.commands.executeCommand("oneagent.inspectContext"),
+      "not_connected",
+    );
     assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "failed");
     assert.equal(fs.existsSync(marker), false);
   });

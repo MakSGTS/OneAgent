@@ -8,6 +8,8 @@ import {
 } from "../../src/lifecycle";
 import {
   RuntimeClientFailure,
+  type ContextRequest,
+  type ContextResult,
   type SymbolSearchRequest,
   type SymbolSearchResult,
 } from "../../src/mcp-client";
@@ -19,6 +21,7 @@ class ControlledClient implements RuntimeClientPort {
   public connectFailure: RuntimeClientFailure | undefined;
   public disconnectFailure: RuntimeClientFailure | undefined;
   public symbolCalls: SymbolSearchRequest[] = [];
+  public contextCalls: ContextRequest[] = [];
   public holdConnect = false;
   private connectCompletion: (() => void) | undefined;
   private connectCancelled = false;
@@ -62,6 +65,11 @@ class ControlledClient implements RuntimeClientPort {
     this.symbolCalls.push(input);
     return { results: [], total: 0, truncated: false };
   }
+
+  public async context(input: ContextRequest): Promise<ContextResult> {
+    this.contextCalls.push(input);
+    return contextResult();
+  }
 }
 
 function supportedTarget(): ConnectionTarget {
@@ -72,14 +80,19 @@ function harness(initialTarget: ConnectionTarget = supportedTarget()): {
   readonly lifecycle: ExtensionLifecycle;
   readonly client: ControlledClient;
   readonly states: ConnectionState[];
+  readonly invalidations: () => number;
   setTarget(target: ConnectionTarget): void;
 } {
   let target = initialTarget;
   const states: ConnectionState[] = [];
+  let invalidationCount = 0;
   let client: ControlledClient | undefined;
   const lifecycle = new ExtensionLifecycle({
     readTarget: () => target,
     renderState: (state) => states.push(state),
+    invalidateSemanticState: () => {
+      invalidationCount += 1;
+    },
     createClient: (stateChanged) => {
       client = new ControlledClient(stateChanged);
       return client;
@@ -90,6 +103,7 @@ function harness(initialTarget: ConnectionTarget = supportedTarget()): {
     lifecycle,
     client,
     states,
+    invalidations: () => invalidationCount,
     setTarget: (replacement) => (target = replacement),
   };
 }
@@ -158,6 +172,19 @@ test("forwards symbol search only while the owned client is connected", async ()
   await assert.rejects(lifecycle.symbols({ query: "Sales" }), RuntimeClientFailure);
 });
 
+test("forwards Context only while connected and invalidates semantic state before exit", async () => {
+  const { lifecycle, client, invalidations } = harness();
+  const input = { configurationId: "configuration-id", nodeId: "node-id" };
+  await assert.rejects(lifecycle.context(input), RuntimeClientFailure);
+  await lifecycle.connect();
+  assert.deepEqual(await lifecycle.context(input), contextResult());
+  assert.deepEqual(client.contextCalls, [input]);
+  assert.equal(invalidations(), 1, "connecting invalidates stale semantic state");
+  await lifecycle.disconnect();
+  assert.equal(invalidations(), 3, "disconnecting and disconnected both invalidate idempotently");
+  await assert.rejects(lifecycle.context(input), RuntimeClientFailure);
+});
+
 test("disconnect cancels an in-flight connect and shares one cleanup operation", async () => {
   const { lifecycle, client } = harness();
   client.holdConnect = true;
@@ -192,3 +219,27 @@ test("shutdown failure remains failed and bounded", async () => {
     return true;
   });
 });
+
+function contextResult(): ContextResult {
+  return {
+    configurationId: "configuration-id",
+    rendered: "seed",
+    items: [{
+      nodeId: "node-id",
+      name: "Seed",
+      kind: "procedure",
+      depth: 0,
+      seedId: "node-id",
+      reason: "seed",
+      relations: [],
+      costBytes: 4,
+    }],
+    budgetBytes: 16_384,
+    usedBytes: 4,
+    remainingBytes: 16_380,
+    candidateTruncated: false,
+    candidateOmitted: 0,
+    budgetTruncated: false,
+    budgetOmitted: 0,
+  };
+}

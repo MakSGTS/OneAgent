@@ -18,6 +18,10 @@ suite("OneAgent untrusted workspace host", () => {
     const configuration = vscode.workspace.getConfiguration("oneagent.runtime");
     await configuration.update("executable", probe, vscode.ConfigurationTarget.Global);
     try {
+      assert.equal(
+        await vscode.commands.executeCommand("oneagent.inspectContext"),
+        "not_connected",
+      );
       assert.equal(await vscode.commands.executeCommand("oneagent.connect"), "failed");
       assert.equal(fs.existsSync(marker), false);
     } finally {

@@ -23,6 +23,7 @@ const HEADER_DELIMITER: &[u8] = b"\r\n\r\n";
 const CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
 const MAX_SYMBOL_RESULTS: usize = 100;
 const MAX_DIAGNOSTIC_RESULTS: usize = 100;
+const LSP_UINTEGER_MAX: u64 = i32::MAX as u64;
 
 /// Successful terminal outcomes for an LSP stdio stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,27 +190,52 @@ pub fn workspace_root_uri(root: &Path) -> Result<String, LspServerConstructionEr
     let path = absolute.to_str().ok_or(LspServerConstructionError)?;
 
     #[cfg(windows)]
-    let path = path.replace('\\', "/");
+    return windows_file_uri(path);
     #[cfg(not(windows))]
-    let path = path.to_owned();
-
-    let encoded = percent_encode_path(&path);
-    #[cfg(windows)]
-    let uri = if encoded.starts_with("//") {
-        format!("file:{encoded}")
-    } else {
-        format!("file:///{encoded}")
-    };
-    #[cfg(not(windows))]
-    let uri = format!("file://{encoded}");
-    Ok(uri)
+    return Ok(format!("file://{}", percent_encode_path(path, false)));
 }
 
-fn percent_encode_path(path: &str) -> String {
+#[cfg(any(windows, test))]
+fn windows_file_uri(path: &str) -> Result<String, LspServerConstructionError> {
+    let normalized = if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+        format!("//{}", unc.replace('\\', "/"))
+    } else if let Some(local) = path.strip_prefix(r"\\?\") {
+        if !windows_drive_path(local) {
+            return Err(LspServerConstructionError);
+        }
+        local.replace('\\', "/")
+    } else if path.starts_with(r"\\") || windows_drive_path(path) {
+        path.replace('\\', "/")
+    } else {
+        return Err(LspServerConstructionError);
+    };
+
+    if let Some(authority_path) = normalized.strip_prefix("//") {
+        let mut components = authority_path.split('/');
+        if components.next().is_none_or(str::is_empty)
+            || components.next().is_none_or(str::is_empty)
+        {
+            return Err(LspServerConstructionError);
+        }
+        return Ok(format!("file:{}", percent_encode_path(&normalized, false)));
+    }
+    Ok(format!(
+        "file:///{}",
+        percent_encode_path(&normalized, true)
+    ))
+}
+
+#[cfg(any(windows, test))]
+fn windows_drive_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    matches!(bytes, [drive, b':', b'\\', ..] if drive.is_ascii_alphabetic())
+}
+
+fn percent_encode_path(path: &str, allow_drive_separator: bool) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut encoded = String::with_capacity(path.len());
     for (index, byte) in path.bytes().enumerate() {
-        let drive_separator = cfg!(windows) && index == 1 && byte == b':';
+        let drive_separator = allow_drive_separator && index == 1 && byte == b':';
         if byte.is_ascii_alphanumeric()
             || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/')
             || drive_separator
@@ -259,9 +285,9 @@ fn project_workspace_symbols(
                 kind,
                 location,
             });
-            enforce_symbol_result_bound(symbols.len())?;
         }
     }
+    enforce_symbol_result_bound(symbols.len())?;
     symbols.sort_by(|left, right| {
         (
             left.folded_name.as_str(),
@@ -278,7 +304,7 @@ fn project_workspace_symbols(
                 right.configuration.configuration_id().as_str(),
             ))
     });
-    Ok(Value::Array(
+    complete_workspace_symbol_projection(
         symbols
             .into_iter()
             .map(|symbol| {
@@ -290,13 +316,18 @@ fn project_workspace_symbols(
                 })
             })
             .collect(),
-    ))
+    )
 }
 
 fn enforce_symbol_result_bound(count: usize) -> Result<(), LspHandlerError> {
     (count <= MAX_SYMBOL_RESULTS)
         .then_some(())
         .ok_or(LspHandlerError::RequestFailed)
+}
+
+fn complete_workspace_symbol_projection(items: Vec<Value>) -> Result<Value, LspHandlerError> {
+    enforce_symbol_result_bound(items.len())?;
+    Ok(Value::Array(items))
 }
 
 const fn lsp_symbol_kind(format: WorkspaceFormat, kind: NodeKind) -> Option<u8> {
@@ -319,9 +350,9 @@ fn lsp_symbol_location(
     let start = lsp_position(span.get("start")?)?;
     let end = lsp_position(span.get("end")?)?;
     let uri = if root_uri.ends_with('/') {
-        format!("{root_uri}{}", percent_encode_path(path))
+        format!("{root_uri}{}", percent_encode_path(path, false))
     } else {
-        format!("{root_uri}/{}", percent_encode_path(path))
+        format!("{root_uri}/{}", percent_encode_path(path, false))
     };
     Some(serde_json::json!({
         "uri": uri,
@@ -332,8 +363,9 @@ fn lsp_symbol_location(
 fn lsp_position(value: &Value) -> Option<Value> {
     let line = value.get("line")?.as_u64()?.checked_sub(1)?;
     let character = value.get("column")?.as_u64()?.checked_sub(1)?;
-    u32::try_from(line).ok()?;
-    u32::try_from(character).ok()?;
+    if line > LSP_UINTEGER_MAX || character > LSP_UINTEGER_MAX {
+        return None;
+    }
     Some(serde_json::json!({"line": line, "character": character}))
 }
 
@@ -362,9 +394,9 @@ fn project_document_diagnostics(
                 continue;
             };
             projected.push(item);
-            enforce_diagnostic_result_bound(projected.len())?;
         }
     }
+    enforce_diagnostic_result_bound(projected.len())?;
     projected.sort_by(|left, right| {
         (
             left.diagnostic,
@@ -395,7 +427,7 @@ fn project_document_diagnostics(
             })
         })
         .collect::<Vec<_>>();
-    Ok(serde_json::json!({"kind": "full", "items": items}))
+    complete_document_diagnostic_projection(items)
 }
 
 fn project_document_diagnostic<'a>(
@@ -441,6 +473,14 @@ fn enforce_diagnostic_result_bound(count: usize) -> Result<(), LspHandlerError> 
         .ok_or(LspHandlerError::RequestFailed)
 }
 
+fn complete_document_diagnostic_projection(items: Vec<Value>) -> Result<Value, LspHandlerError> {
+    enforce_diagnostic_result_bound(items.len())?;
+    let mut report = Map::new();
+    report.insert("kind".to_owned(), Value::String("full".to_owned()));
+    report.insert("items".to_owned(), Value::Array(items));
+    Ok(Value::Object(report))
+}
+
 fn valid_document_uri(root_uri: &str, uri: &str) -> bool {
     if uri == root_uri {
         return true;
@@ -482,7 +522,7 @@ fn canonical_relative_uri_path(encoded: &str) -> bool {
     decoded
         .split('/')
         .all(|component| !component.is_empty() && component != "." && component != "..")
-        && percent_encode_path(decoded) == encoded
+        && percent_encode_path(decoded, false) == encoded
 }
 
 const fn hex_value(byte: u8) -> Option<u8> {
@@ -704,8 +744,10 @@ mod tests {
     use oneagent_workspace::WorkspaceFormat;
 
     use super::{
-        enforce_diagnostic_result_bound, enforce_symbol_result_bound, lsp_symbol_kind,
-        lsp_symbol_location, project_document_diagnostic, valid_document_uri, workspace_root_uri,
+        complete_document_diagnostic_projection, complete_workspace_symbol_projection,
+        enforce_diagnostic_result_bound, enforce_symbol_result_bound, lsp_position,
+        lsp_symbol_kind, lsp_symbol_location, project_document_diagnostic, valid_document_uri,
+        windows_file_uri, workspace_root_uri,
     };
     use crate::WorkspaceSnapshotBuilder;
 
@@ -767,6 +809,76 @@ mod tests {
         );
         assert!(enforce_symbol_result_bound(100).is_ok());
         assert!(enforce_symbol_result_bound(101).is_err());
+    }
+
+    #[test]
+    fn complete_symbol_and_diagnostic_projection_bounds_are_exact() {
+        let symbols = complete_workspace_symbol_projection(vec![serde_json::json!({}); 100])
+            .expect("100 symbols must project");
+        assert_eq!(symbols.as_array().expect("symbol array").len(), 100);
+        assert!(complete_workspace_symbol_projection(vec![serde_json::json!({}); 101]).is_err());
+
+        let diagnostics = complete_document_diagnostic_projection(vec![serde_json::json!({}); 100])
+            .expect("100 diagnostics must project");
+        assert_eq!(
+            diagnostics["items"]
+                .as_array()
+                .expect("diagnostic array")
+                .len(),
+            100
+        );
+        assert!(complete_document_diagnostic_projection(vec![serde_json::json!({}); 101]).is_err());
+    }
+
+    #[test]
+    fn windows_drive_and_unc_uri_oracles_are_standard_and_independent() {
+        for (path, expected) in [
+            (
+                r"\\?\C:\workspace\space # ü",
+                "file:///C:/workspace/space%20%23%20%C3%BC",
+            ),
+            (r"C:\workspace", "file:///C:/workspace"),
+            (
+                r"\\?\UNC\server\share\space # ü",
+                "file://server/share/space%20%23%20%C3%BC",
+            ),
+            (r"\\server\share\workspace", "file://server/share/workspace"),
+        ] {
+            assert_eq!(
+                windows_file_uri(path).expect("canonical Windows path"),
+                expected,
+                "{path}"
+            );
+        }
+        for rejected in [
+            r"\\?\Volume{00000000-0000-0000-0000-000000000000}\workspace",
+            r"relative\workspace",
+            r"\\server",
+        ] {
+            assert!(windows_file_uri(rejected).is_err(), "{rejected}");
+        }
+    }
+
+    #[test]
+    fn runtime_position_projection_enforces_lsp_uinteger() {
+        assert_eq!(
+            lsp_position(&serde_json::json!({"line": 2_147_483_648_u64, "column": 1})),
+            Some(serde_json::json!({"line": 2_147_483_647_u64, "character": 0}))
+        );
+        assert_eq!(
+            lsp_position(&serde_json::json!({"line": 2_147_483_649_u64, "column": 1})),
+            None
+        );
+        assert_eq!(
+            lsp_position(&serde_json::json!({"line": 1, "column": 2_147_483_649_u64})),
+            None
+        );
+        assert_eq!(
+            lsp_position(
+                &serde_json::json!({"line": 2_147_483_647_u64, "column": 2_147_483_647_u64})
+            ),
+            Some(serde_json::json!({"line": 2_147_483_646_u64, "character": 2_147_483_646_u64}))
+        );
     }
 
     #[test]

@@ -79,11 +79,11 @@ The Runtime binary target is additive inside the existing package.
 
 ### Public protocol values and bounds
 
-LSP messages use JSON-RPC string or integer IDs. String IDs are at most 256
-UTF-8 bytes; integers must be losslessly representable by serde_json as `i64` or
-`u64`. `null`, fractions, exponent-form values, booleans, arrays, objects, and
-out-of-representation IDs are invalid requests. Method names are non-empty and
-at most 256 UTF-8 bytes.
+LSP messages use JSON-RPC string or LSP `integer` IDs. String IDs are at most
+256 UTF-8 bytes; integers are exactly in the signed 32-bit LSP range
+`-2,147,483,648..=2,147,483,647`. `null`, fractions, exponent-form values,
+booleans, arrays, objects, and integers outside that range are invalid
+requests. Method names are non-empty and at most 256 UTF-8 bytes.
 
 One decoded JSON body is at most 1,048,576 bytes and at most 128 object/array
 levels, aligned with the existing public protocol bound. Duplicate object keys
@@ -150,7 +150,7 @@ Unknown requests in `Running` use `MethodNotFound`. Unknown notifications and
 
 ### Initialize, roots, and position encoding
 
-`initialize` requires an object with `processId` as integer or null,
+`initialize` requires an object with `processId` as LSP `integer` or null,
 `rootUri` as a non-empty string, and `capabilities` as an object. Known optional
 `clientInfo`, `locale`, `rootPath`, `initializationOptions`, `trace`,
 `workspaceFolders`, and `workDoneToken` must have specification-compatible
@@ -171,8 +171,12 @@ root and validates initialize input through the handler boundary:
 
 Canonical file URIs use UTF-8 percent encoding with uppercase hex, forward
 slashes, no query/fragment/user-info, and platform-correct absolute roots.
-Runtime owns encoding and lexical containment. It does not resolve symlinks or
-read the filesystem during a request.
+On Windows, Runtime converts canonical drive paths to `file:///C:/...`,
+canonical UNC paths to `file://server/share/...`, and removes the extended
+`\\?\` or `\\?\UNC\` filesystem prefix before URI encoding; other extended
+namespaces and incomplete UNC roots are rejected. Runtime owns encoding and
+lexical containment. It does not resolve symlinks or read the filesystem during
+a request.
 
 The server supports only UTF-16 positions, as LSP requires. If
 `capabilities.general.positionEncodings` is absent, UTF-16 is selected by
@@ -265,13 +269,15 @@ Configuration name as `containerName`, and `location` with canonical file URI
 and zero-based range. Tags and data are absent.
 
 One-based half-open source spans convert by subtracting one from line and
-column. Current declaration points therefore become zero-length ranges at
-character zero and are independent of source encoding. Runtime never reads a
-line, adjusts to an identifier, or claims an exact identifier range.
+column. Every emitted zero-based line and character is an LSP `uinteger` in
+`0..=2,147,483,647`; an out-of-range handler projection is an internal error.
+Current declaration points therefore become zero-length ranges at character
+zero and are independent of source encoding. Runtime never reads a line,
+adjusts to an identifier, or claims an exact identifier range.
 
 The complete result is limited to 100 symbols and the protocol body bound.
-Runtime computes the entire matching count with checked arithmetic before
-projection. More than 100 matches, an integer overflow, or an otherwise
+Runtime collects the complete projected candidate set and checks its length
+before constructing the response. More than 100 matches or an otherwise
 over-bound encoded result is `RequestFailed`; no silent prefix, partial result,
 pagination, or truncation claim is returned. No match returns `[]`, never null.
 
@@ -283,6 +289,8 @@ pagination, or truncation claim is returned. No match returns `[]`, never null.
 an identifier other than `oneagent`, or malformed/non-file/non-canonical/
 escaping URI is `InvalidParams`. `previousResultId` is accepted and ignored
 because this server returns no result ID and never advertises unchanged reports.
+Both progress-token fields accept only a string or the same signed 32-bit LSP
+`integer`; fractions and out-of-range numbers are `InvalidParams`.
 
 A canonical Workspace-confined URI with no projected diagnostic returns a full
 empty report. Runtime does not require the file to exist during the request.
@@ -307,8 +315,8 @@ provenance, and source values are absent. This is a navigation anchor at the
 known declaration point, not a claim that the exact erroneous token is ranged.
 
 At most 100 diagnostics may be returned for one document. Runtime computes the
-complete count before projection; more than 100, overflow, or an over-bound
-encoded result is `RequestFailed`. Success is always
+complete projected candidate set before response construction; more than 100
+items or an over-bound encoded result is `RequestFailed`. Success is always
 `{"kind":"full","items":[...]}` without `resultId` or related documents.
 The server emits no publish, workspace-diagnostic, refresh, or unchanged report.
 
@@ -351,7 +359,11 @@ Required evidence includes positive, malformed, missing, duplicate, unknown,
 pre-initialize, post-shutdown, reordered, repeated, exact/over-bound, fragmented,
 coalesced, EOF, channel-purity, root/URI/escape, Unicode, symbol ambiguity,
 missing/conflicting location, diagnostic omission, empty result, exit status,
-and resource-cleanup cases as applicable.
+and resource-cleanup cases as applicable. Numeric conformance evidence covers
+exact and one-over LSP integer/uinteger bounds for request IDs, `processId`,
+progress tokens, and outbound positions, plus fractional rejection. URI
+evidence includes platform-independent drive/UNC oracles and a Windows-only
+canonical-path assertion.
 
 ## Consequences
 

@@ -7629,6 +7629,19 @@ The unchanged extension also passes typecheck, 38 unit tests, the pinned VS Code
 1.134.0 Extension Host matrix, its exact 10-file package inventory, and the
 audit of 39 tracked files, 18 license groups, and three current documents.
 
+The bounded pre-review remediation aligns every numeric LSP field with the
+signed 32-bit `integer` or non-negative signed-32-bit `uinteger` ranges from the
+pinned 3.17 model. Public evidence now rejects fractional and one-over request
+IDs, `processId`, progress tokens, and outbound positions; it covers exact
+256-byte string IDs, method names, and queries, complete 100/101 symbol and
+diagnostic projections, and over-bound encoded semantic responses. Windows
+canonical roots now normalize extended drive and UNC paths to standard file
+URIs, reject unsupported namespaces, and have independent cross-platform
+oracles plus a Windows-only canonical-path assertion. The focused remediation
+matrix passes 12 protocol-domain, 7 Runtime LSP unit, 5 transport, and 6 real-
+process tests. No dependency, lockfile, public capability, or semantic authority
+changes.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
 source/link/structure and `git diff --check` gates. Tasks 3-6 run focused
 protocol/Graph/adapter/Workspace/Runtime/public-process checks plus the

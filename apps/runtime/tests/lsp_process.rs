@@ -126,6 +126,68 @@ async fn public_lsp_process_completes_lifecycle_with_pure_framed_stdout() {
 }
 
 #[tokio::test]
+async fn public_lsp_process_rejects_non_lsp_integer_fields() {
+    let root = tempdir().expect("temporary Workspace must be created");
+    let root_uri = workspace_root_uri(root.path()).expect("root URI must encode");
+    let mut invalid_process_id: Value =
+        serde_json::from_str(&initialize(&root_uri)).expect("initialize request JSON");
+    invalid_process_id["id"] = json!(2);
+    invalid_process_id["params"]["processId"] = json!(i64::from(i32::MAX) + 1);
+    let input = [
+        frame(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": i64::from(i32::MAX) + 1,
+                "method": "initialize",
+                "params": invalid_process_id["params"].clone()
+            })
+            .to_string(),
+        ),
+        frame(&invalid_process_id.to_string()),
+        frame(&initialize(&root_uri)),
+        frame(&notification("initialized")),
+        frame(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "workspace/symbol",
+                "params": {"query": "", "workDoneToken": 1.5}
+            })
+            .to_string(),
+        ),
+        frame(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "workspace/symbol",
+                "params": {
+                    "query": "",
+                    "partialResultToken": i64::from(i32::MAX) + 1
+                }
+            })
+            .to_string(),
+        ),
+        frame(&request(5, "shutdown")),
+        frame(&notification("exit")),
+    ]
+    .concat();
+
+    let output = run_process(root.path(), &input).await;
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let responses = decode_frames(&output.stdout);
+    assert_eq!(responses.len(), 6);
+    assert_eq!(responses[0]["id"], Value::Null);
+    assert_eq!(responses[0]["error"]["code"], -32600);
+    assert_eq!(responses[1]["error"]["code"], -32602);
+    assert_eq!(responses[2]["result"]["serverInfo"]["name"], "oneagent");
+    for response in &responses[3..5] {
+        assert_eq!(response["error"]["code"], -32602);
+    }
+    assert_eq!(responses[5]["result"], Value::Null);
+}
+
+#[tokio::test]
 async fn public_lsp_process_projects_edt_and_designer_workspace_symbols() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service");
     let root_uri = workspace_root_uri(&root).expect("fixture root URI must encode");

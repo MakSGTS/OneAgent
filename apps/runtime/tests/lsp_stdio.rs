@@ -400,3 +400,13 @@ fn public_workspace_root_uri_is_absolute_and_percent_encoded() {
     assert!(uri.contains("space%20%23%20%C3%BC"));
     assert!(!uri.contains('#'));
 }
+
+#[cfg(windows)]
+#[test]
+fn public_windows_workspace_root_uri_uses_standard_file_uri_form() {
+    let root = tempdir().expect("temporary root must be created");
+    let uri = workspace_root_uri(root.path()).expect("Windows root URI must encode");
+    assert!(uri.starts_with("file:///"));
+    assert!(!uri.contains('?'));
+    assert!(!uri.contains("%3F"));
+}

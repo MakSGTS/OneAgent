@@ -20,6 +20,9 @@ const WORKSPACE_SYMBOL: &str = "workspace/symbol";
 const DOCUMENT_DIAGNOSTIC: &str = "textDocument/diagnostic";
 const MAX_QUERY_BYTES: usize = 256;
 const MAX_RESULT_ITEMS: usize = 100;
+const LSP_INTEGER_MIN: i64 = i32::MIN as i64;
+const LSP_INTEGER_MAX: i64 = i32::MAX as i64;
+const LSP_UINTEGER_MAX: u64 = i32::MAX as u64;
 
 /// Optional semantic capabilities installed in one LSP server instance.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -292,10 +295,11 @@ impl LspServer {
         }
 
         let id = match object.get("id") {
-            Some(value) => match RequestId::from_value(value) {
+            Some(value) if valid_lsp_request_id(value) => match RequestId::from_value(value) {
                 Some(id) => Some(id),
                 None => return response_error(None, LspErrorCode::InvalidRequest),
             },
+            Some(_) => return response_error(None, LspErrorCode::InvalidRequest),
             None => None,
         };
         let Some(method) = object.get("method").and_then(Value::as_str) else {
@@ -531,13 +535,20 @@ fn object_params(value: Option<&Value>) -> Option<&Map<String, Value>> {
     value.and_then(Value::as_object)
 }
 
+fn valid_lsp_request_id(value: &Value) -> bool {
+    value.is_string() || lsp_integer(value).is_some()
+}
+
+fn lsp_integer(value: &Value) -> Option<i64> {
+    value
+        .as_i64()
+        .filter(|value| (LSP_INTEGER_MIN..=LSP_INTEGER_MAX).contains(value))
+}
+
 fn validate_initialize_params(params: &Map<String, Value>) -> bool {
-    if !matches!(
-        params.get("processId"),
-        Some(Value::Null | Value::Number(_))
-    ) || params
+    if !params
         .get("processId")
-        .is_some_and(|value| value.as_i64().is_none() && !value.is_null())
+        .is_some_and(|value| value.is_null() || lsp_integer(value).is_some())
         || params
             .get("rootUri")
             .and_then(Value::as_str)
@@ -652,7 +663,7 @@ fn validate_diagnostic_params(params: &Map<String, Value>) -> Option<&str> {
 }
 
 fn valid_progress_token(value: Option<&Value>) -> bool {
-    value.is_none_or(|value| value.is_string() || value.is_number())
+    value.is_none_or(|value| value.is_string() || lsp_integer(value).is_some())
 }
 
 fn fields(values: &Map<String, Value>, allowed: &[&str]) -> bool {
@@ -717,7 +728,7 @@ fn position(value: &Value) -> Option<(u64, u64)> {
     }
     let line = value.get("line")?.as_u64()?;
     let character = value.get("character")?.as_u64()?;
-    (u32::try_from(line).is_ok() && u32::try_from(character).is_ok()).then_some((line, character))
+    (line <= LSP_UINTEGER_MAX && character <= LSP_UINTEGER_MAX).then_some((line, character))
 }
 
 fn validate_document_diagnostics(value: &Value) -> bool {

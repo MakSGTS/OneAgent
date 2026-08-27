@@ -1,6 +1,6 @@
 use oneagent_protocol::{
     LspCapabilities, LspDispatchOutcome, LspErrorCode, LspExitStatus, LspHandler, LspHandlerError,
-    LspServer, MAX_REQUEST_ID_BYTES, encode_lsp_response,
+    LspServer, MAX_MESSAGE_BYTES, MAX_REQUEST_ID_BYTES, encode_lsp_response,
 };
 use serde_json::{Map, Value, json};
 
@@ -61,6 +61,70 @@ impl LspHandler for Handler {
     }
 }
 
+#[derive(Clone, Copy)]
+struct BoundaryHandler {
+    symbol_count: usize,
+    diagnostic_count: usize,
+    oversized_symbol: bool,
+    position: u64,
+}
+
+impl LspHandler for BoundaryHandler {
+    fn validate_initialize(&self, params: &Map<String, Value>) -> Result<(), LspHandlerError> {
+        Handler::default().validate_initialize(params)
+    }
+
+    fn workspace_symbols(&self, _query: &str) -> Result<Value, LspHandlerError> {
+        if self.symbol_count > 100 {
+            return Err(LspHandlerError::RequestFailed);
+        }
+        let name = if self.oversized_symbol {
+            "x".repeat(MAX_MESSAGE_BYTES)
+        } else {
+            "Symbol".to_owned()
+        };
+        Ok(Value::Array(
+            (0..self.symbol_count)
+                .map(|index| {
+                    json!({
+                        "name": format!("{name}{index}"),
+                        "kind": 12,
+                        "containerName": "Main",
+                        "location": {
+                            "uri": DOCUMENT,
+                            "range": {
+                                "start": {"line": self.position, "character": self.position},
+                                "end": {"line": self.position, "character": self.position}
+                            }
+                        }
+                    })
+                })
+                .collect(),
+        ))
+    }
+
+    fn document_diagnostics(&self, _uri: &str) -> Result<Value, LspHandlerError> {
+        if self.diagnostic_count > 100 {
+            return Err(LspHandlerError::RequestFailed);
+        }
+        Ok(json!({
+            "kind": "full",
+            "items": (0..self.diagnostic_count)
+                .map(|index| json!({
+                    "range": {
+                        "start": {"line": self.position, "character": self.position},
+                        "end": {"line": self.position, "character": self.position}
+                    },
+                    "severity": 1,
+                    "code": format!("diagnostic.{index}"),
+                    "source": "oneagent",
+                    "message": "bounded diagnostic"
+                }))
+                .collect::<Vec<_>>()
+        }))
+    }
+}
+
 fn request(id: impl Into<Value>, method: &str, params: Option<Value>) -> String {
     let mut value = json!({"jsonrpc": "2.0", "id": id.into(), "method": method});
     if let Some(params) = params {
@@ -100,7 +164,10 @@ fn response(outcome: LspDispatchOutcome) -> Value {
         .expect("response JSON must parse")
 }
 
-fn initialized_server(capabilities: LspCapabilities, handler: Handler) -> LspServer {
+fn initialized_server(
+    capabilities: LspCapabilities,
+    handler: impl LspHandler + 'static,
+) -> LspServer {
     let mut server = LspServer::with_capabilities(capabilities, handler);
     assert_eq!(
         response(server.dispatch(&request(
@@ -253,6 +320,223 @@ fn public_decode_precedence_rejects_syntax_duplicates_depth_and_bad_ids() {
     assert_eq!(
         response(server.dispatch(&over_depth))["error"]["code"],
         -32600
+    );
+}
+
+#[test]
+fn public_lsp_integer_and_string_id_bounds_are_exact() {
+    for id in [i64::from(i32::MIN), i64::from(i32::MAX)] {
+        let mut server = LspServer::new(Handler::default());
+        let accepted = response(server.dispatch(&request(
+            json!(id),
+            "initialize",
+            Some(initialize_params(ROOT)),
+        )));
+        assert_eq!(accepted["id"], id);
+    }
+    for id in [i64::from(i32::MIN) - 1, i64::from(i32::MAX) + 1] {
+        let mut server = LspServer::new(Handler::default());
+        let rejected = response(server.dispatch(&request(
+            json!(id),
+            "initialize",
+            Some(initialize_params(ROOT)),
+        )));
+        assert_eq!(rejected["id"], Value::Null);
+        assert_eq!(rejected["error"]["code"], -32600);
+    }
+
+    let exact = "i".repeat(MAX_REQUEST_ID_BYTES);
+    let mut server = LspServer::new(Handler::default());
+    assert_eq!(
+        response(server.dispatch(&request(
+            json!(exact),
+            "initialize",
+            Some(initialize_params(ROOT))
+        )))["id"],
+        "i".repeat(MAX_REQUEST_ID_BYTES)
+    );
+    let mut server = LspServer::new(Handler::default());
+    let rejected = response(server.dispatch(&request(
+        json!("i".repeat(MAX_REQUEST_ID_BYTES + 1)),
+        "initialize",
+        Some(initialize_params(ROOT)),
+    )));
+    assert_eq!(rejected["id"], Value::Null);
+    assert_eq!(rejected["error"]["code"], -32600);
+}
+
+#[test]
+fn public_process_progress_method_and_query_bounds_are_exact() {
+    for process_id in [i64::from(i32::MIN), i64::from(i32::MAX)] {
+        let mut params = initialize_params(ROOT);
+        params["processId"] = json!(process_id);
+        let mut server = LspServer::new(Handler::default());
+        assert!(
+            response(server.dispatch(&request(json!(1), "initialize", Some(params))))
+                .get("result")
+                .is_some()
+        );
+    }
+    for process_id in [
+        json!(i64::from(i32::MIN) - 1),
+        json!(i64::from(i32::MAX) + 1),
+        json!(1.5),
+    ] {
+        let mut params = initialize_params(ROOT);
+        params["processId"] = process_id;
+        let mut server = LspServer::new(Handler::default());
+        assert_eq!(
+            response(server.dispatch(&request(json!(1), "initialize", Some(params))))["error"]["code"],
+            -32602
+        );
+    }
+
+    let capabilities = LspCapabilities::lifecycle_only().with_workspace_symbols();
+    let mut server = initialized_server(capabilities, Handler::default());
+    for token in [json!(i32::MIN), json!(i32::MAX), json!("progress")] {
+        assert!(
+            response(server.dispatch(&request(
+                json!(2),
+                "workspace/symbol",
+                Some(json!({"query": "x", "workDoneToken": token})),
+            )))
+            .get("result")
+            .is_some()
+        );
+    }
+    for token in [json!(i64::from(i32::MAX) + 1), json!(1.5)] {
+        assert_eq!(
+            response(server.dispatch(&request(
+                json!(3),
+                "workspace/symbol",
+                Some(json!({"query": "x", "partialResultToken": token})),
+            )))["error"]["code"],
+            -32602
+        );
+    }
+
+    assert_eq!(
+        response(server.dispatch(&request(json!(4), &"m".repeat(256), None)))["error"]["code"],
+        -32601
+    );
+    assert_eq!(
+        response(server.dispatch(&request(json!(5), &"m".repeat(257), None)))["error"]["code"],
+        -32600
+    );
+    assert!(
+        response(server.dispatch(&request(
+            json!(6),
+            "workspace/symbol",
+            Some(json!({"query": "q".repeat(256)})),
+        )))
+        .get("result")
+        .is_some()
+    );
+    assert_eq!(
+        response(server.dispatch(&request(
+            json!(7),
+            "workspace/symbol",
+            Some(json!({"query": "q".repeat(257)})),
+        )))["error"]["code"],
+        -32602
+    );
+}
+
+#[test]
+fn public_complete_semantic_results_and_position_bounds_are_exact() {
+    let capabilities = LspCapabilities::lifecycle_only()
+        .with_workspace_symbols()
+        .with_diagnostics();
+    let mut server = initialized_server(
+        capabilities,
+        BoundaryHandler {
+            symbol_count: 100,
+            diagnostic_count: 100,
+            oversized_symbol: false,
+            position: i32::MAX as u64,
+        },
+    );
+    assert_eq!(
+        response(server.dispatch(&request(
+            json!(2),
+            "workspace/symbol",
+            Some(json!({"query": ""})),
+        )))["result"]
+            .as_array()
+            .expect("exact symbol result")
+            .len(),
+        100
+    );
+    assert_eq!(
+        response(server.dispatch(&request(
+            json!(3),
+            "textDocument/diagnostic",
+            Some(json!({"textDocument": {"uri": DOCUMENT}})),
+        )))["result"]["items"]
+            .as_array()
+            .expect("exact diagnostic result")
+            .len(),
+        100
+    );
+
+    for (symbols, diagnostics, method, params) in [
+        (101, 0, "workspace/symbol", json!({"query": ""})),
+        (
+            0,
+            101,
+            "textDocument/diagnostic",
+            json!({"textDocument": {"uri": DOCUMENT}}),
+        ),
+    ] {
+        let mut server = initialized_server(
+            capabilities,
+            BoundaryHandler {
+                symbol_count: symbols,
+                diagnostic_count: diagnostics,
+                oversized_symbol: false,
+                position: 0,
+            },
+        );
+        assert_eq!(
+            response(server.dispatch(&request(json!(4), method, Some(params))))["error"]["code"],
+            -32803
+        );
+    }
+
+    let mut oversized = initialized_server(
+        capabilities,
+        BoundaryHandler {
+            symbol_count: 1,
+            diagnostic_count: 0,
+            oversized_symbol: true,
+            position: 0,
+        },
+    );
+    assert_eq!(
+        response(oversized.dispatch(&request(
+            json!(5),
+            "workspace/symbol",
+            Some(json!({"query": ""})),
+        )))["error"]["code"],
+        -32803
+    );
+
+    let mut invalid_position = initialized_server(
+        capabilities,
+        BoundaryHandler {
+            symbol_count: 1,
+            diagnostic_count: 0,
+            oversized_symbol: false,
+            position: i32::MAX as u64 + 1,
+        },
+    );
+    assert_eq!(
+        response(invalid_position.dispatch(&request(
+            json!(6),
+            "workspace/symbol",
+            Some(json!({"query": ""})),
+        )))["error"]["code"],
+        -32603
     );
 }
 

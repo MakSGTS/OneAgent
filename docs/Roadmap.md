@@ -7073,8 +7073,8 @@ documentation follow-up.
 | Sprint 28 — MCP Server | Establish the MCP server, lifecycle, and transport boundary. | completed |
 | Sprint 29 — MCP Semantic Tools | Expose graph, query, validation, diagnostics, impact, and context capabilities through MCP. | completed |
 | Sprint 30 — VS Code Extension Foundation | Establish extension packaging, activation, configuration, and runtime connectivity. | completed |
-| Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | active |
-| Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | planned |
+| Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
+| Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | next |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | planned |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | planned |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
@@ -7370,7 +7370,7 @@ behavior. The package adds no dependency and keeps LSP/provider APIs deferred.
 ###### Sprint 31 completed evidence
 
 Task 6 completes the public evidence matrix without changing production
-behavior. A clean locked Node 24/pnpm 11.19.0 install, typecheck, compile, 36
+behavior. A clean locked Node 24/pnpm 11.19.0 install, typecheck, compile, 38
 unit tests, 2 public `oneagent-mcp` process tests, and 16 pinned VS Code 1.134.0
 Extension Host tests pass across two trusted lifecycle cycles plus empty,
 virtual, multi-root, and Restricted Mode hosts. The exact package inventory has
@@ -7381,8 +7381,8 @@ ignored generated/test artifacts, and absent deferred provider, diagnostics,
 chat, and telemetry surfaces.
 
 The canonical Rust format, check, workspace test, all-target/all-feature Clippy,
-and warning-denying Rustdoc gates pass. Public Runtime evidence includes 8 MCP
-process and 5 semantic-tool tests; the complete Workspace, Common, BSL, Graph,
+and warning-denying Rustdoc gates pass. Public Runtime evidence includes 9 MCP
+process and 6 semantic-tool tests; the complete Workspace, Common, BSL, Graph,
 EDT, Designer XML, protocol, Tool Policy, Runtime, and compatibility suites pass
 without a dependency addition or change to the six existing tool contracts.
 Repository CI runs the complete Rust and extension boundaries on both
@@ -7391,13 +7391,16 @@ schema, handler, Tool Policy, manifest, client, package, current-state docs,
 303 local Markdown links, secret/path-leak, generated-artifact, and deferred-
 scope audits agree with the accepted seven-tool, four-kind location matrix.
 
-Sprint 31 remains `active` until Task 7 completes the fresh-context independent
-review, primary reconciliation, repeated complete validation, artifact-
-consistency review, final state transition, and conditional Sprint 30 prompt-
-suite retirement. LSP and VS Code provider APIs, reference search, diagnostics,
-chat/context UI, workspace refresh/watch, remote/web/multi-root support,
-external-client compatibility, Marketplace work, telemetry, edits/refactoring,
-and broad performance/security claims remain deferred.
+Sprint 31 is `completed` with an effective
+`pass with non-blocking follow-ups` after the initial blocked independent
+review, a separate remediation commit, a new fresh-context read-only review,
+primary reconciliation, repeated complete validation, and a passing artifact-
+consistency check by the same final reviewer. Sprint 32 — LSP Adapter is the
+unique `next` target, and the exact verified Sprint 30 prompt suite is retired
+in the review commit. LSP and VS Code provider APIs, reference search,
+diagnostics, chat/context UI, workspace refresh/watch, remote/web/multi-root
+support, external-client compatibility, Marketplace work, telemetry,
+edits/refactoring, and broad performance/security claims remain deferred.
 
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run evidence,
 source/link, structure, and `git diff --check` gates. Task 3 runs focused

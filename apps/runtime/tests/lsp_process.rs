@@ -188,6 +188,29 @@ async fn public_lsp_process_rejects_non_lsp_integer_fields() {
 }
 
 #[tokio::test]
+async fn public_lsp_process_suppresses_method_boundary_notifications() {
+    let root = tempdir().expect("temporary Workspace must be created");
+    let root_uri = workspace_root_uri(root.path()).expect("root URI must encode");
+    let input = [
+        frame(&initialize(&root_uri)),
+        frame(&notification("initialized")),
+        frame(&notification(&"m".repeat(256))),
+        frame(&notification(&"m".repeat(257))),
+        frame(&request(2, "shutdown")),
+        frame(&notification("exit")),
+    ]
+    .concat();
+
+    let output = run_process(root.path(), &input).await;
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let responses = decode_frames(&output.stdout);
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0]["result"]["serverInfo"]["name"], "oneagent");
+    assert_eq!(responses[1]["result"], Value::Null);
+}
+
+#[tokio::test]
 async fn public_lsp_process_projects_edt_and_designer_workspace_symbols() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service");
     let root_uri = workspace_root_uri(&root).expect("fixture root URI must encode");

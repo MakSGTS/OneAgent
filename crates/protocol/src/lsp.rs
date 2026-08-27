@@ -306,7 +306,10 @@ impl LspServer {
             return response_error(id, LspErrorCode::InvalidRequest);
         };
         if method.is_empty() || method.len() > MAX_METHOD_NAME_BYTES {
-            return response_error(id, LspErrorCode::InvalidRequest);
+            return match id {
+                Some(id) => response_error(Some(id), LspErrorCode::InvalidRequest),
+                None => LspDispatchOutcome::NoResponse,
+            };
         }
 
         match id {

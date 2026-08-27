@@ -423,6 +423,12 @@ fn public_process_progress_method_and_query_bounds_are_exact() {
         response(server.dispatch(&request(json!(5), &"m".repeat(257), None)))["error"]["code"],
         -32600
     );
+    for method in ["m".repeat(256), "m".repeat(257)] {
+        assert_eq!(
+            server.dispatch(&notification(&method, None)),
+            LspDispatchOutcome::NoResponse
+        );
+    }
     assert!(
         response(server.dispatch(&request(
             json!(6),

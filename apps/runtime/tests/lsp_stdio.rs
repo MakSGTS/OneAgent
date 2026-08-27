@@ -136,7 +136,11 @@ async fn public_lsp_transport_frames_lifecycle_and_fragmentation_repeatably() {
         assert_eq!(responses[0]["id"], 1);
         assert_eq!(
             responses[0]["result"]["capabilities"],
-            json!({"positionEncoding": "utf-16", "textDocumentSync": 0})
+            json!({
+                "positionEncoding": "utf-16",
+                "textDocumentSync": 0,
+                "workspaceSymbolProvider": true
+            })
         );
         assert_eq!(
             responses[1],

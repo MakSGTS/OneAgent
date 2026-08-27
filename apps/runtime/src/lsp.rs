@@ -5,19 +5,23 @@ use std::fmt;
 use std::future::Future;
 use std::path::Path;
 
+use oneagent_graph::{GraphNode, NodeKind};
 use oneagent_protocol::{
-    LspDispatchOutcome, LspExitStatus, LspHandler, LspHandlerError, LspServer, MAX_MESSAGE_BYTES,
-    encode_lsp_response,
+    LspCapabilities, LspDispatchOutcome, LspExitStatus, LspHandler, LspHandlerError, LspServer,
+    MAX_MESSAGE_BYTES, encode_lsp_response,
 };
+use oneagent_workspace::WorkspaceFormat;
 use serde_json::{Map, Value};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::WorkspaceSnapshot;
+use crate::mcp_tools::unique_symbol_location;
+use crate::{WorkspaceConfigurationSnapshot, WorkspaceSnapshot};
 
 const MAX_HEADER_BYTES: usize = 8_192;
 const READ_SCRATCH_BYTES: usize = 8_192;
 const HEADER_DELIMITER: &[u8] = b"\r\n\r\n";
 const CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
+const MAX_SYMBOL_RESULTS: usize = 100;
 
 /// Successful terminal outcomes for an LSP stdio stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,7 +121,7 @@ impl fmt::Display for LspServerConstructionError {
 impl Error for LspServerConstructionError {}
 
 struct RuntimeLspHandler {
-    _snapshot: WorkspaceSnapshot,
+    snapshot: WorkspaceSnapshot,
     root_uri: String,
 }
 
@@ -145,8 +149,8 @@ impl LspHandler for RuntimeLspHandler {
         Ok(())
     }
 
-    fn workspace_symbols(&self, _query: &str) -> Result<Value, LspHandlerError> {
-        Err(LspHandlerError::Internal)
+    fn workspace_symbols(&self, query: &str) -> Result<Value, LspHandlerError> {
+        project_workspace_symbols(&self.snapshot, &self.root_uri, query)
     }
 
     fn document_diagnostics(&self, _uri: &str) -> Result<Value, LspHandlerError> {
@@ -154,7 +158,7 @@ impl LspHandler for RuntimeLspHandler {
     }
 }
 
-/// Constructs a lifecycle-only LSP server owning one immutable snapshot.
+/// Constructs an LSP server owning one immutable snapshot and symbol handler.
 ///
 /// # Errors
 ///
@@ -162,10 +166,10 @@ impl LspHandler for RuntimeLspHandler {
 /// absolute UTF-8 path representable as a canonical file URI.
 pub fn lsp_server(snapshot: WorkspaceSnapshot) -> Result<LspServer, LspServerConstructionError> {
     let root_uri = workspace_root_uri(snapshot.root_path())?;
-    Ok(LspServer::new(RuntimeLspHandler {
-        _snapshot: snapshot,
-        root_uri,
-    }))
+    Ok(LspServer::with_capabilities(
+        LspCapabilities::lifecycle_only().with_workspace_symbols(),
+        RuntimeLspHandler { snapshot, root_uri },
+    ))
 }
 
 /// Converts an existing Workspace root into its canonical absolute file URI.
@@ -198,8 +202,12 @@ pub fn workspace_root_uri(root: &Path) -> Result<String, LspServerConstructionEr
 fn percent_encode_path(path: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut encoded = String::with_capacity(path.len());
-    for byte in path.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/' | b':') {
+    for (index, byte) in path.bytes().enumerate() {
+        let drive_separator = cfg!(windows) && index == 1 && byte == b':';
+        if byte.is_ascii_alphanumeric()
+            || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/')
+            || drive_separator
+        {
             encoded.push(char::from(byte));
         } else {
             encoded.push('%');
@@ -208,6 +216,119 @@ fn percent_encode_path(path: &str) -> String {
         }
     }
     encoded
+}
+
+struct WorkspaceSymbol<'a> {
+    configuration: &'a WorkspaceConfigurationSnapshot,
+    node: &'a GraphNode,
+    folded_name: String,
+    kind: u8,
+    location: Value,
+}
+
+fn project_workspace_symbols(
+    snapshot: &WorkspaceSnapshot,
+    root_uri: &str,
+    query: &str,
+) -> Result<Value, LspHandlerError> {
+    let folded_query = query.to_lowercase();
+    let mut symbols = Vec::new();
+    for configuration in snapshot.configurations() {
+        for node in configuration.graph().nodes() {
+            let Some(kind) = lsp_symbol_kind(configuration.format(), node.kind()) else {
+                continue;
+            };
+            let folded_name = node.name().as_str().to_lowercase();
+            if !folded_name.contains(&folded_query) {
+                continue;
+            }
+            let Some(location) = lsp_symbol_location(snapshot, configuration, node, root_uri)
+            else {
+                continue;
+            };
+            symbols.push(WorkspaceSymbol {
+                configuration,
+                node,
+                folded_name,
+                kind,
+                location,
+            });
+            enforce_symbol_result_bound(symbols.len())?;
+        }
+    }
+    symbols.sort_by(|left, right| {
+        (
+            left.folded_name.as_str(),
+            left.node.name().as_str(),
+            left.kind,
+            left.node.id().as_str(),
+            left.configuration.configuration_id().as_str(),
+        )
+            .cmp(&(
+                right.folded_name.as_str(),
+                right.node.name().as_str(),
+                right.kind,
+                right.node.id().as_str(),
+                right.configuration.configuration_id().as_str(),
+            ))
+    });
+    Ok(Value::Array(
+        symbols
+            .into_iter()
+            .map(|symbol| {
+                serde_json::json!({
+                    "name": symbol.node.name().as_str(),
+                    "kind": symbol.kind,
+                    "containerName": symbol.configuration.configuration_name().as_str(),
+                    "location": symbol.location
+                })
+            })
+            .collect(),
+    ))
+}
+
+fn enforce_symbol_result_bound(count: usize) -> Result<(), LspHandlerError> {
+    (count <= MAX_SYMBOL_RESULTS)
+        .then_some(())
+        .ok_or(LspHandlerError::RequestFailed)
+}
+
+const fn lsp_symbol_kind(format: WorkspaceFormat, kind: NodeKind) -> Option<u8> {
+    match (format, kind) {
+        (_, NodeKind::Procedure | NodeKind::Function) => Some(12),
+        (WorkspaceFormat::Edt, NodeKind::Query) => Some(19),
+        _ => None,
+    }
+}
+
+fn lsp_symbol_location(
+    snapshot: &WorkspaceSnapshot,
+    configuration: &WorkspaceConfigurationSnapshot,
+    node: &GraphNode,
+    root_uri: &str,
+) -> Option<Value> {
+    let projected = unique_symbol_location(snapshot, configuration, node)?;
+    let path = projected.get("path")?.as_str()?;
+    let span = projected.get("span")?.as_object()?;
+    let start = lsp_position(span.get("start")?)?;
+    let end = lsp_position(span.get("end")?)?;
+    let uri = if root_uri.ends_with('/') {
+        format!("{root_uri}{}", percent_encode_path(path))
+    } else {
+        format!("{root_uri}/{}", percent_encode_path(path))
+    };
+    Some(serde_json::json!({
+        "uri": uri,
+        "range": {"start": start, "end": end}
+    }))
+}
+
+fn lsp_position(value: &Value) -> Option<Value> {
+    let line = value.get("line")?.as_u64()?.checked_sub(1)?;
+    let character = value.get("column")?.as_u64()?.checked_sub(1)?;
+    u32::try_from(line).ok()?;
+    u32::try_from(character).ok()?;
+    Some(serde_json::json!({"line": line, "character": character}))
 }
 
 /// Stateful Content-Length adapter around a transport-independent LSP server.
@@ -404,5 +525,174 @@ where
             |()| Ok(true),
         ),
         () = tokio::task::yield_now() => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use oneagent_common::{
+        EntityId, EntityName, SourceLocation, SourcePath, SourcePosition, SourceSpan,
+    };
+    use oneagent_graph::{
+        Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
+    };
+    use oneagent_workspace::WorkspaceFormat;
+
+    use super::{
+        enforce_symbol_result_bound, lsp_symbol_kind, lsp_symbol_location, workspace_root_uri,
+    };
+    use crate::WorkspaceSnapshotBuilder;
+
+    fn fixture_root() -> &'static Path {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/workspace_service")
+            .leak()
+    }
+
+    fn location(path: SourcePath, with_span: bool) -> SourceLocation {
+        let span = with_span.then(|| {
+            let point = SourcePosition::new(3, 1).expect("one-based point");
+            SourceSpan::new(point, point).expect("ordered point span")
+        });
+        SourceLocation::new(path, span)
+    }
+
+    fn provenance(location: SourceLocation, producer: &str) -> Provenance {
+        Provenance::new_with_location(
+            None,
+            Some(location),
+            ProducerId::new(producer),
+            FactOrigin::Declared,
+            Confidence::Exact,
+            ResolutionState::NotApplicable,
+        )
+    }
+
+    fn node(name: &str, provenance: Vec<Provenance>) -> GraphNode {
+        GraphNode::new_with_provenance(
+            EntityId::new(format!("procedure.{name}")).expect("node ID"),
+            EntityName::new(name).expect("node name"),
+            NodeKind::Procedure,
+            provenance,
+        )
+    }
+
+    #[test]
+    fn symbol_kind_and_bound_contracts_are_exact() {
+        assert_eq!(
+            lsp_symbol_kind(WorkspaceFormat::Edt, NodeKind::Procedure),
+            Some(12)
+        );
+        assert_eq!(
+            lsp_symbol_kind(WorkspaceFormat::Edt, NodeKind::Function),
+            Some(12)
+        );
+        assert_eq!(
+            lsp_symbol_kind(WorkspaceFormat::Edt, NodeKind::Query),
+            Some(19)
+        );
+        assert_eq!(
+            lsp_symbol_kind(WorkspaceFormat::DesignerXml, NodeKind::Query),
+            None
+        );
+        assert_eq!(
+            lsp_symbol_kind(WorkspaceFormat::Edt, NodeKind::Module),
+            None
+        );
+        assert!(enforce_symbol_result_bound(100).is_ok());
+        assert!(enforce_symbol_result_bound(101).is_err());
+    }
+
+    #[test]
+    fn lsp_symbol_locations_require_one_confined_spanned_location() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let configuration = &snapshot.configurations()[0];
+        let root_uri = workspace_root_uri(snapshot.root_path()).expect("root URI");
+        let source_path = SourcePath::new(
+            configuration
+                .root_path()
+                .join("Module.bsl")
+                .to_string_lossy(),
+        )
+        .expect("confined source path");
+        let spanned = location(source_path.clone(), true);
+
+        assert!(
+            lsp_symbol_location(
+                &snapshot,
+                configuration,
+                &node("Missing", Vec::new()),
+                &root_uri
+            )
+            .is_none()
+        );
+        assert!(
+            lsp_symbol_location(
+                &snapshot,
+                configuration,
+                &node(
+                    "Spanless",
+                    vec![provenance(location(source_path.clone(), false), "a")]
+                ),
+                &root_uri
+            )
+            .is_none()
+        );
+
+        let repeated = node(
+            "Repeated",
+            vec![
+                provenance(spanned.clone(), "b"),
+                provenance(spanned.clone(), "a"),
+            ],
+        );
+        let projected = lsp_symbol_location(&snapshot, configuration, &repeated, &root_uri)
+            .expect("repeated identical location must collapse");
+        assert_eq!(
+            projected["range"]["start"],
+            serde_json::json!({"line": 2, "character": 0})
+        );
+        assert_eq!(projected["range"]["start"], projected["range"]["end"]);
+
+        let conflicting = node(
+            "Conflicting",
+            vec![
+                provenance(spanned, "a"),
+                provenance(
+                    location(
+                        SourcePath::new(
+                            configuration
+                                .root_path()
+                                .join("Other.bsl")
+                                .to_string_lossy(),
+                        )
+                        .expect("second source path"),
+                        true,
+                    ),
+                    "b",
+                ),
+            ],
+        );
+        assert!(lsp_symbol_location(&snapshot, configuration, &conflicting, &root_uri).is_none());
+
+        let outside = fixture_root()
+            .parent()
+            .expect("fixture parent")
+            .join("outside.bsl");
+        let escaping = node(
+            "Escaping",
+            vec![provenance(
+                location(
+                    SourcePath::new(outside.to_string_lossy()).expect("outside source path"),
+                    true,
+                ),
+                "a",
+            )],
+        );
+        assert!(lsp_symbol_location(&snapshot, configuration, &escaping, &root_uri).is_none());
     }
 }

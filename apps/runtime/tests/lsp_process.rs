@@ -38,6 +38,10 @@ fn request(id: u64, method: &str) -> String {
     json!({"jsonrpc": "2.0", "id": id, "method": method}).to_string()
 }
 
+fn request_with_params(id: u64, method: &str, params: &Value) -> String {
+    json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()
+}
+
 async fn run_process(root: &Path, input: &[u8]) -> std::process::Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_oneagent-lsp"))
         .current_dir(root)
@@ -107,9 +111,99 @@ async fn public_lsp_process_completes_lifecycle_with_pure_framed_stdout() {
     assert_eq!(responses[0]["result"]["serverInfo"]["name"], "oneagent");
     assert_eq!(
         responses[0]["result"]["capabilities"],
-        json!({"positionEncoding": "utf-16", "textDocumentSync": 0})
+        json!({
+            "positionEncoding": "utf-16",
+            "textDocumentSync": 0,
+            "workspaceSymbolProvider": true
+        })
     );
     assert_eq!(responses[1]["result"], Value::Null);
+}
+
+#[tokio::test]
+async fn public_lsp_process_projects_edt_and_designer_workspace_symbols() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service");
+    let root_uri = workspace_root_uri(&root).expect("fixture root URI must encode");
+    let input = [
+        frame(&initialize(&root_uri)),
+        frame(&notification("initialized")),
+        frame(&request_with_params(
+            2,
+            "workspace/symbol",
+            &json!({"query": ""}),
+        )),
+        frame(&request_with_params(
+            3,
+            "workspace/symbol",
+            &json!({"query": "fillsecurity"}),
+        )),
+        frame(&request_with_params(
+            4,
+            "workspace/symbol",
+            &json!({"query": "absent"}),
+        )),
+        frame(&request_with_params(
+            5,
+            "workspace/symbol",
+            &json!({"query": "", "unknown": true}),
+        )),
+        frame(&request(6, "shutdown")),
+        frame(&notification("exit")),
+    ]
+    .concat();
+
+    let first = run_process(&root, &input).await;
+    let repeated = run_process(&root, &input).await;
+    assert!(first.status.success());
+    assert!(first.stderr.is_empty());
+    assert_eq!(first.stdout, repeated.stdout);
+    let responses = decode_frames(&first.stdout);
+    assert_eq!(responses.len(), 6);
+
+    let symbols = responses[1]["result"]
+        .as_array()
+        .expect("workspace symbols must be an array");
+    assert_eq!(symbols.len(), 4);
+    assert_eq!(
+        symbols
+            .iter()
+            .map(|symbol| symbol["name"].as_str().expect("symbol name"))
+            .collect::<Vec<_>>(),
+        [
+            "FillSecurityCollection",
+            "Posting",
+            "Query",
+            "ReadMissingCatalog"
+        ]
+    );
+    assert!(symbols.iter().all(|symbol| {
+        matches!(symbol["kind"].as_u64(), Some(12 | 19))
+            && symbol["location"]["uri"]
+                .as_str()
+                .is_some_and(|uri| uri.starts_with(&root_uri))
+            && symbol["location"]["range"]["start"]["character"] == 0
+            && symbol["location"]["range"]["start"] == symbol["location"]["range"]["end"]
+    }));
+    assert_eq!(
+        symbols.iter().filter(|symbol| symbol["kind"] == 19).count(),
+        1
+    );
+
+    let designer = responses[2]["result"]
+        .as_array()
+        .expect("filtered symbols must be an array");
+    assert_eq!(designer.len(), 1);
+    assert!(
+        designer[0]["location"]["uri"]
+            .as_str()
+            .expect("Designer symbol URI")
+            .contains("/designer/CommonModules/")
+    );
+    assert_eq!(responses[3]["result"], json!([]));
+    assert_eq!(
+        responses[4]["error"],
+        json!({"code": -32602, "message": "Invalid params"})
+    );
 }
 
 #[tokio::test]

@@ -564,7 +564,7 @@ const fn symbol_kind_name(value: &str) -> Option<&'static str> {
     }
 }
 
-fn unique_symbol_location(
+pub(crate) fn unique_symbol_location(
     snapshot: &WorkspaceSnapshot,
     configuration: &WorkspaceConfigurationSnapshot,
     node: &GraphNode,

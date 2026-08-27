@@ -7430,6 +7430,132 @@ Suggested planning commit message:
 Plan Sprint 31 Navigation and Symbol Search
 ```
 
+##### Sprint 32 LSP Adapter execution plan
+
+Sprint 32 is planned from committed Sprint 31 review head `daab0ecf`. The
+[Sprint 31 review](reviews/sprint-31-navigation-symbol-search.md) records
+`pass with non-blocking follow-ups`, Sprint 31 is `completed`, and Sprint 32 is
+the unique `next` target. The live baseline already owns typed one-based source
+locations, immutable Workspace and Configuration roots, deterministic bounded
+symbol search, recoverable semantic diagnostics, bounded JSON-RPC/MCP values,
+Tokio stdio ownership, and repository-owned mixed EDT/Designer public-process
+fixtures. No LSP module, Content-Length transport, initialize lifecycle,
+`oneagent-lsp` binary, LSP capability, method handler, or LSP process test exists.
+
+The official LSP 3.17 specification and immutable upstream sources, together
+with current graph locations, diagnostics, Workspace roots, protocol/Runtime
+entry points, and tracked fixtures, provide enough evidence for a bounded
+investigation and reproducible implementation plan. Task 1 must pin exact
+upstream sources and inventory lifecycle, framing, roots/URIs, position
+encoding, method/capability candidates, diagnostic locality, bounds, failures,
+dependencies, consumers, and test oracles. Task 2 must accept ADR-0054 before
+production LSP behavior changes.
+
+Framework readiness is complete through the existing Investigation,
+Architecture, Implementation, Runtime Service, IDE Extension, MCP Protocol,
+and Review modules. The generic Implementation contract covers the
+transport-independent LSP value/projection slices; Runtime Service covers stdio
+process ownership, lifecycle, cancellation, shutdown, and public client/server
+evidence; the existing IDE and MCP modules remain compatibility authorities.
+No reusable framework change or post-sprint framework audit is planned.
+
+The complete Sprint 32 prompt suite is owned by
+`docs/codex/prompts/sprint-32-lsp-adapter/`. The immediately preceding suite is
+exactly `docs/codex/prompts/sprint-31-navigation-symbol-search/`, containing
+these eight tracked files with an identical filesystem inventory and no
+untracked addition at planning time:
+
+- `00-sprint-31-execution-loop.md`
+- `01-investigate-navigation-symbol-search.md`
+- `02-define-navigation-symbol-search.md`
+- `03-implement-source-location-model.md`
+- `04-implement-navigation-mcp-tools.md`
+- `05-integrate-vscode-navigation-search.md`
+- `06-complete-navigation-search-evidence.md`
+- `07-sprint-31-integration-review.md`
+
+Only Task 8 may retire those exact files after a non-blocking independent and
+primary review, successful complete validation, and a passing same-reviewer
+artifact-consistency check.
+
+###### Sprint 32 objective
+
+Expose the supported immutable navigation, symbol, and recoverable diagnostic
+evidence through one bounded editor-neutral LSP 3.17 stdio process without
+moving semantic authority into protocol code, reading source after snapshot
+construction, or claiming mutable-document analysis.
+
+Included scope is:
+
+- pinned LSP 3.17 investigation, repository ownership/consumer inventory,
+  decision-ready method/capability slice, compatibility and deterministic test
+  matrix;
+- accepted ADR-0054 for protocol authority, messages, framing, lifecycle,
+  roots/URIs, positions, methods/capabilities, diagnostics, bounds, errors,
+  process ownership, compatibility, evidence, and deferrals;
+- a transport-independent bounded LSP protocol core with truthful capability
+  dispatch and unchanged MCP behavior;
+- one public `oneagent-lsp` Content-Length-framed stdio process over an immutable
+  Workspace snapshot with deterministic initialization, shutdown, exit, EOF,
+  failure, channel-purity, repetition, and cleanup evidence;
+- only the navigation and symbol methods accepted by ADR-0054, projected from
+  canonical graph locations with confined file URIs, correct positions,
+  deterministic ordering/bounds, and public process evidence;
+- only the diagnostic mode accepted by ADR-0054, projected from canonical
+  recoverable diagnostics with truthful source coverage, stable code/severity/
+  ordering/location behavior, and public process evidence;
+- cross-platform CI, complete Rust/process, dependency, compatibility, scope,
+  path/secret/generated-artifact, and current-state evidence; and
+- one mandatory fresh-context read-only integration reviewer, primary
+  reconciliation, artifact consistency, Sprint 33 hand-off, and conditional
+  Sprint 31 prompt-suite retirement.
+
+Excluded scope is mutable document synchronization or parsing; post-start
+source reads; completion, hover, references, rename, code actions, formatting,
+semantic tokens, edits, dynamic registration, and every LSP method not accepted
+by ADR-0054; multiple workspace roots; socket/pipe/remote transport; IDE-specific
+UI or migration of the existing VS Code MCP experience; changes to MCP tools;
+external-client compatibility claims; new diagnostic rules, suppression or
+configuration; telemetry; refactoring; and broad performance/security claims.
+
+###### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the LSP adapter. | Investigation / investigation | Pinned LSP authority, repository ownership/compatibility inventory, decision-ready first slice, and deterministic test matrix. | Sprint 32 planning baseline. | `Investigate Sprint 32 LSP adapter` |
+| 2 | Define the LSP adapter. | Architecture / architecture | Accepted ADR-0054 for protocol, lifecycle, framing, roots/URIs, positions, methods/capabilities, diagnostics, evidence, and deferrals. | Task 1. | `Define Sprint 32 LSP adapter` |
+| 3 | Implement the LSP protocol core. | Implementation / implementation | Transport-independent bounded LSP messages, lifecycle, truthful capabilities, dispatch, validation, and errors. | Accepted ADR-0054. | `Implement Sprint 32 LSP protocol core` |
+| 4 | Implement the LSP Runtime lifecycle. | Runtime Service / Runtime Service | Public `oneagent-lsp` stdio framing/process lifecycle over the immutable Workspace snapshot. | Task 3. | `Implement Sprint 32 LSP runtime lifecycle` |
+| 5 | Implement LSP navigation and symbols. | Implementation / implementation | Exact accepted navigation/symbol handlers with confined URIs, deterministic results, and public process evidence. | Task 4. | `Implement Sprint 32 LSP navigation and symbols` |
+| 6 | Implement LSP diagnostics. | Implementation / implementation | Exact accepted bounded diagnostic projection and public process evidence without new diagnostic authority. | Task 5. | `Implement Sprint 32 LSP diagnostics` |
+| 7 | Complete LSP evidence. | Runtime Service / Runtime Service | Cross-platform complete validation, compatibility/dependency/scope audits, CI, and synchronized current-state docs. | Task 6. | `Complete Sprint 32 LSP evidence` |
+| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 33 hand-off, and conditional Sprint 31 suite retirement. | Task 7 and all validation. | `Complete Sprint 32 LSP adapter review` |
+
+Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
+source/link/structure and `git diff --check` gates. Tasks 3-6 run focused
+protocol/Graph/adapter/Workspace/Runtime/public-process checks plus the
+canonical Rust workspace gate. Task 7 reruns the complete canonical Rust and
+public LSP matrices plus CI/binary/API/capability/handler/dependency/scope/link
+audits. Task 8 gives the exact planning-through-Task-7 range to one fresh-
+context read-only reviewer, then the primary independently inspects and reruns
+the complete matrix. The same reviewer must pass the drafted artifact before
+Roadmap transition or prompt retirement.
+
+Sprint 32 remains `next` during planning, becomes `active` when Task 1 starts,
+and may become `completed` only after Task 8. Missing or contradictory pinned
+protocol evidence, an unapproved dependency, guessed document identity or
+source position, escaping URI, mutable-source dependence, unstable ordering,
+unbounded input/output, capability/handler disagreement, protocol-channel
+contamination, zero matched tests, failed validation or commit, reviewer
+mutation or incompleteness, unresolved evidence disagreement, or failed
+artifact consistency stops execution.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 32 LSP Adapter
+```
+
 The v0.6 release integration review follows Sprint 35.
 
 #### v0.7 — Intelligence

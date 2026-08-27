@@ -162,8 +162,8 @@ Tool results do not create or mutate Knowledge Graph facts.
 
 ### `oneagent-protocol`
 
-Owns the bounded MCP revision 2026-07-28 protocol boundary accepted by ADR-0050
-and ADR-0051:
+Owns the bounded MCP revision 2026-07-28 boundary accepted by ADR-0050 and
+ADR-0051 plus the additive LSP 3.17 boundary accepted by ADR-0054:
 
 * bounded request IDs, method names, client and server information, and request
   and notification metadata;
@@ -171,6 +171,8 @@ and ADR-0051:
 * bounded JSON encoding/decoding and newline-payload validation;
 * exact `server/discover`, truthful tool capability/catalog definitions,
   `tools/list`, `tools/call`, and asynchronous sequential dispatch.
+* bounded LSP JSON-RPC values, initialize/shutdown/exit lifecycle, truthful
+  static capabilities, validation, closed errors, and synchronous dispatch.
 
 It depends only on serialization support and does not own Runtime stream I/O,
 the Knowledge Graph, Context Engine, providers, semantic tool execution, remote
@@ -358,7 +360,7 @@ authority. The subsequent
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; Sprints 29 and 30 are completed, and Sprint 31 implementation and
+follow-ups`; Sprints 29–31 are completed, and Sprint 32 LSP implementation and
 production evidence remain active pending integration review.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
@@ -394,10 +396,23 @@ framing, notifications, cancellation, transport failures, stdout purity, exit
 status, repetition, and cleanup. The desktop VS Code adapter owns one explicit-
 demand Quick Pick and safe navigation projection without semantic matching.
 Additional revisions, remote transports, authentication, snapshot refresh,
-external-client compatibility, Runtime packaging, LSP/provider APIs,
-references, diagnostics UI, and broader IDE integration remain deferred.
-Sprint 31 implementation and production evidence remain active pending
-integration review.
+external-client compatibility, Runtime packaging, references, diagnostics UI,
+and broader IDE integration remain deferred. The additive LSP process does not
+migrate or alter this MCP boundary.
+
+ADR-0054 governs the implemented editor-neutral LSP projection. The separate
+`oneagent-lsp` process owns one immutable Workspace startup snapshot and a
+bounded Content-Length stdio lifecycle. Runtime validates one canonical root,
+confines canonical document URIs, and converts typed one-based spans to
+zero-based UTF-16-compatible ranges without reading source text. The truthful
+static surface contains only `workspace/symbol` for located Procedure,
+Function, and EDT Query nodes and `textDocument/diagnostic` full reports for
+existing recoverable diagnostics with located source nodes. Graph identity,
+diagnostic code/severity/message/order, and source-location provenance remain
+the semantic authority. Each result family has a complete limit of 100 and
+fails closed rather than claiming a truncated prefix. No mutable-document,
+definition/reference, completion, edit, workspace-diagnostic, remote, or
+external-client behavior is represented.
 
 ## Core principles
 
@@ -1536,7 +1551,9 @@ SM-9 MCP and IDE integration
     implemented: immutable startup snapshot and Tool Policy execution gate
     implemented: typed Module, Procedure, Function, and EDT Query source locations
     implemented: explicit VS Code Quick Pick symbol search and safe source navigation
-    deferred: LSP and VS Code definition/reference/document/workspace-symbol providers
+    implemented: bounded LSP 3.17 lifecycle and Content-Length stdio process
+    implemented: LSP workspace symbols and full pull document diagnostics
+    deferred: VS Code LSP migration and definition/reference/document-symbol providers
     deferred: incremental refresh, remote transport/authentication, and external-client compatibility
 ```
 

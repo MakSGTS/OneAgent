@@ -60,16 +60,19 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      operations without becoming a background service. A separate bounded MCP
      stdio adapter and `oneagent-mcp` binary build one immutable startup
      snapshot and serve the seven read-only semantic tools without constructing
-     `App`, watching files, or changing Runtime service ownership.
+     `App`, watching files, or changing Runtime service ownership. A separate
+     bounded LSP stdio adapter and `oneagent-lsp` binary expose immutable
+     workspace symbols and pull diagnostics through Content-Length framing and
+     the accepted LSP lifecycle without changing Graph authority.
    - `oneagent-cli` is the supported dependency-free client for the accepted
      Runtime health and Graph Query HTTP/1.1 surface. It owns a closed command
      grammar, local validation, bounded one-request socket lifecycle, exact
      query encoding, opaque Runtime JSON presentation, and stable failure/exit
      classification without becoming protocol or semantic authority.
-   - `oneagent-protocol` owns the bounded MCP 2026-07-28 request, notification,
-     response, error, discovery, tool catalog/list/call, codec, validation, and
-     asynchronous sequential dispatch contracts. It does not own Runtime I/O,
-     semantic tool execution, HTTP, or LSP contracts.
+   - `oneagent-protocol` owns the bounded MCP 2026-07-28 and LSP 3.17 request,
+     notification, response, error, codec, validation, lifecycle, capability,
+     and dispatch contracts. It does not own Runtime I/O, semantic projection,
+     HTTP, or editor UI.
    - `extensions/vscode` is the desktop workspace client for the accepted MCP
      process boundary. It activates only on its three contributed commands,
      validates one trusted file-backed workspace and one bounded executable,
@@ -106,13 +109,14 @@ The roadmap assigns future boundaries explicitly:
   records `pass with non-blocking follow-up`. The
   [Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
   records `pass with non-blocking follow-ups`. Sprint 31 Navigation and Symbol
-  Search implementation and production evidence are present and remain active
-  pending integration review.
+  Search is completed. Sprint 32 LSP Adapter implementation and production
+  evidence are present and remain active pending integration review.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
-  plus bounded symbol search and navigation are implemented in Sprint 31. LSP,
-  reference providers, diagnostics and chat/context UI, EDT integration, and
-  external-client compatibility remain later work in Sprints 32–35.
+  plus bounded symbol search and navigation are implemented in Sprint 31. The
+  editor-neutral LSP workspace-symbol and pull-diagnostic slice is implemented
+  in Sprint 32. Definition/reference providers, diagnostics UI, chat/context UI,
+  EDT IDE integration, and external-client compatibility remain later work.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
@@ -306,9 +310,42 @@ notifications, LF/CRLF
 framing, cancellation, transport failures, EOF, stdout purity, exit status,
 repetition, and cleanup. Additional MCP revisions, remote transports,
 authentication, snapshot refresh, external-client compatibility, Runtime
-packaging, LSP/provider APIs, references, diagnostics UI, and broader IDE
-integration remain deferred. Sprint 31 implementation and production evidence
-are present and remain active pending integration review.
+packaging, references, diagnostics UI, and broader IDE integration remain
+deferred. Sprint 31 is completed; the additive LSP boundary is described below.
+
+## Implemented LSP adapter boundary
+
+[ADR-0054](adr/0054-lsp-adapter.md) governs the additive editor-neutral LSP
+3.17 slice. `oneagent-protocol` owns bounded duplicate-aware JSON-RPC decoding,
+request IDs, lifecycle state, method validation, closed errors, truthful static
+capabilities, and transport-independent dispatch. `oneagent-runtime` owns the
+8,192-byte Content-Length header bound, 1 MiB UTF-8 body bound, injected
+sequential stdio adapter, canonical startup root URI, confined document URIs,
+semantic handlers, process channels, terminal classification, and the public
+`oneagent-lsp` binary. The process owns one immutable startup snapshot and
+creates no Runtime `App`, watcher, cache, listener, queue, or background task.
+
+Initialize advertises UTF-16 positions, `textDocumentSync: 0`,
+`workspaceSymbolProvider`, and a pull-only `diagnosticProvider` with no
+workspace diagnostics. `workspace/symbol` projects only Procedure, Function,
+and EDT Query nodes with one distinct confined typed span. It applies the
+accepted Unicode-lowercase substring match, deterministic identity order, LSP
+kinds 12/19, zero-based ranges, and a complete-result limit of 100 without
+silent truncation. `textDocument/diagnostic` returns full reports without a
+result ID. It projects only existing recoverable Graph diagnostics whose source
+node has one matching confined span, preserves Graph code, severity, message,
+and stable order, and returns an empty full report for a valid document without
+projected evidence.
+
+Content-Length stdout is protocol-only and flushed per response. Notifications
+are silent; successful process completion requires `shutdown` followed by
+`exit`; EOF before `exit`, malformed framing, I/O/encoding failure,
+cancellation, or early exit is a bounded redacted failure. Existing MCP
+revision/framing, seven tools, Tool Policy, HTTP, CLI, Workspace, cache, Graph,
+adapters, and the VS Code MCP experience remain unchanged. Mutable documents,
+source reads after startup, definition/references/completion/edits,
+push/workspace diagnostics, dynamic registration, remote transport, multi-root,
+external-client claims, and IDE migration remain deferred.
 
 ## Accepted OpenAI-compatible provider boundary
 

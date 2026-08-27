@@ -24,6 +24,9 @@ jobs:
       - name: Check
         run: cargo check --workspace
 
+      - name: Build public Runtime processes
+        run: cargo build -p oneagent-runtime --bin oneagent-mcp --bin oneagent-lsp
+
       - name: Test
         run: cargo test --workspace
 

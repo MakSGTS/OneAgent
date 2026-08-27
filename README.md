@@ -16,15 +16,15 @@ bounded Sprint 26 Ollama Integration is complete with a `pass` integration
 review. The bounded Sprint 27 Tool Execution Policy is complete with a `pass`
 integration review. The bounded Sprint 28 discovery-only MCP Server is complete
 with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
-Semantic Tools and Sprint 30 VS Code Extension Foundation are complete. The
-Sprint 31 Navigation and Symbol Search implementation and production evidence
-are present and remain active pending integration review.
+Semantic Tools, Sprint 30 VS Code Extension Foundation, and Sprint 31 Navigation
+and Symbol Search are complete. The Sprint 32 LSP Adapter implementation and
+production evidence are present and remain active pending integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
 ## Workspace
 
-- `apps/runtime` — long-running Runtime composition, owned service lifecycle, cancellation, shutdown, EDT/Designer Workspace discovery and file-change rebuilds, validated persistent snapshot caching, immutable semantic snapshots, public update/cache observation, HTTP liveness/readiness, the versioned read-only Graph Query API, and the separate bounded `oneagent-mcp` stdio process
+- `apps/runtime` — long-running Runtime composition, owned service lifecycle, cancellation, shutdown, EDT/Designer Workspace discovery and file-change rebuilds, validated persistent snapshot caching, immutable semantic snapshots, public update/cache observation, HTTP liveness/readiness, the versioned read-only Graph Query API, and the separate bounded `oneagent-mcp` and `oneagent-lsp` stdio processes
 - `apps/cli` — supported dependency-free CLI client for Runtime health, Workspace configuration listing, exact node lookup, direct relations, and bounded traversal
 - `crates/common` — shared primitives
 - `crates/workspace` — project and workspace model
@@ -34,7 +34,7 @@ See
 - `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
-- `crates/protocol` — bounded MCP 2026-07-28 domain values, validation, encoding, discovery, tool catalog/list/call, and asynchronous sequential dispatch contracts
+- `crates/protocol` — bounded MCP 2026-07-28 and LSP 3.17 domain values, validation, encoding, lifecycle, capabilities, and dispatch contracts
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
 - `adapters/openai-compatible` — implemented explicit bounded OpenAI-compatible `/v1/models` and non-streaming `/v1/completions` provider adapter
@@ -65,9 +65,9 @@ success/error schemas. The supported CLI maps its exact commands to those health
 and Graph Query GET routes through one bounded HTTP/1.1 connection, preserves
 Runtime JSON, and distinguishes usage, transport, server, protocol, and output
 failures with stable exit codes. Runtime process management, endpoint discovery,
-configuration files, richer output, alternate transports, packaging, Git, LSP,
-external MCP-client compatibility, and AI-provider integration remain planned
-capabilities with explicit ownership. The bounded desktop VS Code client uses
+configuration files, richer output, alternate transports, packaging, Git,
+external MCP/LSP-client compatibility, and AI-provider integration remain
+planned capabilities with explicit ownership. The bounded desktop VS Code client uses
 the separate MCP process for explicit connection and symbol-search/navigation
 only. Health remains available through exact `GET /health/live` and
 `GET /health/ready` probes.
@@ -149,18 +149,32 @@ listener, background task, remote client, or real side effect. It keeps stdout
 protocol-pure, treats EOF as successful completion, and reports only stable
 startup or transport categories on stderr. Additional protocol revisions,
 remote transports, authentication, snapshot refresh, external-client
-compatibility, Runtime packaging, LSP/providers, references, diagnostics UI,
+compatibility, Runtime packaging, references, diagnostics UI,
 and broader IDE integration remain deferred. The desktop VS Code extension
 supports only the accepted explicit connection and bounded symbol-navigation
 slice.
 
+Sprint 32 adds an independent bounded LSP 3.17 process without migrating the
+VS Code extension. `oneagent-lsp` builds one immutable startup snapshot, accepts
+only Content-Length-framed stdio, and enforces initialize, initialized,
+shutdown, and exit sequencing. Its static capabilities are UTF-16 positions,
+no document synchronization, `workspaceSymbolProvider`, and pull-only
+`diagnosticProvider`. Workspace symbols cover located Procedure, Function, and
+EDT Query nodes; full document diagnostic reports project only existing
+recoverable Graph diagnostics with located source nodes. Runtime owns canonical
+confined file URIs and zero-based ranges. The process reads no source after
+startup, emits protocol frames only on stdout, treats EOF before `exit` as a
+failure, adds no dependency, and does not claim definition, references,
+completion, edits, mutable documents, workspace diagnostics, remote transport,
+or external-client compatibility.
+
 ## Verify
 
 ```bash
-cargo fmt --all --check
-cargo check --workspace --all-targets
-cargo test --workspace --all-targets
-cargo clippy --workspace --all-targets -- -D warnings
-cargo doc --workspace --no-deps
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 git diff --check
 ```

@@ -12,7 +12,7 @@ use oneagent_runtime::{
 };
 use serde_json::{Value, json};
 use tempfile::tempdir;
-use tokio::io::{AsyncRead, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 const CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
 
@@ -104,6 +104,61 @@ impl AsyncRead for ChunkedReader {
         if let Some(chunk) = self.chunks.pop_front() {
             buffer.put_slice(&chunk);
         }
+        Poll::Ready(Ok(()))
+    }
+}
+
+struct FailingReader;
+
+impl AsyncRead for FailingReader {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        _buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Poll::Ready(Err(io::Error::other("controlled read failure")))
+    }
+}
+
+#[derive(Default)]
+struct FailingWriter;
+
+impl AsyncWrite for FailingWriter {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        _buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Poll::Ready(Err(io::Error::other("controlled write failure")))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[derive(Default)]
+struct FailingFlushWriter(Vec<u8>);
+
+impl AsyncWrite for FailingFlushWriter {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        self.0.extend_from_slice(buffer);
+        Poll::Ready(Ok(buffer.len()))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Err(io::Error::other("controlled flush failure")))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -227,6 +282,18 @@ async fn public_lsp_transport_closes_malformed_eof_and_cancellation_paths() {
             LspStdioErrorKind::InvalidHeader,
         ),
         (
+            b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}".as_slice(),
+            LspStdioErrorKind::InvalidHeader,
+        ),
+        (
+            b"Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n\r\n".as_slice(),
+            LspStdioErrorKind::InvalidHeader,
+        ),
+        (
+            b"Content-Length: 2\r\nContent-Type: text/plain\r\n\r\n{}".as_slice(),
+            LspStdioErrorKind::InvalidHeader,
+        ),
+        (
             b"Content-Length: 02\r\n\r\n{}".as_slice(),
             LspStdioErrorKind::InvalidHeader,
         ),
@@ -278,6 +345,45 @@ async fn public_lsp_transport_closes_malformed_eof_and_cancellation_paths() {
         .expect_err("shutdown-source failure must terminate");
     assert_eq!(failure.kind(), LspStdioErrorKind::Shutdown);
     assert!(!failure.to_string().contains("secret"));
+}
+
+#[tokio::test]
+async fn public_lsp_transport_classifies_injected_io_failures_without_disclosure() {
+    let (mut transport, _) = new_transport();
+    let failure = transport
+        .run(
+            &mut FailingReader,
+            &mut Vec::new(),
+            pending::<Result<(), Infallible>>(),
+        )
+        .await
+        .expect_err("reader failure must terminate");
+    assert_eq!(failure.kind(), LspStdioErrorKind::Read);
+    assert!(!failure.to_string().contains("controlled"));
+
+    let (mut transport, _) = new_transport();
+    let mut writer = FailingWriter;
+    let failure = transport
+        .run(
+            &mut &frame("")[..],
+            &mut writer,
+            pending::<Result<(), Infallible>>(),
+        )
+        .await
+        .expect_err("writer failure must terminate");
+    assert_eq!(failure.kind(), LspStdioErrorKind::Write);
+
+    let (mut transport, _) = new_transport();
+    let mut writer = FailingFlushWriter::default();
+    let failure = transport
+        .run(
+            &mut &frame("")[..],
+            &mut writer,
+            pending::<Result<(), Infallible>>(),
+        )
+        .await
+        .expect_err("flush failure must terminate");
+    assert_eq!(failure.kind(), LspStdioErrorKind::Flush);
 }
 
 fn pending_reader() -> impl AsyncRead + Unpin {

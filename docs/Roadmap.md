@@ -7571,6 +7571,64 @@ full diagnostic reports without result IDs. Module symbols, definition,
 document symbols, mutable documents, publish/workspace diagnostics, external
 clients, and every other LSP feature remain deferred.
 
+###### Sprint 32 protocol and Runtime lifecycle implementation
+
+Task 3 implements the transport-independent LSP core in `oneagent-protocol`:
+duplicate-aware bounded JSON-RPC decoding, request IDs, initialize/initialized/
+shutdown/exit state, closed errors, static capability projection, exact method
+validation, synchronous dispatch, and response encoding. The additive module
+reuses crate-internal bounded JSON primitives without changing the MCP public
+contract. Its 9 public domain tests cover lifecycle, capability, handler,
+validation, precedence, error, response-shape, and notification behavior.
+
+Task 4 adds the public `oneagent-lsp` process and Runtime adapter. It constructs
+one immutable startup snapshot, canonicalizes the sole Workspace root, accepts
+only an exact initialize root/folder contract, processes sequential
+Content-Length frames with an 8,192-byte header and 1 MiB body bound, flushes
+protocol-only stdout, and requires shutdown then exit for success. Four
+in-memory transport tests and three initial process tests cover fragmented and
+coalesced frames, exact/over bounds, malformed/truncated input, UTF-8, EOF,
+cancellation, root rejection, repetition, channel purity, exit status, and
+redacted terminal categories. No dependency or background task is added.
+
+###### Sprint 32 symbol and diagnostic implementation
+
+Task 5 installs the truthful workspace-symbol capability. Runtime reuses the
+existing confined unique-location projection, requires a typed span, omits
+Module and Designer Query nodes, maps Procedure/Function to LSP kind 12 and EDT
+Query to kind 19, converts one-based points to zero-based ranges, applies the
+accepted Unicode-lowercase substring match and five-part identity order, and
+fails the complete request beyond 100 results. Mixed-fixture process evidence
+returns four exact EDT/Designer symbols repeatably; missing, repeated,
+conflicting, span-less, and escaping location evidence is covered without
+changing the MCP symbol wire.
+
+Task 6 installs the pull-only document-diagnostic capability. Runtime accepts
+only canonical Workspace-confined file URIs and returns full reports without a
+result ID. Existing recoverable Graph diagnostics are included only when their
+source node exists in the same Configuration and has one exact matching span;
+codes, severity, messages, and stable order are preserved. The mixed EDT
+document returns its three located errors; Designer, absent, and other valid
+documents return full empty reports. Missing source nodes and malformed,
+noncanonical, escaping URIs are omitted or rejected exactly as accepted;
+`previousResultId` is ignored. The complete-result limit is 100, and Graph,
+cache, adapter, Workspace, and MCP diagnostic regressions pass unchanged.
+
+###### Sprint 32 completed implementation evidence
+
+Task 7 synchronizes the public binary, capability, method, compatibility, and
+deferred-scope inventories across the README, architecture, semantic model,
+Roadmap, and CI. The Rust job now explicitly builds both `oneagent-mcp` and
+`oneagent-lsp` on `macos-14` and `windows-latest` before running the complete
+workspace tests and Clippy. The LSP public matrix contains 9 protocol-domain,
+5 transport, and 5 process tests plus focused Runtime location/URI/bound tests.
+No production dependency, lockfile change, generated artifact, source read,
+MCP/HTTP/CLI/VS Code migration, remote transport, external-client claim, or
+unsupported LSP method is added. Sprint 32 remains `active` until Task 8 review.
+The unchanged extension also passes typecheck, 38 unit tests, the pinned VS Code
+1.134.0 Extension Host matrix, its exact 10-file package inventory, and the
+audit of 39 tracked files, 18 license groups, and three current documents.
+
 Tasks execute strictly in order. Documentation-only Tasks 1-2 run pinned
 source/link/structure and `git diff --check` gates. Tasks 3-6 run focused
 protocol/Graph/adapter/Workspace/Runtime/public-process checks plus the

@@ -7701,6 +7701,103 @@ Suggested planning commit message:
 Plan Sprint 32 LSP Adapter
 ```
 
+Sprint 33 is planned from committed Sprint 32 review head `8e33c95c`. The
+Sprint 32 integration review records `pass with non-blocking follow-ups`, so
+Sprint 33 — AI Chat and Context Panel is the unique `next` target. The live
+baseline already exposes bounded `oneagent.context` and `oneagent.symbols`
+tools over one immutable Workspace snapshot, and the VS Code extension already
+owns trusted single-workspace Runtime connectivity, the exact seven-tool MCP
+catalog, symbol navigation, pinned VS Code 1.134.0 types and Extension Host,
+and deterministic unit, process, host, package, and cross-platform CI evidence.
+
+The smallest existing Investigation, Architecture, IDE Extension, Runtime,
+MCP, Implementation, and Review profiles, workflows, and templates express
+every planned evidence, decision, implementation, lifecycle, validation, and
+reporting boundary. No reusable Codex Framework change or post-sprint
+framework audit is planned.
+
+The sprint objective is to add one bounded VS Code chat participant and one
+inspectable read-only semantic Context panel that consume canonical Runtime
+facts without moving semantic authority, source access, or provider secrets
+into the extension. Investigation and ADR acceptance must decide the exact
+stable Chat, Language Model, webview, manifest, cancellation, prompt/context
+budget, lifecycle, rendering, and failure contracts before implementation.
+The expected first slice reuses the current request-selected VS Code language
+model and the existing Runtime Context tool; any contradiction in pinned API
+or executable evidence stops before production code.
+
+Included scope is immutable VS Code 1.134.0 API and manifest investigation;
+one accepted ADR; strict Context request/result decoding over the existing MCP
+process; serialization with the single pending-request transport boundary;
+bounded semantic-seed selection; a script-free, escaped, read-only Context
+panel; one contributed chat participant; deterministic model-message assembly
+from an explicitly selected Context bundle and user prompt; streamed text,
+cancellation, errors, disposal, reconnection, and context invalidation; public
+unit/process/Extension Host/package/CI evidence; and current-state
+documentation. Exact UI and message contracts remain owned by Tasks 1-2.
+
+Excluded scope is a new Rust semantic or protocol capability; changing the
+seven-tool Runtime catalog; Runtime LLM-provider composition; provider/model
+discovery or secrets in the extension; arbitrary source reads; inferred
+editor-to-node resolution; automatic context collection; tools or edits from
+the model; webview scripts or retained executable state; conversation
+persistence; custom model history; remote/web/multi-root or EDT integration;
+diagnostics UI; Marketplace publication; telemetry; and broad quality,
+performance, or security claims.
+
+The mandatory data gate is satisfied by the repository-owned Context Engine
+and MCP Context tests, real Runtime process fixtures, strict TypeScript client,
+pinned `@types/vscode@1.134.0`, pinned VS Code/Electron 1.134.0 Extension Host,
+package/audit tooling, and immutable official VS Code tag commit
+`474a349ad5b745e512ef86b864d1c74f7264dd7a`. Task 1 must pin the exact upstream
+files and record positive, negative, malformed, missing, incompatible,
+cancelled, reordered, repeated, disconnect, disposal, escaping, budget, and
+package oracles. No new production dependency is planned; discovery of one is
+a blocking approval gate.
+
+Tasks execute in this exact dependency order:
+
+| Order | Task-owned outcome | Profile / Template | Required committed prerequisite | Validation additions | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Pinned AI chat/Context-panel API, repository ownership, security, compatibility, and executable-oracle investigation. | Investigation / Investigation | Sprint 33 planning commit. | Pinned-source, API/manifest, existing Context/MCP/extension baseline, prompt-inventory, link, and `git diff --check` gates. | `Investigate Sprint 33 AI chat and context panel` |
+| 2 | Accepted ADR-0055 for the bounded chat and inspectable Context UI slice. | Architecture / Architecture | Task 1 with no blocking unknown or dependency. | ADR/source/link/scope/consumer consistency and `git diff --check`. | `Define Sprint 33 AI chat and context panel` |
+| 3 | Strict TypeScript Context request/result domain and serialized Runtime client operation over existing `oneagent.context`. | IDE Extension / IDE Extension | Task 2 and accepted ADR-0055. | Non-zero TypeScript decoder/client and real Runtime-process Context matrices; unchanged Rust protocol/catalog evidence. | `Implement Sprint 33 context Runtime client` |
+| 4 | Bounded semantic selection state and read-only, escaped, script-free Context panel presentation with deterministic lifecycle. | IDE Extension / IDE Extension | Task 3. | Non-zero controller/rendering tests, injection/bounds/disposal cases, typecheck, and compile. | `Implement Sprint 33 context panel` |
+| 5 | Bounded VS Code chat participant and deterministic selected-Context model request/streaming/cancellation behavior. | IDE Extension / IDE Extension | Task 4. | Non-zero chat controller/model-stream tests covering missing context, failures, bounds, cancellation, and repeated requests. | `Implement Sprint 33 AI chat participant` |
+| 6 | Public manifest, command, activation, disposable, Runtime reconnect, Chat, panel, and Extension Host integration. | IDE Extension / IDE Extension | Task 5. | Manifest/audit, unit, process, pinned Host, lifecycle, and exact registration/cleanup matrices. | `Integrate Sprint 33 chat and context extension` |
+| 7 | Complete package, cross-platform CI, compatibility, scope, security, and current-state evidence. | IDE Extension / IDE Extension | Task 6. | Frozen install, clean build, complete test/Host/process/package/VSIX/audit matrices, canonical Rust compatibility gate, links, and `git diff --check`. | `Complete Sprint 33 chat and context evidence` |
+| 8 | Fresh-context independent integration review, primary reconciliation, artifact consistency, Sprint 34 hand-off, and conditional Sprint 32 suite retirement. | Review / Review | Task 7 and all validation. | Reviewer and primary complete matrices plus same-reviewer consistency check. | `Complete Sprint 33 AI chat and context panel review` |
+
+The accepted planning baseline is the commit with subject
+`Plan Sprint 33 AI Chat and Context Panel`. Sprint 33 remains `next` during
+planning, becomes `active` when Task 1 starts, and may become `completed` only
+after Task 8 records `pass` or `pass with non-blocking follow-ups`, required
+validation succeeds, and the same independent reviewer passes artifact
+consistency. `already_complete` requires committed evidence plus every current
+criterion and validation; it never creates an empty commit. Missing or mutable
+API authority, an unapproved dependency, invented Context or model semantics,
+unsafe HTML, source access, unbounded prompt/output, stale Context after
+disconnect, protocol/catalog drift, leaked resources, zero matched tests,
+failed validation or commit, reviewer mutation or incompleteness, unresolved
+evidence disagreement, or failed artifact consistency stops execution.
+
+The exact current prompt suite is
+`docs/codex/prompts/sprint-33-ai-chat-context-panel/`. The verified immediately
+preceding suite is the nine tracked files under
+`docs/codex/prompts/sprint-32-lsp-adapter/`; only Task 8 may retire them after a
+non-blocking effective review decision, complete validation, and passing
+same-reviewer artifact consistency. A successful review records
+`docs/reviews/sprint-33-ai-chat-context-panel.md`, transitions Sprint 33 to
+`completed`, makes Sprint 34 — EDT Integration Prototype the unique `next`
+target, and atomically retires that exact preceding suite in the final review
+commit.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 33 AI Chat and Context Panel
+```
+
 The v0.6 release integration review follows Sprint 35.
 
 #### v0.7 — Intelligence

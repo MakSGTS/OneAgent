@@ -7078,7 +7078,7 @@ non-blocking documentation follow-up.
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | completed |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | completed |
-| Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | next |
+| Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | active |
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 

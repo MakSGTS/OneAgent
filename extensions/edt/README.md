@@ -38,6 +38,7 @@ cd extensions/edt
 export JAVA_HOME=/absolute/path/to/jdk-25
 export ONEAGENT_MCP_EXECUTABLE=/absolute/path/to/oneagent-mcp
 export ONEAGENT_MCP_FIXTURE=/absolute/path/to/repository/apps/runtime/tests/fixtures/workspace_service/edt
+java scripts/VerifyHostBoundary.java
 ./mvnw --batch-mode --no-transfer-progress clean verify
 java scripts/VerifyPackage.java repositories/com.oneagent.edt.repository/target/repository
 ```
@@ -104,6 +105,9 @@ Use a disposable JDK copy when the host requires the additional
 `lib/javafx-swt.jar`; never modify or re-sign an EDT application bundle. GUI
 validation must run sequentially on an authorized host and preserve the real
 exit status. A pipeline must enable `set -o pipefail` or inspect every stage.
+A boundary change requires new disposable host evidence against a vendor-
+supported EDT architecture, JDK, and matching OpenJFX SDK before the checked-in
+contract or validation commands change.
 
 ## Optional authenticated official p2 access
 

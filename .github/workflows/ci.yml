@@ -111,6 +111,11 @@ jobs:
           cache: maven
           cache-dependency-path: extensions/edt/pom.xml
 
+      - name: Verify EDT host runtime boundary
+        shell: bash
+        working-directory: extensions/edt
+        run: java scripts/VerifyHostBoundary.java
+
       - name: Build public Runtime
         run: cargo build -p oneagent-runtime --bin oneagent-mcp
 

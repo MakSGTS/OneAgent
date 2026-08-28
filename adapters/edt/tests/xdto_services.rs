@@ -49,8 +49,19 @@ fn copied_production_fixture() -> TempDir {
 
 fn replace_fixture_fragment(path: &Path, old: &str, new: &str) {
     let source = fs::read_to_string(path).expect("fixture artifact must be readable");
-    assert!(source.contains(old), "fixture fragment must exist: {old}");
-    fs::write(path, source.replacen(old, new, 1)).expect("fixture artifact must be updated");
+    let line_ending = if source.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let old_in_source = old.replace("\r\n", "\n").replace('\n', line_ending);
+    let new_in_source = new.replace("\r\n", "\n").replace('\n', line_ending);
+    assert!(
+        source.contains(&old_in_source),
+        "fixture fragment must exist: {old}"
+    );
+    fs::write(path, source.replacen(&old_in_source, &new_in_source, 1))
+        .expect("fixture artifact must be updated");
 }
 
 fn project() -> TempDir {

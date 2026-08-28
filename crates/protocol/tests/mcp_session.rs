@@ -440,6 +440,20 @@ fn legacy_lifecycle_errors_notifications_ping_and_post_error_state_are_closed() 
         )
         .is_none()
     );
+    assert!(
+        block_on(connection.dispatch(
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{"_meta":42}}"#
+        ))
+        .is_none()
+    );
+    let unknown_while_waiting = dispatch_json(
+        &mut connection,
+        &legacy_request(&json!(10), "review/unknown", Some(&json!({}))),
+    );
+    assert_eq!(
+        unknown_while_waiting["error"]["code"],
+        ErrorCode::MethodNotFound.value()
+    );
     let still_waiting = dispatch_json(&mut connection, &legacy_request(&json!(11), "ping", None));
     assert_eq!(
         still_waiting["error"]["code"],

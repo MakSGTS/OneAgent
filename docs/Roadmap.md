@@ -8359,9 +8359,19 @@ corrective task makes initialize metadata, roots, sampling, elicitation, tasks,
 and implementation validation revision-aware; adds atomic negative protocol
 and production-process coverage; reruns the exact literal Codex and Cursor
 commands; and records the complete successful gate with 1,136 workspace tests.
-Sprint 35 remains `active` until a new review covers the updated immutable
-range. The blocked review created no review artifact, state transition, or
-prompt retirement.
+The next fresh-context review of
+`cd876c836014fbd1ee15c0683da67d036f181b3c..88ccac4804ded4a15c81c71ec8d068957b571adc`
+was also `blocked`: malformed initialized metadata could activate a legacy
+session, and an unknown request while awaiting initialized received `-32002`
+instead of `-32601`. A second separate correction validates initialized
+notification metadata before state transition, distinguishes unknown and
+known operational requests while awaiting initialized, adds protocol and
+public-process regressions for both legacy revisions, and completes the full
+matrix with 1,137 workspace tests, 14 public-process tests, three successful
+Codex runs, two successful Cursor discovery runs, 62 VS Code unit tests, two
+VS Code process tests, and 41 EDT tests. Sprint 35 remains `active` until a new
+fresh-context review covers the latest immutable range. Neither blocked review
+created a review artifact, state transition, or prompt retirement.
 
 Task 6 reviews the exact planning-through-latest-corrective range with exactly
 one fresh-context read-only reviewer. The primary independently reconciles every

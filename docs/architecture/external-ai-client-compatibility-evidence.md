@@ -141,14 +141,14 @@ The final corrective focused counts are:
 
 - protocol session: 11 passed;
 - Runtime stdio: 8 passed;
-- public `oneagent-mcp` process: 13 passed;
+- public `oneagent-mcp` process: 14 passed;
 - semantic MCP tools: 6 passed;
 - LSP process regression: 7 passed;
 - VS Code: compilation passed, 62 unit tests and 2 real-process tests passed;
 - EDT: Tycho/PDE build passed, 41 tests passed with zero failures, errors, or
   skips, including the real process twice.
 
-The two new protocol tests accept the exact revision-specific shapes and reject
+The revision-aware protocol tests accept the exact revision-specific shapes and reject
 scalar initialize `_meta`, non-string/non-number progress tokens, non-boolean
 `roots.listChanged`, malformed `2025-11-25` sampling/elicitation/tasks fields,
 `2025-11-25`-only fields in `2025-06-18`, and wrong known implementation field
@@ -156,13 +156,22 @@ types. Every invalid request returns `-32602`, retains an undetermined session,
 and permits a following valid initialize. The public process repeats the
 atomic rejection boundary through the built `oneagent-mcp`.
 
+A second fresh-context review found two uncovered lifecycle branches. The
+follow-up correction validates notification `_meta` before accepting
+`notifications/initialized` and distinguishes unknown requests from known
+operational requests while the connection awaits that notification. Protocol
+and public-process regressions prove for both legacy revisions that malformed
+initialized metadata stays silent without activating the session, an unknown
+request returns `-32601`, a known `ping` remains gated by `-32002`, and a later
+valid initialized notification activates the same connection.
+
 The final accepted corrective canonical gate is:
 
 | Command | Exit and exact outcome |
 | --- | --- |
 | `cargo fmt --all --check` | 0 |
 | `cargo check --workspace --all-targets` | 0 |
-| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,136 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
+| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,137 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 |
 | `cargo doc --workspace --no-deps` | 0 |
 | `git diff --check` | 0 |

@@ -152,7 +152,16 @@ impl<'server> McpConnection<'server> {
             RawDecodeOutcome::Notification(notification)
                 if notification.method() == INITIALIZED_NOTIFICATION =>
             {
-                if let ConnectionState::LegacyAwaitingInitialized(facts) = &self.state {
+                let metadata_is_valid = notification.params().is_none_or(|params| {
+                    params.get("_meta").is_none_or(|metadata| {
+                        metadata
+                            .as_object()
+                            .is_some_and(validate_legacy_request_metadata)
+                    })
+                });
+                if metadata_is_valid
+                    && let ConnectionState::LegacyAwaitingInitialized(facts) = &self.state
+                {
                     self.state = ConnectionState::LegacyActive(facts.clone());
                 }
                 None
@@ -161,7 +170,14 @@ impl<'server> McpConnection<'server> {
             RawDecodeOutcome::Request { id, method, .. } if method == INITIALIZE_METHOD => {
                 Some(standard_error(Some(id), ErrorCode::InvalidRequest))
             }
-            RawDecodeOutcome::Request { id, .. } => Some(server_not_initialized(id)),
+            RawDecodeOutcome::Request { id, method, .. }
+                if is_legacy_operational_method(&method) =>
+            {
+                Some(server_not_initialized(id))
+            }
+            RawDecodeOutcome::Request { id, .. } => {
+                Some(standard_error(Some(id), ErrorCode::MethodNotFound))
+            }
         }
     }
 

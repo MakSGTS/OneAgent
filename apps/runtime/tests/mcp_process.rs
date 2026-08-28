@@ -418,6 +418,39 @@ async fn public_mcp_process_rejects_revision_specific_initialize_shapes_atomical
 }
 
 #[tokio::test]
+async fn public_mcp_process_rejects_malformed_initialized_and_projects_awaiting_errors() {
+    for initialize in [codex_initialize(), cursor_initialize()] {
+        let input = [
+            initialize,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{"_meta":42}}"#
+                .to_owned(),
+            legacy_request(47, "review/unknown", Some(&json!({}))),
+            legacy_request(48, "ping", None),
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_owned(),
+            legacy_request(49, "ping", None),
+        ]
+        .join("\n")
+            + "\n";
+        let output = run_process(input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("lifecycle stdout must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("lifecycle response JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 4);
+        assert!(responses[0]["result"]["protocolVersion"].is_string());
+        assert_eq!(responses[1]["id"], 47);
+        assert_eq!(responses[1]["error"]["code"], -32601);
+        assert_eq!(responses[2]["id"], 48);
+        assert_eq!(responses[2]["error"]["code"], -32002);
+        assert_eq!(responses[3]["id"], 49);
+        assert_eq!(responses[3]["result"], json!({}));
+    }
+}
+
+#[tokio::test]
 async fn public_mcp_process_falls_back_unknown_legacy_version_with_string_id() {
     let initialize = json!({
         "jsonrpc": "2.0",

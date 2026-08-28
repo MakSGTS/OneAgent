@@ -8130,7 +8130,7 @@ host runs each pass 38/38 tests with zero failures, errors, or skips. Both
 repositories have the same seven-file inventory; feature SHA-256 remains
 `9078608b97dc1a8c04ca0bacdc77a23948668a621e051c7924281923bde1015a`
 and bundle SHA-256 remains
-`04b6199901a9b66bfd5f80e89e119ab089f2e890465520db80aa57afa65d17b3`.
+`e55d3f3f4d1084b5d3a20c1a95855b08e3485879f486e5529e1be8b53baaf0ee`.
 The four metadata representations agree after normalizing only their generated
 `p2.timestamp`, and `p2.index` agrees after removing only its generated comment.
 The Java 17 package auditor reports `PASS`. Focused public MCP semantic/process

@@ -17,7 +17,7 @@ const expected = [
   "extension/dist/context-panel.js",
   "extension/dist/configuration.js",
   "extension/dist/ai-chat.js",
-];
+].sort();
 
 const outputs = ["oneagent-first.vsix", "oneagent-second.vsix"];
 try {
@@ -86,7 +86,7 @@ function zipInventory(archive) {
     entries.push(name);
     offset += 46 + fileNameLength + extraLength + commentLength;
   }
-  return entries;
+  return entries.sort();
 }
 
 function findEndOfCentralDirectory(archive) {

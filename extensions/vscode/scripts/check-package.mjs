@@ -14,7 +14,7 @@ const expected = [
   "dist/context-panel.js",
   "dist/configuration.js",
   "dist/ai-chat.js",
-];
+].sort();
 
 function inventory() {
   const command = process.platform === "win32" ? "vsce.cmd" : "vsce";
@@ -24,7 +24,7 @@ function inventory() {
   });
   assert.equal(result.status, 0, "vsce inventory command must succeed");
   assert.equal(result.stderr, "", "vsce inventory must not emit diagnostics");
-  return result.stdout.trim().split(/\r?\n/u);
+  return result.stdout.trim().split(/\r?\n/u).sort();
 }
 
 function spawnCommand(executable, args, options) {

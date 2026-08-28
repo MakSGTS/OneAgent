@@ -8202,6 +8202,173 @@ unrelated-change absence. Suggested planning commit message:
 Plan Sprint 34 EDT Integration Prototype
 ```
 
+#### Sprint 35 External AI Client Compatibility execution plan
+
+Sprint 35 is planned from committed readiness head `c83adc4a`. The
+[Sprint 34 integration review](reviews/sprint-34-edt-integration-prototype.md)
+records a non-blocking decision, Sprint 34 is `completed`, and Sprint 35 is the
+unique `next` target. The accepted MCP server and seven-tool catalog remain the
+semantic authority, but the live public clients cannot currently finish MCP
+initialization: Codex CLI `0.150.0-alpha.8` sends protocol version `2025-06-18`
+and Cursor Agent `2026.08.25-3e8eec8` sends `2025-11-25`, while the server
+accepts only its existing 2026-era stateless request metadata. Both clients
+return JSON-RPC `-32602` before tool discovery.
+
+The live executable/version/request traces, the official Codex and Cursor MCP
+documentation, and the official MCP lifecycle and tool schemas provide enough
+data for a bounded investigation. Client downloads, disposable workspaces,
+wrappers, logs, and configs remain ignored under `local-artifacts/sprint-35/`.
+Task 1 must pin the exact immutable upstream evidence and record redacted
+reproduction commands. Task 2 must accept the protocol negotiation, session,
+capability, response-shape, error, lifecycle, compatibility, and evidence
+contract before production behavior changes.
+
+Framework readiness is complete through the existing Investigation,
+Architecture, MCP Protocol, Runtime Service, and Review profiles, templates,
+and workflows. They already cover protocol evolution, stdio process lifecycle,
+public-boundary evidence, and independent review. No Codex Framework change or
+new production dependency is planned.
+
+##### Sprint 35 objective
+
+Make the repository-owned `oneagent-mcp` stdio server usable by the exact
+supported Codex and Cursor clients through standards-conforming initialization,
+tool discovery, tool calls, and shutdown while preserving the accepted modern
+OneAgent protocol, immutable seven-tool catalog, semantic results, bounded
+resources, deterministic failures, and existing clients. Represent additional
+MCP-capable clients through pinned protocol fixtures unless a separately
+authorized executable is required.
+
+##### Prerequisite and retirement gate
+
+Task 1 requires one committed Sprint 35 planning baseline containing this plan
+and the complete suite under
+`docs/codex/prompts/sprint-35-external-ai-client-compatibility/`. Every later
+task requires the preceding committed outcome. Stored prompts do not authorize
+commits or external access; both come only from the launching user instruction.
+
+The immediately preceding suite is exactly
+`docs/codex/prompts/sprint-34-edt-integration-prototype/`, with these eight
+tracked files and an identical filesystem inventory at planning time:
+
+- `00-sprint-34-execution-loop.md`
+- `01-investigate-edt-integration-prototype.md`
+- `02-define-edt-integration-prototype.md`
+- `03-implement-edt-runtime-client.md`
+- `04-implement-edt-command-lifecycle.md`
+- `05-package-edt-plugin.md`
+- `06-complete-edt-integration-evidence.md`
+- `07-sprint-34-integration-review.md`
+
+The suite remains untouched through Task 5. Only Task 6 may retire this exact
+inventory after a non-blocking review, complete primary validation, and the
+same reviewer's passing artifact-consistency check.
+
+##### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate external AI client compatibility. | Investigation / investigation | Pinned client, wire, protocol, lifecycle, response-shape, fixture, dependency, platform, and deterministic-oracle evidence with explicit ADR questions. | Sprint 35 planning baseline. | `Investigate Sprint 35 external AI client compatibility` |
+| 2 | Define external AI client compatibility. | Architecture / architecture | Accepted ADR-0057 for protocol negotiation, connection session, lifecycle, capabilities, response projection, errors, compatibility, and evidence. | Task 1. | `Define Sprint 35 external AI client compatibility` |
+| 3 | Implement legacy MCP protocol compatibility. | MCP Protocol / MCP Protocol | Accepted version negotiation, per-session protocol state, legacy response projection, modern preservation, and focused protocol evidence. | Task 2. | `Implement Sprint 35 legacy MCP protocol` |
+| 4 | Integrate the MCP client lifecycle. | MCP Protocol / MCP Protocol | Connection-owned initialize/initialized/list/call/shutdown/EOF lifecycle in the production stdio process with focused process evidence. | Task 3. | `Integrate Sprint 35 MCP client lifecycle` |
+| 5 | Complete external-client evidence. | MCP Protocol / MCP Protocol | Repository-owned conformance fixtures, exact Codex/Cursor public-process matrix, synthetic supported-version matrix, audits, and current-state docs. | Task 4. | `Complete Sprint 35 external client evidence` |
+| 6 | Review the integrated Sprint 35 baseline. | Review / review | Fresh-context review, primary reconciliation, artifact consistency, v0.6 release-review hand-off, and conditional Sprint 34 suite retirement. | Task 5 and all validation. | `Complete Sprint 35 external AI client compatibility review` |
+
+```text
+Committed Sprint 35 planning baseline
+    -> Task 1 pinned client and protocol investigation
+    -> Task 2 accepted ADR-0057
+    -> Task 3 protocol negotiation and response compatibility
+    -> Task 4 production stdio client lifecycle
+    -> Task 5 real-client and synthetic conformance evidence
+    -> Task 6 integration review and conditional Sprint 34 suite retirement
+    -> v0.6 release integration review eligibility
+```
+
+Task 1 creates only
+`docs/architecture/external-ai-client-compatibility-investigation.md` and
+changes Sprint 35 to `active`. It pins the exact Codex and Cursor versions,
+official download/documentation sources, first-request traces, current server
+failure, relevant MCP protocol revisions, lifecycle and tool schemas, current
+implementation ownership, candidate compatibility shapes, deterministic test
+oracles, platform constraints, and every decision ADR-0057 must make. It keeps
+personal paths, mutable credentials, downloaded binaries, and logs untracked
+and selects no architecture.
+
+Task 2 creates `docs/adr/0057-external-ai-client-compatibility.md` and
+synchronizes only planning-level architecture text required by the decision.
+It fixes accepted protocol versions, initialization and notification ordering,
+connection-owned session state, capabilities, method availability, request and
+response projection, error precedence, pre-initialize/post-close behavior,
+modern compatibility, transport ownership, limits, dependencies, tests,
+migration, first slice, rejected alternatives, and deferred scope. It
+implements no Rust.
+
+Task 3 implements only the accepted protocol-domain compatibility boundary. It
+negotiates supported versions, represents session state without global mutable
+authority, validates lifecycle-dependent dispatch, projects version-correct
+initialize and tool-list/tool-call results, preserves current modern metadata
+and semantic results, and returns deterministic JSON-RPC failures. Focused
+tests cover every accepted version, order, capability, shape, malformed input,
+repetition, isolation, and modern regression case. It does not own stdio loops,
+client installation, semantic tools, or catalog changes.
+
+Task 4 composes the accepted protocol session into each production stdio
+connection. It owns initialize, initialized, request sequencing, notification
+silence, request correlation, EOF, shutdown/exit if accepted by ADR-0057,
+connection isolation, bounded framing, stderr cleanliness, and cleanup. Public
+process tests prove exact Codex/Cursor initialization and tool workflows plus
+modern-client regression without changing tool semantics or adding another
+transport.
+
+Task 5 checks in only the accepted repository-owned fixtures, harness, tests,
+and current-state documentation. It reruns the exact public Codex and Cursor
+clients against the repository-built `oneagent-mcp`, proves the accepted
+initialize/list/call/failure/repetition/shutdown matrix, runs synthetic
+conformance for every supported version and platform-neutral framing, audits
+catalog/result equivalence, dependencies, secrets, personal paths, generated
+files, and scope, and runs the canonical workspace gate. It adds no new
+production behavior and makes no compatibility claim without executable
+evidence.
+
+Task 6 reviews the exact planning-through-Task-5 range with exactly one
+fresh-context read-only reviewer. The primary independently reconciles every
+finding and reruns the complete validation matrix. The same reviewer must pass
+the drafted review/Roadmap/retirement artifact before any state transition.
+Only `pass` or `pass with non-blocking follow-ups` transitions Sprint 35 to
+`completed`, makes the v0.6 release integration review eligible, and atomically
+retires the exact Sprint 34 suite. Sprint 36 remains `planned` until the v0.6
+release review explicitly hands off to it. The review never silently fixes
+production code.
+
+##### State gates and completion criteria
+
+Sprint 35 remains `next` during planning and becomes `active` only after the
+planning commit and Task 1 start. `already_complete` requires current committed
+evidence and successful required validation; no empty commit is created. Stop
+after the first prerequisite, implementation, validation, staging, commit,
+external-client, review, or consistency failure. Do not skip, reorder, combine,
+or partially commit tasks.
+
+Completion requires committed or proven Tasks 1-5, accepted ADR-0057, exact
+supported protocol revisions and lifecycle, successful real Codex and Cursor
+initialize/list/call workflows, version-correct response projections,
+connection isolation, deterministic malformed/order/failure behavior, preserved
+modern protocol and seven-tool semantic results, bounded cleanup, explicit
+deferred scope, the canonical full workspace gate, and a non-blocking Task 6
+decision. A blocked review keeps Sprint 35 incomplete, preserves the Sprint 34
+suite, and leaves both the v0.6 release review and Sprint 36 ineligible.
+
+Planning validation covers Markdown links and structure, prompt numbering,
+manifest/prerequisite/commit-message agreement, accepted-versus-deferred scope,
+unchanged `next` state, exact Sprint 34 suite inventory, `git diff --check`, and
+unrelated-change absence. Suggested planning commit message:
+
+```text
+Plan Sprint 35 External AI Client Compatibility
+```
+
 The v0.6 release integration review follows Sprint 35.
 
 #### v0.7 — Intelligence

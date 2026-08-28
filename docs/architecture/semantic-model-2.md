@@ -162,8 +162,10 @@ Tool results do not create or mutate Knowledge Graph facts.
 
 ### `oneagent-protocol`
 
-Owns the bounded MCP revision 2026-07-28 boundary accepted by ADR-0050 and
-ADR-0051 plus the additive LSP 3.17 boundary accepted by ADR-0054:
+Owns the bounded stateless MCP revision `2026-07-28` boundary accepted by
+ADR-0050 and ADR-0051, the connection-local legacy revisions `2025-06-18` and
+`2025-11-25` accepted by ADR-0057, and the additive LSP 3.17 boundary accepted
+by ADR-0054:
 
 * bounded request IDs, method names, client and server information, and request
   and notification metadata;

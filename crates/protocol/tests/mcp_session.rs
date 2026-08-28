@@ -630,6 +630,7 @@ fn independent_connections_do_not_share_legacy_or_modern_state() {
 fn modern_connection_dispatch_is_exactly_equal_to_stateless_dispatch() {
     let (server, _) = tool_server();
     let requests = [
+        modern_request(&json!(0), "initialize", &json!({})),
         modern_request(&json!(1), "server/discover", &json!({})),
         modern_request(&json!(2), "tools/list", &json!({})),
         modern_request(
@@ -647,6 +648,10 @@ fn modern_connection_dispatch_is_exactly_equal_to_stateless_dispatch() {
             encode_response(&expected).expect("expected response")
         );
     }
+    assert_eq!(
+        connection.protocol_revision(),
+        Some(McpProtocolRevision::V2026_07_28)
+    );
 }
 
 #[test]

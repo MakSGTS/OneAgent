@@ -141,20 +141,21 @@ The final corrective focused counts are:
 
 - protocol session: 11 passed;
 - Runtime stdio: 8 passed;
-- public `oneagent-mcp` process: 14 passed;
+- public `oneagent-mcp` process: 15 passed;
 - semantic MCP tools: 6 passed;
 - LSP process regression: 7 passed;
 - VS Code: compilation passed, 62 unit tests and 2 real-process tests passed;
 - EDT: Tycho/PDE build passed, 41 tests passed with zero failures, errors, or
   skips, including the real process twice.
 
-The revision-aware protocol tests accept the exact revision-specific shapes and reject
-scalar initialize `_meta`, non-string/non-number progress tokens, non-boolean
-`roots.listChanged`, malformed `2025-11-25` sampling/elicitation/tasks fields,
-`2025-11-25`-only fields in `2025-06-18`, and wrong known implementation field
-types. Every invalid request returns `-32602`, retains an undetermined session,
-and permits a following valid initialize. The public process repeats the
-atomic rejection boundary through the built `oneagent-mcp`.
+The revision-aware protocol tests accept the exact revision-specific shapes
+and reject scalar initialize `_meta`, non-string/non-number progress tokens,
+non-boolean `roots.listChanged`, malformed `2025-11-25`
+sampling/elicitation/tasks fields, `2025-11-25`-only fields in `2025-06-18`,
+and wrong known implementation field types. Every invalid request returns
+`-32602`, retains an undetermined session, and permits a following valid
+initialize. The public process repeats the atomic rejection boundary through
+the built `oneagent-mcp`.
 
 A second fresh-context review found two uncovered lifecycle branches. The
 follow-up correction validates notification `_meta` before accepting
@@ -165,13 +166,21 @@ initialized metadata stays silent without activating the session, an unknown
 request returns `-32601`, a known `ping` remains gated by `-32002`, and a later
 valid initialized notification activates the same connection.
 
+A third fresh-context review found that the undetermined state selected the
+legacy decoder solely from the method name `initialize`, before recognizing a
+valid modern envelope. The final correction gives a valid `2026-07-28`
+request the existing stateless dispatch semantics before attempting legacy
+initialize. Protocol equality and public-process regressions prove that modern
+`initialize` returns `-32601`, selects Modern, and permits a following modern
+discover, while the full legacy initialize matrix remains unchanged.
+
 The final accepted corrective canonical gate is:
 
 | Command | Exit and exact outcome |
 | --- | --- |
 | `cargo fmt --all --check` | 0 |
 | `cargo check --workspace --all-targets` | 0 |
-| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,137 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
+| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,138 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 |
 | `cargo doc --workspace --no-deps` | 0 |
 | `git diff --check` | 0 |
@@ -181,6 +190,13 @@ The workspace-test aggregate was computed from the complete output under
 `local-artifacts/sprint-35/`. An earlier development gate found one Clippy
 `redundant_closure` warning in the new validator and was not accepted. The
 smallest mechanical fix was applied before the complete successful cycle above.
+
+The first final EDT host attempt encountered one timing-sensitive existing
+`lateCancellationInterruptsPostFrameExitWait` failure (`PROCESS_FAILED` rather
+than `CANCELLED`) and failed the build with 40 of 41 tests passing. No EDT code
+is in the final corrective diff. One immediate sequential rerun of the exact
+full command completed with `BUILD SUCCESS`, all 41 tests passing, zero
+failures, errors, or skips, and the public Runtime process exercised twice.
 
 ## Audits and limitations
 

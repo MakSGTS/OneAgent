@@ -116,6 +116,13 @@ impl<'server> McpConnection<'server> {
             RawDecodeOutcome::Error(error) => Some(Response::Error(error)),
             RawDecodeOutcome::IgnoredNotification | RawDecodeOutcome::Notification(_) => None,
             RawDecodeOutcome::Request { id, method, params } if method == INITIALIZE_METHOD => {
+                if matches!(
+                    decode_request(id.clone(), method.clone(), params.as_ref()),
+                    DecodeOutcome::Message(InboundMessage::Request(_))
+                ) {
+                    self.state = ConnectionState::Modern;
+                    return self.server.dispatch(input).await;
+                }
                 match decode_initialize(self.server, id, params.as_ref()) {
                     Ok((facts, response)) => {
                         self.state = ConnectionState::LegacyAwaitingInitialized(facts);

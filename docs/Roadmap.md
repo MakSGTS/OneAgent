@@ -8370,8 +8370,22 @@ public-process regressions for both legacy revisions, and completes the full
 matrix with 1,137 workspace tests, 14 public-process tests, three successful
 Codex runs, two successful Cursor discovery runs, 62 VS Code unit tests, two
 VS Code process tests, and 41 EDT tests. Sprint 35 remains `active` until a new
-fresh-context review covers the latest immutable range. Neither blocked review
-created a review artifact, state transition, or prompt retirement.
+fresh-context review covers the latest immutable range. The third fresh-context
+review of
+`cd876c836014fbd1ee15c0683da67d036f181b3c..237d588135835ca0fb0c0741ed6e5ab12936d2fe`
+was again `blocked`: a valid modern metadata-bearing request named
+`initialize` was routed to legacy validation and returned `-32602` instead of
+the preserved stateless `-32601`. The final separate correction recognizes a
+valid modern request before attempting legacy initialize, adds exact protocol
+equality and production-process regression rows, synchronizes stale current-
+state architecture text, and completes the full matrix with 1,138 workspace
+tests and 15 public-process tests. Its final client matrix again records three
+successful Codex runs, two successful Cursor discovery runs, 62 VS Code unit
+tests, two VS Code process tests, and a successful 41-test EDT rerun after one
+timing-sensitive cancellation-test failure. Sprint 35 remains `active` until a
+new fresh-context review covers the latest immutable range. None of the three
+blocked reviews created a review artifact, state transition, or prompt
+retirement.
 
 Task 6 reviews the exact planning-through-latest-corrective range with exactly
 one fresh-context read-only reviewer. The primary independently reconciles every

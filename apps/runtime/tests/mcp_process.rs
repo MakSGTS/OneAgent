@@ -451,6 +451,31 @@ async fn public_mcp_process_rejects_malformed_initialized_and_projects_awaiting_
 }
 
 #[tokio::test]
+async fn public_mcp_process_preserves_modern_unknown_initialize_dispatch() {
+    let input = format!(
+        "{}\n{}\n",
+        request_with_capabilities(50, "initialize", &json!({})),
+        request_with_capabilities(51, "server/discover", &json!({}))
+    );
+    let output = run_process(input.as_bytes()).await;
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let responses = String::from_utf8(output.stdout)
+        .expect("modern dispatch stdout must be UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("modern dispatch response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0]["id"], 50);
+    assert_eq!(responses[0]["error"]["code"], -32601);
+    assert_eq!(responses[1]["id"], 51);
+    assert_eq!(
+        responses[1]["result"]["supportedVersions"],
+        json!([PROTOCOL_VERSION])
+    );
+}
+
+#[tokio::test]
 async fn public_mcp_process_falls_back_unknown_legacy_version_with_string_id() {
     let initialize = json!({
         "jsonrpc": "2.0",

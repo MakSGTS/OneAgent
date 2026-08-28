@@ -121,18 +121,18 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
   records `pass with non-blocking follow-ups`. Sprint 31 Navigation and Symbol
   Search, Sprint 32 LSP Adapter, and Sprint 33 AI Chat and Context Panel are
-  completed. Sprint 34 EDT Integration Prototype implementation, package, and
-  authorized local host evidence are present and remain active pending
-  integration review.
+  completed. The Sprint 34 EDT Integration Prototype review records `pass`,
+  and Sprint 35 External AI Client Compatibility remains active pending its
+  final integration review.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
   editor-neutral LSP workspace-symbol and pull-diagnostic slice is implemented
   in Sprint 32. Explicit semantic Context inspection and bounded request-selected
   chat are implemented in Sprint 33. The bounded native EDT compatibility probe
-  is implemented in Sprint 34. Definition/reference providers, diagnostics UI,
-  model tools or edits, semantic EDT IDE workflows, and external-client
-  compatibility remain later work.
+  is implemented in Sprint 34. External Codex and Cursor compatibility is
+  implemented in Sprint 35. Definition/reference providers, diagnostics UI,
+  model tools or edits, and semantic EDT IDE workflows remain later work.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 

@@ -7062,9 +7062,10 @@ Sprint 29 is `completed`, Sprint 30 VS Code Extension Foundation is the unique
 review commit. ADR-0051, the immutable six-tool catalog, bounded protocol
 list/call boundary, Tool Policy gate, startup workspace snapshot, deterministic
 semantic projections, and repository-owned public evidence remain the current
-baseline. Pinning the investigation's version-specific upstream schema URL
-from mutable GitHub `main` to an immutable commit remains a non-blocking
-documentation follow-up.
+baseline. The investigation's version-specific upstream schema source is
+pinned to the official stable release commit
+`5f5440bb26a62e2cf3440b92da5a667efa03b267`, resolving the review's sole
+non-blocking documentation follow-up.
 
 #### v0.6 — MCP and IDE
 

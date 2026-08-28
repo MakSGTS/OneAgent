@@ -16,7 +16,7 @@ The selected authority remains MCP revision `2026-07-28`, matching ADR-0050:
   security expectations, and result behavior.
 - [Schema reference](https://modelcontextprotocol.io/specification/2026-07-28/schema)
   is the human-readable type authority.
-- [Versioned TypeScript schema source](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2026-07-28/schema.ts)
+- [Versioned TypeScript schema source](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/5f5440bb26a62e2cf3440b92da5a667efa03b267/schema/2026-07-28/schema.ts)
   is the field-level source used for the candidate wire matrix.
 
 Confirmed normative facts are:
@@ -40,10 +40,12 @@ Confirmed normative facts are:
   and are advisory rather than authorization;
 - request `_meta` and ADR-0050's protocol validation remain unchanged.
 
-The upstream schema URLs are revision-directory-specific but currently follow
-mutable `main`, preserving Sprint 28's non-blocking provenance risk. ADR-0051
-must cite the selected URLs and revision without claiming immutable upstream
-content.
+The TypeScript schema source is pinned to full commit
+`5f5440bb26a62e2cf3440b92da5a667efa03b267`, identified by the
+[official stable `2026-07-28` release](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28).
+The human-readable specification URLs remain revision-directory-specific.
+ADR-0051 cites the selected revision and immutable field-level source without
+depending on mutable upstream branch content.
 
 ## Current repository ownership
 

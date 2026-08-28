@@ -124,13 +124,16 @@ contracts and missing tests. The reviewer never modified the repository.
 
 None remain after `844515d1` and `f24967d1`.
 
-### Non-blocking follow-up
+### Non-blocking follow-up — resolved
 
-The investigation's version-specific generated-schema URL still uses the
-mutable GitHub `main` branch. The `schema/2026-07-28` path fixes the accepted
-revision, and the repository contract and tests are self-contained, so this
-does not affect current correctness. Pinning the upstream URL to an immutable
-commit would improve long-term provenance reproducibility.
+The review found that the investigation's version-specific generated-schema
+URL used the mutable GitHub `main` branch. The `schema/2026-07-28` path fixed
+the accepted revision, and the repository contract and tests were
+self-contained, so the finding did not affect Sprint correctness.
+
+The post-review follow-up pins the field-level schema source to the official
+stable release commit `5f5440bb26a62e2cf3440b92da5a667efa03b267` and removes
+the remaining mutable-branch dependency. The finding is resolved.
 
 ## Missing evidence
 
@@ -267,8 +270,6 @@ capabilities; IDE/LSP; and broad performance/security claims.
 
 ## Residual risks
 
-- The upstream generated-schema provenance URL follows mutable `main`; an
-  immutable commit pin remains a documentation follow-up.
 - External-client interoperability, remote transport/authentication, concurrent
   dispatch, mutable workspaces, and IDE integration remain intentionally
   deferred.

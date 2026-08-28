@@ -915,9 +915,11 @@ mod tests {
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
+    #[cfg(feature = "external-edt-corpus-tests")]
+    use crate::EdtCommandParameterSourceKind;
     use crate::{
-        EdtCommandParameterSourceKind, EdtCommandParameterTypeOutcomeKind,
-        EdtCommandParameterTypeReason, EdtMetadataObjectDescriptor,
+        EdtCommandParameterTypeOutcomeKind, EdtCommandParameterTypeReason,
+        EdtMetadataObjectDescriptor,
     };
 
     use super::{
@@ -1608,25 +1610,26 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn reads_real_catalog_document_and_task_command_parameter_types() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let repository = crate::live_test_support::project_root();
         let cases = [
             (
-                "OneAgent_EDTproject/src/Catalogs/UserGroups/UserGroups.mdo",
+                "src/Catalogs/UserGroups/UserGroups.mdo",
                 "catalog-user-groups",
                 "OpenUserGroups",
                 "CatalogRef.Users",
                 MetadataKind::Catalog,
             ),
             (
-                "OneAgent_EDTproject/src/Documents/CustomerOrder/CustomerOrder.mdo",
+                "src/Documents/CustomerOrder/CustomerOrder.mdo",
                 "document-customer-order",
                 "CancelCustomerOrder",
                 "DocumentRef.CustomerOrder",
                 MetadataKind::Document,
             ),
             (
-                "OneAgent_EDTproject/src/Tasks/PerformerTask/PerformerTask.mdo",
+                "src/Tasks/PerformerTask/PerformerTask.mdo",
                 "task-performer-task",
                 "Completed2",
                 "TaskRef.PerformerTask",

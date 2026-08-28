@@ -195,3 +195,12 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 git diff --check
 ```
+
+The default test suite uses repository-owned fixtures only. Optional validation
+against a separately maintained EDT corpus requires an explicitly authorized
+absolute path:
+
+```bash
+ONEAGENT_EDT_CORPUS=/absolute/path/to/edt-project \
+  cargo test -p oneagent-edt --features external-edt-corpus-tests
+```

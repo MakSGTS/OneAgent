@@ -1,14 +1,17 @@
 use oneagent_common::{EntityId, EntityName};
 use oneagent_edt::{
-    EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataObjectDescriptor,
-    EdtMetadataObjectReader, EdtModuleError, EdtModuleKind, EdtModuleLayoutOutcomeKind,
-    EdtModuleLayoutRejectionReason, EdtModuleOwnerKind, EdtModuleReader,
-    FileSystemEdtMetadataObjectReader, FileSystemEdtModuleReader,
+    EdtMetadataChildDescriptor, EdtMetadataChildKind, EdtMetadataObjectDescriptor, EdtModuleError,
+    EdtModuleKind, EdtModuleLayoutOutcomeKind, EdtModuleLayoutRejectionReason, EdtModuleOwnerKind,
+    EdtModuleReader, FileSystemEdtModuleReader,
 };
+#[cfg(feature = "external-edt-corpus-tests")]
+use oneagent_edt::{EdtMetadataObjectReader, FileSystemEdtMetadataObjectReader};
 use oneagent_metadata::MetadataKind;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(feature = "external-edt-corpus-tests")]
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 fn id(value: &str) -> EntityId {
@@ -56,11 +59,16 @@ fn write_module(path: &Path) {
     fs::write(path, "Procedure Test()\nEndProcedure").expect("module source must be created");
 }
 
+#[cfg(feature = "external-edt-corpus-tests")]
 fn repository_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("repository root must exist")
+    let root = std::env::var_os("ONEAGENT_EDT_CORPUS")
+        .map(PathBuf::from)
+        .expect("ONEAGENT_EDT_CORPUS must name the external EDT corpus project");
+    assert!(
+        root.is_absolute(),
+        "ONEAGENT_EDT_CORPUS must be an absolute path"
+    );
+    root
 }
 
 #[test]
@@ -351,9 +359,10 @@ fn module_reader_owner_scoped_identity_prevents_equal_name_collisions() {
 }
 
 #[test]
+#[cfg(feature = "external-edt-corpus-tests")]
 fn module_reader_repository_artifacts_match_declared_form_and_command_owners() {
     let root = repository_root();
-    let object_directory = root.join("OneAgent_EDTproject/src/Catalogs/CounterpartiesProducts");
+    let object_directory = root.join("src/Catalogs/CounterpartiesProducts");
     let descriptor = FileSystemEdtMetadataObjectReader
         .read(&object_directory, MetadataKind::Catalog)
         .expect("repository Catalog descriptor must parse");
@@ -409,9 +418,10 @@ fn module_reader_repository_artifacts_match_declared_form_and_command_owners() {
 }
 
 #[test]
+#[cfg(feature = "external-edt-corpus-tests")]
 fn module_reader_repository_common_command_and_common_form_preserve_roles() {
     let root = repository_root();
-    let common_command_directory = root.join("OneAgent_EDTproject/src/CommonCommands/AccessRights");
+    let common_command_directory = root.join("src/CommonCommands/AccessRights");
     let common_command = FileSystemEdtMetadataObjectReader
         .read(&common_command_directory, MetadataKind::Command)
         .expect("Common Command descriptor must parse");
@@ -428,7 +438,7 @@ fn module_reader_repository_common_command_and_common_form_preserve_roles() {
         Some(common_command.id())
     );
 
-    let common_form_directory = root.join("OneAgent_EDTproject/src/CommonForms/AccessRights");
+    let common_form_directory = root.join("src/CommonForms/AccessRights");
     let common_form = FileSystemEdtMetadataObjectReader
         .read(&common_form_directory, MetadataKind::CommonForm)
         .expect("Common Form descriptor must parse");

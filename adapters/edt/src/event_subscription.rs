@@ -913,19 +913,20 @@ mod tests {
         EdtEventSubscriptionSourceOutcomeKind, EdtEventSubscriptionSourceReason,
         FileSystemEdtEventSubscriptionReader, parse_descriptor,
     };
+    #[cfg(feature = "external-edt-corpus-tests")]
     use oneagent_metadata::MetadataKind;
+    #[cfg(feature = "external-edt-corpus-tests")]
     use std::collections::BTreeSet;
     use std::fmt::Write as _;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     const VALID_UUID: &str = "7fa2863c-662c-4893-b42e-01a883bffc54";
 
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn repository_event_subscriptions() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join("OneAgent_EDTproject/src/EventSubscriptions")
+        crate::live_test_support::project_root().join("src/EventSubscriptions")
     }
 
     fn valid_xml(source_values: &[&str], handler: &str) -> String {
@@ -953,6 +954,7 @@ mod tests {
         parse_descriptor(xml, PathBuf::from("GeneratedSubscription.mdo"))
     }
 
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn read_live(name: &str) -> super::EdtEventSubscriptionDescriptor {
         FileSystemEdtEventSubscriptionReader
             .read(&repository_event_subscriptions().join(name))
@@ -960,6 +962,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     #[allow(clippy::too_many_lines)]
     fn reads_live_cardinality_matrix_and_complete_event_vocabulary() {
         for (name, uuid, synonym, event, handler, source_count) in [
@@ -1093,6 +1096,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn preserves_synonym_bare_and_qualified_selector_and_handler_spelling() {
         let bare = read_live("Catalogs_BeforeWrite");
         assert_eq!(bare.synonym(), Some("Catalogs before write"));

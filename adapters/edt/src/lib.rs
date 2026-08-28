@@ -10,6 +10,8 @@ mod event_subscription_emission;
 mod event_subscription_resolution;
 mod form_navigation;
 mod form_navigation_emission;
+#[cfg(all(test, feature = "external-edt-corpus-tests"))]
+mod live_test_support;
 mod metadata_object;
 mod metadata_structure;
 mod module_reader;

@@ -1460,10 +1460,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     #[allow(clippy::too_many_lines)]
     fn all_live_xdto_packages_match_the_accepted_direct_slice() {
-        let packages_directory = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../OneAgent_EDTproject/src/XDTOPackages");
+        let packages_directory = crate::live_test_support::project_root().join("src/XDTOPackages");
         let mut package_directories = fs::read_dir(&packages_directory)
             .expect("live XDTOPackages directory must be readable")
             .map(|entry| {

@@ -851,6 +851,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
+    #[cfg(feature = "external-edt-corpus-tests")]
     use crate::{
         EdtCommandParameterSourceKind, EdtCommandParameterTypeOutcomeKind,
         EdtCommandParameterTypeReason, EdtMetadataReferenceRole,
@@ -950,9 +951,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn reads_real_common_command_parameter_types_repeatedly() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let directory = repository.join("OneAgent_EDTproject/src/CommonCommands/AccessRights");
+        let repository = crate::live_test_support::project_root();
+        let directory = repository.join("src/CommonCommands/AccessRights");
         let first = FileSystemEdtMetadataObjectReader
             .read(&directory, MetadataKind::Command)
             .expect("real Common Command must parse");
@@ -985,7 +987,7 @@ mod tests {
 
         let defined_type = FileSystemEdtMetadataObjectReader
             .read(
-                &repository.join("OneAgent_EDTproject/src/CommonCommands/AttachedFiles"),
+                &repository.join("src/CommonCommands/AttachedFiles"),
                 MetadataKind::Command,
             )
             .expect("real deferred Common Command must parse");

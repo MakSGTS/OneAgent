@@ -1578,9 +1578,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     #[allow(clippy::too_many_lines)]
     fn all_live_http_and_web_services_match_the_accepted_contract() {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../OneAgent_EDTproject/src");
+        let source = crate::live_test_support::project_root().join("src");
         let mut http_directories = fs::read_dir(source.join("HTTPServices"))
             .expect("live HTTPServices directory must be readable")
             .map(|entry| {

@@ -1219,7 +1219,7 @@ mod tests {
     use oneagent_graph::DataSetKind;
     use oneagent_metadata::MetadataKind;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use tempfile::{TempDir, tempdir};
 
     use crate::{EdtMetadataObjectReader, FileSystemEdtMetadataObjectReader};
@@ -1894,10 +1894,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     #[allow(clippy::too_many_lines)]
     fn all_live_report_declarations_match_the_accepted_contract() {
-        let reports_directory =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../OneAgent_EDTproject/src/Reports");
+        let reports_directory = crate::live_test_support::project_root().join("src/Reports");
         let mut report_directories = fs::read_dir(&reports_directory)
             .expect("live Reports directory must be readable")
             .map(|entry| entry.expect("live Report entry must be readable").path())

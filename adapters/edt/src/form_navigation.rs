@@ -709,8 +709,9 @@ mod tests {
     use crate::{EdtModuleDescriptor, EdtModuleKind};
     use oneagent_common::{EntityId, EntityName};
     use oneagent_metadata::MetadataKind;
+    #[cfg(feature = "external-edt-corpus-tests")]
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     fn module(kind: EdtModuleKind, path: PathBuf) -> EdtModuleDescriptor {
         EdtModuleDescriptor::new(
@@ -725,9 +726,10 @@ mod tests {
         module(EdtModuleKind::Command, PathBuf::from("CommandModule.bsl"))
     }
 
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn repository_source(relative: &str) -> (EdtModuleDescriptor, String) {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../OneAgent_EDTproject/src")
+        let path = crate::live_test_support::project_root()
+            .join("src")
             .join(relative);
         let source = fs::read_to_string(&path).expect("repository source must be readable");
         (module(EdtModuleKind::Command, path), source)
@@ -756,6 +758,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn reads_exact_repository_subordinate_and_common_form_calls() {
         let (subordinate_module, subordinate_source) = repository_source(
             "Catalogs/CounterpartiesProducts/Commands/CounterpartiesProductsPriceImport/CommandModule.bsl",
@@ -807,6 +810,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn reads_exact_repository_multiline_first_argument() {
         let (module, source) =
             repository_source("Tasks/PerformerTask/Commands/MyTasks/CommandModule.bsl");
@@ -826,6 +830,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn repository_dynamic_default_shorthand_and_prefix_cases_are_typed() {
         let cases = [
             (

@@ -1248,9 +1248,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "external-edt-corpus-tests")]
     fn live_source_has_expected_depth_counts_and_relations() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let hierarchy = read(&repository.join("OneAgent_EDTproject"))
+        let hierarchy = read(&crate::live_test_support::project_root())
             .expect("bootstrap-selected live EDT hierarchy must parse");
         let counts = hierarchy
             .descriptors()

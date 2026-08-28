@@ -36,35 +36,15 @@ fn request_with_capabilities(id: u64, method: &str, capabilities: &Value) -> Str
 }
 
 fn codex_initialize() -> String {
-    json!({
-        "method": "initialize",
-        "params": {
-            "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
-            "capabilities": {"elicitation": {"form": {}, "url": {}}},
-            "clientInfo": {
-                "name": "codex-mcp-client",
-                "title": "Codex",
-                "version": "0.150.0-alpha.8"
-            }
-        },
-        "jsonrpc": "2.0",
-        "id": 0
-    })
-    .to_string()
+    include_str!("../../../tests/fixtures/mcp/external-client-compatibility/codex-initialize.json")
+        .trim_end()
+        .to_owned()
 }
 
 fn cursor_initialize() -> String {
-    json!({
-        "method": "initialize",
-        "params": {
-            "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
-            "capabilities": {"elicitation": {"form": {}}},
-            "clientInfo": {"name": "Cursor", "version": "1.0.0"}
-        },
-        "jsonrpc": "2.0",
-        "id": 0
-    })
-    .to_string()
+    include_str!("../../../tests/fixtures/mcp/external-client-compatibility/cursor-initialize.json")
+        .trim_end()
+        .to_owned()
 }
 
 fn legacy_request(id: u64, method: &str, params: Option<&Value>) -> String {

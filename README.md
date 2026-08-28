@@ -19,7 +19,8 @@ with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
 Semantic Tools, Sprint 30 VS Code Extension Foundation, and Sprint 31 Navigation
 and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The
 Sprint 33 AI Chat and Context Panel and Sprint 34 EDT Integration Prototype are
-complete. Sprint 35 External AI Client Compatibility is the next target.
+complete. Sprint 35 External AI Client Compatibility is active with
+implementation and client evidence complete, pending integration review.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -35,7 +36,7 @@ See
 - `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
-- `crates/protocol` — bounded MCP 2026-07-28 and LSP 3.17 domain values, validation, encoding, lifecycle, capabilities, and dispatch contracts
+- `crates/protocol` — bounded MCP 2025-06-18, 2025-11-25, and 2026-07-28 plus LSP 3.17 domain values, validation, encoding, lifecycle, capabilities, and dispatch contracts
 - `adapters/edt` — implemented EDT configuration-to-semantic-graph adapter
 - `adapters/designer-xml` — implemented hierarchical Designer XML configuration-to-semantic-graph adapter
 - `adapters/openai-compatible` — implemented explicit bounded OpenAI-compatible `/v1/models` and non-streaming `/v1/completions` provider adapter
@@ -67,7 +68,7 @@ and Graph Query GET routes through one bounded HTTP/1.1 connection, preserves
 Runtime JSON, and distinguishes usage, transport, server, protocol, and output
 failures with stable exit codes. Runtime process management, endpoint discovery,
 configuration files, richer output, alternate transports, packaging, Git,
-external MCP/LSP-client compatibility, and AI-provider integration remain
+additional MCP/LSP-client compatibility and AI-provider integration remain
 planned capabilities with explicit ownership. The bounded desktop VS Code client uses
 the separate MCP process for explicit connection and symbol-search/navigation
 only. Health remains available through exact `GET /health/live` and
@@ -126,8 +127,9 @@ integration. Runtime composes its execution gate for the MCP semantic tools
 without moving policy authority. Sprint 27 is complete with a `pass`
 integration review.
 
-The Sprint 28 foundation implements MCP revision 2026-07-28 without legacy
-initialize or session behavior. Sprint 29 adds the semantic-tool boundary, and
+The MCP foundation preserves stateless revision `2026-07-28` and adds
+connection-owned initialize/initialized compatibility for revisions
+`2025-06-18` and `2025-11-25`. Sprint 29 adds the semantic-tool boundary, and
 Sprint 31 extends its truthful `tools` capability with this lexicographically
 ordered read-only catalog: `oneagent.context`, `oneagent.diagnostics`,
 `oneagent.graph`, `oneagent.impact`, `oneagent.query`, `oneagent.symbols`, and
@@ -146,14 +148,19 @@ one-based locations for the accepted Module, Procedure, Function, and EDT Query
 slice.
 
 The process constructs no long-running Runtime `App`, watcher, cache, HTTP
-listener, background task, remote client, or real side effect. It keeps stdout
+listener, background task, remote client, or real side effect. Each stdio run
+owns one fresh negotiated session over the immutable server. It keeps stdout
 protocol-pure, treats EOF as successful completion, and reports only stable
-startup or transport categories on stderr. Additional protocol revisions,
-remote transports, authentication, snapshot refresh, external-client
-compatibility, Runtime packaging, references, diagnostics UI,
-and broader IDE integration remain deferred. The desktop VS Code extension
-also consumes the accepted Context and symbol tools through the bounded
-Sprint 33 UI described below.
+startup or transport categories on stderr. Exact Codex CLI
+`0.150.0-alpha.8` and Cursor Agent `2026.08.25-3e8eec8` evidence is recorded in
+the [Sprint 35 compatibility evidence](docs/architecture/external-ai-client-compatibility-evidence.md).
+Cursor's public `mcp list-tools` command proves discovery but exposes no direct
+tool-call command; Codex directly exercises all seven tools, including semantic
+success and domain failure. Additional revisions and clients, remote
+transports, authentication, snapshot refresh, Runtime packaging, references,
+diagnostics UI, and broader IDE integration remain deferred. The desktop VS
+Code extension also consumes the accepted Context and symbol tools through the
+bounded Sprint 33 UI described below.
 
 Sprint 32 adds an independent bounded LSP 3.17 process without migrating the
 VS Code extension. `oneagent-lsp` builds one immutable startup snapshot, accepts

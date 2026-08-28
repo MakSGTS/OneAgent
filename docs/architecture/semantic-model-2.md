@@ -381,23 +381,25 @@ ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service
 authority. ADR-0051 governs the original six-tool semantic slice, and ADR-0053
 adds typed source locations plus the seventh `oneagent.symbols` tool.
-`oneagent-protocol` represents MCP revision 2026-07-28 requests, notifications,
-responses, closed errors, bounded JSON payloads, exact `server/discover`, the
-truthful `tools` capability, the single-page lexicographic catalog,
-`tools/list`, and `tools/call`, with no legacy initialize or session behavior.
+`oneagent-protocol` preserves stateless MCP revision `2026-07-28` and owns one
+connection-local negotiated state machine for revisions `2025-06-18` and
+`2025-11-25`. It represents bounded requests, notifications, responses, closed
+errors, exact modern discovery, legacy initialize/initialized lifecycle,
+version-specific result projection, the truthful `tools` capability, the
+single-page lexicographic catalog, `tools/list`, and `tools/call`.
 `oneagent-runtime` supplies an injected sequential newline-framed asynchronous
-adapter with a 1 MiB payload limit, notification silence, per-response flush,
-cooperative cancellation, successful EOF completion, and stable controlled
-transport failures. It composes `oneagent.context`, `oneagent.diagnostics`,
-`oneagent.graph`, `oneagent.impact`, `oneagent.query`, and
-`oneagent.symbols`, and `oneagent.validation` over one immutable Workspace
-startup snapshot. Every known call traverses the fail-closed Tool Policy gate;
-results are bounded deterministic JSON with equivalent compact text and
-structured content. The original six tools remain path-free. The symbol tool
-projects only unique, lexically confined Workspace-relative forward-slash
-locations for Module, Procedure, Function, and EDT Query nodes and never exposes
-opaque provenance or an absolute source path. The tools perform no real side
-effect.
+adapter with exactly one fresh session per run, a 1 MiB payload limit,
+notification silence, per-response flush, cooperative cancellation, successful
+EOF completion, and stable controlled transport failures. It composes
+`oneagent.context`, `oneagent.diagnostics`, `oneagent.graph`,
+`oneagent.impact`, `oneagent.query`, `oneagent.symbols`, and
+`oneagent.validation` over one immutable Workspace startup snapshot. Every
+known call traverses the fail-closed Tool Policy gate; results are bounded
+deterministic JSON with equivalent compact text and structured content. The
+original six tools remain path-free. The symbol tool projects only unique,
+lexically confined Workspace-relative forward-slash locations for Module,
+Procedure, Function, and EDT Query nodes and never exposes opaque provenance or
+an absolute source path. The tools perform no real side effect.
 
 The separate `oneagent-mcp` process constructs no Runtime `App`, watcher,
 cache, listener, or background task, preserves protocol-only stdout, exits
@@ -407,12 +409,16 @@ real-process evidence covers catalog order, annotations and schemas, all seven
 tool families, bounds, policy gating, path redaction and confinement, malformed
 and oversized input, unknown methods/tools, LF/CRLF
 framing, notifications, cancellation, transport failures, stdout purity, exit
-status, repetition, and cleanup. The desktop VS Code adapter owns explicit-
-demand Quick Pick navigation and Context selection without semantic matching.
-Additional revisions, remote transports, authentication, snapshot refresh,
-external-client compatibility, Runtime packaging, references, diagnostics UI,
-and broader IDE integration remain deferred. The additive LSP process does not
-migrate or alter this MCP boundary.
+status, repetition, and cleanup. Exact Codex CLI and Cursor Agent evidence is
+recorded in the
+[Sprint 35 compatibility evidence](external-ai-client-compatibility-evidence.md):
+Codex directly exercises all seven tools, while Cursor proves the seven-tool
+catalog through its available public list command. The desktop VS Code adapter
+owns explicit-demand Quick Pick navigation and Context selection without
+semantic matching. Additional revisions and clients, remote transports,
+authentication, snapshot refresh, Runtime packaging, references, diagnostics
+UI, and broader IDE integration remain deferred. The additive LSP process does
+not migrate or alter this MCP boundary.
 
 ADR-0055 governs the implemented extension-only Context inspection and AI chat
 projection. The adapter selects exact canonical symbol identity, calls the
@@ -1573,10 +1579,11 @@ SM-8 AI Context Engine
     deferred: source extraction and provider/model context
 
 SM-9 MCP and IDE integration
-    implemented: MCP 2026-07-28 discovery, tools/list, and tools/call domain
-    implemented: bounded newline-framed stdio process and EOF lifecycle
+    implemented: MCP 2025-06-18 and 2025-11-25 negotiated compatibility plus preserved stateless 2026-07-28
+    implemented: one fresh connection session per bounded newline-framed stdio run and EOF lifecycle
     implemented: seven read-only graph, diagnostics, impact, query, validation, context, and symbol tools
     implemented: immutable startup snapshot and Tool Policy execution gate
+    implemented: exact Codex CLI and Cursor Agent public-client evidence
     implemented: typed Module, Procedure, Function, and EDT Query source locations
     implemented: explicit VS Code Quick Pick symbol search and safe source navigation
     implemented: explicit semantic Context selection and read-only panel presentation
@@ -1585,7 +1592,7 @@ SM-9 MCP and IDE integration
     implemented: LSP workspace symbols and full pull document diagnostics
     deferred: model tools/edits, history, source inference, automatic Context, and Runtime provider wiring
     deferred: VS Code LSP migration and definition/reference/document-symbol providers
-    deferred: incremental refresh, remote transport/authentication, and external-client compatibility
+    deferred: incremental refresh, remote transport/authentication, additional clients, and client packaging
 ```
 
 ## Historical initial implementation boundary

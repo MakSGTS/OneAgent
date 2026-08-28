@@ -284,25 +284,28 @@ evidence remain active pending integration review.
 ## Implemented MCP Server boundary
 
 [ADR-0050](adr/0050-mcp-server.md) governs the discovery and transport
-foundation for MCP revision 2026-07-28. [ADR-0051](adr/0051-mcp-semantic-tools.md)
-governs the additive semantic-tool slice. `oneagent-protocol` owns bounded
-request IDs, method names, request and notification metadata, closed responses
-and errors, newline-payload codec validation, exact discovery data, truthful
-tool capability/catalog definitions, `tools/list`, `tools/call`, and
-asynchronous sequential dispatch. `server/discover` returns a complete result
-for the one supported revision, the `tools` capability, bounded server identity,
-zero TTL, and public cache scope. Legacy initialize, sessions, negotiation, and
-pagination are absent.
+foundation, [ADR-0051](adr/0051-mcp-semantic-tools.md) governs the additive
+semantic-tool slice, and
+[ADR-0057](adr/0057-external-ai-client-compatibility.md) governs negotiated
+legacy compatibility. `oneagent-protocol` owns bounded request IDs, method
+names, request and notification metadata, closed responses and errors,
+newline-payload codec validation, exact discovery data, truthful tool
+capability/catalog definitions, `tools/list`, `tools/call`, asynchronous
+sequential dispatch, and one connection-local state machine for revisions
+`2025-06-18` and `2025-11-25`. Existing stateless revision `2026-07-28` and its
+`server/discover` response remain unchanged. Pagination remains absent.
 
-`oneagent-runtime` owns one injected sequential asynchronous stdio adapter. It
-accepts LF and CRLF framing, enforces a 1 MiB payload limit and bounded JSON
-nesting, emits no response for notifications, flushes every response, maps
-controlled read/write/flush/shutdown failures to stable categories, and treats
-cancellation and EOF as successful completion. The separate `oneagent-mcp`
-binary constructs one immutable Workspace snapshot from its working directory
-before reading stdin and creates no Runtime `App`, watcher, cache, listener, or
-background task. Stdout contains protocol frames only, EOF exits with status
-zero, and startup or terminal failures use stable redacted stderr categories.
+`oneagent-runtime` owns one injected sequential asynchronous stdio adapter. Each
+`run` creates exactly one fresh negotiated session borrowing the immutable
+server. The adapter accepts LF and CRLF framing, enforces a 1 MiB payload limit
+and bounded JSON nesting, emits no response for notifications, flushes every
+response, maps controlled read/write/flush/shutdown failures to stable
+categories, and treats cancellation and EOF as successful completion. The
+separate `oneagent-mcp` binary constructs one immutable Workspace snapshot from
+its working directory before reading stdin and creates no Runtime `App`,
+watcher, cache, listener, or background task. Stdout contains protocol frames
+only, EOF exits with status zero, and startup or terminal failures use stable
+redacted stderr categories.
 
 The exact lexicographic catalog is `oneagent.context`,
 `oneagent.diagnostics`, `oneagent.graph`, `oneagent.impact`, `oneagent.query`,
@@ -324,20 +327,17 @@ bounds, all seven tool families, Tool Policy execution, path redaction and
 symbol-path confinement, malformed and oversized input, unknown methods/tools,
 notifications, LF/CRLF
 framing, cancellation, transport failures, EOF, stdout purity, exit status,
-repetition, and cleanup. At the current implementation baseline, additional MCP
-revisions and external-client compatibility are absent. Remote transports,
-authentication, snapshot refresh, Runtime packaging, references, diagnostics
-UI, and broader IDE integration remain deferred. Sprint 31 is completed; the
-additive LSP boundary is described below.
-
-[ADR-0057](adr/0057-external-ai-client-compatibility.md) accepts an additive
-connection-owned compatibility boundary for MCP `2025-06-18` and `2025-11-25`
-while preserving the existing stateless `2026-07-28` dispatch. Protocol owns
-negotiation, lifecycle state, and version-specific projection; each Runtime
-stdio run owns one fresh session over the same immutable server and catalog.
-This decision is not implemented at the Task 2 baseline: until the protocol
-and Runtime tasks complete, the production process still rejects legacy
-`initialize` requests and only the modern behavior above is current.
+repetition, and cleanup. Exact Codex CLI `0.150.0-alpha.8` and Cursor Agent
+`2026.08.25-3e8eec8` public-client results plus the complete synthetic matrix
+are recorded in the
+[Sprint 35 evidence](architecture/external-ai-client-compatibility-evidence.md).
+Codex directly calls all seven tools and observes semantic success and domain
+failure. Cursor's public `mcp list-tools` command proves all seven definitions;
+that client version exposes no non-interactive direct-call command, so no
+Cursor call result is claimed. Additional revisions and clients, remote
+transports, authentication, snapshot refresh, Runtime packaging, references,
+diagnostics UI, and broader IDE integration remain deferred. Sprint 31 is
+completed; the additive LSP boundary is described below.
 
 ## Implemented LSP adapter boundary
 

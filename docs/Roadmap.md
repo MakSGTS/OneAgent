@@ -8332,6 +8332,23 @@ files, and scope, and runs the canonical workspace gate. It adds no new
 production behavior and makes no compatibility claim without executable
 evidence.
 
+Task 5 evidence is complete at the implementation baseline. Exact captured
+Codex `2025-06-18` and Cursor `2025-11-25` initialize requests are reusable
+platform-neutral fixtures. The production process matrix covers both legacy
+revisions, fallback, preserved modern `2026-07-28`, lifecycle ordering,
+versioned list/call projection, success, domain failure, malformed input,
+notifications, shutdown/exit behavior, LF/CRLF, EOF, repetition, and session
+isolation. Exact Codex CLI `0.150.0-alpha.8` directly called every catalog tool,
+including one semantic success and bounded domain failures, in fresh ephemeral
+read-only runs. Exact Cursor Agent `2026.08.25-3e8eec8` listed the same seven
+tools twice from its authorized repository-local project configuration. That
+Cursor command surface has no direct non-interactive tool-call command, so no
+Cursor call result is claimed. The complete commands, hashes, counts,
+limitations, and audits are recorded in the
+[Sprint 35 external-client evidence](architecture/external-ai-client-compatibility-evidence.md).
+Sprint 35 remains `active` and no release or next-sprint transition occurs
+before Task 6 review.
+
 Task 6 reviews the exact planning-through-Task-5 range with exactly one
 fresh-context read-only reviewer. The primary independently reconciles every
 finding and reruns the complete validation matrix. The same reviewer must pass

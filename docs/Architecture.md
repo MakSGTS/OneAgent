@@ -125,8 +125,9 @@ The roadmap assigns future boundaries explicitly:
   records `pass with non-blocking follow-ups`. Sprint 31 Navigation and Symbol
   Search, Sprint 32 LSP Adapter, and Sprint 33 AI Chat and Context Panel are
   completed. The Sprint 34 EDT Integration Prototype review records `pass`,
-  and Sprint 35 External AI Client Compatibility remains active pending its
-  final integration review.
+  Sprint 35 External AI Client Compatibility is completed, and the
+  [v0.6 MCP and IDE release review](reviews/v0.6-release-review.md) records
+  `pass with non-blocking follow-ups`.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -189,8 +190,8 @@ the [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; Sprints 29 and 30 are completed, and Sprint 31 implementation and
-production evidence remain active pending integration review.
+follow-ups`; Sprints 29–35 and the v0.6 MCP and IDE boundary are completed with
+a non-blocking [release decision](reviews/v0.6-release-review.md).
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -232,8 +233,8 @@ The [Sprint 26 integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`. The later
 [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
-follow-ups`; Sprints 29 and 30 are completed, and Sprint 31 implementation and
-production evidence remain active pending integration review.
+follow-ups`; Sprints 29–35 and the v0.6 MCP and IDE boundary are completed with
+a non-blocking [release decision](reviews/v0.6-release-review.md).
 
 ## Implemented Tool Execution Policy boundary
 
@@ -281,8 +282,8 @@ registration, transport, MCP/provider/IDE mapping, sandbox, or cross-process
 replay prevention. The
 [Sprint 27 integration review](reviews/sprint-27-tool-execution-policy.md)
 records `pass`. Sprint 28 is completed with `pass with non-blocking follow-ups`;
-Sprints 29 and 30 are completed, and Sprint 31 implementation and production
-evidence remain active pending integration review.
+Sprints 29–35 and the v0.6 MCP and IDE boundary are completed with a
+non-blocking [release decision](reviews/v0.6-release-review.md).
 
 ## Implemented MCP Server boundary
 
@@ -852,5 +853,5 @@ records `pass`. The later
 [Sprint 26 Ollama Integration review](reviews/sprint-26-ollama-integration.md)
 records `pass`; Sprint 27 Tool Execution Policy is completed with a `pass`
 review. Sprint 28 is completed with `pass with non-blocking follow-ups`; the
-later Sprints 29 and 30 are completed, and Sprint 31 implementation and
-production evidence remain active pending integration review.
+later Sprints 29–35 and the v0.6 MCP and IDE boundary are completed with a
+non-blocking [release decision](reviews/v0.6-release-review.md).

@@ -367,8 +367,10 @@ also records `pass`. The
 follow-ups`; Sprints 29–32 are completed, and the subsequent
 [Sprint 33 AI Chat and Context Panel review](../reviews/sprint-33-ai-chat-context-panel.md)
 records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint
-34 EDT Integration Prototype is completed. Sprint 35 External AI Client
-Compatibility is active pending its integration review.
+34 EDT Integration Prototype and Sprint 35 External AI Client Compatibility are
+completed. The
+[v0.6 MCP and IDE release review](../reviews/v0.6-release-review.md) records
+`pass with non-blocking follow-ups`.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes

@@ -21,8 +21,10 @@ with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
 Semantic Tools, Sprint 30 VS Code Extension Foundation, and Sprint 31 Navigation
 and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The
 Sprint 33 AI Chat and Context Panel and Sprint 34 EDT Integration Prototype are
-complete. Sprint 35 External AI Client Compatibility is active with
-implementation and client evidence complete, pending integration review.
+complete. Sprint 35 External AI Client Compatibility is complete, and the
+[v0.6 MCP and IDE release review](docs/reviews/v0.6-release-review.md) records
+`pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine is the unique
+`next` planning target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

@@ -17,7 +17,7 @@ boundaries; they do not define a second task sequence.
 | v0.3 — 1C Knowledge Model | Broader metadata semantics and Designer XML ingestion | Sprints 6–14 | completed |
 | v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | completed |
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | completed |
-| v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | planned |
+| v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | completed |
 | v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | planned |
 | v1.0 — Stable Platform | Stable APIs, plugin SDK, hardening, documentation, and release | Sprints 42–46 | planned |
 
@@ -33,9 +33,9 @@ closed with a `pass` decision in the
 [v0.4 release review](reviews/v0.4-release-review.md). The v0.5 boundary is
 closed with a `pass` decision in the
 [v0.5 release review](reviews/v0.5-release-review.md). The
-[Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
-records `pass with non-blocking follow-ups`; Sprint 30 is completed and Sprint
-31 Navigation and Symbol Search is the unique `next` planning target. The
+[v0.6 release review](reviews/v0.6-release-review.md) records
+`pass with non-blocking follow-ups`; v0.6 is completed and Sprint 36 Diagnostics
+Engine is the unique `next` planning target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -7085,6 +7085,11 @@ non-blocking documentation follow-up.
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | completed |
 | Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | completed |
 
+The [v0.6 release integration review](reviews/v0.6-release-review.md) records
+`pass with non-blocking follow-ups` for Sprints 28–35. The release is
+`completed`, and Sprint 36 Diagnostics Engine is the unique `next` planning
+target.
+
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
 Sprint 30 is planned from committed governance head `90695c74`. Sprint 29 is
@@ -8463,13 +8468,14 @@ unrelated-change absence. Suggested planning commit message:
 Plan Sprint 35 External AI Client Compatibility
 ```
 
-The v0.6 release integration review follows Sprint 35.
+The [v0.6 release integration review](reviews/v0.6-release-review.md) records
+`pass with non-blocking follow-ups` and closes the MCP and IDE boundary.
 
 #### v0.7 — Intelligence
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | planned |
+| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | next |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | planned |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | planned |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |

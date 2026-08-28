@@ -7,6 +7,7 @@ on:
 jobs:
   rust:
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-14, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -46,6 +47,7 @@ jobs:
 
   vscode:
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-14, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -92,6 +94,7 @@ jobs:
 
   edt:
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-14, windows-latest]
     runs-on: ${{ matrix.os }}

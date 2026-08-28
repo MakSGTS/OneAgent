@@ -40,6 +40,7 @@ final class ProbeController {
                 state.job = jobs.create(
                         () -> run(state, executable, workingDirectory),
                         state.cancellation::cancel);
+                state.job.onCompletion(() -> release(state));
             } catch (RuntimeException error) {
                 publish(state, Presentation.ERROR, OneAgentMessages.FAILED);
                 return;
@@ -157,6 +158,14 @@ final class ProbeController {
         state.job.cancel();
     }
 
+    private void release(RunState state) {
+        synchronized (this) {
+            if (active == state) {
+                active = null;
+            }
+        }
+    }
+
     private void cancelAndReleasePending(RunState state) {
         if (state == null) {
             return;
@@ -182,6 +191,8 @@ final class ProbeController {
 
     interface JobHandle {
         void schedule();
+
+        void onCompletion(Runnable completion);
 
         boolean cancel();
 

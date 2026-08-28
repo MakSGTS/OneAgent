@@ -94,6 +94,10 @@ public final class ProbeRuntimeHandlerTest {
         }
 
         @Override
+        public void onCompletion(Runnable completion) {
+        }
+
+        @Override
         public boolean cancel() {
             return true;
         }

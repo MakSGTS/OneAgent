@@ -3,7 +3,9 @@ package com.oneagent.edt;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.IJobChangeEvent;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.core.runtime.jobs.JobChangeAdapter;
 
 final class EclipseProbeJobFactory implements ProbeController.JobFactory {
     private static final String JOB_NAME = "OneAgent Runtime compatibility probe";
@@ -30,6 +32,16 @@ final class EclipseProbeJobFactory implements ProbeController.JobFactory {
         @Override
         public void schedule() {
             job.schedule();
+        }
+
+        @Override
+        public void onCompletion(Runnable completion) {
+            job.addJobChangeListener(new JobChangeAdapter() {
+                @Override
+                public void done(IJobChangeEvent event) {
+                    completion.run();
+                }
+            });
         }
 
         @Override

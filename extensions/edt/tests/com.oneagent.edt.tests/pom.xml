@@ -16,6 +16,36 @@
     <plugins>
       <plugin>
         <groupId>org.eclipse.tycho</groupId>
+        <artifactId>target-platform-configuration</artifactId>
+        <configuration>
+          <dependency-resolution>
+            <extraRequirements>
+              <requirement>
+                <type>p2-installable-unit</type>
+                <id>org.eclipse.equinox.p2.director.app</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+              <requirement>
+                <type>p2-installable-unit</type>
+                <id>org.eclipse.equinox.p2.transport.ecf</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+              <requirement>
+                <type>p2-installable-unit</type>
+                <id>org.eclipse.equinox.p2.touchpoint.eclipse</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+              <requirement>
+                <type>p2-installable-unit</type>
+                <id>org.eclipse.equinox.p2.touchpoint.natives</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+            </extraRequirements>
+          </dependency-resolution>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
         <artifactId>tycho-surefire-plugin</artifactId>
         <configuration>
           <useUIHarness>true</useUIHarness>

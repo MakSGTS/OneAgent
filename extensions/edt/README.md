@@ -67,6 +67,28 @@ Eclipse/EDT install-software flow or a disposable p2 director profile. Do not us
 an application bundle or a shared p2 pool as the install destination. Removal
 must leave no `com.oneagent.edt` bundle in the disposable profile.
 
+The checked-in target includes the public p2 director application and its ECF
+transport so local validation never needs to run a director from an installed
+EDT application.
+After `clean verify`, run the fail-closed disposable lifecycle oracle with the
+generated Tycho launcher and an absent work directory under `local-artifacts`:
+
+```bash
+extensions/edt/scripts/verify-disposable-p2.sh \
+  /absolute/path/to/jdk-25/bin/java \
+  /absolute/path/to/repository/local-artifacts/maven-repository \
+  /absolute/path/to/repository/local-artifacts/sprint-34/disposable-p2-run
+```
+
+The script accepts only the generated repository and Tycho builder inside this
+checkout. It copies the builder configuration into the disposable root, pins
+`user.home`, p2 data, configuration, instance, destination, profile, and bundle
+pool to that root, and performs install, list, uninstall, and a fresh list.
+Existing application bundles, user p2 data, and installed bundle pools are not
+valid inputs or destinations. The final check inspects the current disposable
+profile state; an unregistered artifact may remain in its disposable bundle-pool
+cache until that whole ignored validation directory is discarded.
+
 ## EDT host validation
 
 The verified EDT 2026.1 host is x86_64 and therefore uses an x86_64 JDK 17. Its

@@ -4,6 +4,10 @@
 //! provenance, and locations. This module provides bounded normalized values
 //! without parsing source or executing graph validation.
 
+mod engine;
+
+pub use engine::DiagnosticEngine;
+
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
@@ -762,14 +766,9 @@ impl DiagnosticReport {
     /// # Errors
     ///
     /// Returns [`DiagnosticErrorKind::TooManyFindings`] for an over-bound
-    /// input or [`DiagnosticErrorKind::ConflictingEvidence`] for an identity
-    /// collision.
+    /// normalized result or [`DiagnosticErrorKind::ConflictingEvidence`] for
+    /// an identity collision.
     pub fn new(findings: Vec<DiagnosticFinding>) -> Result<Self, DiagnosticError> {
-        validate_count(
-            DiagnosticErrorKind::TooManyFindings,
-            findings.len(),
-            MAX_DIAGNOSTIC_FINDINGS,
-        )?;
         let mut normalized = BTreeMap::new();
         for finding in findings {
             match normalized.entry(finding.identity().clone()) {
@@ -782,6 +781,11 @@ impl DiagnosticReport {
                 }
             }
         }
+        validate_count(
+            DiagnosticErrorKind::TooManyFindings,
+            normalized.len(),
+            MAX_DIAGNOSTIC_FINDINGS,
+        )?;
         let mut findings = normalized.into_values().collect::<Vec<_>>();
         findings.sort();
         let summary = DiagnosticSummary::from_findings(&findings)?;

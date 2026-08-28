@@ -42,6 +42,7 @@ technical workflows:
 - architecture;
 - implementation;
 - context engine;
+- diagnostics engine;
 - IDE and extension integration;
 - graph model;
 - graph emission;
@@ -100,6 +101,7 @@ docs/codex/
     ai-tool-policy.md
     architecture.md
     context-engine.md
+    diagnostics-engine.md
     ide-extension.md
     graph-emission.md
     graph-model.md
@@ -117,6 +119,7 @@ docs/codex/
     ai-tool-policy-implementation.md
     architecture.md
     context-engine-implementation.md
+    diagnostics-engine-implementation.md
     graph-implementation.md
     ide-extension-implementation.md
     implementation.md
@@ -133,6 +136,7 @@ docs/codex/
     ai-tool-policy-task.md
     architecture-task.md
     context-engine-task.md
+    diagnostics-engine-task.md
     graph-emission-task.md
     graph-model-task.md
     ide-extension-task.md
@@ -235,6 +239,9 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 - Use `docs/codex/profiles/context-engine-implementation.md` for deterministic
   semantic context selection, budgeting, assembly, explanation, rendering, and
   reproducible evaluation tasks.
+- Use `docs/codex/profiles/diagnostics-engine-implementation.md` for
+  source-independent diagnostic identity, orchestration, suppression, bounded
+  reporting, immutable snapshot composition, and diagnostic projections.
 - Use `docs/codex/profiles/ide-extension-implementation.md` for editor extension
   build, packaging, activation, configuration, Runtime connectivity, UI state,
   extension-host lifecycle, and integration evidence.
@@ -277,6 +284,9 @@ module composition.
   incremental Semantic Index work.
 - Use `docs/codex/templates/context-engine-task.md` for semantic context request,
   selection, budget, truncation, provenance, rendering, or evaluation work.
+- Use `docs/codex/templates/diagnostics-engine-task.md` for diagnostic identity,
+  normalization, orchestration, suppression, reporting, snapshot, or
+  public-projection work.
 - Use `docs/codex/templates/ide-extension-task.md` for editor extension build,
   packaging, activation, configuration, Runtime connectivity, UI state, or
   extension-host lifecycle work.
@@ -356,6 +366,12 @@ ordering, and equivalence with canonical query or full-rebuild behavior.
 Context Engine tasks select and assemble deterministic, budget-bounded context
 without creating semantic facts. They must define seed resolution, relevance
 ordering, provenance, explanations, truncation, and reproducible evaluation.
+
+Diagnostics Engine tasks normalize and report accepted canonical diagnostic
+evidence without becoming semantic or validation authority. They must define
+typed identity, duplicate/conflict behavior, suppression, ordering, bounds,
+summaries, sensitive-data handling, and deterministic snapshot or projection
+evidence while keeping general rule execution separate.
 
 Review tasks inspect existing work. They may create explicitly authorized review
 artifacts and Roadmap state transitions, but they do not modify implementation

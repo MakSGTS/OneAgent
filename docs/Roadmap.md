@@ -136,7 +136,8 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests implemented by the [AI Tool Policy profile](codex/profiles/ai-tool-policy-implementation.md), [AI Tool Policy workflow](codex/workflows/ai-tool-policy.md), and [AI Tool Policy template](codex/templates/ai-tool-policy-task.md). | Sprints 27, 29, and 33 | completed |
 | Task prompt template update completed — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence implemented by the [MCP Protocol profile](codex/profiles/mcp-protocol-implementation.md), [MCP Protocol workflow](codex/workflows/mcp-protocol.md), [MCP Protocol template](codex/templates/mcp-protocol-task.md), existing [Runtime Service modules](codex/profiles/runtime-service-implementation.md), and existing [AI Tool Policy modules](codex/profiles/ai-tool-policy-implementation.md). | Sprints 28–29 and 35; protocol baseline for Sprint 32 | completed |
 | Task prompt template update completed — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence implemented by the [IDE Extension profile](codex/profiles/ide-extension-implementation.md), [IDE Extension workflow](codex/workflows/ide-extension.md), and [IDE Extension template](codex/templates/ide-extension-task.md), with existing Runtime Service and MCP Protocol modules retained for their owned boundaries. | Sprints 30–34 | completed |
-| Task prompt template update required — Diagnostics and Rules | Sprint 36 | Stable diagnostic identity, severity and configuration, deterministic rule registration and execution, suppression, reporting, and regression evidence. | Sprints 36–37 and 39 | planned |
+| Task prompt template update completed — Diagnostics Engine | Sprint 36 | Canonical diagnostic inputs, stable typed identity, duplicate/conflict handling, suppression authority, deterministic ordering, bounds, summaries, sensitive-data policy, immutable snapshots, projections, and regression evidence implemented by the [Diagnostics Engine profile](codex/profiles/diagnostics-engine-implementation.md), [workflow](codex/workflows/diagnostics-engine.md), and [template](codex/templates/diagnostics-engine-task.md). | Sprints 36 and 39 | completed |
+| Task prompt template update required — Rules Engine | Sprint 37 | Deterministic rule registration, identity, dependencies, configuration, execution, result contracts, and integration with accepted diagnostic evidence. | Sprint 37 | planned |
 | Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
 | Task prompt template update required — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation. | Sprints 40–41 | planned |
 | Task prompt template update required — API Stability and Plugin SDK | Sprint 42 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 42–43 | planned |
@@ -8501,11 +8502,15 @@ The exact cross-family identity, orchestration, suppression, ordering, bounds,
 summary, compatibility, and ownership decisions are unresolved and therefore
 belong to Task 1 investigation and accepted ADR-0058 before production changes.
 
-Framework readiness is complete through the existing Investigation,
-Architecture, Implementation, Runtime Service, MCP Protocol, and Review
-profiles, templates, and workflows. They express every planned evidence,
-domain, orchestration, snapshot, protocol, validation, and review boundary. No
-framework change or post-sprint framework audit is planned.
+The initial planning baseline incorrectly treated the generic Implementation
+modules as sufficient even though the live task-template readiness forecast
+required a Diagnostics and Rules framework before Sprint 36. The post-Task-1
+readiness audit resolves the concrete Diagnostics Engine gap through the
+dedicated profile, workflow, and template. The reusable contract covers
+canonical inputs, identity, conflicts, suppression, ordering, bounds, reports,
+snapshots, persistence, protocol projection, sensitive data, and deterministic
+evidence. The general Rules Engine framework remains a separate required Sprint
+37 gate; no speculative registration or execution contract is created here.
 
 The complete Sprint 36 prompt suite is owned by
 `docs/codex/prompts/sprint-36-diagnostics-engine/`. The immediately preceding
@@ -8572,12 +8577,12 @@ security claims.
 | Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
 |---:|---|---|---|---|---|
 | 1 | Investigate the Diagnostics Engine. | Investigation / investigation | Complete producer, consumer, identity, ordering, suppression, bound, compatibility, and executable-oracle evidence with decision-ready ADR questions. | Sprint 36 planning baseline. | `Investigate Sprint 36 diagnostics engine` |
-| 2 | Define the Diagnostics Engine. | Architecture / architecture | Accepted ADR-0058 for source-independent diagnostic orchestration and reporting. | Task 1. | `Define Sprint 36 diagnostics engine` |
-| 3 | Implement the diagnostic domain. | Implementation / implementation | Accepted typed identity, normalized result, suppression outcome, summary, report, bounds, and deterministic ordering model. | Accepted ADR-0058. | `Implement Sprint 36 diagnostic domain` |
-| 4 | Implement diagnostic orchestration. | Implementation / implementation | Deterministic bounded orchestration of the accepted existing diagnostic and validation input families with focused evidence. | Task 3. | `Implement Sprint 36 diagnostic orchestration` |
-| 5 | Integrate diagnostic snapshots. | Runtime Service / runtime service | Immutable Workspace composition, rebuild/cache equivalence, lifecycle compatibility, and repeated-snapshot evidence for the accepted engine result. | Task 4. | `Integrate Sprint 36 diagnostic snapshots` |
-| 6 | Integrate diagnostic reporting. | MCP Protocol + Runtime Service / MCP Protocol | Accepted MCP and LSP projections with truthful schemas/capabilities, Tool Policy, confinement, bounds, compatibility, and public-process evidence. | Task 5. | `Integrate Sprint 36 diagnostic reporting` |
-| 7 | Complete Diagnostics Engine evidence. | Implementation / implementation | Complete validation, compatibility/dependency/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 36 diagnostics evidence` |
+| 2 | Define the Diagnostics Engine. | Architecture / architecture | Accepted ADR-0058 for source-independent diagnostic orchestration and reporting. | Task 1 and the committed Diagnostics Engine framework prerequisite. | `Define Sprint 36 diagnostics engine` |
+| 3 | Implement the diagnostic domain. | Diagnostics Engine / Diagnostics Engine | Accepted typed identity, normalized result, suppression outcome, summary, report, bounds, and deterministic ordering model. | Accepted ADR-0058. | `Implement Sprint 36 diagnostic domain` |
+| 4 | Implement diagnostic orchestration. | Diagnostics Engine / Diagnostics Engine | Deterministic bounded orchestration of the accepted existing diagnostic and validation input families with focused evidence. | Task 3. | `Implement Sprint 36 diagnostic orchestration` |
+| 5 | Integrate diagnostic snapshots. | Diagnostics Engine + Runtime Service / Diagnostics Engine | Immutable Workspace composition, rebuild/cache equivalence, lifecycle compatibility, and repeated-snapshot evidence for the accepted engine result. | Task 4. | `Integrate Sprint 36 diagnostic snapshots` |
+| 6 | Integrate diagnostic reporting. | Diagnostics Engine + MCP Protocol + Runtime Service / Diagnostics Engine | Accepted MCP and LSP projections with truthful schemas/capabilities, Tool Policy, confinement, bounds, compatibility, and public-process evidence. | Task 5. | `Integrate Sprint 36 diagnostic reporting` |
+| 7 | Complete Diagnostics Engine evidence. | Diagnostics Engine / Diagnostics Engine | Complete validation, compatibility/dependency/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 36 diagnostics evidence` |
 | 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 37 hand-off, and conditional Sprint 35 suite retirement. | Task 7 and all validation. | `Complete Sprint 36 diagnostics engine review` |
 
 Tasks execute strictly in order. Documentation-only Tasks 1–2 run evidence,
@@ -8606,6 +8611,13 @@ before production changes. A configurable rule registry, third-party or
 scripted rules, new producers, diagnostics UI, mutable documents, fixes,
 telemetry, and remote behavior remain outside Sprint 36. Sprint 36 is now
 `active`; Task 2 owns architecture acceptance.
+
+The committed framework prerequisite after Task 1 adds
+`docs/codex/profiles/diagnostics-engine-implementation.md`,
+`docs/codex/workflows/diagnostics-engine.md`, and
+`docs/codex/templates/diagnostics-engine-task.md`, corrects the planning routing,
+and restarts readiness from the accepted investigation evidence. No production
+behavior changes in that prerequisite.
 
 Sprint 36 remains `next` during planning, becomes `active` when Task 1 starts,
 and may become `completed` only after Task 8. `already_complete` requires current

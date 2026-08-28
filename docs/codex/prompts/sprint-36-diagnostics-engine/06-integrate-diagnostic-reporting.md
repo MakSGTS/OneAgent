@@ -9,15 +9,17 @@ Continue OneAgent development.
 
 ## Profiles and template
 
+- `docs/codex/profiles/diagnostics-engine-implementation.md`
 - `docs/codex/profiles/mcp-protocol-implementation.md`
 - `docs/codex/profiles/runtime-service-implementation.md`
-- `docs/codex/templates/mcp-protocol-task.md`
+- `docs/codex/templates/diagnostics-engine-task.md`
 
 ## Required workflows
 
 - `docs/codex/workflows/mcp-protocol.md`
 - `docs/codex/workflows/runtime-service.md`
 - `docs/codex/workflows/implementation.md`
+- `docs/codex/workflows/diagnostics-engine.md`
 
 ## Authoritative documents
 

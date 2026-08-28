@@ -31,8 +31,9 @@ Continue OneAgent development.
 
 ## Prerequisite
 
-Task 1 is committed and its investigation contains no blocking evidence gap or
-unapproved production dependency.
+Task 1 and the reusable Diagnostics Engine framework prerequisite are committed.
+The investigation contains no blocking evidence gap or unapproved production
+dependency.
 
 ## Task
 

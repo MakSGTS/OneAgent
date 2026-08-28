@@ -9,12 +9,14 @@ Continue OneAgent development.
 
 ## Profile and template
 
+- `docs/codex/profiles/diagnostics-engine-implementation.md`
 - `docs/codex/profiles/runtime-service-implementation.md`
-- `docs/codex/templates/runtime-service-task.md`
+- `docs/codex/templates/diagnostics-engine-task.md`
 
 ## Required workflows
 
 - `docs/codex/workflows/implementation.md`
+- `docs/codex/workflows/diagnostics-engine.md`
 - `docs/codex/workflows/runtime-service.md`
 
 ## Authoritative documents

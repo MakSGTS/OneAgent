@@ -48,6 +48,13 @@ Execution requires the committed planning baseline with subject
 must be the unique eligible target. Resolve commit mode from the current user
 instruction; this stored prompt does not authorize commits by itself.
 
+After Task 1, execution also requires the committed reusable Diagnostics Engine
+framework prerequisite with subject `Establish Diagnostics Engine task
+framework`. It corrects the initial planning-readiness decision before Task 2
+and selects the dedicated profile, workflow, and template without changing
+production behavior. The separate Rules Engine framework remains deferred to
+Sprint 37.
+
 The current user's launch authorizes exactly one mandatory fresh-context
 read-only reviewer for Task 8. Launch it automatically at the review gate
 without separate confirmation. No other delegation is authorized.
@@ -57,7 +64,7 @@ without separate confirmation. No other delegation is authorized.
 | Order | Prompt | Required committed prerequisite | Task-owned outcome | Validation additions | Suggested commit message |
 |---:|---|---|---|---|---|
 | 1 | `01-investigate-diagnostics-engine.md` | Sprint 36 planning commit | Producer, consumer, identity, ordering, suppression, bounds, compatibility, and oracle investigation | Source/API/fixture/test/consumer/link gates | `Investigate Sprint 36 diagnostics engine` |
-| 2 | `02-define-diagnostics-engine.md` | Task 1 | Accepted ADR-0058 | ADR/evidence/identity/ownership/compatibility/scope consistency | `Define Sprint 36 diagnostics engine` |
+| 2 | `02-define-diagnostics-engine.md` | Task 1 and committed Diagnostics Engine framework prerequisite | Accepted ADR-0058 | ADR/evidence/identity/ownership/compatibility/scope consistency | `Define Sprint 36 diagnostics engine` |
 | 3 | `03-implement-diagnostic-domain.md` | Task 2 | Typed diagnostic identity, result, suppression, summary, report, bounds, and ordering domain | Focused domain/API/ordering/bound tests and workspace gate | `Implement Sprint 36 diagnostic domain` |
 | 4 | `04-implement-diagnostic-orchestration.md` | Task 3 | Deterministic accepted-input orchestration | Positive/negative/duplicate/suppression/bound/repetition tests and workspace gate | `Implement Sprint 36 diagnostic orchestration` |
 | 5 | `05-integrate-diagnostic-snapshots.md` | Task 4 | Immutable Workspace and cache/rebuild diagnostic result composition | Snapshot/cache/rebuild/lifecycle/repetition matrices and workspace gate | `Integrate Sprint 36 diagnostic snapshots` |

@@ -7076,8 +7076,8 @@ documentation follow-up.
 | Sprint 31 — Navigation and Symbol Search | Add semantic navigation and symbol-search experiences. | completed |
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | completed |
-| Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | active |
-| Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | planned |
+| Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | completed |
+| Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | next |
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8146,15 +8146,20 @@ source, manifest, target, feature/category definition, protocol, catalog, or
 other client behavior, so the authorized EDT evidence from Task 5 remains the
 applicable local host result.
 
-Task 7 reviews the exact planning-through-Task-6 range and creates
-`docs/reviews/sprint-34-edt-integration-prototype.md` only for `pass` or `pass
-with non-blocking follow-ups` after all focused and complete validation
-succeeds. That decision transitions Sprint 34 to `completed`, makes Sprint 35
-External AI Client Compatibility the unique `next` target, and atomically
-retires the exact Sprint 33 prompt suite in the same review commit. The review
-never silently fixes code. An inventory mismatch, endangered untracked file,
-reviewer mutation or incompleteness, unresolved evidence disagreement, failed
-artifact consistency, or blocking finding stops before the final mutation.
+Task 7 records `pass with non-blocking follow-ups` in the
+[Sprint 34 integration review](reviews/sprint-34-edt-integration-prototype.md)
+for the exact `19ba2671..4e7cfa34` range. Corrective commits close bounded
+Runtime cancellation and post-frame termination, package evidence, disposable
+p2 safety, clean-checkout fixtures, Windows line endings and command launch,
+package inventory ordering, and Rust 1.98 platform lint findings. GitHub Actions
+run `33147520423` passes all six Rust, VS Code, and EDT jobs on macOS and
+Windows at the exact final corrective head. The full EDT 2026.1 host evidence
+passes positive, repeated, invalid-configuration, timeout, cancellation, stop,
+and JavaFX absence gates. The final independent reviewer found no blocker or
+missing mandatory evidence, and the same reviewer passed artifact consistency.
+Sprint 34 is `completed`, Sprint 35 External AI Client Compatibility is the
+unique `next` target, the stale root README state is synchronized, and the
+exact nine-file Sprint 33 prompt suite is retired in the Task 7 commit.
 
 The immediately preceding suite is exactly
 `docs/codex/prompts/sprint-33-ai-chat-context-panel/`, with these nine tracked
@@ -8170,11 +8175,13 @@ files and an identical filesystem inventory at planning time:
 - `07-complete-chat-context-evidence.md`
 - `08-sprint-33-integration-review.md`
 
-Sprint 34 remains `next` during planning and becomes `active` only after the
-planning commit and Task 1 start. `already_complete` requires current committed
-evidence and successful required validation; no empty commit is created. Stop
-after the first prerequisite, implementation, validation, staging, commit, or
-review failure. Do not skip, reorder, combine, or partially commit tasks.
+Sprint 34 was `next` during planning and became `active` only after the planning
+commit and Task 1 start. It becomes `completed` only after the non-blocking Task
+7 decision, complete primary validation, and passing same-reviewer artifact
+consistency. `already_complete` requires current committed evidence and
+successful required validation; no empty commit is created. Stop after the
+first prerequisite, implementation, validation, staging, commit, or review
+failure. Do not skip, reorder, combine, or partially commit tasks.
 
 Completion requires committed or proven Tasks 1-6, accepted ADR-0056, one
 dependency-free bounded Runtime probe, exact EDT-project and configuration

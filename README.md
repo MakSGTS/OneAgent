@@ -18,8 +18,8 @@ integration review. The bounded Sprint 28 discovery-only MCP Server is complete
 with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
 Semantic Tools, Sprint 30 VS Code Extension Foundation, and Sprint 31 Navigation
 and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The
-Sprint 33 AI Chat and Context Panel implementation and production evidence are
-present and remain active pending integration review.
+Sprint 33 AI Chat and Context Panel and Sprint 34 EDT Integration Prototype are
+complete. Sprint 35 External AI Client Compatibility is the next target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

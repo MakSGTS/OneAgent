@@ -513,6 +513,67 @@ fn legacy_lifecycle_errors_notifications_ping_and_post_error_state_are_closed() 
 }
 
 #[test]
+fn legacy_initialized_notification_and_ping_accept_revision_generic_metadata() {
+    for version in [
+        MCP_PROTOCOL_VERSION_2025_06_18,
+        MCP_PROTOCOL_VERSION_2025_11_25,
+    ] {
+        let (server, _) = tool_server();
+        let mut connection = server.connection();
+        let response = dispatch_json(
+            &mut connection,
+            &initialize(
+                &json!(0),
+                version,
+                &json!({}),
+                &json!({"name": "metadata-client", "version": "1"}),
+            ),
+        );
+        assert_eq!(response["result"]["protocolVersion"], version);
+
+        assert!(
+            block_on(connection.dispatch(
+                r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{"_meta":42}}"#
+            ))
+            .is_none()
+        );
+        assert!(!connection.is_initialized());
+        assert!(
+            block_on(connection.dispatch(
+                r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{"_meta":{"progressToken":{},"example/trace":[1]}}}"#
+            ))
+            .is_none()
+        );
+        assert!(connection.is_initialized());
+
+        for (id, progress_token) in [(1, json!("progress")), (2, json!(7))] {
+            let ping = dispatch_json(
+                &mut connection,
+                &legacy_request(
+                    &json!(id),
+                    "ping",
+                    Some(&json!({"_meta": {"progressToken": progress_token}})),
+                ),
+            );
+            assert_eq!(ping["result"], json!({}));
+        }
+        let invalid_ping = dispatch_json(
+            &mut connection,
+            &legacy_request(
+                &json!(3),
+                "ping",
+                Some(&json!({"_meta": {"progressToken": true}})),
+            ),
+        );
+        assert_eq!(
+            invalid_ping["error"]["code"],
+            ErrorCode::InvalidParams.value()
+        );
+        assert!(connection.is_initialized());
+    }
+}
+
+#[test]
 fn legacy_list_and_call_shapes_preserve_catalog_results_and_domain_errors() {
     for version in [
         MCP_PROTOCOL_VERSION_2025_06_18,

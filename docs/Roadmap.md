@@ -8395,8 +8395,20 @@ the full matrix with 1,139 workspace tests, 16 public-process tests, three
 successful Codex runs, two successful Cursor discovery runs, 62 VS Code unit
 tests, two VS Code process tests, and 41 successful EDT tests. Sprint 35 remains
 `active` until a new fresh-context review covers the latest immutable range.
-None of the four blocked reviews created a review artifact, state transition,
-or prompt retirement.
+The fifth fresh-context review of
+`cd876c836014fbd1ee15c0683da67d036f181b3c..16fc33c9997596ea7ced789e392678c3d7621350`
+was also `blocked`: schema-valid open notification metadata was checked with a
+request-only validator, active legacy `ping` rejected schema-valid generic
+request metadata, and the evidence omitted the exact VS Code and EDT commands.
+The fifth separate correction applies the distinct notification and request
+metadata contracts, preserves negative validation, covers both legacy
+revisions at the protocol and public-process boundaries, records the exact
+existing-client commands, and completes the full matrix with 1,140 workspace
+tests, 16 public-process tests, three successful Codex runs, two successful
+Cursor discovery runs, 62 VS Code unit tests, two VS Code process tests, and 41
+successful EDT tests. Sprint 35 remains `active` until a new fresh-context
+review covers the latest immutable range. None of the five blocked reviews
+created a review artifact, state transition, or prompt retirement.
 
 Task 6 reviews the exact planning-through-latest-corrective range with exactly
 one fresh-context read-only reviewer. The primary independently reconciles every

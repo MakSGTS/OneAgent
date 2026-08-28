@@ -435,8 +435,22 @@ async fn public_mcp_process_rejects_malformed_initialized_and_projects_awaiting_
                 .to_owned(),
             legacy_request(47, "review/unknown", Some(&json!({}))),
             legacy_request(48, "ping", None),
-            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_owned(),
-            legacy_request(49, "ping", None),
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{"_meta":{"progressToken":{},"example/trace":[1]}}}"#.to_owned(),
+            legacy_request(
+                49,
+                "ping",
+                Some(&json!({"_meta": {"progressToken": "progress"}})),
+            ),
+            legacy_request(
+                50,
+                "ping",
+                Some(&json!({"_meta": {"progressToken": 7}})),
+            ),
+            legacy_request(
+                51,
+                "ping",
+                Some(&json!({"_meta": {"progressToken": true}})),
+            ),
         ]
         .join("\n")
             + "\n";
@@ -448,7 +462,7 @@ async fn public_mcp_process_rejects_malformed_initialized_and_projects_awaiting_
             .lines()
             .map(|line| serde_json::from_str::<Value>(line).expect("lifecycle response JSON"))
             .collect::<Vec<_>>();
-        assert_eq!(responses.len(), 4);
+        assert_eq!(responses.len(), 6);
         assert!(responses[0]["result"]["protocolVersion"].is_string());
         assert_eq!(responses[1]["id"], 47);
         assert_eq!(responses[1]["error"]["code"], -32601);
@@ -456,6 +470,10 @@ async fn public_mcp_process_rejects_malformed_initialized_and_projects_awaiting_
         assert_eq!(responses[2]["error"]["code"], -32002);
         assert_eq!(responses[3]["id"], 49);
         assert_eq!(responses[3]["result"], json!({}));
+        assert_eq!(responses[4]["id"], 50);
+        assert_eq!(responses[4]["result"], json!({}));
+        assert_eq!(responses[5]["id"], 51);
+        assert_eq!(responses[5]["error"]["code"], -32602);
     }
 }
 

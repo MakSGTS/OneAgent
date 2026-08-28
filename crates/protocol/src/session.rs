@@ -156,13 +156,9 @@ impl<'server> McpConnection<'server> {
             RawDecodeOutcome::Notification(notification)
                 if notification.method() == INITIALIZED_NOTIFICATION =>
             {
-                let metadata_is_valid = notification.params().is_none_or(|params| {
-                    params.get("_meta").is_none_or(|metadata| {
-                        metadata
-                            .as_object()
-                            .is_some_and(validate_legacy_request_metadata)
-                    })
-                });
+                let metadata_is_valid = notification
+                    .params()
+                    .is_none_or(|params| params.get("_meta").is_none_or(Value::is_object));
                 if metadata_is_valid
                     && let ConnectionState::LegacyAwaitingInitialized(facts) = &self.state
                 {
@@ -201,7 +197,7 @@ impl<'server> McpConnection<'server> {
                     Err(response) => return Some(response),
                 };
                 match request.method() {
-                    PING_METHOD if request.params().is_empty() => {
+                    PING_METHOD if request.params().keys().all(|key| key == "_meta") => {
                         Some(legacy_result(request.id().clone(), Map::new()))
                     }
                     PING_METHOD => Some(standard_error(

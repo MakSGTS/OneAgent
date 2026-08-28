@@ -3,11 +3,11 @@
 ## Status and scope
 
 This document records the Task 5 evidence executed on 2026-08-28 from committed
-Task 4 head `71425e50` and the corrective evidence executed after the first
-Task 6 review. Task 5 introduced no production behavior. The corrective change
-makes legacy initialize validation revision-aware after that review proved that
-schema-invalid known fields could select a connection revision. Sprint 35
-remains `active` pending a new independent Task 6 integration review.
+Task 4 head `71425e50` and the corrective evidence executed after successive
+Task 6 reviews. Task 5 introduced no production behavior. The corrective
+changes close revision-aware initialization, lifecycle, mode-selection, error-
+precedence, and generic-metadata gaps found by those reviews. Sprint 35 remains
+`active` pending a new independent Task 6 integration review.
 
 The production process supports these exact revisions:
 
@@ -125,6 +125,46 @@ Therefore actual Cursor tool success and domain-failure calls are not claimed;
 their absence is a client-command limitation, not a server failure. Synthetic
 process evidence and Codex direct calls cover those server rows.
 
+## Exact existing-client compatibility commands
+
+The final corrective VS Code compatibility run used the Node executable from
+the ignored pinned Cursor package and the existing installed extension
+dependencies. From the repository root, the exact commands were:
+
+```bash
+ONEAGENT_REPOSITORY="$(git rev-parse --show-toplevel)"
+ONEAGENT_NODE="$ONEAGENT_REPOSITORY/local-artifacts/sprint-35/cursor-agent-2026.08.25-3e8eec8/darwin-arm64/node"
+cd "$ONEAGENT_REPOSITORY/extensions/vscode"
+"$ONEAGENT_NODE" node_modules/typescript/bin/tsc -p tsconfig.json --noEmit
+"$ONEAGENT_NODE" node_modules/typescript/bin/tsc -p tsconfig.test.json --noEmit
+"$ONEAGENT_NODE" node_modules/typescript/bin/tsc -p tsconfig.json
+"$ONEAGENT_NODE" node_modules/typescript/bin/tsc -p tsconfig.test.json
+"$ONEAGENT_NODE" --test dist-test/test/unit/*.test.js
+ONEAGENT_MCP_BIN="$ONEAGENT_REPOSITORY/target/debug/oneagent-mcp" \
+  "$ONEAGENT_NODE" --test dist-test/test/integration/*.test.js
+```
+
+All four TypeScript commands exited zero. The unit row passed 62 of 62 with
+zero failures, cancellations, skips, or todos. An initial integration command
+without `ONEAGENT_MCP_BIN` exited one before spawning Runtime and failed 2 of 2;
+that invocation is not acceptance evidence. The exact corrected command above
+passed 2 of 2 with all negative counters zero.
+
+The final corrective EDT host run used the exact command below from
+`extensions/edt`:
+
+```bash
+ONEAGENT_REPOSITORY="$(git rev-parse --show-toplevel)"
+cd "$ONEAGENT_REPOSITORY/extensions/edt"
+ONEAGENT_MCP_EXECUTABLE="$ONEAGENT_REPOSITORY/target/debug/oneagent-mcp" \
+ONEAGENT_MCP_FIXTURE="$ONEAGENT_REPOSITORY/apps/runtime/tests/fixtures/workspace_service" \
+  ./mvnw --batch-mode --no-transfer-progress clean verify
+```
+
+The command exited zero with `BUILD SUCCESS`; all 41 tests passed with zero
+failures, errors, or skips, and the public Runtime process was exercised twice.
+The known Tycho platform-shutdown job warning remained non-fatal.
+
 ## Platform-neutral conformance
 
 Repository tests consume the exact captured client fixtures and execute every
@@ -139,7 +179,7 @@ fresh-session reuse.
 
 The final corrective focused counts are:
 
-- protocol session: 11 passed;
+- protocol session: 12 passed;
 - Runtime stdio: 8 passed;
 - public `oneagent-mcp` process: 16 passed;
 - semantic MCP tools: 6 passed;
@@ -182,13 +222,24 @@ parse/envelope validation and before mode selection. Protocol and public-
 process rows cover all three methods with well-typed `2025-11-25` metadata,
 prove the state remains Undetermined, and then complete a valid initialize.
 
+A fifth fresh-context review found two adjacent generic-metadata gaps. A schema-
+valid open notification `_meta` object could be rejected because it was checked
+with the request-only progress-token validator, and an active legacy `ping`
+could reject schema-valid generic request metadata. The latest correction uses
+the open notification metadata contract for `notifications/initialized`,
+allows only an already validated `_meta` field on `ping`, and retains
+`-32602` for scalar notification metadata, non-string/non-number request
+progress tokens, and every unexpected ping field. Protocol and public-process
+rows cover both legacy revisions, string and number tokens, open notification
+metadata values, negative forms, state transitions, and response shapes.
+
 The final accepted corrective canonical gate is:
 
 | Command | Exit and exact outcome |
 | --- | --- |
 | `cargo fmt --all --check` | 0 |
 | `cargo check --workspace --all-targets` | 0 |
-| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,139 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
+| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,140 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 |
 | `cargo doc --workspace --no-deps` | 0 |
 | `git diff --check` | 0 |
@@ -207,6 +258,17 @@ full command completed with `BUILD SUCCESS`, all 41 tests passing, zero
 failures, errors, or skips, and the public Runtime process exercised twice.
 The later final correction's EDT host run passed on its first attempt with the
 same 41-test, zero-failure/error/skip result.
+
+During the latest correction, running the seven LSP public-process tests in
+parallel with two other process-heavy suites exhausted their five-second test
+deadline and produced seven timeouts. The isolated immediate rerun passed all
+7 tests in 0.69 seconds, and the subsequent sequential canonical workspace run
+also passed those tests. This scheduling-induced attempt is not acceptance
+evidence. The exact Codex success/domain commands passed twice, the exact
+seven-tool command passed after the repository owner explicitly authorized its
+result payload, and both Cursor discovery commands passed. The first attempted
+seven-tool host approval was rejected before Codex started and changed no
+state; it is not a client execution result.
 
 ## Audits and limitations
 

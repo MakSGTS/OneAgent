@@ -16,7 +16,7 @@ use crate::writes::EdtWritesCandidate;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EdtWritesResolutionOutcome {
     Resolved {
-        declaration: EdtDocumentRegisterDeclaration,
+        declaration: Box<EdtDocumentRegisterDeclaration>,
         target_id: EntityId,
     },
     MissingOwner,
@@ -159,7 +159,7 @@ impl EdtWritesResolutionIndex {
                 candidates: candidates.keys().cloned().collect(),
             },
             [target_id] => EdtWritesResolutionOutcome::Resolved {
-                declaration,
+                declaration: Box::new(declaration),
                 target_id: target_id.clone(),
             },
             _ => EdtWritesResolutionOutcome::AmbiguousTarget {

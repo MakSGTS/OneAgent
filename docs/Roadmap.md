@@ -7078,7 +7078,7 @@ non-blocking documentation follow-up.
 | Sprint 32 — LSP Adapter | Expose supported navigation, symbol, and diagnostic capabilities through an editor-neutral LSP boundary. | completed |
 | Sprint 33 — AI Chat and Context Panel | Add IDE chat and inspectable semantic context UI. | completed |
 | Sprint 34 — EDT Integration Prototype | Prove the EDT integration boundary and user workflow. | completed |
-| Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | active |
+| Sprint 35 — External AI Client Compatibility | Validate Codex, Cursor, and other MCP-capable client workflows. | completed |
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8419,6 +8419,17 @@ Only `pass` or `pass with non-blocking follow-ups` transitions Sprint 35 to
 retires the exact Sprint 34 suite. Sprint 36 remains `planned` until the v0.6
 release review explicitly hands off to it. The review never silently fixes
 production code.
+
+Task 6 records `pass with non-blocking follow-ups` in the
+[Sprint 35 integration review](reviews/sprint-35-external-ai-client-compatibility.md)
+for the exact `cd876c83..2f809f6d` range. Fresh-context reviewer
+`/root/sprint_35_metadata_final_reviewer` found no blocker; primary
+reconciliation accepted only bounded documentation and test-hardening follow-
+ups and repeated the complete Rust, Codex, Cursor, VS Code, LSP, and EDT
+matrices. The same reviewer passed artifact consistency. Sprint 35 is
+`completed`, the v0.6 release integration review is the next eligible gate,
+Sprint 36 remains `planned`, and the exact eight-file Sprint 34 prompt suite is
+retired in the Task 6 commit.
 
 ##### State gates and completion criteria
 

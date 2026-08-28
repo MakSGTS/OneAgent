@@ -1,6 +1,21 @@
 model_reasoning_effort = "high"
 
 approval_policy = "on-request"
-sandbox_mode = "workspace-write"
+default_permissions = "workspace-loopback"
 
 project_doc_max_bytes = 65536
+
+[features]
+network_proxy = true
+
+[permissions.workspace-loopback]
+description = "Workspace access with IPv4 loopback sockets for local tests."
+extends = ":workspace"
+
+[permissions.workspace-loopback.network]
+enabled = true
+allow_local_binding = true
+allow_upstream_proxy = false
+
+[permissions.workspace-loopback.network.domains]
+"127.0.0.1" = "allow"

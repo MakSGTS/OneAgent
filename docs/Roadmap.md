@@ -8619,6 +8619,28 @@ The committed framework prerequisite after Task 1 adds
 and restarts readiness from the accepted investigation evidence. No production
 behavior changes in that prerequisite.
 
+###### Sprint 36 architecture decision
+
+Task 2 accepts [ADR-0058](adr/0058-diagnostics-engine.md). The source-independent
+Diagnostics Engine belongs to `oneagent-analysis` and consumes only immutable
+Graph-owned recoverable diagnostics plus a caller-supplied Graph validation
+result. It produces a complete bounded typed report with family-discriminated
+identity, exact duplicate handling, fail-closed conflicting evidence,
+error-before-warning deterministic ordering, checked summaries, and only exact
+in-memory identity suppression. Workspace uses the default no-suppression
+policy.
+
+Workspace retains raw diagnostics and adds derived complete validation and
+diagnostic-report evidence before immutable publication. Cache schema and bytes
+remain unchanged; warm loads recompute equal derived evidence. MCP keeps the
+seven-tool catalog and current semantic item fields while adding exact filters,
+normalized fields, summary, and validation findings with explicit truncation.
+LSP keeps its existing pull capability and complete 100-result bound while
+projecting only active findings with one exact confined node span. No
+dependency, new producer, Coverage transition, Rules Engine, suppression
+configuration, UI, mutable-document, fix, or remote behavior is accepted by
+architecture alone.
+
 Sprint 36 remains `next` during planning, becomes `active` when Task 1 starts,
 and may become `completed` only after Task 8. `already_complete` requires current
 committed evidence and successful required validation; no empty commit is

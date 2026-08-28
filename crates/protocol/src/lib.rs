@@ -3,6 +3,7 @@
 mod lsp;
 mod mcp;
 mod server;
+mod session;
 
 pub use lsp::{
     LSP_SERVER_NAME, LspCapabilities, LspDispatchOutcome, LspEncodeError, LspErrorCode,
@@ -19,6 +20,10 @@ pub use mcp::{
 pub use server::{
     MCP_SERVER_NAME, McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome,
     McpToolDefinition, McpToolDefinitionError, McpToolFuture,
+};
+pub use session::{
+    MCP_PROTOCOL_VERSION_2025_06_18, MCP_PROTOCOL_VERSION_2025_11_25, McpConnection,
+    McpProtocolRevision, SUPPORTED_MCP_PROTOCOL_VERSIONS,
 };
 
 /// Returns the protocol component name.

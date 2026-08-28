@@ -257,6 +257,15 @@ impl McpServer {
     }
 
     async fn dispatch_request(&self, request: &Request) -> Response {
+        self.dispatch_request_with_profile(request, McpResponseProfile::Modern)
+            .await
+    }
+
+    pub(crate) async fn dispatch_request_with_profile(
+        &self,
+        request: &Request,
+        profile: McpResponseProfile,
+    ) -> Response {
         let Some(registration) = self.methods.get(request.method()) else {
             return standard_error(Some(request.id().clone()), ErrorCode::MethodNotFound);
         };
@@ -275,8 +284,15 @@ impl McpServer {
         }
 
         match registration.handler.handle_request(request).await {
-            Ok(result) => ResultResponse::complete(request.id().clone(), result)
-                .map_or_else(|_| internal_error(request.id().clone()), Response::Result),
+            Ok(mut result) => {
+                if profile == McpResponseProfile::Modern && request.method() == TOOLS_LIST_METHOD {
+                    result.insert("ttlMs".to_owned(), json!(0));
+                    result.insert("cacheScope".to_owned(), json!("public"));
+                }
+                profile
+                    .response(request.id().clone(), result)
+                    .map_or_else(|_| internal_error(request.id().clone()), Response::Result)
+            }
             Err(HandlerFailure::InvalidParams) => {
                 standard_error(Some(request.id().clone()), ErrorCode::InvalidParams)
             }
@@ -290,6 +306,25 @@ impl McpServer {
         };
         if registration.mode.accepts_notifications() {
             registration.handler.handle_notification(notification);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum McpResponseProfile {
+    Legacy,
+    Modern,
+}
+
+impl McpResponseProfile {
+    fn response(
+        self,
+        id: RequestId,
+        fields: Map<String, Value>,
+    ) -> Result<ResultResponse, crate::EncodeError> {
+        match self {
+            Self::Legacy => ResultResponse::legacy(id, fields),
+            Self::Modern => ResultResponse::complete(id, fields),
         }
     }
 }
@@ -497,9 +532,7 @@ impl MethodHandler for ToolsListHandler {
                 return Err(HandlerFailure::InvalidParams);
             }
             Ok(json!({
-                "tools": self.tools.iter().map(McpToolDefinition::as_value).collect::<Vec<_>>(),
-                "ttlMs": 0,
-                "cacheScope": "public"
+                "tools": self.tools.iter().map(McpToolDefinition::as_value).collect::<Vec<_>>()
             })
             .as_object()
             .expect("tools/list result is an object")

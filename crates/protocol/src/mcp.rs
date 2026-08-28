@@ -225,6 +225,26 @@ pub struct Request {
 }
 
 impl Request {
+    pub(crate) fn legacy(
+        id: RequestId,
+        method: String,
+        params: Map<String, Value>,
+        protocol_version: &str,
+        client_capabilities: Map<String, Value>,
+        client_info: Implementation,
+    ) -> Self {
+        Self {
+            id,
+            method,
+            params,
+            metadata: RequestMetadata {
+                protocol_version: protocol_version.to_owned(),
+                client_capabilities,
+                client_info: Some(client_info),
+            },
+        }
+    }
+
     /// Returns the request identifier.
     #[must_use]
     pub fn id(&self) -> &RequestId {
@@ -316,6 +336,8 @@ pub enum ErrorCode {
     InvalidParams = -32_602,
     /// Unexpected handler failure.
     InternalError = -32_603,
+    /// A legacy operational request arrived before initialization completed.
+    ServerNotInitialized = -32_002,
     /// A registered method requires an undeclared client capability.
     MissingRequiredClientCapability = -32_021,
     /// The request names an unsupported MCP revision.
@@ -338,6 +360,7 @@ impl ErrorCode {
             Self::MethodNotFound => "Method not found",
             Self::InvalidParams => "Invalid params",
             Self::InternalError => "Internal error",
+            Self::ServerNotInitialized => "Server not initialized",
             Self::MissingRequiredClientCapability => "Missing required client capability",
             Self::UnsupportedProtocolVersion => "Unsupported protocol version",
         }
@@ -367,9 +390,10 @@ impl ErrorResponse {
         let id_is_valid = match code {
             ErrorCode::ParseError => id.is_none(),
             ErrorCode::InvalidRequest => true,
-            ErrorCode::MethodNotFound | ErrorCode::InvalidParams | ErrorCode::InternalError => {
-                id.is_some()
-            }
+            ErrorCode::MethodNotFound
+            | ErrorCode::InvalidParams
+            | ErrorCode::InternalError
+            | ErrorCode::ServerNotInitialized => id.is_some(),
             ErrorCode::MissingRequiredClientCapability | ErrorCode::UnsupportedProtocolVersion => {
                 false
             }
@@ -481,6 +505,12 @@ impl ResultResponse {
         Ok(response)
     }
 
+    pub(crate) fn legacy(id: RequestId, result: Map<String, Value>) -> Result<Self, EncodeError> {
+        let response = Self { id, result };
+        ensure_response_bound(&Response::Result(response.clone()))?;
+        Ok(response)
+    }
+
     /// Returns the response identifier.
     #[must_use]
     pub const fn id(&self) -> &RequestId {
@@ -524,6 +554,17 @@ pub enum DecodeOutcome {
     IgnoredNotification,
 }
 
+pub(crate) enum RawDecodeOutcome {
+    Request {
+        id: RequestId,
+        method: String,
+        params: Option<Value>,
+    },
+    Notification(Notification),
+    Error(ErrorResponse),
+    IgnoredNotification,
+}
+
 /// A response serialization failure with a redacted stable diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EncodeError;
@@ -539,28 +580,41 @@ impl std::error::Error for EncodeError {}
 /// Decodes one UTF-8 JSON frame according to ADR-0050 precedence.
 #[must_use]
 pub fn decode_message(input: &str) -> DecodeOutcome {
+    match decode_raw_message(input) {
+        RawDecodeOutcome::Request { id, method, params } => {
+            decode_request(id, method, params.as_ref())
+        }
+        RawDecodeOutcome::Notification(notification) => {
+            DecodeOutcome::Message(InboundMessage::Notification(notification))
+        }
+        RawDecodeOutcome::Error(error) => DecodeOutcome::Error(error),
+        RawDecodeOutcome::IgnoredNotification => DecodeOutcome::IgnoredNotification,
+    }
+}
+
+pub(crate) fn decode_raw_message(input: &str) -> RawDecodeOutcome {
     if input.len() > MAX_MESSAGE_BYTES {
-        return invalid_request(None);
+        return raw_invalid_request(None);
     }
 
     let value = match parse_unique_value(input) {
         Ok(value) => value,
         Err(ParseFailure::Syntax) => {
-            return DecodeOutcome::Error(standard_error(None, ErrorCode::ParseError));
+            return RawDecodeOutcome::Error(standard_error(None, ErrorCode::ParseError));
         }
-        Err(ParseFailure::Duplicate | ParseFailure::Depth) => return invalid_request(None),
+        Err(ParseFailure::Duplicate | ParseFailure::Depth) => return raw_invalid_request(None),
     };
 
     let Value::Object(object) = value else {
-        return invalid_request(None);
+        return raw_invalid_request(None);
     };
     if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
-        return invalid_request(None);
+        return raw_invalid_request(None);
     }
 
     let request_id = if let Some(value) = object.get("id") {
         let Some(id) = RequestId::from_value(value) else {
-            return invalid_request(None);
+            return raw_invalid_request(None);
         };
         Some(id)
     } else {
@@ -568,15 +622,27 @@ pub fn decode_message(input: &str) -> DecodeOutcome {
     };
 
     let Some(method) = object.get("method").and_then(Value::as_str) else {
-        return invalid_request(request_id);
+        return raw_invalid_request(request_id);
     };
     if method.is_empty() || method.len() > MAX_METHOD_NAME_BYTES {
-        return invalid_request(request_id);
+        return raw_invalid_request(request_id);
     }
 
     match request_id {
-        Some(id) => decode_request(id, method.to_owned(), object.get("params")),
-        None => decode_notification(method.to_owned(), object.get("params")),
+        Some(id) => RawDecodeOutcome::Request {
+            id,
+            method: method.to_owned(),
+            params: object.get("params").cloned(),
+        },
+        None => match decode_notification(method.to_owned(), object.get("params")) {
+            DecodeOutcome::Message(InboundMessage::Notification(notification)) => {
+                RawDecodeOutcome::Notification(notification)
+            }
+            DecodeOutcome::IgnoredNotification => RawDecodeOutcome::IgnoredNotification,
+            DecodeOutcome::Message(InboundMessage::Request(_)) | DecodeOutcome::Error(_) => {
+                unreachable!("notification decoding has only notification outcomes")
+            }
+        },
     }
 }
 
@@ -653,7 +719,11 @@ pub(crate) fn value_within_nesting_bound(value: &Value, depth: usize) -> bool {
     }
 }
 
-fn decode_request(id: RequestId, method: String, params: Option<&Value>) -> DecodeOutcome {
+pub(crate) fn decode_request(
+    id: RequestId,
+    method: String,
+    params: Option<&Value>,
+) -> DecodeOutcome {
     let Some(Value::Object(params)) = params else {
         return invalid_params(id);
     };
@@ -737,6 +807,12 @@ fn validate_request_metadata(metadata: &Map<String, Value>) -> bool {
     progress_token_is_valid && log_level_is_valid
 }
 
+pub(crate) fn validate_legacy_request_metadata(metadata: &Map<String, Value>) -> bool {
+    metadata
+        .get(PROGRESS_TOKEN_META_KEY)
+        .is_none_or(|value| value.is_string() || value.is_number())
+}
+
 pub(crate) fn validate_client_capabilities(capabilities: &Map<String, Value>) -> bool {
     map_values_are_objects(capabilities.get("experimental"))
         && optional_object(capabilities.get("roots"))
@@ -815,7 +891,7 @@ fn valid_meta_name(name: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'_' | b'.'))
 }
 
-fn decode_implementation(value: &Value) -> Option<Implementation> {
+pub(crate) fn decode_implementation(value: &Value) -> Option<Implementation> {
     let Value::Object(object) = value else {
         return None;
     };
@@ -861,8 +937,8 @@ fn validate_icon(value: &Value) -> bool {
         .is_none_or(|value| matches!(value.as_str(), Some("light" | "dark")))
 }
 
-fn invalid_request(id: Option<RequestId>) -> DecodeOutcome {
-    DecodeOutcome::Error(standard_error(id, ErrorCode::InvalidRequest))
+fn raw_invalid_request(id: Option<RequestId>) -> RawDecodeOutcome {
+    RawDecodeOutcome::Error(standard_error(id, ErrorCode::InvalidRequest))
 }
 
 fn invalid_params(id: RequestId) -> DecodeOutcome {

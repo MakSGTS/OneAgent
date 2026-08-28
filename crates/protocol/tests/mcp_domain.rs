@@ -454,6 +454,7 @@ fn public_error_construction_enforces_request_id_precedence() {
         ErrorCode::MethodNotFound,
         ErrorCode::InvalidParams,
         ErrorCode::InternalError,
+        ErrorCode::ServerNotInitialized,
     ] {
         assert!(oneagent_protocol::ErrorResponse::new(None, code).is_err());
         assert!(oneagent_protocol::ErrorResponse::new(Some(RequestId::unsigned(1)), code).is_ok());

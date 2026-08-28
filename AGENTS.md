@@ -12,6 +12,40 @@
 - Keep project-owned local artifacts that must not be tracked under
   `local-artifacts/`.
 
+# Git Branch and Release Workflow
+
+- Create each version branch from `main` and include the version number in its
+  name: `codex/v<major>.<minor>`.
+- Create each sprint implementation branch from the current version branch and
+  include both the version and sprint numbers in its name:
+  `codex/v<major>.<minor>-sprint-<number>`.
+- After the sprint implementation and its required validation succeed, merge
+  the sprint branch into the version branch with `git merge --no-ff`.
+- Create sprint review branches from the version branch after the corresponding
+  implementation merge. Name them
+  `codex/v<major>.<minor>-sprint-<number>-review`.
+- Create release review branches from the version branch and name them
+  `codex/v<major>.<minor>-release-review`.
+- Keep review work separate from implementation fixes. When a review requires
+  remediation, create
+  `codex/v<major>.<minor>-sprint-<number>-remediation` from the version branch,
+  merge the remediation back with `git merge --no-ff`, and repeat the required
+  review gate.
+- Merge successful review branches back into the version branch with
+  `git merge --no-ff`.
+- After the release review and all required validation succeed, merge the
+  version branch into `main` with `git merge --no-ff` and tag the resulting
+  release commit with the exact version, for example `v0.7`.
+- Push every commit immediately to `origin`, including merge commits. On the
+  first push of a new branch, set its upstream with
+  `git push -u origin <branch>`; use `git push origin <branch>` afterwards.
+- Push only the current working branch. Push `main` only after the completed
+  version has been merged into it.
+- If a push fails, stop before making further changes or commits, report the
+  exact failure, and resolve or agree on the cause before continuing.
+- These push rules do not authorize creating a commit. Create commits only when
+  the current user request explicitly authorizes them.
+
 # macOS GUI-Dependent Validation
 
 - On macOS, treat VS Code or Electron Extension Host tests, Eclipse, SWT/Cocoa,

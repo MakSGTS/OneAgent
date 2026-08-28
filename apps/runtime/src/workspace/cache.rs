@@ -37,7 +37,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 2;
+const SEMANTIC_VERSION: u32 = 3;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -2321,6 +2321,7 @@ impl ConfigurationDto {
             ledger,
             total_statistics,
             report,
+            validation,
         )
         .map_err(|error| invalid(format!("workspace cache snapshot is invalid: {error}")))
     }
@@ -2337,11 +2338,11 @@ mod tests {
         DataCompositionSchemaPayload, DataSetKind, DataSetPayload, EdgeKind, FactOrigin, GraphNode,
         GraphNodePayload, HttpServiceMethodPayload, HttpServiceUrlTemplatePayload, NodeKind,
         ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
-        SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphReport, SemanticReference,
-        SemanticReferenceCategory, SemanticReferenceOutcome, SemanticReferenceRequestLedger,
-        SemanticReferenceRequestOutcome, SemanticReferenceStatistics, WebServiceOperationPayload,
-        WebServiceParameterDirection, WebServiceParameterPayload, XdtoTypeKind, XdtoTypePayload,
-        XdtoTypeReference,
+        SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphReport, SemanticGraphValidator,
+        SemanticReference, SemanticReferenceCategory, SemanticReferenceOutcome,
+        SemanticReferenceRequestLedger, SemanticReferenceRequestOutcome,
+        SemanticReferenceStatistics, WebServiceOperationPayload, WebServiceParameterDirection,
+        WebServiceParameterPayload, XdtoTypeKind, XdtoTypePayload, XdtoTypeReference,
     };
     use oneagent_metadata::{
         CommonMetadataPayload, DocumentMetadataPayload, EventSubscriptionMetadataPayload,
@@ -2425,6 +2426,14 @@ mod tests {
             std::slice::from_ref(&diagnostic),
             statistics,
         );
+        let validation = SemanticGraphValidator::new()
+            .validate_build_result_with_reference_requests_and_report(
+                &graph,
+                std::slice::from_ref(&diagnostic),
+                &SemanticReferenceRequestLedger::new(),
+                statistics,
+                &report,
+            );
         let configuration = snapshot_from_parts(
             &configuration_root,
             oneagent_workspace::WorkspaceFormat::Edt,
@@ -2433,6 +2442,7 @@ mod tests {
             SemanticReferenceRequestLedger::new(),
             statistics,
             report,
+            validation,
         )
         .expect("diagnostic-rich snapshot must be valid");
         WorkspaceSnapshot {
@@ -2471,7 +2481,7 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 2);
+        assert_eq!(envelope.semantic_version, 3);
         assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
@@ -2582,6 +2592,28 @@ mod tests {
         assert_eq!(
             decoded.configurations()[0].report(),
             snapshot.configurations()[0].report()
+        );
+        assert_eq!(
+            decoded.configurations()[0].validation(),
+            snapshot.configurations()[0].validation()
+        );
+        assert_eq!(
+            decoded.configurations()[0].diagnostic_report(),
+            snapshot.configurations()[0].diagnostic_report()
+        );
+        assert_eq!(
+            decoded.configurations()[0]
+                .diagnostic_report()
+                .summary()
+                .total(),
+            2
+        );
+        assert_eq!(
+            decoded.configurations()[0]
+                .diagnostic_report()
+                .summary()
+                .suppressed(),
+            0
         );
     }
 

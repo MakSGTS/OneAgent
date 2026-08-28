@@ -20,6 +20,7 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy, DiagnosticReport};
 use oneagent_common::{EntityId, EntityName};
 use oneagent_designer_xml::{
     DesignerXmlBuildScope, DesignerXmlSemanticGraphBuilder,
@@ -964,6 +965,8 @@ pub struct WorkspaceConfigurationSnapshot {
     reference_requests: Arc<SemanticReferenceRequestLedger>,
     reference_statistics: SemanticReferenceStatistics,
     report: SemanticGraphReport,
+    validation: Arc<SemanticGraphValidationResult>,
+    diagnostic_report: Arc<DiagnosticReport>,
 }
 
 impl WorkspaceConfigurationSnapshot {
@@ -1019,6 +1022,18 @@ impl WorkspaceConfigurationSnapshot {
     #[must_use]
     pub const fn report(&self) -> &SemanticGraphReport {
         &self.report
+    }
+
+    /// Returns the complete Graph validation result used by diagnostics.
+    #[must_use]
+    pub fn validation(&self) -> &SemanticGraphValidationResult {
+        &self.validation
+    }
+
+    /// Returns the complete normalized diagnostic report.
+    #[must_use]
+    pub fn diagnostic_report(&self) -> &DiagnosticReport {
+        &self.diagnostic_report
     }
 }
 
@@ -1182,6 +1197,7 @@ fn build_edt(
         reference_requests,
         reference_statistics,
         report,
+        validation,
     )
 }
 
@@ -1210,6 +1226,7 @@ fn build_designer_xml(
         SemanticReferenceRequestLedger::new(),
         SemanticReferenceStatistics::new(),
         report,
+        validation,
     )
 }
 
@@ -1234,6 +1251,7 @@ fn snapshot_from_parts(
     reference_requests: SemanticReferenceRequestLedger,
     reference_statistics: SemanticReferenceStatistics,
     report: SemanticGraphReport,
+    validation: SemanticGraphValidationResult,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     let (configuration_id, configuration_name) =
         configuration_identity(&graph).map_err(|actual| {
@@ -1243,6 +1261,9 @@ fn snapshot_from_parts(
                 actual,
             }
         })?;
+    let diagnostic_report = DiagnosticEngine
+        .build(&diagnostics, &validation, &DiagnosticPolicy::default())
+        .map_err(|source| semantic_build_error(root_path, format, source))?;
 
     Ok(WorkspaceConfigurationSnapshot {
         root_path: root_path.to_path_buf(),
@@ -1254,6 +1275,8 @@ fn snapshot_from_parts(
         reference_requests: Arc::new(reference_requests),
         reference_statistics,
         report,
+        validation: Arc::new(validation),
+        diagnostic_report: Arc::new(diagnostic_report),
     })
 }
 
@@ -1277,6 +1300,14 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use oneagent_analysis::diagnostics::MAX_SEMANTIC_DIAGNOSTICS;
+    use oneagent_common::{EntityId, EntityName};
+    use oneagent_graph::{
+        GraphNode, NodeKind, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
+        SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphReport, SemanticGraphValidator,
+        SemanticReference, SemanticReferenceRequestLedger, SemanticReferenceStatistics,
+    };
+    use oneagent_metadata::MetadataKind;
     use oneagent_workspace::WorkspaceFormat;
     use tempfile::tempdir;
     use tokio::sync::{mpsc, oneshot, watch};
@@ -1290,6 +1321,7 @@ mod tests {
         WorkspaceCacheWriteOutcome, WorkspaceDetector, WorkspaceFileState, WorkspaceService,
         WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
         WorkspaceUpdatePhase, WorkspaceUpdateStatus, initialize_workspace, rebuild_workspace,
+        snapshot_from_parts,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -1596,6 +1628,73 @@ mod tests {
         assert_eq!(snapshot.len(), 0);
         assert!(snapshot.configurations().is_empty());
         assert_eq!(snapshot.root_path(), root.path());
+    }
+
+    #[test]
+    fn diagnostic_composition_accepts_exact_and_rejects_one_over_atomically() {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            EntityId::new("configuration:test").expect("configuration ID must be valid"),
+            EntityName::new("Test").expect("configuration name must be valid"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let diagnostic = SemanticDiagnostic::new(
+            SemanticDiagnosticCode::QueryLanguageMalformedSyntax,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::QueryLanguageMalformedSyntax,
+            "malformed query",
+            SemanticReference::Raw("query".to_owned()),
+        );
+        let exact = vec![diagnostic.clone(); MAX_SEMANTIC_DIAGNOSTICS];
+        let report = SemanticGraphReport::from_graph_diagnostics_and_references(
+            &graph,
+            &exact,
+            SemanticReferenceStatistics::new(),
+        );
+        let validation = SemanticGraphValidator::new().validate_build_result_with_report(
+            &graph,
+            &exact,
+            SemanticReferenceStatistics::new(),
+            &report,
+        );
+        let snapshot = snapshot_from_parts(
+            std::path::Path::new("configuration"),
+            WorkspaceFormat::Edt,
+            graph.clone(),
+            exact,
+            SemanticReferenceRequestLedger::new(),
+            SemanticReferenceStatistics::new(),
+            report,
+            validation,
+        )
+        .expect("exact diagnostic input bound must publish");
+        assert_eq!(snapshot.diagnostics().len(), MAX_SEMANTIC_DIAGNOSTICS);
+        assert_eq!(snapshot.diagnostic_report().summary().total(), 2);
+
+        let over = vec![diagnostic; MAX_SEMANTIC_DIAGNOSTICS + 1];
+        let report = SemanticGraphReport::from_graph_diagnostics_and_references(
+            &graph,
+            &over,
+            SemanticReferenceStatistics::new(),
+        );
+        let validation = SemanticGraphValidator::new().validate_build_result_with_report(
+            &graph,
+            &over,
+            SemanticReferenceStatistics::new(),
+            &report,
+        );
+        let error = snapshot_from_parts(
+            std::path::Path::new("configuration"),
+            WorkspaceFormat::Edt,
+            graph,
+            over,
+            SemanticReferenceRequestLedger::new(),
+            SemanticReferenceStatistics::new(),
+            report,
+            validation,
+        )
+        .expect_err("one-over diagnostic input must not publish");
+        assert_eq!(error.kind(), WorkspaceBuildErrorKind::SemanticBuildFailed);
     }
 
     #[test]

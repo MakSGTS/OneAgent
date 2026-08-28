@@ -9,7 +9,7 @@ use crate::{
     RequestId, Response, ResultResponse,
     mcp::{
         RawDecodeOutcome, decode_implementation, decode_raw_message, decode_request,
-        validate_client_capabilities, validate_legacy_request_metadata,
+        validate_legacy_request_metadata,
     },
     server::McpResponseProfile,
 };
@@ -269,14 +269,18 @@ fn decode_initialize(
     let Some(Value::Object(client_capabilities)) = params.get("capabilities") else {
         return Err(standard_error(Some(id), ErrorCode::InvalidParams));
     };
-    if !validate_client_capabilities(client_capabilities) {
+    let revision = McpProtocolRevision::negotiate_legacy(requested);
+    if !validate_initialize_metadata(params)
+        || !validate_legacy_client_capabilities(revision, client_capabilities)
+    {
         return Err(standard_error(Some(id), ErrorCode::InvalidParams));
     }
-    let Some(client_info) = params.get("clientInfo").and_then(decode_implementation) else {
+    let Some(client_info_value) = params.get("clientInfo") else {
         return Err(standard_error(Some(id), ErrorCode::InvalidParams));
     };
-
-    let revision = McpProtocolRevision::negotiate_legacy(requested);
+    let Some(client_info) = decode_legacy_implementation(revision, client_info_value) else {
+        return Err(standard_error(Some(id), ErrorCode::InvalidParams));
+    };
     let result = json!({
         "protocolVersion": revision.as_str(),
         "capabilities": server.capabilities(),
@@ -300,6 +304,105 @@ fn decode_initialize(
         },
         response,
     ))
+}
+
+fn validate_initialize_metadata(params: &Map<String, Value>) -> bool {
+    params.get("_meta").is_none_or(|value| {
+        value
+            .as_object()
+            .is_some_and(validate_legacy_request_metadata)
+    })
+}
+
+fn validate_legacy_client_capabilities(
+    revision: McpProtocolRevision,
+    capabilities: &Map<String, Value>,
+) -> bool {
+    map_values_are_objects(capabilities.get("experimental"))
+        && validate_roots_capability(capabilities.get("roots"))
+        && match revision {
+            McpProtocolRevision::V2025_06_18 => {
+                optional_object(capabilities.get("sampling"))
+                    && optional_object(capabilities.get("elicitation"))
+                    && capabilities.get("tasks").is_none()
+            }
+            McpProtocolRevision::V2025_11_25 => {
+                object_options_are_objects(capabilities.get("sampling"), &["context", "tools"])
+                    && object_options_are_objects(capabilities.get("elicitation"), &["form", "url"])
+                    && validate_tasks_capability(capabilities.get("tasks"))
+            }
+            McpProtocolRevision::V2026_07_28 => false,
+        }
+}
+
+fn validate_roots_capability(value: Option<&Value>) -> bool {
+    value.is_none_or(|value| {
+        value
+            .as_object()
+            .is_some_and(|roots| roots.get("listChanged").is_none_or(Value::is_boolean))
+    })
+}
+
+fn validate_tasks_capability(value: Option<&Value>) -> bool {
+    value.is_none_or(|value| {
+        value.as_object().is_some_and(|tasks| {
+            object_fields_are_objects(tasks, &["list", "cancel"])
+                && tasks.get("requests").is_none_or(|value| {
+                    value.as_object().is_some_and(|requests| {
+                        requests.get("sampling").is_none_or(|value| {
+                            value.as_object().is_some_and(|sampling| {
+                                object_fields_are_objects(sampling, &["createMessage"])
+                            })
+                        }) && requests.get("elicitation").is_none_or(|value| {
+                            value.as_object().is_some_and(|elicitation| {
+                                object_fields_are_objects(elicitation, &["create"])
+                            })
+                        })
+                    })
+                })
+        })
+    })
+}
+
+fn object_options_are_objects(value: Option<&Value>, options: &[&str]) -> bool {
+    value.is_none_or(|value| {
+        value
+            .as_object()
+            .is_some_and(|object| object_fields_are_objects(object, options))
+    })
+}
+
+fn object_fields_are_objects(object: &Map<String, Value>, fields: &[&str]) -> bool {
+    fields
+        .iter()
+        .all(|field| object.get(*field).is_none_or(Value::is_object))
+}
+
+fn map_values_are_objects(value: Option<&Value>) -> bool {
+    value.is_none_or(|value| {
+        value
+            .as_object()
+            .is_some_and(|values| values.values().all(Value::is_object))
+    })
+}
+
+fn optional_object(value: Option<&Value>) -> bool {
+    value.is_none_or(Value::is_object)
+}
+
+fn decode_legacy_implementation(
+    revision: McpProtocolRevision,
+    value: &Value,
+) -> Option<Implementation> {
+    let object = value.as_object()?;
+    if revision == McpProtocolRevision::V2025_06_18
+        && ["description", "websiteUrl", "icons"]
+            .iter()
+            .any(|field| object.contains_key(*field))
+    {
+        return None;
+    }
+    decode_implementation(value)
 }
 
 fn decode_legacy_request(

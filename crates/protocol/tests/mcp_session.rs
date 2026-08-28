@@ -258,6 +258,170 @@ fn unsupported_legacy_versions_fallback_and_invalid_initialize_does_not_select()
 }
 
 #[test]
+fn legacy_initialize_validation_is_revision_aware_and_atomic() {
+    let invalid_requests = [
+        json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1"},
+                "_meta": 42
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 2, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1"},
+                "_meta": {"progressToken": {}}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 3, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {"roots": {"listChanged": 1}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 4, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {"roots": {"listChanged": "yes"}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 5, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {"tasks": {}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 6, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1", "description": "late"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 7, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {"sampling": {"context": false}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 8, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {"elicitation": {"form": []}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 9, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {"tasks": {"requests": {"sampling": {"createMessage": true}}}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 10, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1", "description": 42}
+            }
+        }),
+    ];
+
+    let (server, _) = tool_server();
+    for invalid_request in invalid_requests {
+        let mut connection = server.connection();
+        let invalid = dispatch_json(&mut connection, &invalid_request.to_string());
+        assert_eq!(invalid["error"]["code"], ErrorCode::InvalidParams.value());
+        assert_eq!(connection.protocol_revision(), None);
+        assert!(!connection.is_initialized());
+
+        let valid = dispatch_json(&mut connection, &cursor_initialize());
+        assert_eq!(
+            valid["result"]["protocolVersion"],
+            MCP_PROTOCOL_VERSION_2025_11_25
+        );
+    }
+}
+
+#[test]
+fn legacy_initialize_accepts_exact_revision_specific_shapes() {
+    let accepted = [
+        json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {
+                    "experimental": {"example/feature": {}},
+                    "roots": {"listChanged": true},
+                    "sampling": {"revision-open-field": false},
+                    "elicitation": {"revision-open-field": []}
+                },
+                "clientInfo": {"name": "client", "title": "Client", "version": "1"},
+                "_meta": {"progressToken": "initialize", "example/trace": 1}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 2, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {
+                    "roots": {"listChanged": false},
+                    "sampling": {"context": {}, "tools": {}},
+                    "elicitation": {"form": {}, "url": {}},
+                    "tasks": {
+                        "list": {},
+                        "cancel": {},
+                        "requests": {
+                            "sampling": {"createMessage": {}},
+                            "elicitation": {"create": {}}
+                        }
+                    }
+                },
+                "clientInfo": {
+                    "name": "client", "title": "Client", "version": "1",
+                    "description": "Test client", "websiteUrl": "https://example.invalid",
+                    "icons": [{"src": "https://example.invalid/icon.png", "sizes": ["32x32"], "theme": "light"}]
+                },
+                "_meta": {"progressToken": 1}
+            }
+        }),
+    ];
+
+    let (server, _) = tool_server();
+    for request in accepted {
+        let expected_revision = request["params"]["protocolVersion"]
+            .as_str()
+            .expect("protocol version");
+        let mut connection = server.connection();
+        let response = dispatch_json(&mut connection, &request.to_string());
+        assert_eq!(response["result"]["protocolVersion"], expected_revision);
+        assert_eq!(
+            connection
+                .protocol_revision()
+                .map(McpProtocolRevision::as_str),
+            Some(expected_revision)
+        );
+    }
+}
+
+#[test]
 fn legacy_lifecycle_errors_notifications_ping_and_post_error_state_are_closed() {
     let (server, _) = tool_server();
     let mut connection = server.connection();

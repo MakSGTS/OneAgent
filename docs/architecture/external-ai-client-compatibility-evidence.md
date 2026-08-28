@@ -3,9 +3,11 @@
 ## Status and scope
 
 This document records the Task 5 evidence executed on 2026-08-28 from committed
-Task 4 head `71425e50`. It verifies the additive ADR-0057 compatibility
-boundary and introduces no production behavior. Sprint 35 remains `active`
-pending the independent Task 6 integration review.
+Task 4 head `71425e50` and the corrective evidence executed after the first
+Task 6 review. Task 5 introduced no production behavior. The corrective change
+makes legacy initialize validation revision-aware after that review proved that
+schema-invalid known fields could select a connection revision. Sprint 35
+remains `active` pending a new independent Task 6 integration review.
 
 The production process supports these exact revisions:
 
@@ -37,9 +39,9 @@ checked in as untrusted fixtures under
 
 ## Exact Codex CLI matrix
 
-The executed commands resolved `ONEAGENT_REPOSITORY` with
-`git rev-parse --show-toplevel`, used the existing exact Codex executable, and
-used this common isolated command prefix:
+The corrective evidence resolved `ONEAGENT_REPOSITORY` with
+`git rev-parse --show-toplevel` and executed these exact commands. The first two
+commands are intentionally identical fresh ephemeral runs:
 
 ```bash
 ONEAGENT_REPOSITORY="$(git rev-parse --show-toplevel)"
@@ -50,7 +52,25 @@ ONEAGENT_REPOSITORY="$(git rev-parse --show-toplevel)"
   -c "mcp_servers.oneagent.command=\"$ONEAGENT_REPOSITORY/target/debug/oneagent-mcp\"" \
   -c 'mcp_servers.oneagent.required=true' \
   -c 'mcp_servers.oneagent.startup_timeout_sec=10' \
-  '<ROW-SPECIFIC PROMPT>'
+  'Use only the oneagent MCP server. Call oneagent.graph with {"limit":1}. Then call oneagent.graph with {"limit":0}. Confirm that the first call succeeds with total 2 and truncated true and that the second call returns the structured invalid_arguments domain error. Reply with exactly SUCCESS_AND_DOMAIN_ERROR.'
+
+/Applications/ChatGPT.app/Contents/Resources/codex exec \
+  --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check \
+  --sandbox read-only --json \
+  -C "$ONEAGENT_REPOSITORY/apps/runtime/tests/fixtures/workspace_service" \
+  -c "mcp_servers.oneagent.command=\"$ONEAGENT_REPOSITORY/target/debug/oneagent-mcp\"" \
+  -c 'mcp_servers.oneagent.required=true' \
+  -c 'mcp_servers.oneagent.startup_timeout_sec=10' \
+  'Use only the oneagent MCP server. Call oneagent.graph with {"limit":1}. Then call oneagent.graph with {"limit":0}. Confirm that the first call succeeds with total 2 and truncated true and that the second call returns the structured invalid_arguments domain error. Reply with exactly SUCCESS_AND_DOMAIN_ERROR.'
+
+/Applications/ChatGPT.app/Contents/Resources/codex exec \
+  --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check \
+  --sandbox read-only --json \
+  -C "$ONEAGENT_REPOSITORY/apps/runtime/tests/fixtures/workspace_service" \
+  -c "mcp_servers.oneagent.command=\"$ONEAGENT_REPOSITORY/target/debug/oneagent-mcp\"" \
+  -c 'mcp_servers.oneagent.required=true' \
+  -c 'mcp_servers.oneagent.startup_timeout_sec=10' \
+  'Use only the oneagent MCP server. Call each of these seven tools exactly once in this exact order: oneagent.context with {}, oneagent.diagnostics with {}, oneagent.graph with {"limit":1}, oneagent.impact with {}, oneagent.query with {}, oneagent.symbols with {}, and oneagent.validation with {}. After all seven calls, reply with exactly SEVEN_TOOLS_CALLED.'
 ```
 
 No user config was loaded, no session was persisted, the sandbox was read-only,
@@ -80,6 +100,9 @@ Cursor used the ignored repository-local Git workspace
 exact command was executed twice from that directory:
 
 ```bash
+"$ONEAGENT_REPOSITORY/local-artifacts/sprint-35/cursor-agent-2026.08.25-3e8eec8/darwin-arm64/cursor-agent" \
+  mcp list-tools oneagent
+
 "$ONEAGENT_REPOSITORY/local-artifacts/sprint-35/cursor-agent-2026.08.25-3e8eec8/darwin-arm64/cursor-agent" \
   mcp list-tools oneagent
 ```
@@ -114,25 +137,48 @@ notifications, malformed JSON, LF/CRLF, request IDs, EOF, repeated processes,
 two simultaneous sessions, stdout/stderr, transport cancellation/failures, and
 fresh-session reuse.
 
-The focused accepted counts at Task 5 are:
+The final corrective focused counts are:
 
-- protocol session: 9 passed;
+- protocol session: 11 passed;
 - Runtime stdio: 8 passed;
-- public `oneagent-mcp` process: 12 passed;
+- public `oneagent-mcp` process: 13 passed;
 - semantic MCP tools: 6 passed;
 - LSP process regression: 7 passed;
 - VS Code: compilation passed, 62 unit tests and 2 real-process tests passed;
 - EDT: Tycho/PDE build passed, 41 tests passed with zero failures, errors, or
   skips, including the real process twice.
 
-The final canonical workspace-gate result is recorded in the Task 5 commit and
-Sprint report rather than inferred from these focused counts.
+The two new protocol tests accept the exact revision-specific shapes and reject
+scalar initialize `_meta`, non-string/non-number progress tokens, non-boolean
+`roots.listChanged`, malformed `2025-11-25` sampling/elicitation/tasks fields,
+`2025-11-25`-only fields in `2025-06-18`, and wrong known implementation field
+types. Every invalid request returns `-32602`, retains an undetermined session,
+and permits a following valid initialize. The public process repeats the
+atomic rejection boundary through the built `oneagent-mcp`.
+
+The final accepted corrective canonical gate is:
+
+| Command | Exit and exact outcome |
+| --- | --- |
+| `cargo fmt --all --check` | 0 |
+| `cargo check --workspace --all-targets` | 0 |
+| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,136 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 |
+| `cargo doc --workspace --no-deps` | 0 |
+| `git diff --check` | 0 |
+
+The workspace-test aggregate was computed from the complete output under
+`set -o pipefail`; the temporary raw log remains ignored under
+`local-artifacts/sprint-35/`. An earlier development gate found one Clippy
+`redundant_closure` warning in the new validator and was not accepted. The
+smallest mechanical fix was applied before the complete successful cycle above.
 
 ## Audits and limitations
 
 - No Cargo manifest, lockfile, production dependency, third-party package,
-  license inventory, production source, catalog, schema, Tool Policy rule, or
-  semantic implementation changed in Task 5.
+  license inventory, catalog, response schema, Tool Policy rule, or semantic
+  implementation changed. Task 5 changed no production source; the corrective
+  change modifies only connection-owned initialize validation.
 - No credential, token, personal absolute path, client binary, archive, raw
   trace, generated package, client cache, or global client configuration is
   tracked. Downloaded clients and disposable configs remain ignored under

@@ -335,6 +335,89 @@ async fn public_mcp_process_runs_exact_codex_and_cursor_lifecycles_repeatably() 
 }
 
 #[tokio::test]
+async fn public_mcp_process_rejects_revision_specific_initialize_shapes_atomically() {
+    let invalid_requests = [
+        json!({
+            "jsonrpc": "2.0", "id": 40, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1"},
+                "_meta": 42
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 41, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1"},
+                "_meta": {"progressToken": {}}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 42, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {"roots": {"listChanged": 1}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 43, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {"tasks": {"requests": {"elicitation": {"create": false}}}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 44, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {"tasks": {}},
+                "clientInfo": {"name": "client", "version": "1"}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 45, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1", "icons": []}
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0", "id": 46, "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+                "capabilities": {},
+                "clientInfo": {"name": "client", "version": "1", "websiteUrl": false}
+            }
+        }),
+    ];
+
+    for invalid_request in invalid_requests {
+        let input = format!("{invalid_request}\n{}\n", cursor_initialize());
+        let output = run_process(input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("initialize stdout must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("initialize response JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0]["error"]["code"], -32602);
+        assert_eq!(responses[1]["id"], 0);
+        assert_eq!(
+            responses[1]["result"]["protocolVersion"],
+            MCP_PROTOCOL_VERSION_2025_11_25
+        );
+    }
+}
+
+#[tokio::test]
 async fn public_mcp_process_falls_back_unknown_legacy_version_with_string_id() {
     let initialize = json!({
         "jsonrpc": "2.0",

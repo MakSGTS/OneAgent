@@ -8349,8 +8349,22 @@ limitations, and audits are recorded in the
 Sprint 35 remains `active` and no release or next-sprint transition occurs
 before Task 6 review.
 
-Task 6 reviews the exact planning-through-Task-5 range with exactly one
-fresh-context read-only reviewer. The primary independently reconciles every
+The first Task 6 review of
+`cd876c836014fbd1ee15c0683da67d036f181b3c..c70173e7bb224093d65c5e6f1dc9cda43737715e`
+was `blocked`. It independently proved that common initialize validation
+accepted wrong known field types and later-revision fields before choosing the
+negotiated legacy revision. It also found that the evidence retained a Codex
+prompt placeholder and did not record the claimed canonical gate. The separate
+corrective task makes initialize metadata, roots, sampling, elicitation, tasks,
+and implementation validation revision-aware; adds atomic negative protocol
+and production-process coverage; reruns the exact literal Codex and Cursor
+commands; and records the complete successful gate with 1,136 workspace tests.
+Sprint 35 remains `active` until a new review covers the updated immutable
+range. The blocked review created no review artifact, state transition, or
+prompt retirement.
+
+Task 6 reviews the exact planning-through-latest-corrective range with exactly
+one fresh-context read-only reviewer. The primary independently reconciles every
 finding and reruns the complete validation matrix. The same reviewer must pass
 the drafted review/Roadmap/retirement artifact before any state transition.
 Only `pass` or `pass with non-blocking follow-ups` transitions Sprint 35 to

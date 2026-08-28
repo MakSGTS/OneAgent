@@ -65,15 +65,19 @@ tasks or treat a zero-match filter as passing evidence.
 
 ## External-access boundary
 
-The current user authorized read/run access only to these application bundles:
+The current user authorized read/run access only to the exact application
+bundles supplied at runtime as these untracked values:
 
-- `/Users/maxim_tomshin/Library/Application Support/1C/1cedtstart/installations/Eclipse для разработки плагинов 1C_EDT 2025-12/eclipse.app`
-- `/Users/maxim_tomshin/Library/Application Support/1C/1cedtstart/installations/1C_EDT 2026.1/1cedt.app`
+- `<ONEAGENT_ECLIPSE_APP>`: the authorized Eclipse plug-in-development bundle;
+- `<ONEAGENT_EDT_APP>`: the authorized 1C:EDT 2026.1 bundle.
 
 The current user authorized read-only access, with writes and deletion
-forbidden, to `/Users/maxim_tomshin/.p2/pool`. Keep temporary configurations,
-workspaces, toolchains, repositories, and logs inside `local-artifacts/` or a
-disposable temporary directory. Never store or print ITS credentials.
+forbidden, to the exact installed pool supplied at runtime as
+`<ONEAGENT_P2_POOL>`. Resolve these placeholders only from the current user
+instruction or execution environment; never commit their personal absolute
+values. Keep temporary configurations, workspaces, toolchains, repositories,
+and logs inside `local-artifacts/` or a disposable temporary directory. Never
+store or print ITS credentials.
 
 ## Previous-suite retirement
 

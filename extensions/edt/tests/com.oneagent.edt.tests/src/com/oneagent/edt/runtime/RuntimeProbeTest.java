@@ -158,6 +158,20 @@ public final class RuntimeProbeTest {
         assertFalse(process.destroyedForcibly);
         assertFalse(process.isAlive());
         assertTrue(process.stdoutClosed);
+
+        FakeProcess writeTimedProcess = FakeProcess.completed(COMPATIBLE + "\n", "", 0);
+        RuntimeProbe writeTimedProbe = new RuntimeProbe(new CapturingFactory(writeTimedProcess),
+                () -> writeTimedProcess.stdinWritten
+                        ? TimeUnit.SECONDS.toNanos(2)
+                        : 0,
+                new RuntimeProbe.Timeouts(1_000, 1, 1, 1));
+
+        ProbeFailure writeTimedFailure = assertThrows(ProbeFailure.class,
+                () -> writeTimedProbe.probe("oneagent-mcp", WORKSPACE, CancellationToken.NONE));
+
+        assertEquals(ProbeFailure.Category.TIMEOUT, writeTimedFailure.category());
+        assertEquals(RuntimeProbe.REQUEST, writeTimedProcess.stdinText());
+        assertFalse(writeTimedProcess.isAlive());
     }
 
     @Test
@@ -179,6 +193,7 @@ public final class RuntimeProbeTest {
         ProbeFailure cancelled = assertThrows(ProbeFailure.class,
                 () -> running.probe("oneagent-mcp", WORKSPACE, during));
         assertEquals(ProbeFailure.Category.CANCELLED, cancelled.category());
+        assertEquals("", process.stdinText());
         assertFalse(process.isAlive());
     }
 
@@ -269,6 +284,7 @@ public final class RuntimeProbeTest {
         private boolean alive = true;
         private boolean destroyed;
         private boolean destroyedForcibly;
+        private boolean stdinWritten;
         private boolean stdinClosed;
         private boolean stdoutClosed;
         private boolean stderrClosed;
@@ -307,11 +323,13 @@ public final class RuntimeProbeTest {
             return new OutputStream() {
                 @Override
                 public void write(int value) throws IOException {
+                    stdinWritten = true;
                     stdin.write(value);
                 }
 
                 @Override
                 public void write(byte[] bytes, int offset, int length) throws IOException {
+                    stdinWritten = true;
                     stdin.write(bytes, offset, length);
                 }
 

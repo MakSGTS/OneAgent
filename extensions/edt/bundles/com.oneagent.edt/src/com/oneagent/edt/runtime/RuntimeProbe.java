@@ -54,8 +54,10 @@ public final class RuntimeProbe {
         }
 
         final ProbeProcess process;
+        final long deadline;
         try {
             process = processFactory.start(executable, workingDirectory);
+            deadline = deadlineAfter(timeouts.responseMillis());
         } catch (Exception error) {
             throw failure(ProbeFailure.Category.SPAWN_FAILED);
         }
@@ -68,13 +70,15 @@ public final class RuntimeProbe {
         boolean compatible = false;
 
         try {
-            if (cancellation.isCancelled()) {
-                cancelled.complete(null);
+            if (cancellation.isCancelled() || cancelled.isDone()) {
+                throw failure(ProbeFailure.Category.CANCELLED);
             }
             readers.start();
+            if (cancellation.isCancelled() || cancelled.isDone()) {
+                throw failure(ProbeFailure.Category.CANCELLED);
+            }
             writeRequest(process.stdin());
 
-            long deadline = deadlineAfter(timeouts.responseMillis());
             byte[] frame = awaitFrame(readers, cancelled, deadline);
             if (cancellation.isCancelled() || cancelled.isDone()) {
                 throw failure(ProbeFailure.Category.CANCELLED);

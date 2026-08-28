@@ -14,7 +14,9 @@ bounded Sprint 24 OpenAI-Compatible Provider is complete with a
 LM Studio Integration is complete with a `pass` integration review. The
 bounded Sprint 26 Ollama Integration is complete with a `pass` integration
 review. The bounded Sprint 27 Tool Execution Policy is complete with a `pass`
-integration review. The bounded Sprint 28 discovery-only MCP Server is complete
+integration review, and the
+[v0.5 AI Integration release review](docs/reviews/v0.5-release-review.md)
+records `pass`. The bounded Sprint 28 discovery-only MCP Server is complete
 with a `pass with non-blocking follow-ups` integration review. Sprint 29 MCP
 Semantic Tools, Sprint 30 VS Code Extension Foundation, and Sprint 31 Navigation
 and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The

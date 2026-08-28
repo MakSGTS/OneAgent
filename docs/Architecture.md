@@ -115,6 +115,8 @@ The roadmap assigns future boundaries explicitly:
   records `pass`; the later
   [Sprint 27 Tool Execution Policy review](reviews/sprint-27-tool-execution-policy.md)
   also records `pass`. The
+  [v0.5 AI Integration release review](reviews/v0.5-release-review.md) records
+  `pass`. The
   [Sprint 28 MCP Server review](reviews/sprint-28-mcp-server.md) records
   `pass with non-blocking follow-ups`. The
   [Sprint 29 MCP Semantic Tools review](reviews/sprint-29-mcp-semantic-tools.md)
@@ -472,6 +474,8 @@ described below.
 The Sprint 24 integration review records `pass with non-blocking follow-ups`;
 the Sprint 25 and Sprint 26 integration reviews record `pass`. Sprint 26 is
 completed. Sprint 27 Tool Execution Policy is completed with a `pass` review.
+The [v0.5 release review](reviews/v0.5-release-review.md) records `pass` for the
+complete AI Integration boundary.
 Sprint 28 is completed with `pass with non-blocking follow-ups`; the Sprint 29
 implementation is present and remains the unique `next` target pending
 integration review.

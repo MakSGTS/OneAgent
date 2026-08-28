@@ -361,7 +361,9 @@ authority. The subsequent
 [Sprint 26 Ollama Integration review](../reviews/sprint-26-ollama-integration.md)
 records `pass`; the later
 [Sprint 27 Tool Execution Policy review](../reviews/sprint-27-tool-execution-policy.md)
-also records `pass`. Sprint 28 is completed with `pass with non-blocking
+also records `pass`. The
+[v0.5 AI Integration release review](../reviews/v0.5-release-review.md) records
+`pass`. Sprint 28 is completed with `pass with non-blocking
 follow-ups`; Sprints 29–32 are completed, and the subsequent
 [Sprint 33 AI Chat and Context Panel review](../reviews/sprint-33-ai-chat-context-panel.md)
 records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint

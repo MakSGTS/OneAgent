@@ -16,7 +16,7 @@ boundaries; they do not define a second task sequence.
 | v0.2 — Semantic Core | Typed semantic graph, semantic index, and deterministic incremental indexing | Sprints 2–5 | completed |
 | v0.3 — 1C Knowledge Model | Broader metadata semantics and Designer XML ingestion | Sprints 6–14 | completed |
 | v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | completed |
-| v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | planned |
+| v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | completed |
 | v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | planned |
 | v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | planned |
 | v1.0 — Stable Platform | Stable APIs, plugin SDK, hardening, documentation, and release | Sprints 42–46 | planned |
@@ -30,7 +30,9 @@ The v0.2 boundary is closed with a `pass` decision in the
 The v0.3 boundary is closed with a `pass` decision in the
 [v0.3 release review](reviews/v0.3-release-review.md). The v0.4 boundary is
 closed with a `pass` decision in the
-[v0.4 release review](reviews/v0.4-release-review.md). The
+[v0.4 release review](reviews/v0.4-release-review.md). The v0.5 boundary is
+closed with a `pass` decision in the
+[v0.5 release review](reviews/v0.5-release-review.md). The
 [Sprint 30 VS Code Extension Foundation review](reviews/sprint-30-vscode-extension-foundation.md)
 records `pass with non-blocking follow-ups`; Sprint 30 is completed and Sprint
 31 Navigation and Symbol Search is the unique `next` planning target. The
@@ -5320,7 +5322,10 @@ later [Sprint 23 review](reviews/sprint-23-llm-provider-abstraction.md) records
 | Sprint 26 — Ollama Integration | Add local Ollama discovery and execution support. | completed |
 | Sprint 27 — Tool Execution Policy | Define and enforce safe AI tool execution boundaries. | completed |
 
-The v0.5 release integration review follows Sprint 27.
+The [v0.5 release integration review](reviews/v0.5-release-review.md) records
+`pass` for Sprints 22–27. The release is `completed`; the later Sprints 28–35
+are also completed, so the v0.6 release integration review is the next release
+gate.
 
 #### Sprint 22 Context Engine execution plan
 

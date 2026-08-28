@@ -4,7 +4,9 @@ use std::error::Error;
 use std::fmt;
 use std::future::Future;
 
-use oneagent_protocol::{EncodeError, MAX_MESSAGE_BYTES, McpServer, Response, encode_response};
+use oneagent_protocol::{
+    EncodeError, MAX_MESSAGE_BYTES, McpConnection, McpServer, Response, encode_response,
+};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 const READ_SCRATCH_BYTES: usize = 8_192;
@@ -82,7 +84,7 @@ impl fmt::Display for McpStdioError {
 
 impl Error for McpStdioError {}
 
-/// A stateless newline-framed adapter around a transport-independent server.
+/// A newline-framed adapter with one fresh protocol session per run.
 #[derive(Debug, Default)]
 pub struct McpStdioTransport {
     server: McpServer,
@@ -117,6 +119,7 @@ impl McpStdioTransport {
         E: Error,
     {
         tokio::pin!(shutdown);
+        let mut connection = self.server.connection();
         let mut frame = Vec::new();
         let mut scratch = [0_u8; READ_SCRATCH_BYTES];
 
@@ -145,7 +148,7 @@ impl McpStdioTransport {
                     if frame.len() > MAX_MESSAGE_BYTES {
                         return Err(McpStdioError::new(McpStdioErrorKind::FrameTooLarge));
                     }
-                    self.process_frame(&frame, writer).await?;
+                    Self::process_frame(&mut connection, &frame, writer).await?;
                     frame.clear();
                     if poll_shutdown(&mut shutdown).await? {
                         return Ok(McpStdioOutcome::Cancelled);
@@ -162,16 +165,19 @@ impl McpStdioTransport {
         }
     }
 
-    async fn process_frame<W>(&self, frame: &[u8], writer: &mut W) -> Result<(), McpStdioError>
+    async fn process_frame<W>(
+        connection: &mut McpConnection<'_>,
+        frame: &[u8],
+        writer: &mut W,
+    ) -> Result<(), McpStdioError>
     where
         W: AsyncWrite + Unpin,
     {
-        self.process_frame_with_encoder(frame, writer, encode_response)
-            .await
+        Self::process_frame_with_encoder(connection, frame, writer, encode_response).await
     }
 
     async fn process_frame_with_encoder<W, E>(
-        &self,
+        connection: &mut McpConnection<'_>,
         frame: &[u8],
         writer: &mut W,
         encode: E,
@@ -182,7 +188,7 @@ impl McpStdioTransport {
     {
         let input = std::str::from_utf8(frame)
             .map_err(|_| McpStdioError::new(McpStdioErrorKind::InvalidUtf8))?;
-        let Some(response) = self.server.dispatch(input).await else {
+        let Some(response) = connection.dispatch(input).await else {
             return Ok(());
         };
         let payload =
@@ -348,11 +354,16 @@ mod tests {
     #[tokio::test]
     async fn controlled_encode_failure_is_closed_and_writes_nothing() {
         let transport = McpStdioTransport::default();
+        let mut connection = transport.server.connection();
         let mut output = Vec::new();
-        let failure = transport
-            .process_frame_with_encoder(b"{}", &mut output, |_| Err(oneagent_protocol::EncodeError))
-            .await
-            .expect_err("encode failure must terminate");
+        let failure = McpStdioTransport::process_frame_with_encoder(
+            &mut connection,
+            b"{}",
+            &mut output,
+            |_| Err(oneagent_protocol::EncodeError),
+        )
+        .await
+        .expect_err("encode failure must terminate");
 
         assert_eq!(failure.kind(), McpStdioErrorKind::Encode);
         assert!(output.is_empty());

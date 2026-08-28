@@ -6,7 +6,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 
-use oneagent_protocol::{MAX_MESSAGE_BYTES, PROTOCOL_VERSION};
+use oneagent_protocol::{
+    MAX_MESSAGE_BYTES, MCP_PROTOCOL_VERSION_2025_06_18, MCP_PROTOCOL_VERSION_2025_11_25,
+    PROTOCOL_VERSION,
+};
 use oneagent_runtime::{McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -28,6 +31,13 @@ fn request(id: u64, method: &str) -> String {
 
 async fn run(input: &[u8]) -> (Result<McpStdioOutcome, McpStdioErrorKind>, Vec<u8>) {
     let transport = McpStdioTransport::default();
+    run_with_transport(&transport, input).await
+}
+
+async fn run_with_transport(
+    transport: &McpStdioTransport,
+    input: &[u8],
+) -> (Result<McpStdioOutcome, McpStdioErrorKind>, Vec<u8>) {
     let mut reader = input;
     let mut output = Vec::new();
     let outcome = transport
@@ -39,6 +49,24 @@ async fn run(input: &[u8]) -> (Result<McpStdioOutcome, McpStdioErrorKind>, Vec<u
         .await
         .map_err(|error| error.kind());
     (outcome, output)
+}
+
+fn legacy_initialize(version: &str, name: &str) -> String {
+    json!({
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": version,
+            "capabilities": {},
+            "clientInfo": {"name": name, "version": "1"}
+        }
+    })
+    .to_string()
+}
+
+fn legacy_request(id: u64, method: &str) -> String {
+    json!({"jsonrpc": "2.0", "id": id, "method": method}).to_string()
 }
 
 #[tokio::test]
@@ -62,6 +90,53 @@ async fn public_transport_frames_orders_flushes_and_suppresses_notifications() {
         assert_eq!(second["id"], 2);
         assert_eq!(second["error"]["code"], -32601);
     }
+}
+
+#[tokio::test]
+async fn public_transport_owns_one_fresh_legacy_session_per_run() {
+    let transport = McpStdioTransport::default();
+    let initialized = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+    let first_input = format!(
+        "{}\n{initialized}\n{}\n",
+        legacy_initialize(MCP_PROTOCOL_VERSION_2025_11_25, "first-client"),
+        legacy_request(1, "ping")
+    );
+    let (first_outcome, first_output) =
+        run_with_transport(&transport, first_input.as_bytes()).await;
+    assert_eq!(first_outcome, Ok(McpStdioOutcome::EndOfInput));
+    let first = String::from_utf8(first_output)
+        .expect("first run output must be UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("first run response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(first.len(), 2);
+    assert_eq!(
+        first[0]["result"]["protocolVersion"],
+        MCP_PROTOCOL_VERSION_2025_11_25
+    );
+    assert_eq!(first[1]["result"], json!({}));
+
+    let second_input = format!(
+        "{}\r\n{}\r\n{initialized}\r\n{}\r\n",
+        legacy_request(2, "tools/list"),
+        legacy_initialize(MCP_PROTOCOL_VERSION_2025_06_18, "second-client"),
+        legacy_request(3, "ping")
+    );
+    let (second_outcome, second_output) =
+        run_with_transport(&transport, second_input.as_bytes()).await;
+    assert_eq!(second_outcome, Ok(McpStdioOutcome::EndOfInput));
+    let second = String::from_utf8(second_output)
+        .expect("second run output must be UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("second run response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(second.len(), 3);
+    assert_eq!(second[0]["error"]["code"], -32002);
+    assert_eq!(
+        second[1]["result"]["protocolVersion"],
+        MCP_PROTOCOL_VERSION_2025_06_18
+    );
+    assert_eq!(second[2]["result"], json!({}));
 }
 
 #[tokio::test]

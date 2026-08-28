@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use oneagent_protocol::{MAX_MESSAGE_BYTES, PROTOCOL_VERSION};
+use oneagent_protocol::{
+    MAX_MESSAGE_BYTES, MCP_PROTOCOL_VERSION_2025_06_18, MCP_PROTOCOL_VERSION_2025_11_25,
+    PROTOCOL_VERSION,
+};
 use oneagent_runtime::WorkspaceSnapshotBuilder;
 use serde_json::{Value, json};
 use tempfile::tempdir;
@@ -30,6 +33,84 @@ fn request_with_capabilities(id: u64, method: &str, capabilities: &Value) -> Str
         }
     })
     .to_string()
+}
+
+fn codex_initialize() -> String {
+    json!({
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_PROTOCOL_VERSION_2025_06_18,
+            "capabilities": {"elicitation": {"form": {}, "url": {}}},
+            "clientInfo": {
+                "name": "codex-mcp-client",
+                "title": "Codex",
+                "version": "0.150.0-alpha.8"
+            }
+        },
+        "jsonrpc": "2.0",
+        "id": 0
+    })
+    .to_string()
+}
+
+fn cursor_initialize() -> String {
+    json!({
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_PROTOCOL_VERSION_2025_11_25,
+            "capabilities": {"elicitation": {"form": {}}},
+            "clientInfo": {"name": "Cursor", "version": "1.0.0"}
+        },
+        "jsonrpc": "2.0",
+        "id": 0
+    })
+    .to_string()
+}
+
+fn legacy_request(id: u64, method: &str, params: Option<&Value>) -> String {
+    let mut request = json!({"jsonrpc": "2.0", "id": id, "method": method});
+    if let Some(params) = params {
+        request
+            .as_object_mut()
+            .expect("legacy request object")
+            .insert("params".to_owned(), params.clone());
+    }
+    request.to_string()
+}
+
+fn legacy_lifecycle_input(initialize: &str, separator: &str) -> String {
+    let initialized = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+    let cancelled = r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":4,"reason":"test"}}"#;
+    let exit = r#"{"jsonrpc":"2.0","method":"exit"}"#;
+    [
+        legacy_request(1, "tools/list", None),
+        initialize.to_owned(),
+        legacy_request(2, "tools/list", None),
+        initialized.to_owned(),
+        cancelled.to_owned(),
+        legacy_request(3, "tools/list", None),
+        legacy_request(
+            4,
+            "tools/call",
+            Some(&json!({"name": "oneagent.graph", "arguments": {}})),
+        ),
+        legacy_request(
+            5,
+            "tools/call",
+            Some(&json!({
+                "name": "oneagent.graph",
+                "arguments": {"extra": true}
+            })),
+        ),
+        legacy_request(6, "unknown/method", None),
+        initialize.to_owned(),
+        legacy_request(8, "shutdown", None),
+        exit.to_owned(),
+        "{".to_owned(),
+        legacy_request(9, "ping", None),
+    ]
+    .join(separator)
+        + separator
 }
 
 async fn run_process(input: &[u8]) -> std::process::Output {
@@ -192,6 +273,166 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
             })
         );
     }
+}
+
+#[tokio::test]
+async fn public_mcp_process_runs_exact_codex_and_cursor_lifecycles_repeatably() {
+    for (initialize, version, separator) in [
+        (codex_initialize(), MCP_PROTOCOL_VERSION_2025_06_18, "\n"),
+        (cursor_initialize(), MCP_PROTOCOL_VERSION_2025_11_25, "\r\n"),
+    ] {
+        let input = legacy_lifecycle_input(&initialize, separator);
+        let first = run_process(input.as_bytes()).await;
+        let repeated = run_process(input.as_bytes()).await;
+        assert!(first.status.success());
+        assert!(first.stderr.is_empty());
+        assert_eq!(first.stdout, repeated.stdout);
+        assert_eq!(first.stderr, repeated.stderr);
+        assert_eq!(first.status, repeated.status);
+
+        let stdout = String::from_utf8(first.stdout).expect("stdout must be UTF-8 JSON lines");
+        assert!(stdout.ends_with('\n'));
+        let responses = stdout
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("legacy response JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 11);
+        assert_eq!(responses[0]["id"], 1);
+        assert_eq!(responses[0]["error"]["code"], -32002);
+        assert_eq!(responses[1]["id"], 0);
+        assert_eq!(responses[1]["result"]["protocolVersion"], version);
+        assert_eq!(responses[1]["result"]["capabilities"], json!({"tools": {}}));
+        assert_eq!(responses[1]["result"]["serverInfo"]["name"], "oneagent");
+        assert!(responses[1]["result"].get("resultType").is_none());
+        assert_eq!(responses[2]["id"], 2);
+        assert_eq!(responses[2]["error"]["code"], -32002);
+
+        let listed = &responses[3];
+        assert_eq!(listed["id"], 3);
+        assert_eq!(
+            listed["result"]["tools"]
+                .as_array()
+                .expect("legacy tool catalog")
+                .iter()
+                .map(|tool| tool["name"].as_str().expect("tool name"))
+                .collect::<Vec<_>>(),
+            [
+                "oneagent.context",
+                "oneagent.diagnostics",
+                "oneagent.graph",
+                "oneagent.impact",
+                "oneagent.query",
+                "oneagent.symbols",
+                "oneagent.validation"
+            ]
+        );
+        for forbidden in ["resultType", "ttlMs", "cacheScope", "nextCursor"] {
+            assert!(listed["result"].get(forbidden).is_none());
+        }
+
+        assert_eq!(responses[4]["id"], 4);
+        assert!(responses[4]["result"].get("structuredContent").is_some());
+        assert!(responses[4]["result"].get("isError").is_none());
+        assert!(responses[4]["result"].get("resultType").is_none());
+        assert_eq!(responses[5]["id"], 5);
+        assert_eq!(responses[5]["result"]["isError"], true);
+        assert_eq!(
+            responses[5]["result"]["structuredContent"]["code"],
+            "invalid_arguments"
+        );
+        assert!(responses[5]["result"].get("resultType").is_none());
+        assert_eq!(responses[6]["error"]["code"], -32601);
+        assert_eq!(responses[6]["id"], 6);
+        assert_eq!(responses[7]["error"]["code"], -32600);
+        assert_eq!(responses[7]["id"], 0);
+        assert_eq!(responses[8]["error"]["code"], -32601);
+        assert_eq!(responses[8]["id"], 8);
+        assert_eq!(responses[9]["error"]["code"], -32700);
+        assert!(responses[9].get("id").is_none());
+        assert_eq!(responses[10]["id"], 9);
+        assert_eq!(responses[10]["result"], json!({}));
+    }
+}
+
+#[tokio::test]
+async fn public_mcp_process_falls_back_unknown_legacy_version_with_string_id() {
+    let initialize = json!({
+        "jsonrpc": "2.0",
+        "id": "fallback-request",
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "fallback-client", "version": "1"}
+        }
+    });
+    let input = format!(
+        "{initialize}\n{}\n{}\n",
+        r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}"#,
+        legacy_request(60, "ping", None)
+    );
+    let output = run_process(input.as_bytes()).await;
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let responses = String::from_utf8(output.stdout)
+        .expect("fallback stdout must be UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("fallback response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0]["id"], "fallback-request");
+    assert_eq!(
+        responses[0]["result"]["protocolVersion"],
+        MCP_PROTOCOL_VERSION_2025_11_25
+    );
+    assert_eq!(responses[1]["id"], 60);
+    assert_eq!(responses[1]["result"], json!({}));
+}
+
+#[tokio::test]
+async fn public_mcp_process_keeps_two_client_sessions_isolated() {
+    let codex_input = format!(
+        "{}\n{}\n{}\n",
+        codex_initialize(),
+        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+        legacy_request(61, "ping", None)
+    );
+    let cursor_input = format!(
+        "{}\r\n{}\r\n{}\r\n",
+        cursor_initialize(),
+        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+        legacy_request(62, "ping", None)
+    );
+    let (codex, cursor) = tokio::join!(
+        run_process(codex_input.as_bytes()),
+        run_process(cursor_input.as_bytes())
+    );
+    for output in [&codex, &cursor] {
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+    }
+    let codex_responses = String::from_utf8(codex.stdout)
+        .expect("Codex stdout must be UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("Codex response JSON"))
+        .collect::<Vec<_>>();
+    let cursor_responses = String::from_utf8(cursor.stdout)
+        .expect("Cursor stdout must be UTF-8")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("Cursor response JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(codex_responses.len(), 2);
+    assert_eq!(cursor_responses.len(), 2);
+    assert_eq!(
+        codex_responses[0]["result"]["protocolVersion"],
+        MCP_PROTOCOL_VERSION_2025_06_18
+    );
+    assert_eq!(codex_responses[1]["id"], 61);
+    assert_eq!(
+        cursor_responses[0]["result"]["protocolVersion"],
+        MCP_PROTOCOL_VERSION_2025_11_25
+    );
+    assert_eq!(cursor_responses[1]["id"], 62);
 }
 
 #[tokio::test]

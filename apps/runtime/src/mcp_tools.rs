@@ -8,12 +8,16 @@ use oneagent_analysis::context::{
     ContextEngine, ContextError, ContextInclusionReason, ContextIntent, ContextPolicy,
     ContextRelationDirection, ContextRequest, ContextSeed, ContextTraversalDirection,
 };
+use oneagent_analysis::diagnostics::{
+    DiagnosticCategory, DiagnosticDisposition, DiagnosticFamily, DiagnosticFilter,
+    DiagnosticFinding, DiagnosticReport, DiagnosticSeverity, DiagnosticSummary,
+};
 use oneagent_common::{EntityId, SourceLocation};
 use oneagent_graph::{
     EdgeKind, GraphEdge, GraphNode, ImpactNodeStatus, ImpactPropagationDirection, ImpactReasonKind,
-    ImpactSeedKind, ImpactSnapshot, NodeId, NodeKind, SemanticDiagnosticKind,
-    SemanticDiagnosticSeverity, SemanticGraphQuery, SemanticGraphValidationIssueKind,
-    SemanticGraphValidationSeverity, SemanticImpactAnalyzer, SemanticImpactOptions,
+    ImpactSeedKind, ImpactSnapshot, NodeId, NodeKind, SemanticGraphQuery,
+    SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity, SemanticImpactAnalyzer,
+    SemanticImpactOptions,
 };
 use oneagent_protocol::{
     McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome, McpToolDefinition,
@@ -146,6 +150,39 @@ fn impact_context_definitions() -> Result<Vec<McpToolDefinition>, McpSemanticSer
     .collect()
 }
 
+fn diagnostic_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "configurationId": {"type": "string"},
+            "families": {
+                "type": "array",
+                "items": {"enum": ["semantic", "validation"]},
+                "minItems": 1,
+                "uniqueItems": true
+            },
+            "severities": {
+                "type": "array",
+                "items": {"enum": ["error", "warning"]},
+                "minItems": 1,
+                "uniqueItems": true
+            },
+            "categories": {
+                "type": "array",
+                "items": {"enum": [
+                    "source", "semantic", "structural", "provenance", "build_consistency"
+                ]},
+                "minItems": 1,
+                "uniqueItems": true
+            },
+            "includeSuppressed": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+        },
+        "required": ["configurationId"],
+        "additionalProperties": false
+    })
+}
+
 fn definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
     let limited = || {
         json!({
@@ -212,8 +249,8 @@ fn definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
         (VALIDATION, "Validate one immutable OneAgent semantic graph.", limited()),
         (
             DIAGNOSTICS,
-            "List bounded source-independent OneAgent semantic diagnostics.",
-            limited(),
+            "List bounded source-independent OneAgent diagnostic findings.",
+            diagnostic_schema(),
         ),
     ]
     .into_iter()
@@ -666,7 +703,7 @@ fn graph(
 }
 
 fn summary(configuration: &WorkspaceConfigurationSnapshot) -> Value {
-    let validation = configuration.graph().validate();
+    let validation = configuration.validation();
     let references = configuration.reference_statistics();
     let format = match configuration.format() {
         WorkspaceFormat::Edt => "edt",
@@ -873,7 +910,7 @@ fn validation(
     fields(arguments, &["configurationId", "limit"])?;
     let configuration = configuration(snapshot, string(arguments, "configurationId")?)?;
     let limit = limit(arguments)?;
-    let result = configuration.graph().validate();
+    let result = configuration.validation();
     let total = result.issues().len();
     let issues = result
         .issues()
@@ -904,31 +941,160 @@ fn diagnostics(
     snapshot: &WorkspaceSnapshot,
     arguments: &Map<String, Value>,
 ) -> Result<Value, SemanticError> {
-    fields(arguments, &["configurationId", "limit"])?;
-    let configuration = configuration(snapshot, string(arguments, "configurationId")?)?;
-    let limit = limit(arguments)?;
-    let total = configuration.diagnostics().len();
-    let values = configuration
-        .diagnostics()
-        .iter()
+    let arguments = diagnostic_arguments(arguments)?;
+    let configuration = configuration(snapshot, arguments.configuration_id)?;
+    Ok(project_diagnostic_report(
+        configuration.configuration_id().as_str(),
+        configuration.diagnostic_report(),
+        &arguments.filter,
+        arguments.limit,
+    ))
+}
+
+struct DiagnosticArguments<'a> {
+    configuration_id: &'a str,
+    filter: DiagnosticFilter,
+    limit: usize,
+}
+
+fn diagnostic_arguments(
+    arguments: &Map<String, Value>,
+) -> Result<DiagnosticArguments<'_>, SemanticError> {
+    fields(
+        arguments,
+        &[
+            "configurationId",
+            "families",
+            "severities",
+            "categories",
+            "includeSuppressed",
+            "limit",
+        ],
+    )?;
+    let families = diagnostic_values(arguments, "families", diagnostic_family)?;
+    let severities = diagnostic_values(arguments, "severities", diagnostic_severity)?;
+    let categories = diagnostic_values(arguments, "categories", diagnostic_category)?;
+    let include_suppressed = match arguments.get("includeSuppressed") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err(INVALID),
+    };
+    let dispositions = if include_suppressed {
+        BTreeSet::new()
+    } else {
+        BTreeSet::from([DiagnosticDisposition::Active])
+    };
+    Ok(DiagnosticArguments {
+        configuration_id: string(arguments, "configurationId")?,
+        filter: DiagnosticFilter::new(families, severities, categories, dispositions),
+        limit: limit(arguments)?,
+    })
+}
+
+fn diagnostic_values<T: Ord>(
+    arguments: &Map<String, Value>,
+    field: &str,
+    parse: fn(&str) -> Option<T>,
+) -> Result<BTreeSet<T>, SemanticError> {
+    let Some(value) = arguments.get(field) else {
+        return Ok(BTreeSet::new());
+    };
+    let values = value
+        .as_array()
+        .filter(|values| !values.is_empty())
+        .ok_or(INVALID)?;
+    let mut accepted = BTreeSet::new();
+    for value in values {
+        let value = value.as_str().and_then(parse).ok_or(INVALID)?;
+        if !accepted.insert(value) {
+            return Err(INVALID);
+        }
+    }
+    Ok(accepted)
+}
+
+fn project_diagnostic_report(
+    configuration_id: &str,
+    report: &DiagnosticReport,
+    filter: &DiagnosticFilter,
+    limit: usize,
+) -> Value {
+    let matching = report.filtered(filter).collect::<Vec<_>>();
+    let total = matching.len();
+    let values = matching
+        .into_iter()
         .take(limit)
-        .map(|item| {
-            json!({
-                "code": item.code().as_str(),
-                "severity": diagnostic_severity(item.severity()),
-                "kind": diagnostic_kind(item.kind()),
-                "message": item.message(),
-                "sourceNodeId": item.source_node().map(EntityId::as_str),
-                "candidateNodeIds": item.candidates().iter().map(EntityId::as_str).collect::<Vec<_>>()
-            })
-        })
+        .map(project_diagnostic_finding)
         .collect::<Vec<_>>();
-    Ok(json!({
-        "configurationId": configuration.configuration_id().as_str(),
+    let returned = values.len();
+    json!({
+        "configurationId": configuration_id,
         "diagnostics": values,
         "total": total,
-        "truncated": total > limit
-    }))
+        "truncated": total > returned,
+        "summary": project_diagnostic_summary(report.summary())
+    })
+}
+
+fn project_diagnostic_finding(finding: &DiagnosticFinding) -> Value {
+    let semantic = matches!(finding.family(), DiagnosticFamily::Semantic);
+    let source_node = semantic
+        .then(|| finding.node_anchors().first())
+        .flatten()
+        .map(EntityId::as_str);
+    let candidate_nodes = if semantic {
+        finding
+            .related_nodes()
+            .iter()
+            .map(EntityId::as_str)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    json!({
+        "family": finding.family().as_str(),
+        "code": finding.code().as_str(),
+        "severity": finding.severity().as_str(),
+        "category": finding.category().as_str(),
+        "kind": finding.kind().as_str(),
+        "message": finding.message(),
+        "disposition": finding.disposition().as_str(),
+        "sourceNodeId": source_node,
+        "candidateNodeIds": candidate_nodes,
+        "nodeIds": finding.node_anchors().iter().map(EntityId::as_str).collect::<Vec<_>>(),
+        "edgeId": finding.edge_id().map(oneagent_graph::EdgeId::as_str),
+        "referenceRequestId": finding
+            .reference_request_id()
+            .map(oneagent_graph::SemanticReferenceRequestId::as_str)
+    })
+}
+
+fn project_diagnostic_summary(summary: &DiagnosticSummary) -> Value {
+    let family_count = |value| summary.by_family().get(&value).copied().unwrap_or(0);
+    let severity_count = |value| summary.by_severity().get(&value).copied().unwrap_or(0);
+    let category_count = |value| summary.by_category().get(&value).copied().unwrap_or(0);
+    json!({
+        "total": summary.total(),
+        "active": summary.active(),
+        "suppressed": summary.suppressed(),
+        "byFamily": {
+            "semantic": family_count(DiagnosticFamily::Semantic),
+            "validation": family_count(DiagnosticFamily::Validation)
+        },
+        "bySeverity": {
+            "error": severity_count(DiagnosticSeverity::Error),
+            "warning": severity_count(DiagnosticSeverity::Warning)
+        },
+        "byCategory": {
+            "source": category_count(DiagnosticCategory::Source),
+            "semantic": category_count(DiagnosticCategory::Semantic),
+            "structural": category_count(DiagnosticCategory::Structural),
+            "provenance": category_count(DiagnosticCategory::Provenance),
+            "build_consistency": category_count(DiagnosticCategory::BuildConsistency)
+        },
+        "activeByCode": summary.active_by_code(),
+        "suppressedByCode": summary.suppressed_by_code()
+    })
 }
 
 fn impact(
@@ -1306,68 +1472,55 @@ const fn validation_kind(value: SemanticGraphValidationIssueKind) -> &'static st
     }
 }
 
-const fn diagnostic_severity(value: SemanticDiagnosticSeverity) -> &'static str {
+fn diagnostic_family(value: &str) -> Option<DiagnosticFamily> {
     match value {
-        SemanticDiagnosticSeverity::Warning => "warning",
-        SemanticDiagnosticSeverity::Error => "error",
+        "semantic" => Some(DiagnosticFamily::Semantic),
+        "validation" => Some(DiagnosticFamily::Validation),
+        _ => None,
     }
 }
 
-const fn diagnostic_kind(value: SemanticDiagnosticKind) -> &'static str {
+fn diagnostic_severity(value: &str) -> Option<DiagnosticSeverity> {
     match value {
-        SemanticDiagnosticKind::QueryLanguageMalformedSyntax => "query_language_malformed_syntax",
-        SemanticDiagnosticKind::QueryLanguageUnsupportedStructure => {
-            "query_language_unsupported_structure"
-        }
-        SemanticDiagnosticKind::QueryLanguageUnsupportedPersistentNamespace => {
-            "query_language_unsupported_persistent_namespace"
-        }
-        SemanticDiagnosticKind::QueryLanguageVirtualTableSource => {
-            "query_language_virtual_table_source"
-        }
-        SemanticDiagnosticKind::QueryLanguageTemporaryTableSource => {
-            "query_language_temporary_table_source"
-        }
-        SemanticDiagnosticKind::QueryLanguageExternalOrParameterDataSource => {
-            "query_language_external_or_parameter_data_source"
-        }
-        SemanticDiagnosticKind::DataCompositionNestedDataSetDeferred => {
-            "data_composition_nested_data_set_deferred"
-        }
-        SemanticDiagnosticKind::DataCompositionFieldFolderDeferred => {
-            "data_composition_field_folder_deferred"
-        }
-        SemanticDiagnosticKind::DataCompositionUnsupportedDataSetType => {
-            "data_composition_unsupported_data_set_type"
-        }
-        SemanticDiagnosticKind::DataCompositionUnsupportedFieldType => {
-            "data_composition_unsupported_field_type"
-        }
-        SemanticDiagnosticKind::MalformedReferenceFormat => "malformed_reference_format",
-        SemanticDiagnosticKind::UnsupportedReferencePrefix => "unsupported_reference_prefix",
-        SemanticDiagnosticKind::UnresolvedTarget => "unresolved_target",
-        SemanticDiagnosticKind::AmbiguousTarget => "ambiguous_target",
-        SemanticDiagnosticKind::IncompatibleTargetKind => "incompatible_target_kind",
-        SemanticDiagnosticKind::InvalidOwnerReference => "invalid_owner_reference",
-        SemanticDiagnosticKind::DuplicateSemanticEdgeRequest => "duplicate_semantic_edge_request",
+        "error" => Some(DiagnosticSeverity::Error),
+        "warning" => Some(DiagnosticSeverity::Warning),
+        _ => None,
+    }
+}
+
+fn diagnostic_category(value: &str) -> Option<DiagnosticCategory> {
+    match value {
+        "source" => Some(DiagnosticCategory::Source),
+        "semantic" => Some(DiagnosticCategory::Semantic),
+        "structural" => Some(DiagnosticCategory::Structural),
+        "provenance" => Some(DiagnosticCategory::Provenance),
+        "build_consistency" => Some(DiagnosticCategory::BuildConsistency),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::path::Path;
     use std::sync::Arc;
 
+    use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticIdentity, DiagnosticPolicy};
     use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
     use oneagent_graph::{
         Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
+        SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
+        SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
     };
     use oneagent_protocol::{McpToolCallHandler, McpToolCallOutcome};
     use oneagent_tool_policy::{PolicyRevision, ToolPolicy};
     use serde_json::{Map, json};
     use tempfile::tempdir;
 
-    use super::{GRAPH, Handler, SYMBOLS, project_symbol_location, unique_symbol_location};
+    use super::{
+        DIAGNOSTICS, GRAPH, Handler, SYMBOLS, diagnostic_arguments, project_diagnostic_report,
+        project_symbol_location, unique_symbol_location,
+    };
     use crate::WorkspaceSnapshotBuilder;
 
     fn fixture_root() -> &'static Path {
@@ -1385,6 +1538,119 @@ mod tests {
             Confidence::Exact,
             ResolutionState::NotApplicable,
         )
+    }
+
+    fn diagnostic(source: &str, severity: SemanticDiagnosticSeverity) -> SemanticDiagnostic {
+        SemanticDiagnostic::new(
+            SemanticDiagnosticCode::ReferenceUnresolved,
+            severity,
+            SemanticDiagnosticKind::UnresolvedTarget,
+            "semantic reference target could not be resolved",
+            SemanticReference::NodeId("metadata.target".to_owned()),
+        )
+        .with_source_node(EntityId::new(source).expect("source node ID"))
+    }
+
+    #[test]
+    fn diagnostic_projection_filters_complete_report_and_retains_unfiltered_summary() {
+        let active = diagnostic("metadata.active", SemanticDiagnosticSeverity::Error);
+        let suppressed = diagnostic("metadata.suppressed", SemanticDiagnosticSeverity::Warning);
+        let policy = DiagnosticPolicy::new(BTreeSet::from([DiagnosticIdentity::from_semantic(
+            &suppressed,
+        )]))
+        .expect("one suppression");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            EntityId::new("metadata.validation").expect("validation node ID"),
+            EntityName::new("Validation").expect("validation node name"),
+            NodeKind::Unknown,
+        ));
+        let report = DiagnosticEngine
+            .build(&[suppressed, active], &graph.validate(), &policy)
+            .expect("mixed report");
+
+        let arguments = json!({
+            "configurationId": "configuration.test",
+            "families": ["semantic", "validation"],
+            "severities": ["warning"],
+            "categories": ["semantic", "provenance"],
+            "includeSuppressed": true,
+            "limit": 1
+        });
+        let arguments = diagnostic_arguments(arguments.as_object().expect("arguments object"))
+            .unwrap_or_else(|_| panic!("valid diagnostic filters"));
+        let projected = project_diagnostic_report(
+            arguments.configuration_id,
+            &report,
+            &arguments.filter,
+            arguments.limit,
+        );
+
+        assert_eq!(projected["total"], 2);
+        assert_eq!(projected["truncated"], true);
+        assert_eq!(projected["diagnostics"][0]["family"], "validation");
+        assert_eq!(projected["diagnostics"][0]["disposition"], "active");
+        assert_eq!(
+            projected["diagnostics"][0]["nodeIds"],
+            json!(["metadata.validation"])
+        );
+        assert!(projected["diagnostics"][0]["sourceNodeId"].is_null());
+        assert_eq!(projected["summary"]["total"], 3);
+        assert_eq!(projected["summary"]["active"], 2);
+        assert_eq!(projected["summary"]["suppressed"], 1);
+        assert_eq!(projected["summary"]["byFamily"]["semantic"], 2);
+        assert_eq!(projected["summary"]["byFamily"]["validation"], 1);
+        assert_eq!(projected["summary"]["bySeverity"]["error"], 1);
+        assert_eq!(projected["summary"]["bySeverity"]["warning"], 2);
+        assert_eq!(projected["summary"]["byCategory"]["provenance"], 1);
+        assert_eq!(
+            projected["summary"]["suppressedByCode"]["semantic.reference.unresolved"],
+            1
+        );
+
+        let default_arguments = json!({"configurationId": "configuration.test"});
+        let default_arguments = diagnostic_arguments(
+            default_arguments
+                .as_object()
+                .expect("default arguments object"),
+        )
+        .unwrap_or_else(|_| panic!("default diagnostic arguments"));
+        let active_only = project_diagnostic_report(
+            default_arguments.configuration_id,
+            &report,
+            &default_arguments.filter,
+            default_arguments.limit,
+        );
+        assert_eq!(active_only["total"], 2);
+        assert!(
+            active_only["diagnostics"]
+                .as_array()
+                .expect("active diagnostics")
+                .iter()
+                .all(|finding| finding["disposition"] == "active")
+        );
+        assert_eq!(active_only["summary"], projected["summary"]);
+    }
+
+    #[test]
+    fn diagnostic_arguments_reject_empty_duplicate_invalid_and_unknown_values() {
+        for arguments in [
+            json!({"configurationId": "configuration.test", "families": []}),
+            json!({"configurationId": "configuration.test", "families": ["semantic", "semantic"]}),
+            json!({"configurationId": "configuration.test", "families": ["rules"]}),
+            json!({"configurationId": "configuration.test", "severities": []}),
+            json!({"configurationId": "configuration.test", "severities": ["info"]}),
+            json!({"configurationId": "configuration.test", "categories": []}),
+            json!({"configurationId": "configuration.test", "categories": ["source", "source"]}),
+            json!({"configurationId": "configuration.test", "categories": ["runtime"]}),
+            json!({"configurationId": "configuration.test", "includeSuppressed": "true"}),
+            json!({"configurationId": "configuration.test", "extra": true}),
+        ] {
+            assert!(
+                diagnostic_arguments(arguments.as_object().expect("arguments object")).is_err(),
+                "{arguments}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -1405,6 +1671,17 @@ mod tests {
         let graph = handler.call(GRAPH, &Map::new()).await;
         assert!(matches!(
             graph,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
+
+        let valid_diagnostics = json!({"configurationId": "configuration.test"})
+            .as_object()
+            .expect("diagnostic arguments must be an object")
+            .clone();
+        let valid_diagnostics = handler.call(DIAGNOSTICS, &valid_diagnostics).await;
+        assert!(matches!(
+            valid_diagnostics,
             McpToolCallOutcome::Error { ref code, ref message }
                 if code == "policy_denied" && message == "The semantic tool request was denied."
         ));

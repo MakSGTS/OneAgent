@@ -324,10 +324,20 @@ bounds, all seven tool families, Tool Policy execution, path redaction and
 symbol-path confinement, malformed and oversized input, unknown methods/tools,
 notifications, LF/CRLF
 framing, cancellation, transport failures, EOF, stdout purity, exit status,
-repetition, and cleanup. Additional MCP revisions, remote transports,
-authentication, snapshot refresh, external-client compatibility, Runtime
-packaging, references, diagnostics UI, and broader IDE integration remain
-deferred. Sprint 31 is completed; the additive LSP boundary is described below.
+repetition, and cleanup. At the current implementation baseline, additional MCP
+revisions and external-client compatibility are absent. Remote transports,
+authentication, snapshot refresh, Runtime packaging, references, diagnostics
+UI, and broader IDE integration remain deferred. Sprint 31 is completed; the
+additive LSP boundary is described below.
+
+[ADR-0057](adr/0057-external-ai-client-compatibility.md) accepts an additive
+connection-owned compatibility boundary for MCP `2025-06-18` and `2025-11-25`
+while preserving the existing stateless `2026-07-28` dispatch. Protocol owns
+negotiation, lifecycle state, and version-specific projection; each Runtime
+stdio run owns one fresh session over the same immutable server and catalog.
+This decision is not implemented at the Task 2 baseline: until the protocol
+and Runtime tasks complete, the production process still rejects legacy
+`initialize` requests and only the modern behavior above is current.
 
 ## Implemented LSP adapter boundary
 

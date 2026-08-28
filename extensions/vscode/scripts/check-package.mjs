@@ -18,13 +18,20 @@ const expected = [
 
 function inventory() {
   const command = process.platform === "win32" ? "vsce.cmd" : "vsce";
-  const result = spawnSync(command, ["ls", "--no-dependencies"], {
+  const result = spawnCommand(command, ["ls", "--no-dependencies"], {
     encoding: "utf8",
     env: process.env,
   });
   assert.equal(result.status, 0, "vsce inventory command must succeed");
   assert.equal(result.stderr, "", "vsce inventory must not emit diagnostics");
   return result.stdout.trim().split(/\r?\n/u);
+}
+
+function spawnCommand(executable, args, options) {
+  if (process.platform !== "win32" || !executable.endsWith(".cmd")) {
+    return spawnSync(executable, args, options);
+  }
+  return spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
 }
 
 const first = inventory();

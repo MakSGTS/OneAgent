@@ -47,7 +47,7 @@ function command(name) {
 }
 
 function run(executable, args) {
-  const result = spawnSync(executable, args, {
+  const result = spawnCommand(executable, args, {
     encoding: "utf8",
     env: process.env,
     stdio: "pipe",
@@ -57,6 +57,13 @@ function run(executable, args) {
     0,
     `${executable} ${args.join(" ")} failed with bounded output:\n${bounded(result)}`,
   );
+}
+
+function spawnCommand(executable, args, options) {
+  if (process.platform !== "win32" || !executable.endsWith(".cmd")) {
+    return spawnSync(executable, args, options);
+  }
+  return spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
 }
 
 function bounded(result) {

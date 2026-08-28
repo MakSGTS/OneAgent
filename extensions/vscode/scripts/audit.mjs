@@ -175,7 +175,7 @@ function command(name) {
 }
 
 function run(executable, args) {
-  const result = spawnSync(executable, args, {
+  const result = spawnCommand(executable, args, {
     cwd: executable === "git" ? repositoryRoot : extensionRoot,
     encoding: "utf8",
     env: process.env,
@@ -186,6 +186,13 @@ function run(executable, args) {
     `${executable} ${args.join(" ")} failed with bounded output:\n${`${result.stdout ?? ""}${result.stderr ?? ""}`.slice(-4_096)}`,
   );
   return result.stdout;
+}
+
+function spawnCommand(executable, args, options) {
+  if (process.platform !== "win32" || !executable.endsWith(".cmd")) {
+    return spawnSync(executable, args, options);
+  }
+  return spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
 }
 
 function checkLocalLinks(document) {

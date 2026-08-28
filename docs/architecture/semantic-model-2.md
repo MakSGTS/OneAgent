@@ -370,7 +370,9 @@ records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint
 34 EDT Integration Prototype and Sprint 35 External AI Client Compatibility are
 completed. The
 [v0.6 MCP and IDE release review](../reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`.
+`pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine implementation
+and completion evidence are committed; Sprint 36 remains active until its
+mandatory integration review.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -407,6 +409,15 @@ original six tools remain path-free. The symbol tool projects only unique,
 lexically confined Workspace-relative forward-slash locations for Module,
 Procedure, Function, and EDT Query nodes and never exposes opaque provenance or
 an absolute source path. The tools perform no real side effect.
+
+ADR-0058 changes only the accepted diagnostic projection. The
+`oneagent.diagnostics` tool consumes the complete immutable Analysis-owned
+report, filters semantic and validation families without rerunning the engine,
+retains a complete unfiltered summary, and returns an ordered prefix of at most
+100 with explicit truncation. It preserves the previous semantic fields and
+exposes no path, source content, raw reference, or provenance. The existing
+Graph summary and validation tool reuse the validation result already published
+in the same Configuration snapshot.
 
 The separate `oneagent-mcp` process constructs no Runtime `App`, watcher,
 cache, listener, or background task, preserves protocol-only stdout, exits
@@ -448,12 +459,14 @@ confines canonical document URIs, and converts typed one-based spans to
 zero-based UTF-16-compatible ranges without reading source text. The truthful
 static surface contains only `workspace/symbol` for located Procedure,
 Function, and EDT Query nodes and `textDocument/diagnostic` full reports for
-existing recoverable diagnostics with located source nodes. Graph identity,
-diagnostic code/severity/message/order, and source-location provenance remain
-the semantic authority. Each result family has a complete limit of 100 and
-fails closed rather than claiming a truncated prefix. No mutable-document,
-definition/reference, completion, edit, workspace-diagnostic, remote, or
-external-client behavior is represented.
+active normalized findings with exactly one node and one confined typed span.
+Graph identity, diagnostic code/severity/message, and source-location
+provenance remain the semantic authority. Missing, multiple, conflicting,
+span-less, escaping, incompatible, or suppressed evidence is omitted rather
+than guessed. Each result family has a complete limit of 100 and fails closed
+rather than claiming a truncated prefix. No mutable-document, definition/
+reference, completion, edit, workspace-diagnostic, remote, or external-client
+behavior is represented.
 
 ## Core principles
 
@@ -1346,6 +1359,42 @@ Knowledge Graph filtered to callable symbols and Calls or MayCall edges
 ```
 
 This allows current consumers to migrate without duplicating semantic extraction.
+
+## Diagnostics Engine
+
+The implemented ADR-0058 first slice is a derived source-independent view over
+existing graph evidence. `oneagent-analysis::diagnostics` accepts exactly the
+ordered recoverable `SemanticDiagnostic` values produced by Graph construction
+and one caller-supplied `SemanticGraphValidationResult`. It neither validates
+the graph nor creates a competing fact, producer, provenance, location, report,
+or build-diff authority.
+
+Each finding has a family-tagged typed identity. Semantic identity is code,
+kind, optional source node, and exact semantic reference. Validation identity
+is code, kind, canonical node IDs, optional edge/request identities and kinds,
+and invariant. Severity, category, message, related nodes, provenance count,
+and disposition remain observable content rather than identity. Exact equal
+evidence collapses; equal identity with different content is an error.
+
+The complete report orders active before suppressed, Error before Warning, then
+category, family, typed identity, and observable content. Its summary reconciles
+total, active/suppressed, family, severity, category, and code counts. The only
+implemented suppression input is an exact in-memory identity set; default
+Workspace construction supplies an empty set. Filtering is a read-only view and
+does not rerun normalization or rebuild a summary.
+
+Input and output collections, messages, anchors, provenance counts, and
+suppression sets have explicit hard limits. The engine fails without a partial
+report and never truncates. Protocol adapters retain their smaller independent
+result bounds. Runtime composes validation and the report before snapshot
+publication and deterministically recomputes them after cache decode without
+serializing either derived value.
+
+This boundary adds no Coverage capability because it emits no node, edge,
+parser result, or new diagnostic producer. Configurable rules, rule-produced
+findings, suppression files/patterns, baselines, UI, fixes, mutable documents,
+and telemetry remain deferred. The complete executable matrix is recorded in
+the [Sprint 36 evidence](diagnostics-engine-evidence.md).
 
 ## Incremental indexing
 

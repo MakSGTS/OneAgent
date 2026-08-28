@@ -7088,8 +7088,9 @@ non-blocking documentation follow-up.
 
 The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups` for Sprints 28–35. The release is
-`completed`, and Sprint 36 Diagnostics Engine is the unique `next` planning
-target.
+`completed`. Sprint 36 Diagnostics Engine is the unique active target; its
+implementation and completion evidence are committed, and the mandatory
+integration review remains.
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8640,6 +8641,36 @@ projecting only active findings with one exact confined node span. No
 dependency, new producer, Coverage transition, Rules Engine, suppression
 configuration, UI, mutable-document, fix, or remote behavior is accepted by
 architecture alone.
+
+###### Sprint 36 implementation and completion evidence
+
+Tasks 3–6 implement the accepted boundary in dependency order. Analysis owns
+the typed domain and deterministic engine; Runtime publishes complete Graph
+validation and the default-policy report atomically and recomputes both after
+cache decode; MCP projects filtered semantic/validation findings plus the
+complete unfiltered summary; LSP projects only active single-node findings with
+one confined typed span. Existing raw diagnostics, Graph reports/diffs,
+seven-tool catalog, Tool Policy, protocol revisions, LSP capabilities, cache
+schema, HTTP, CLI, VS Code, EDT, and Coverage behavior remain compatible.
+
+Task 7 records the complete requirement-to-test matrix in the
+[Sprint 36 Diagnostics Engine evidence](architecture/diagnostics-engine-evidence.md).
+The accepted canonical Rust gate contains 73 test targets and 1,176 passing
+tests with zero failures, ignored, measured, or filtered tests. Four expected
+binary entry-point targets contain zero tests and are not acceptance filters.
+Focused public evidence includes 25 Analysis diagnostic unit tests, 3 public
+engine tests, 86 Graph validation/report/diff/reference/Coverage tests, 95
+Runtime unit tests, 7 semantic MCP tests, 8 MCP stdio tests, 17 public MCP
+process tests, 12 LSP protocol tests, 5 LSP stdio tests, and 8 public LSP
+process tests. VS Code typecheck/compile, 62 unit and 2 real-process tests pass;
+the EDT Tycho reactor reports `BUILD SUCCESS` with 41 tests and no failure,
+error, or skip.
+
+Task 7 changes documentation only. Sprint 36 remains `active`; Task 8 still
+owns the fresh-context independent integration review, primary reconciliation,
+same-reviewer artifact-consistency check, Sprint 37 hand-off, and conditional
+retirement of the exact Sprint 35 prompt suite. No review decision or prompt
+retirement is claimed by completion evidence.
 
 Sprint 36 remains `next` during planning, becomes `active` when Task 1 starts,
 and may become `completed` only after Task 8. `already_complete` requires current

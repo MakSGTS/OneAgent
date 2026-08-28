@@ -17,8 +17,10 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 
 public final class RuntimeProbeTest {
@@ -126,6 +128,41 @@ public final class RuntimeProbeTest {
                 ProbeFailure.Category.PROCESS_FAILED);
         assertFailure(COMPATIBLE + "\n", "x".repeat(RuntimeProbe.MAX_STDERR_BYTES + 1),
                 ProbeFailure.Category.STDERR_OVERFLOW);
+    }
+
+    @Test
+    public void lateStderrOverflowInterruptsPostFrameExitWait() {
+        ReleasableInputStream stderr = new ReleasableInputStream();
+        LateTerminalProcess process = new LateTerminalProcess(stderr,
+                () -> stderr.release("x".repeat(RuntimeProbe.MAX_STDERR_BYTES + 1)
+                        .getBytes(StandardCharsets.UTF_8)));
+        RuntimeProbe probe = new RuntimeProbe(new CapturingFactory(process), System::nanoTime,
+                new RuntimeProbe.Timeouts(1_000, 100, 100, 100));
+
+        ProbeFailure failure = assertThrows(ProbeFailure.class,
+                () -> probe.probe("oneagent-mcp", WORKSPACE, CancellationToken.NONE));
+
+        assertEquals(ProbeFailure.Category.STDERR_OVERFLOW, failure.category());
+        assertTrue(process.firstWaitTriggered);
+        assertTrue(process.destroyed);
+        assertFalse(process.isAlive());
+    }
+
+    @Test
+    public void lateCancellationInterruptsPostFrameExitWait() {
+        ManualCancellation cancellation = new ManualCancellation();
+        LateTerminalProcess process = new LateTerminalProcess(
+                new ReleasableInputStream(), cancellation::cancel);
+        RuntimeProbe probe = new RuntimeProbe(new CapturingFactory(process), System::nanoTime,
+                new RuntimeProbe.Timeouts(1_000, 100, 100, 100));
+
+        ProbeFailure failure = assertThrows(ProbeFailure.class,
+                () -> probe.probe("oneagent-mcp", WORKSPACE, cancellation));
+
+        assertEquals(ProbeFailure.Category.CANCELLED, failure.category());
+        assertTrue(process.firstWaitTriggered);
+        assertTrue(process.destroyed);
+        assertFalse(process.isAlive());
     }
 
     @Test
@@ -428,6 +465,114 @@ public final class RuntimeProbeTest {
                 }
             }
             return -1;
+        }
+
+        @Override
+        public synchronized void close() {
+            closed = true;
+            notifyAll();
+        }
+    }
+
+    private static final class LateTerminalProcess implements ProbeProcess {
+        private final ByteArrayOutputStream stdin = new ByteArrayOutputStream();
+        private final InputStream stdout = new ByteArrayInputStream(
+                (COMPATIBLE + "\n").getBytes(StandardCharsets.UTF_8));
+        private final InputStream stderr;
+        private final Runnable onFirstWait;
+        private final CountDownLatch exited = new CountDownLatch(1);
+        private final AtomicInteger waits = new AtomicInteger();
+        private volatile boolean alive = true;
+        private volatile boolean firstWaitTriggered;
+        private volatile boolean destroyed;
+
+        LateTerminalProcess(InputStream stderr, Runnable onFirstWait) {
+            this.stderr = stderr;
+            this.onFirstWait = onFirstWait;
+        }
+
+        @Override
+        public OutputStream stdin() {
+            return stdin;
+        }
+
+        @Override
+        public InputStream stdout() {
+            return stdout;
+        }
+
+        @Override
+        public InputStream stderr() {
+            return stderr;
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
+            if (waits.incrementAndGet() == 1) {
+                firstWaitTriggered = true;
+                onFirstWait.run();
+                return exited.await(timeout, unit);
+            }
+            return !alive;
+        }
+
+        @Override
+        public int exitValue() {
+            return 0;
+        }
+
+        @Override
+        public boolean isAlive() {
+            return alive;
+        }
+
+        @Override
+        public void destroy() {
+            destroyed = true;
+            alive = false;
+            exited.countDown();
+        }
+
+        @Override
+        public void destroyForcibly() {
+            destroy();
+        }
+    }
+
+    private static final class ReleasableInputStream extends InputStream {
+        private byte[] bytes;
+        private int index;
+        private boolean closed;
+
+        synchronized void release(byte[] value) {
+            bytes = value;
+            notifyAll();
+        }
+
+        @Override
+        public synchronized int read() throws IOException {
+            byte[] single = new byte[1];
+            int count = read(single, 0, 1);
+            return count == -1 ? -1 : single[0] & 0xff;
+        }
+
+        @Override
+        public synchronized int read(byte[] target, int offset, int length) throws IOException {
+            while (bytes == null && !closed) {
+                try {
+                    wait();
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException();
+                }
+            }
+            if (closed || index == bytes.length) {
+                return -1;
+            }
+            int count = Math.min(length, bytes.length - index);
+            System.arraycopy(bytes, index, target, offset, count);
+            index += count;
+            return count;
         }
 
         @Override

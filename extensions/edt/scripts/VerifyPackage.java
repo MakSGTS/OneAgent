@@ -98,7 +98,7 @@ public final class VerifyPackage {
         verifyArtifacts(repository.resolve("artifacts.jar"));
         scanRepositoryText(repository, feature, bundle);
 
-        System.out.println("tests=39/failures=0/errors=0/skipped=0");
+        System.out.println("tests=41/failures=0/errors=0/skipped=0");
         System.out.println("repository-files=" + actualFiles.size());
         System.out.println("content-units=" + CONTENT_UNITS.size());
         System.out.println("feature=com.oneagent.edt.feature/" + VERSION);
@@ -202,7 +202,7 @@ public final class VerifyPackage {
             skipped += integerAttribute(suite, "skipped");
         }
         require(suites.equals(TEST_SUITES), "unexpected Surefire suites: " + suites);
-        require(tests == 39 && failures == 0 && errors == 0 && skipped == 0,
+        require(tests == 41 && failures == 0 && errors == 0 && skipped == 0,
                 "incomplete test gate: tests=" + tests + ", failures=" + failures
                         + ", errors=" + errors + ", skipped=" + skipped);
     }

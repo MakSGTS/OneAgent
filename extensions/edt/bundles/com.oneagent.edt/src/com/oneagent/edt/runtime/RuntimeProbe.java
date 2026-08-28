@@ -86,13 +86,7 @@ public final class RuntimeProbe {
             validateCompatibleResponse(frame);
             closeQuietly(process.stdin());
 
-            if (!process.waitFor(timeouts.gracefulMillis(), TimeUnit.MILLISECONDS)) {
-                throw failure(ProbeFailure.Category.PROCESS_FAILED);
-            }
-            if (cancellation.isCancelled() || cancelled.isDone()) {
-                throw failure(ProbeFailure.Category.CANCELLED);
-            }
-            awaitReaderCompletion(readers);
+            awaitPostFrameCompletion(readers, cancelled);
             if (process.exitValue() != 0 || readers.stderrBytes() != 0 || readers.hasExtraStdout()) {
                 throw failure(readers.hasExtraStdout()
                         ? ProbeFailure.Category.PROTOCOL_FAILURE
@@ -157,15 +151,36 @@ public final class RuntimeProbe {
         }
     }
 
-    private void awaitReaderCompletion(ReaderOwner readers)
+    private void awaitPostFrameCompletion(ReaderOwner readers, CompletableFuture<Void> cancelled)
             throws ProbeFailure, InterruptedException {
+        CompletableFuture<Boolean> exited = readers.waitForExit(timeouts.gracefulMillis());
+        CompletableFuture<Void> terminal = CompletableFuture.allOf(
+                exited, readers.stdoutDone(), readers.stderrDone());
         try {
-            readers.stdoutDone().get(timeouts.gracefulMillis(), TimeUnit.MILLISECONDS);
-            readers.stderrDone().get(timeouts.gracefulMillis(), TimeUnit.MILLISECONDS);
+            CompletableFuture.anyOf(terminal, readers.stderrOverflow(), cancelled)
+                    .get(timeouts.gracefulMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException error) {
             throw failure(ProbeFailure.Category.PROCESS_FAILED);
         } catch (ExecutionException error) {
             throw readerFailure(error.getCause());
+        }
+        if (cancelled.isDone()) {
+            throw failure(ProbeFailure.Category.CANCELLED);
+        }
+        if (readers.stderrOverflow().isDone()) {
+            try {
+                readers.stderrOverflow().get();
+            } catch (ExecutionException error) {
+                throw readerFailure(error.getCause());
+            }
+        }
+        try {
+            terminal.get();
+        } catch (ExecutionException error) {
+            throw readerFailure(error.getCause());
+        }
+        if (!exited.getNow(Boolean.FALSE)) {
+            throw failure(ProbeFailure.Category.PROCESS_FAILED);
         }
     }
 
@@ -310,7 +325,7 @@ public final class RuntimeProbe {
                 thread.setDaemon(true);
                 return thread;
             };
-            executor = Executors.newFixedThreadPool(2, factory);
+            executor = Executors.newFixedThreadPool(3, factory);
         }
 
         void start() {
@@ -332,6 +347,19 @@ public final class RuntimeProbe {
 
         CompletableFuture<Integer> stderrDone() {
             return stderrDone;
+        }
+
+        CompletableFuture<Boolean> waitForExit(long timeoutMillis) {
+            CompletableFuture<Boolean> exited = new CompletableFuture<>();
+            executor.execute(() -> {
+                try {
+                    exited.complete(process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS));
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    exited.completeExceptionally(new ReaderFailure(ProbeFailure.Category.CANCELLED));
+                }
+            });
+            return exited;
         }
 
         boolean hasExtraStdout() {

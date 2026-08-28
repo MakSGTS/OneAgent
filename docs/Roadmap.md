@@ -8076,7 +8076,7 @@ Task 5 packages only `com.oneagent.edt.feature` and `com.oneagent.edt` in the
 `com.oneagent.edt.category` p2 repository; tests, fixtures, Runtime, JRE, and
 generated Java execution-environment units are absent. The production bundle
 retains JavaSE-17 bytecode and public Eclipse imports while Maven/Tycho runs on
-JDK 25. Two host `clean verify` executions pass 39/39 tests with the real
+JDK 25. Two host `clean verify` executions pass 41/41 tests with the real
 Runtime process, and two clean repositories have identical inventories,
 feature and bundle bytes, and metadata after removing only generated p2
 timestamps and the generated `p2.index` comment. The disposable p2 director
@@ -8126,11 +8126,11 @@ repository-level metadata; publication, symlinks, target resolution, and every
 write remain forbidden.
 
 Task 6 local verification uses the pinned wrapper on arm64 JDK 25. Two clean
-host runs each pass 39/39 tests with zero failures, errors, or skips. Both
+host runs each pass 41/41 tests with zero failures, errors, or skips. Both
 repositories have the same seven-file inventory; feature SHA-256 remains
 `9078608b97dc1a8c04ca0bacdc77a23948668a621e051c7924281923bde1015a`
 and bundle SHA-256 remains
-`4e80d9360f868ea145803021c8881affc88ff354fe88508d3771073cbb435eef`.
+`c85e3e45bb476354743bbe1a3fb98317909b83bdb898f1dd4f8b2f95d3645ddd`.
 The four metadata representations agree after normalizing only their generated
 `p2.timestamp`, and `p2.index` agrees after removing only its generated comment.
 The Java 17 package auditor reports `PASS`. Focused public MCP semantic/process

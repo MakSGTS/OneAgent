@@ -44,11 +44,11 @@ java scripts/VerifyPackage.java repositories/com.oneagent.edt.repository/target/
 
 On Windows, use `mvnw.cmd` from PowerShell or keep `./mvnw` when the commands run
 under Bash. `ONEAGENT_MCP_EXECUTABLE` must include the `.exe` suffix. A successful
-verification runs 39 tests with zero failures, errors, or skips; one of those
+verification runs 41 tests with zero failures, errors, or skips; one of those
 tests starts the real Runtime twice. A skipped real-process test is not complete
 acceptance evidence.
 
-The package auditor requires all eight Surefire suites and exactly 39 tests with
+The package auditor requires all eight Surefire suites and exactly 41 tests with
 zero failures, errors, or skips. It then requires exactly seven repository files,
 four p2 content units, one feature, and one production bundle. It verifies the
 frozen qualifier, JDK 25 build marker, Java 17 bytecode and execution-environment

@@ -415,7 +415,7 @@ The distributable p2 repository contains exactly one feature and one production
 bundle under the `OneAgent` category. It contains no test fragment, fixture,
 Runtime, JRE, JavaFX, native executable, credential, private-p2 metadata, or
 personal path. Repository-owned macOS and Windows CI builds the real Runtime,
-runs the complete 38-test Tycho/PDE/real-process matrix, and audits the exact p2
+runs the complete 41-test Tycho/PDE/real-process matrix, and audits the exact p2
 inventory without an ITS secret. Authorized local x86_64 EDT 2026.1 evidence on
 JDK 17 and matching OpenJFX proves positive, repeated, invalid-configuration,
 timeout, cancellation, stop, install, uninstall, and clean-host outcomes while

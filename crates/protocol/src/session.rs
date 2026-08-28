@@ -137,10 +137,7 @@ impl<'server> McpConnection<'server> {
                         self.state = ConnectionState::Modern;
                         self.server.dispatch(input).await
                     }
-                    DecodeOutcome::Error(error)
-                        if error.code() == ErrorCode::InvalidParams
-                            && is_legacy_operational_method(&method) =>
-                    {
+                    DecodeOutcome::Error(_) if is_legacy_operational_method(&method) => {
                         Some(server_not_initialized(id))
                     }
                     DecodeOutcome::Error(error) => Some(Response::Error(error)),

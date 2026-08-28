@@ -1,11 +1,11 @@
-//! Bounded MCP `2026-07-28` JSON-RPC values and codec.
+//! Bounded modern and connection-local legacy MCP JSON-RPC values and codec.
 
 use std::fmt;
 
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 
-/// The only MCP protocol revision supported by this crate.
+/// The stateless MCP protocol revision supported by this crate.
 pub const PROTOCOL_VERSION: &str = "2026-07-28";
 /// Required per-request protocol-version metadata key.
 pub const PROTOCOL_VERSION_META_KEY: &str = "io.modelcontextprotocol/protocolVersion";

@@ -84,11 +84,20 @@ fn legacy_request(id: &Value, method: &str, params: Option<&Value>) -> String {
 }
 
 fn modern_request(id: &Value, method: &str, fields: &Value) -> String {
+    modern_request_with_version(id, method, fields, PROTOCOL_VERSION)
+}
+
+fn modern_request_with_version(
+    id: &Value,
+    method: &str,
+    fields: &Value,
+    protocol_version: &str,
+) -> String {
     let mut params = fields.as_object().expect("field object").clone();
     params.insert(
         "_meta".to_owned(),
         json!({
-            "io.modelcontextprotocol/protocolVersion": PROTOCOL_VERSION,
+            "io.modelcontextprotocol/protocolVersion": protocol_version,
             "io.modelcontextprotocol/clientCapabilities": {}
         }),
     );
@@ -430,6 +439,22 @@ fn legacy_lifecycle_errors_notifications_ping_and_post_error_state_are_closed() 
         preinit["error"]["code"],
         ErrorCode::ServerNotInitialized.value()
     );
+    for (id, method) in [(2, "ping"), (3, "tools/list"), (4, "tools/call")] {
+        let unsupported = dispatch_json(
+            &mut connection,
+            &modern_request_with_version(
+                &json!(id),
+                method,
+                &json!({}),
+                MCP_PROTOCOL_VERSION_2025_11_25,
+            ),
+        );
+        assert_eq!(
+            unsupported["error"]["code"],
+            ErrorCode::ServerNotInitialized.value()
+        );
+        assert_eq!(connection.protocol_revision(), None);
+    }
 
     let _ = dispatch_json(&mut connection, &cursor_initialize());
     assert!(block_on(connection.dispatch(r#"{"jsonrpc":"2.0","method":"unknown"}"#)).is_none());

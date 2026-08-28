@@ -141,7 +141,7 @@ The final corrective focused counts are:
 
 - protocol session: 11 passed;
 - Runtime stdio: 8 passed;
-- public `oneagent-mcp` process: 15 passed;
+- public `oneagent-mcp` process: 16 passed;
 - semantic MCP tools: 6 passed;
 - LSP process regression: 7 passed;
 - VS Code: compilation passed, 62 unit tests and 2 real-process tests passed;
@@ -174,13 +174,21 @@ initialize. Protocol equality and public-process regressions prove that modern
 `initialize` returns `-32601`, selects Modern, and permits a following modern
 discover, while the full legacy initialize matrix remains unchanged.
 
+A fourth fresh-context review found that one neighboring pre-initialize path
+still exposed the modern unsupported-version error for operational methods.
+The final precedence correction maps every failed modern decode of `ping`,
+`tools/list`, or `tools/call` in Undetermined to `-32002`, after raw
+parse/envelope validation and before mode selection. Protocol and public-
+process rows cover all three methods with well-typed `2025-11-25` metadata,
+prove the state remains Undetermined, and then complete a valid initialize.
+
 The final accepted corrective canonical gate is:
 
 | Command | Exit and exact outcome |
 | --- | --- |
 | `cargo fmt --all --check` | 0 |
 | `cargo check --workspace --all-targets` | 0 |
-| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,138 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
+| `cargo test --workspace --all-targets` | 0; 72 test-result targets, 1,139 passed, 0 failed, ignored, measured, or filtered; four binary targets contain zero tests and are not acceptance filters |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 |
 | `cargo doc --workspace --no-deps` | 0 |
 | `git diff --check` | 0 |
@@ -197,6 +205,8 @@ than `CANCELLED`) and failed the build with 40 of 41 tests passing. No EDT code
 is in the final corrective diff. One immediate sequential rerun of the exact
 full command completed with `BUILD SUCCESS`, all 41 tests passing, zero
 failures, errors, or skips, and the public Runtime process exercised twice.
+The later final correction's EDT host run passed on its first attempt with the
+same 41-test, zero-failure/error/skip result.
 
 ## Audits and limitations
 

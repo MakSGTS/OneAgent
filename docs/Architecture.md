@@ -69,10 +69,11 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      grammar, local validation, bounded one-request socket lifecycle, exact
      query encoding, opaque Runtime JSON presentation, and stable failure/exit
      classification without becoming protocol or semantic authority.
-   - `oneagent-protocol` owns the bounded MCP 2026-07-28 and LSP 3.17 request,
-     notification, response, error, codec, validation, lifecycle, capability,
-     and dispatch contracts. It does not own Runtime I/O, semantic projection,
-     HTTP, or editor UI.
+   - `oneagent-protocol` owns bounded stateless MCP 2026-07-28,
+     connection-local legacy MCP 2025-06-18 and 2025-11-25, and LSP 3.17
+     request, notification, response, error, codec, validation, lifecycle,
+     capability, and dispatch contracts. It does not own Runtime I/O, semantic
+     projection, HTTP, or editor UI.
    - `extensions/vscode` is the desktop workspace client for the accepted MCP
      process boundary. It exposes four contributed commands and one non-default
      chat participant,

@@ -21,13 +21,22 @@ fn request(id: u64, method: &str) -> String {
 }
 
 fn request_with_capabilities(id: u64, method: &str, capabilities: &Value) -> String {
+    request_with_version_and_capabilities(id, method, PROTOCOL_VERSION, capabilities)
+}
+
+fn request_with_version_and_capabilities(
+    id: u64,
+    method: &str,
+    protocol_version: &str,
+    capabilities: &Value,
+) -> String {
     json!({
         "jsonrpc": "2.0",
         "id": id,
         "method": method,
         "params": {
             "_meta": {
-                "io.modelcontextprotocol/protocolVersion": PROTOCOL_VERSION,
+                "io.modelcontextprotocol/protocolVersion": protocol_version,
                 "io.modelcontextprotocol/clientCapabilities": capabilities
             }
         }
@@ -473,6 +482,35 @@ async fn public_mcp_process_preserves_modern_unknown_initialize_dispatch() {
         responses[1]["result"]["supportedVersions"],
         json!([PROTOCOL_VERSION])
     );
+}
+
+#[tokio::test]
+async fn public_mcp_process_closes_preinitialize_operational_error_precedence() {
+    for (id, method) in [(52, "ping"), (53, "tools/list"), (54, "tools/call")] {
+        let unsupported = request_with_version_and_capabilities(
+            id,
+            method,
+            MCP_PROTOCOL_VERSION_2025_11_25,
+            &json!({}),
+        );
+        let input = format!("{unsupported}\n{}\n", cursor_initialize());
+        let output = run_process(input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("pre-initialize stdout must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("pre-initialize response JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0]["id"], id);
+        assert_eq!(responses[0]["error"]["code"], -32002);
+        assert_eq!(responses[1]["id"], 0);
+        assert_eq!(
+            responses[1]["result"]["protocolVersion"],
+            MCP_PROTOCOL_VERSION_2025_11_25
+        );
+    }
 }
 
 #[tokio::test]

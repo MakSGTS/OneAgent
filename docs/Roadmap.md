@@ -8383,9 +8383,20 @@ tests and 15 public-process tests. Its final client matrix again records three
 successful Codex runs, two successful Cursor discovery runs, 62 VS Code unit
 tests, two VS Code process tests, and a successful 41-test EDT rerun after one
 timing-sensitive cancellation-test failure. Sprint 35 remains `active` until a
-new fresh-context review covers the latest immutable range. None of the three
-blocked reviews created a review artifact, state transition, or prompt
-retirement.
+new fresh-context review covers the latest immutable range. The fourth fresh-
+context review of
+`cd876c836014fbd1ee15c0683da67d036f181b3c..6a808fc100ca41b343ac7a0851dd346542a2b800`
+was also `blocked`: a pre-initialize operational request with well-typed legacy
+revision metadata exposed modern `-32022` instead of lifecycle `-32002`. The
+fourth separate correction closes this precedence for `ping`, `tools/list`,
+and `tools/call`, proves atomic recovery through a following initialize,
+updates the remaining stale protocol/current-state summaries, and completes
+the full matrix with 1,139 workspace tests, 16 public-process tests, three
+successful Codex runs, two successful Cursor discovery runs, 62 VS Code unit
+tests, two VS Code process tests, and 41 successful EDT tests. Sprint 35 remains
+`active` until a new fresh-context review covers the latest immutable range.
+None of the four blocked reviews created a review artifact, state transition,
+or prompt retirement.
 
 Task 6 reviews the exact planning-through-latest-corrective range with exactly
 one fresh-context read-only reviewer. The primary independently reconciles every

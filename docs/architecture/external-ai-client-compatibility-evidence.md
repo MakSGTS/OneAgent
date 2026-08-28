@@ -6,8 +6,9 @@ This document records the Task 5 evidence executed on 2026-08-28 from committed
 Task 4 head `71425e50` and the corrective evidence executed after successive
 Task 6 reviews. Task 5 introduced no production behavior. The corrective
 changes close revision-aware initialization, lifecycle, mode-selection, error-
-precedence, and generic-metadata gaps found by those reviews. Sprint 35 remains
-`active` pending a new independent Task 6 integration review.
+precedence, and generic-metadata gaps found by those reviews. The
+[Sprint 35 integration review](../reviews/sprint-35-external-ai-client-compatibility.md)
+records `pass with non-blocking follow-ups`, and Sprint 35 is `completed`.
 
 The production process supports these exact revisions:
 
@@ -270,12 +271,32 @@ result payload, and both Cursor discovery commands passed. The first attempted
 seven-tool host approval was rejected before Codex started and changed no
 state; it is not a client execution result.
 
+## Post-review follow-up hardening
+
+On 2026-08-29, the accepted non-blocking Sprint 35 follow-ups were completed
+without changing production code. One table-driven protocol test now locks the
+unknown-method precedence for an Undetermined connection across absent,
+malformed, supported-legacy, and valid-modern metadata at `-32602`, `-32602`,
+`-32022`, and `-32601`. Named positive rows also cover explicit empty-object
+`ping` params and valid generic request metadata on `tools/list` for both
+legacy revisions.
+
+`cargo test -p oneagent-protocol --test mcp_session` passed 13 tests with zero
+failures. The subsequent complete workspace gate passed 1,141 tests with zero
+failures; `cargo fmt --all --check`, `cargo check --workspace --all-targets`,
+strict all-target Clippy, warnings-as-errors Rustdoc, and `git diff --check`
+also exited zero.
+
 ## Audits and limitations
 
-- No Cargo manifest, lockfile, production dependency, third-party package,
-  license inventory, catalog, response schema, Tool Policy rule, or semantic
-  implementation changed. Task 5 changed no production source; the corrective
-  change modifies only connection-owned initialize validation.
+- Sprint 35 added connection-owned legacy negotiation, lifecycle validation,
+  error precedence, generic metadata handling, and revision-specific legacy
+  initialize/list/call/ping response projection. The existing modern response
+  schema, immutable catalog, Tool Policy rules, semantic implementations,
+  Cargo manifests, lockfile, production dependencies, third-party packages,
+  and license inventory remain unchanged. Task 5 changed no production source;
+  its subsequent corrective changes remained inside the protocol session and
+  production-process compatibility boundaries.
 - No credential, token, personal absolute path, client binary, archive, raw
   trace, generated package, client cache, or global client configuration is
   tracked. Downloaded clients and disposable configs remain ignored under

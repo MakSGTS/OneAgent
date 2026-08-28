@@ -513,6 +513,49 @@ fn legacy_lifecycle_errors_notifications_ping_and_post_error_state_are_closed() 
 }
 
 #[test]
+fn undetermined_unknown_requests_preserve_metadata_error_precedence() {
+    let cases = [
+        (
+            "absent metadata",
+            legacy_request(&json!(1), "review/unknown", None),
+            ErrorCode::InvalidParams,
+            None,
+        ),
+        (
+            "malformed metadata",
+            legacy_request(&json!(2), "review/unknown", Some(&json!({"_meta": 42}))),
+            ErrorCode::InvalidParams,
+            None,
+        ),
+        (
+            "supported legacy revision metadata",
+            modern_request_with_version(
+                &json!(3),
+                "review/unknown",
+                &json!({}),
+                MCP_PROTOCOL_VERSION_2025_11_25,
+            ),
+            ErrorCode::UnsupportedProtocolVersion,
+            None,
+        ),
+        (
+            "valid modern metadata",
+            modern_request(&json!(4), "review/unknown", &json!({})),
+            ErrorCode::MethodNotFound,
+            Some(McpProtocolRevision::V2026_07_28),
+        ),
+    ];
+
+    for (name, request, expected_error, expected_revision) in cases {
+        let (server, _) = tool_server();
+        let mut connection = server.connection();
+        let response = dispatch_json(&mut connection, &request);
+        assert_eq!(response["error"]["code"], expected_error.value(), "{name}");
+        assert_eq!(connection.protocol_revision(), expected_revision, "{name}");
+    }
+}
+
+#[test]
 fn legacy_initialized_notification_and_ping_accept_revision_generic_metadata() {
     for version in [
         MCP_PROTOCOL_VERSION_2025_06_18,
@@ -546,7 +589,13 @@ fn legacy_initialized_notification_and_ping_accept_revision_generic_metadata() {
         );
         assert!(connection.is_initialized());
 
-        for (id, progress_token) in [(1, json!("progress")), (2, json!(7))] {
+        let empty_params_ping = dispatch_json(
+            &mut connection,
+            &legacy_request(&json!(1), "ping", Some(&json!({}))),
+        );
+        assert_eq!(empty_params_ping["result"], json!({}));
+
+        for (id, progress_token) in [(2, json!("progress")), (3, json!(7))] {
             let ping = dispatch_json(
                 &mut connection,
                 &legacy_request(
@@ -560,7 +609,7 @@ fn legacy_initialized_notification_and_ping_accept_revision_generic_metadata() {
         let invalid_ping = dispatch_json(
             &mut connection,
             &legacy_request(
-                &json!(3),
+                &json!(4),
                 "ping",
                 Some(&json!({"_meta": {"progressToken": true}})),
             ),
@@ -583,7 +632,16 @@ fn legacy_list_and_call_shapes_preserve_catalog_results_and_domain_errors() {
         let mut connection = initialize_active(&server, version);
         let listed = dispatch_json(
             &mut connection,
-            &legacy_request(&json!(10), "tools/list", None),
+            &legacy_request(
+                &json!(10),
+                "tools/list",
+                Some(&json!({
+                    "_meta": {
+                        "progressToken": "list",
+                        "example/trace": [1]
+                    }
+                })),
+            ),
         );
         assert_eq!(listed["result"]["tools"][0]["name"], "oneagent.graph");
         assert_eq!(listed["result"]["tools"][1]["name"], "oneagent.query");

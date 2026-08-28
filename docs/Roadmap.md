@@ -8475,7 +8475,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | next |
+| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | active |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | planned |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | planned |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
@@ -8587,6 +8587,25 @@ canonical Rust workspace gate. Task 8 gives the exact planning-through-Task-7
 range to one fresh-context read-only reviewer, then the primary independently
 inspects and reruns the complete matrix. The same reviewer must pass the drafted
 artifact before any Roadmap transition or prompt deletion.
+
+###### Sprint 36 investigation evidence
+
+Task 1 starts from committed planning baseline `cc890879`. The
+[Diagnostics Engine investigation](architecture/diagnostics-engine-investigation.md)
+inventories the 17 recoverable semantic diagnostic codes, 19 graph-validation
+codes, producer precursors, typed identities and ordering, reports and diffs,
+Workspace snapshots, cache reconstruction, MCP/LSP projections, source-location
+constraints, dependencies, consumers, fixtures, and executable baseline.
+
+The evidence is decision-ready for ADR-0058. Graph remains semantic and
+validation authority; no repository-owned suppression configuration or unified
+cross-family identity exists. ADR-0058 must therefore select the bounded
+source-independent owner, family-discriminated identity, disposition,
+suppression, ordering, report, error, Workspace/cache, and MCP/LSP contracts
+before production changes. A configurable rule registry, third-party or
+scripted rules, new producers, diagnostics UI, mutable documents, fixes,
+telemetry, and remote behavior remain outside Sprint 36. Sprint 36 is now
+`active`; Task 2 owns architecture acceptance.
 
 Sprint 36 remains `next` during planning, becomes `active` when Task 1 starts,
 and may become `completed` only after Task 8. `already_complete` requires current

@@ -90,8 +90,8 @@ pub(crate) fn sha256_hex(input: &[u8]) -> String {
     padded.extend_from_slice(&bit_length.to_be_bytes());
 
     let mut state = INITIAL_STATE;
-    for block in padded.chunks_exact(64) {
-        compress(&mut state, block);
+    for block_start in (0..padded.len()).step_by(64) {
+        compress(&mut state, &padded[block_start..block_start + 64]);
     }
     let mut digest = String::with_capacity(64);
     for word in state {
@@ -103,8 +103,14 @@ pub(crate) fn sha256_hex(input: &[u8]) -> String {
 #[allow(clippy::many_single_char_names)]
 fn compress(state: &mut [u32; 8], block: &[u8]) {
     let mut schedule = [0_u32; 64];
-    for (index, word) in block.chunks_exact(4).take(16).enumerate() {
-        schedule[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+    for (index, slot) in schedule.iter_mut().take(16).enumerate() {
+        let word_start = index * 4;
+        *slot = u32::from_be_bytes([
+            block[word_start],
+            block[word_start + 1],
+            block[word_start + 2],
+            block[word_start + 3],
+        ]);
     }
     for index in 16..64 {
         let sigma_zero = schedule[index - 15].rotate_right(7)

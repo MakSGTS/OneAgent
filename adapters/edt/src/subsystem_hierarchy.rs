@@ -583,11 +583,13 @@ fn parse_qualified_parent(
         return Err(malformed_parent(descriptor, value));
     }
     let mut names = Vec::new();
-    for pair in components.chunks_exact(2) {
-        if pair[0] != "Subsystem" || validate_exact_name(pair[1]).is_err() {
+    for pair_start in (0..components.len()).step_by(2) {
+        let kind = components[pair_start];
+        let name = components[pair_start + 1];
+        if kind != "Subsystem" || validate_exact_name(name).is_err() {
             return Err(malformed_parent(descriptor, value));
         }
-        names.push(EntityName::new(pair[1]).map_err(|_| malformed_parent(descriptor, value))?);
+        names.push(EntityName::new(name).map_err(|_| malformed_parent(descriptor, value))?);
     }
     Ok(names)
 }

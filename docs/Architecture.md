@@ -127,9 +127,10 @@ The roadmap assigns future boundaries explicitly:
   completed. The Sprint 34 EDT Integration Prototype review records `pass`,
   Sprint 35 External AI Client Compatibility is completed, and the
   [v0.6 MCP and IDE release review](reviews/v0.6-release-review.md) records
-  `pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine is active;
-  implementation and completion evidence are committed, while its mandatory
-  integration review remains.
+  `pass with non-blocking follow-ups`. The
+  [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+  records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
+  next target.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -240,11 +241,12 @@ a partial report. Neither protocol handler reruns normalization or validation.
 
 The complete requirement matrix, focused/public process counts, compatibility
 checks, and limitations are recorded in the
-[Sprint 36 evidence](architecture/diagnostics-engine-evidence.md). Sprint 36
-remains active until its mandatory integration review. Configurable rule
+[Sprint 36 evidence](architecture/diagnostics-engine-evidence.md), and the
+[Sprint 36 review](reviews/sprint-36-diagnostics-engine.md) records `pass` and
+completion. Sprint 37 Rules Engine is the unique next target. Configurable rule
 registration/execution, persisted suppression, new producers, diagnostics UI,
 mutable documents, fixes, edits, remote access, and telemetry remain outside
-this boundary and belong to later architecture, including Sprint 37.
+the completed Sprint 36 boundary.
 
 ## Accepted LLM Provider abstraction boundary
 

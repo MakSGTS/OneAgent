@@ -23,9 +23,10 @@ and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The
 Sprint 33 AI Chat and Context Panel and Sprint 34 EDT Integration Prototype are
 complete. Sprint 35 External AI Client Compatibility is complete, and the
 [v0.6 MCP and IDE release review](docs/reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine is active;
-its implementation and completion evidence are committed, and the mandatory
-integration review remains.
+`pass with non-blocking follow-ups`. The
+[Sprint 36 Diagnostics Engine review](docs/reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
+next target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

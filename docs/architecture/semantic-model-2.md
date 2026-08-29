@@ -370,9 +370,10 @@ records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint
 34 EDT Integration Prototype and Sprint 35 External AI Client Compatibility are
 completed. The
 [v0.6 MCP and IDE release review](../reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine implementation
-and completion evidence are committed; Sprint 36 remains active until its
-mandatory integration review.
+`pass with non-blocking follow-ups`. The
+[Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
+next target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes

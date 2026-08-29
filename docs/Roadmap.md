@@ -34,8 +34,10 @@ closed with a `pass` decision in the
 closed with a `pass` decision in the
 [v0.5 release review](reviews/v0.5-release-review.md). The
 [v0.6 release review](reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`; v0.6 is completed and Sprint 36 Diagnostics
-Engine is the unique active target pending its repeated integration review. The
+`pass with non-blocking follow-ups`; v0.6 is completed. The
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
+next target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -7088,9 +7090,10 @@ non-blocking documentation follow-up.
 
 The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups` for Sprints 28–35. The release is
-`completed`. Sprint 36 Diagnostics Engine is the unique active target; its
-implementation and completion evidence are committed, and the mandatory
-integration review remains.
+`completed`. The
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
+next target.
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8477,8 +8480,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | active |
-| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | planned |
+| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
+| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | next |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | planned |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
@@ -8673,6 +8676,33 @@ owns the fresh-context independent integration review, primary reconciliation,
 same-reviewer artifact-consistency check, Sprint 37 hand-off, and conditional
 retirement of the exact Sprint 35 prompt suite. No review decision or prompt
 retirement is claimed by completion evidence.
+
+###### Sprint 36 integration review
+
+Task 8 reviews the exact immutable range
+`4a165109a37dc44371d81e49b1931c2d3a1de06c..9afd3026a98c900a7e8b606650d6bc056e92a3bc`.
+Fresh-context read-only reviewer `/root/sprint36_validation_evidence_reviewer`
+returns `pass` with no finding, missing evidence, or follow-up. Primary
+reconciliation reproduces the focused matrix and complete canonical gate at
+the same head: 73 targets and 1,177 tests pass with zero failed, ignored,
+measured, or filtered tests; strict format, check, Clippy, Rustdoc, and diff
+checks also pass.
+
+Four separate remediation commits close every earlier review finding:
+`88295738` corrects cache compatibility claims and the Task 5 ADR link;
+`5573ef60` corrects the remaining Roadmap statements; `60743f45` corrects
+README cache wording and makes Designer XML use complete build-result
+validation; and `170b9e8f` adds the shared production helper plus a negative
+`InconsistentReport` regression that distinguishes complete validation from
+graph-only validation. The same final reviewer confirms the completed
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md),
+this state transition, the Sprint 37 hand-off, and the exact retirement
+inventory as truthful, complete, and non-weakening.
+
+Sprint 36 is `completed`; Sprint 37 Rules Engine is the unique `next` target.
+All nine Sprint 36 prompt files remain tracked. The completed transition
+retires exactly the seven verified Sprint 35 External AI Client Compatibility
+prompt files and no other prompt or repository file.
 
 Sprint 36 remains `next` during planning, becomes `active` when Task 1 starts,
 and may become `completed` only after Task 8. `already_complete` requires current

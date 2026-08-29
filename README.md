@@ -23,8 +23,9 @@ and Symbol Search are complete. Sprint 32 LSP Adapter is also complete. The
 Sprint 33 AI Chat and Context Panel and Sprint 34 EDT Integration Prototype are
 complete. Sprint 35 External AI Client Compatibility is complete, and the
 [v0.6 MCP and IDE release review](docs/reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine is the unique
-`next` planning target.
+`pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine is active;
+its implementation and completion evidence are committed, and the mandatory
+integration review remains.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -37,7 +38,7 @@ See
 - `crates/metadata` — typed 1C metadata model
 - `crates/graph` — canonical semantic graph, query, validation, diff, impact, coverage, and resolution APIs
 - `crates/bsl` — BSL lexical and syntax analysis
-- `crates/analysis` — source-independent declaration/call analysis and deterministic semantic Context Engine
+- `crates/analysis` — source-independent declaration/call analysis, deterministic semantic Context Engine, and deterministic bounded Diagnostics Engine
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
 - `crates/protocol` — bounded MCP 2025-06-18, 2025-11-25, and 2026-07-28 plus LSP 3.17 domain values, validation, encoding, lifecycle, capabilities, and dispatch contracts
@@ -56,7 +57,8 @@ then observes complete file bytes through a Runtime-owned polling source,
 serializes rebuilds, atomically publishes valid replacements, and retains the
 last valid snapshot across failed rebuilds until a later change recovers. The
 transport-neutral snapshot contains separate ordered per-configuration graphs
-plus preserved diagnostics, reference evidence, and reports; a public status
+plus preserved raw diagnostics, reference evidence, complete validation, graph
+reports, and one complete normalized diagnostic report; a public status
 observer reports rebuild attempts, publications, phases, and failures. Runtime
 stores complete validated snapshots in the fixed Workspace-local
 `.oneagent/cache/workspace-v1.json` entry. Startup restores only an exact
@@ -151,6 +153,18 @@ returns only confined Workspace-relative forward-slash source paths and
 one-based locations for the accepted Module, Procedure, Function, and EDT Query
 slice.
 
+ADR-0058 adds the source-independent `oneagent-analysis::diagnostics` boundary
+over existing Graph-owned recoverable diagnostics and caller-supplied Graph
+validation. The engine collapses exact duplicates, rejects conflicting evidence,
+applies only exact in-memory identity suppression, and returns one complete
+bounded deterministic report with checked summaries. Workspace publishes the
+default no-suppression report atomically and recomputes it after cache decode
+without changing cache schema. `oneagent.diagnostics` now filters both semantic
+and validation findings, retains the complete unfiltered summary, and exposes
+at most 100 path-free ordered items with explicit truncation. The
+[Sprint 36 evidence](docs/architecture/diagnostics-engine-evidence.md) records
+the complete acceptance matrix and limitations.
+
 The process constructs no long-running Runtime `App`, watcher, cache, HTTP
 listener, background task, remote client, or real side effect. Each stdio run
 owns one fresh negotiated session over the immutable server. It keeps stdout
@@ -172,13 +186,15 @@ only Content-Length-framed stdio, and enforces initialize, initialized,
 shutdown, and exit sequencing. Its static capabilities are UTF-16 positions,
 no document synchronization, `workspaceSymbolProvider`, and pull-only
 `diagnosticProvider`. Workspace symbols cover located Procedure, Function, and
-EDT Query nodes; full document diagnostic reports project only existing
-recoverable Graph diagnostics with located source nodes. Runtime owns canonical
-confined file URIs and zero-based ranges. The process reads no source after
-startup, emits protocol frames only on stdout, treats EOF before `exit` as a
-failure, adds no dependency, and does not claim definition, references,
-completion, edits, mutable documents, workspace diagnostics, remote transport,
-or external-client compatibility.
+EDT Query nodes; full document diagnostic reports project only active normalized
+findings with exactly one existing source node and one confined typed span.
+Missing, multiple, conflicting, span-less, escaping, or incompatible locations
+are omitted rather than guessed, and more than 100 located findings fails the
+complete request. Runtime owns canonical confined file URIs and zero-based
+ranges. The process reads no source after startup, emits protocol frames only on
+stdout, treats EOF before `exit` as a failure, adds no dependency, and does not
+claim definition, references, completion, edits, mutable documents, workspace
+diagnostics, remote transport, or external-client compatibility.
 
 Sprint 33 adds an extension-only semantic Context and AI chat slice without
 changing Rust, MCP, or provider authority. `OneAgent: Inspect Semantic Context` starts

@@ -127,7 +127,9 @@ The roadmap assigns future boundaries explicitly:
   completed. The Sprint 34 EDT Integration Prototype review records `pass`,
   Sprint 35 External AI Client Compatibility is completed, and the
   [v0.6 MCP and IDE release review](reviews/v0.6-release-review.md) records
-  `pass with non-blocking follow-ups`.
+  `pass with non-blocking follow-ups`. Sprint 36 Diagnostics Engine is active;
+  implementation and completion evidence are committed, while its mandatory
+  integration review remains.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -135,8 +137,10 @@ The roadmap assigns future boundaries explicitly:
   in Sprint 32. Explicit semantic Context inspection and bounded request-selected
   chat are implemented in Sprint 33. The bounded native EDT compatibility probe
   is implemented in Sprint 34. External Codex and Cursor compatibility is
-  implemented in Sprint 35. Definition/reference providers, diagnostics UI,
-  model tools or edits, and semantic EDT IDE workflows remain later work.
+  implemented in Sprint 35. Source-independent diagnostic orchestration and
+  immutable MCP/LSP projections are implemented in Sprint 36. Definition/
+  reference providers, diagnostics UI, model tools or edits, and semantic EDT
+  IDE workflows remain later work.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
@@ -192,6 +196,53 @@ records `pass`; the later
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
 follow-ups`; Sprints 29–35 and the v0.6 MCP and IDE boundary are completed with
 a non-blocking [release decision](reviews/v0.6-release-review.md).
+
+## Implemented Diagnostics Engine boundary
+
+[ADR-0058](adr/0058-diagnostics-engine.md) governs the implemented Sprint 36
+slice. `oneagent-analysis::diagnostics` consumes exactly immutable Graph-owned
+`SemanticDiagnostic` values and one caller-supplied
+`SemanticGraphValidationResult`. Graph remains the authority for facts,
+diagnostic and validation vocabularies, validation execution, provenance,
+locations, reports, and build diffs. The engine does not parse source, invoke a
+validator, mutate a graph, infer a location, or register a rule.
+
+Each normalized finding has one tagged semantic or validation identity, closed
+severity/category/disposition values, retained typed evidence, bounded message
+and anchors, and a deterministic total order. Exact duplicates collapse;
+same-identity different-content evidence fails closed. The only suppression
+authority is an exact in-memory identity set. Suppressed findings remain in the
+complete report and summary after active findings. Production Workspace uses
+the empty suppression policy.
+
+The engine accepts at most 65,536 diagnostics, 65,536 validation issues, and
+65,536 normalized findings; suppression, message, node-anchor, and provenance
+limits are independently enforced before cloning. It never truncates or
+returns a partial report. Closed errors contain only kind and bounded counts.
+The report owns checked complete totals and deterministic read-only filters.
+
+Runtime constructs complete build validation and the report before atomically
+publishing each immutable Configuration snapshot. Raw diagnostics and existing
+Graph reports remain available. Persistent cache schema and bytes are unchanged;
+decode reconstructs both derived values from canonical stored evidence. Cold,
+warm, watched, rebuilt, and repeated snapshots expose equal results.
+
+MCP keeps the seven-tool catalog and Tool Policy gate. `oneagent.diagnostics`
+adds exact family/severity/category filters, optional suppressed visibility,
+normalized semantic and validation fields, and the complete unfiltered summary;
+the adapter retains its default 50 and maximum 100 result limit and explicit
+truncation. MCP exposes no path, source, raw reference, or provenance. LSP keeps
+pull-only full reports and projects only active findings with exactly one node
+and one confined typed span; it fails requests above 100 rather than returning
+a partial report. Neither protocol handler reruns normalization or validation.
+
+The complete requirement matrix, focused/public process counts, compatibility
+checks, and limitations are recorded in the
+[Sprint 36 evidence](architecture/diagnostics-engine-evidence.md). Sprint 36
+remains active until its mandatory integration review. Configurable rule
+registration/execution, persisted suppression, new producers, diagnostics UI,
+mutable documents, fixes, edits, remote access, and telemetry remain outside
+this boundary and belong to later architecture, including Sprint 37.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -325,6 +376,16 @@ semantic failures set `isError`; malformed or unknown calls remain protocol
 `Invalid params` failures. No tool mutates files, graphs, processes, network
 state, or other external state.
 
+Under ADR-0058, `oneagent.diagnostics` consumes the Configuration snapshot's
+complete normalized report rather than raw diagnostics. Its required
+`configurationId`, optional unique non-empty family/severity/category filters,
+optional suppressed visibility, and `1..=100` limit are reflected exactly in
+the input schema and handler validation. Ordered results include both accepted
+families and normalized fields while retaining the existing semantic fields;
+`total` counts every match before the limit and `summary` always describes the
+complete unfiltered report. The Graph summary and `oneagent.validation` also
+reuse the published validation result rather than running validation per call.
+
 Public protocol, semantic-library, fixture, adapter, and real-process tests
 cover exact discovery, catalog order, annotations and schemas, validation
 bounds, all seven tool families, Tool Policy execution, path redaction and
@@ -362,10 +423,13 @@ and EDT Query nodes with one distinct confined typed span. It applies the
 accepted Unicode-lowercase substring match, deterministic identity order, LSP
 kinds 12/19, zero-based ranges, and a complete-result limit of 100 without
 silent truncation. `textDocument/diagnostic` returns full reports without a
-result ID. It projects only existing recoverable Graph diagnostics whose source
-node has one matching confined span, preserves Graph code, severity, message,
-and stable order, and returns an empty full report for a valid document without
-projected evidence.
+result ID. It consumes the immutable normalized report and projects only active
+findings with exactly one primary node that exists in the same Configuration
+and has one matching confined typed span. It preserves Graph code, severity,
+message, and deterministic order, and returns an empty full report for a valid
+document without projected evidence. Suppressed, unlocated, multi-anchor,
+conflicting, span-less, escaping, or incompatible evidence is omitted rather
+than guessed. A complete located result above 100 returns `RequestFailed`.
 
 Content-Length stdout is protocol-only and flushed per response. Notifications
 are silent; successful process completion requires `shutdown` followed by

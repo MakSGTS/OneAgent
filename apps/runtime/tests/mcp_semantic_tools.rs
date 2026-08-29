@@ -137,6 +137,47 @@ fn assert_catalog(listed: &Value) {
         symbols["inputSchema"]["properties"]["kinds"]["items"]["enum"],
         json!(["module", "procedure", "function", "query"])
     );
+    assert_diagnostic_schema(listed);
+}
+
+fn assert_diagnostic_schema(listed: &Value) {
+    let diagnostics = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.diagnostics")
+        .expect("diagnostics definition");
+    assert_eq!(
+        diagnostics["inputSchema"]["required"],
+        json!(["configurationId"])
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["families"],
+        json!({
+            "type": "array",
+            "items": {"enum": ["semantic", "validation"]},
+            "minItems": 1,
+            "uniqueItems": true
+        })
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["severities"]["items"]["enum"],
+        json!(["error", "warning"])
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["categories"]["items"]["enum"],
+        json!([
+            "source",
+            "semantic",
+            "structural",
+            "provenance",
+            "build_consistency"
+        ])
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["includeSuppressed"],
+        json!({"type": "boolean"})
+    );
 }
 
 fn tool_cases(
@@ -277,7 +318,7 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         );
         let serialized = first["result"]["structuredContent"].to_string();
         assert!(!serialized.contains(fixture_root().to_str().expect("UTF-8 fixture path")));
-        assert!(!serialized.contains("provenance"));
+        assert!(!serialized.contains("\"provenance\":["));
         assert!(!serialized.contains("Configuration.xml"));
         assert_projection(offset, &first["result"]["structuredContent"]);
     }
@@ -300,6 +341,34 @@ fn assert_projection(offset: usize, content: &Value) {
                     .skip(1)
                     .all(|node| node["viaEdgeId"].is_string())
             );
+        }
+        5 => {
+            let diagnostics = content["diagnostics"]
+                .as_array()
+                .expect("diagnostic findings");
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(content["total"], 3);
+            assert_eq!(content["truncated"], true);
+            assert_eq!(content["summary"]["total"], 3);
+            assert_eq!(content["summary"]["active"], 3);
+            assert_eq!(content["summary"]["suppressed"], 0);
+            assert_eq!(content["summary"]["byFamily"]["semantic"], 3);
+            assert_eq!(content["summary"]["byFamily"]["validation"], 0);
+            assert!(diagnostics.iter().all(|finding| {
+                finding["family"] == "semantic"
+                    && finding["severity"] == "error"
+                    && finding["category"] == "semantic"
+                    && finding["disposition"] == "active"
+                    && finding["sourceNodeId"].is_string()
+                    && finding["candidateNodeIds"].is_array()
+                    && finding["nodeIds"].is_array()
+                    && finding["edgeId"].is_null()
+                    && finding["referenceRequestId"].is_null()
+            }));
+            let serialized = content.to_string();
+            assert!(!serialized.contains("reference\""));
+            assert!(!serialized.contains("producer"));
+            assert!(!serialized.contains("rootPath"));
         }
         6 => {
             let affected = content["affectedNodes"].as_array().expect("affected nodes");
@@ -402,6 +471,21 @@ async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
         json!({"name": "oneagent.symbols", "arguments": {
             "query": "x", "extra": true
         }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "families": []
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "families": ["semantic", "semantic"]
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "severities": ["info"]
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "categories": ["runtime"]
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "includeSuppressed": "true"
+        }}),
     ] {
         let response = dispatch(&server, &request(30, "tools/call", &fields)).await;
         assert_eq!(response["result"]["isError"], true);
@@ -448,6 +532,65 @@ async fn public_symbols_validate_all_arguments_before_lookup() {
         response["result"]["structuredContent"]["code"], "not_found",
         "{response}"
     );
+}
+
+#[tokio::test]
+async fn public_diagnostics_filter_complete_findings_without_rebuilding_summary() {
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot
+        .configurations()
+        .iter()
+        .find(|configuration| !configuration.diagnostic_report().findings().is_empty())
+        .expect("fixture must contain normalized findings")
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    let matching = dispatch(
+        &server,
+        &request(
+            35,
+            "tools/call",
+            &json!({"name": "oneagent.diagnostics", "arguments": {
+                "configurationId": configuration_id,
+                "families": ["semantic"],
+                "severities": ["error"],
+                "categories": ["semantic"],
+                "includeSuppressed": true,
+                "limit": 2
+            }}),
+        ),
+    )
+    .await;
+    let content = &matching["result"]["structuredContent"];
+    assert_eq!(content["total"], 3);
+    assert_eq!(
+        content["diagnostics"].as_array().expect("findings").len(),
+        2
+    );
+    assert_eq!(content["truncated"], true);
+    assert_eq!(content["summary"]["total"], 3);
+
+    let empty = dispatch(
+        &server,
+        &request(
+            36,
+            "tools/call",
+            &json!({"name": "oneagent.diagnostics", "arguments": {
+                "configurationId": configuration_id,
+                "families": ["validation"]
+            }}),
+        ),
+    )
+    .await;
+    let empty = &empty["result"]["structuredContent"];
+    assert_eq!(empty["diagnostics"], json!([]));
+    assert_eq!(empty["total"], 0);
+    assert_eq!(empty["truncated"], false);
+    assert_eq!(empty["summary"], content["summary"]);
 }
 
 #[tokio::test]

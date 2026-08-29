@@ -48,6 +48,9 @@ struct ConfigurationObservation {
     nodes: usize,
     edges: usize,
     diagnostics: usize,
+    validation_issues: usize,
+    normalized_findings: usize,
+    suppressed_findings: usize,
     requests: usize,
     reference_total: usize,
     reference_resolved: usize,
@@ -89,6 +92,11 @@ fn observe(snapshot: &WorkspaceSnapshot) -> SnapshotObservation {
                     configuration.graph().edge_count()
                 );
                 assert!(configuration.graph().validate().is_valid());
+                assert!(configuration.validation().is_valid());
+                assert_eq!(
+                    configuration.diagnostic_report().summary().total(),
+                    configuration.diagnostic_report().findings().len()
+                );
 
                 ConfigurationObservation {
                     id: configuration.configuration_id().as_str().to_owned(),
@@ -97,6 +105,9 @@ fn observe(snapshot: &WorkspaceSnapshot) -> SnapshotObservation {
                     nodes: configuration.graph().node_count(),
                     edges: configuration.graph().edge_count(),
                     diagnostics: configuration.diagnostics().len(),
+                    validation_issues: configuration.validation().issues().len(),
+                    normalized_findings: configuration.diagnostic_report().summary().total(),
+                    suppressed_findings: configuration.diagnostic_report().summary().suppressed(),
                     requests: configuration.reference_requests().len(),
                     reference_total: configuration.reference_statistics().total(),
                     reference_resolved: configuration.reference_statistics().resolved(),
@@ -327,6 +338,9 @@ async fn public_workspace_builds_both_production_formats_deterministically() {
             nodes: 4,
             edges: 3,
             diagnostics: 0,
+            validation_issues: 0,
+            normalized_findings: 0,
+            suppressed_findings: 0,
             requests: 0,
             reference_total: 0,
             reference_resolved: 0,
@@ -339,6 +353,9 @@ async fn public_workspace_builds_both_production_formats_deterministically() {
     assert_eq!(first.configurations[1].nodes, 13);
     assert_eq!(first.configurations[1].edges, 14);
     assert_eq!(first.configurations[1].diagnostics, 3);
+    assert_eq!(first.configurations[1].validation_issues, 0);
+    assert_eq!(first.configurations[1].normalized_findings, 3);
+    assert_eq!(first.configurations[1].suppressed_findings, 0);
     assert_eq!(first.configurations[1].requests, 1);
     assert_eq!(first.configurations[1].reference_total, 5);
     assert_eq!(first.configurations[1].reference_resolved, 2);

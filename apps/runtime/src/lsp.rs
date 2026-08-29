@@ -5,7 +5,10 @@ use std::fmt;
 use std::future::Future;
 use std::path::Path;
 
-use oneagent_graph::{GraphNode, NodeKind, SemanticDiagnostic, SemanticDiagnosticSeverity};
+use oneagent_analysis::diagnostics::{
+    DiagnosticDisposition, DiagnosticFinding, DiagnosticSeverity,
+};
+use oneagent_graph::{GraphNode, NodeKind};
 use oneagent_protocol::{
     LspCapabilities, LspDispatchOutcome, LspExitStatus, LspHandler, LspHandlerError, LspServer,
     MAX_MESSAGE_BYTES, encode_lsp_response,
@@ -385,7 +388,7 @@ fn lsp_position(value: &Value) -> Result<Value, LspHandlerError> {
 }
 
 struct DocumentDiagnostic<'a> {
-    diagnostic: &'a SemanticDiagnostic,
+    finding: &'a DiagnosticFinding,
     range: Value,
     start: (u64, u64),
     end: (u64, u64),
@@ -398,11 +401,14 @@ fn project_document_diagnostics(
 ) -> Result<Value, LspHandlerError> {
     let mut projected = Vec::new();
     for configuration in snapshot.configurations() {
-        for diagnostic in configuration.diagnostics() {
+        for finding in configuration.diagnostic_report().findings() {
+            if finding.disposition() != DiagnosticDisposition::Active {
+                continue;
+            }
             let Some(item) = project_document_diagnostic(
                 snapshot,
                 configuration,
-                diagnostic,
+                finding,
                 root_uri,
                 requested_uri,
             )?
@@ -415,20 +421,20 @@ fn project_document_diagnostics(
     enforce_diagnostic_result_bound(projected.len())?;
     projected.sort_by(|left, right| {
         (
-            left.diagnostic,
+            left.finding,
             requested_uri,
             left.start,
             left.end,
-            left.diagnostic.code().as_str(),
-            left.diagnostic.message(),
+            left.finding.code().as_str(),
+            left.finding.message(),
         )
             .cmp(&(
-                right.diagnostic,
+                right.finding,
                 requested_uri,
                 right.start,
                 right.end,
-                right.diagnostic.code().as_str(),
-                right.diagnostic.message(),
+                right.finding.code().as_str(),
+                right.finding.message(),
             ))
     });
     let items = projected
@@ -436,10 +442,10 @@ fn project_document_diagnostics(
         .map(|item| {
             serde_json::json!({
                 "range": item.range,
-                "severity": lsp_diagnostic_severity(item.diagnostic.severity()),
-                "code": item.diagnostic.code().as_str(),
+                "severity": lsp_diagnostic_severity(item.finding.severity()),
+                "code": item.finding.code().as_str(),
                 "source": "oneagent",
-                "message": item.diagnostic.message()
+                "message": item.finding.message()
             })
         })
         .collect::<Vec<_>>();
@@ -449,11 +455,14 @@ fn project_document_diagnostics(
 fn project_document_diagnostic<'a>(
     snapshot: &WorkspaceSnapshot,
     configuration: &WorkspaceConfigurationSnapshot,
-    diagnostic: &'a SemanticDiagnostic,
+    finding: &'a DiagnosticFinding,
     root_uri: &str,
     requested_uri: &str,
 ) -> Result<Option<DocumentDiagnostic<'a>>, LspHandlerError> {
-    let Some(source_node_id) = diagnostic.source_node() else {
+    if finding.disposition() != DiagnosticDisposition::Active {
+        return Ok(None);
+    }
+    let [source_node_id] = finding.node_anchors() else {
         return Ok(None);
     };
     let Some(source_node) = configuration.graph().node(source_node_id) else {
@@ -462,7 +471,7 @@ fn project_document_diagnostic<'a>(
     project_document_diagnostic_from_source_node(
         snapshot,
         configuration,
-        diagnostic,
+        finding,
         source_node,
         root_uri,
         requested_uri,
@@ -472,7 +481,7 @@ fn project_document_diagnostic<'a>(
 fn project_document_diagnostic_from_source_node<'a>(
     snapshot: &WorkspaceSnapshot,
     configuration: &WorkspaceConfigurationSnapshot,
-    diagnostic: &'a SemanticDiagnostic,
+    finding: &'a DiagnosticFinding,
     source_node: &GraphNode,
     root_uri: &str,
     requested_uri: &str,
@@ -493,7 +502,7 @@ fn project_document_diagnostic_from_source_node<'a>(
     let end = lsp_position_tuple(range.get("end").ok_or(LspHandlerError::Internal)?)
         .ok_or(LspHandlerError::Internal)?;
     Ok(Some(DocumentDiagnostic {
-        diagnostic,
+        finding,
         range,
         start,
         end,
@@ -507,10 +516,10 @@ fn lsp_position_tuple(value: &Value) -> Option<(u64, u64)> {
     ))
 }
 
-const fn lsp_diagnostic_severity(severity: SemanticDiagnosticSeverity) -> u8 {
+const fn lsp_diagnostic_severity(severity: DiagnosticSeverity) -> u8 {
     match severity {
-        SemanticDiagnosticSeverity::Error => 1,
-        SemanticDiagnosticSeverity::Warning => 2,
+        DiagnosticSeverity::Error => 1,
+        DiagnosticSeverity::Warning => 2,
     }
 }
 
@@ -784,12 +793,15 @@ where
 mod tests {
     use std::path::Path;
 
+    use oneagent_analysis::diagnostics::{
+        DiagnosticEvidence, DiagnosticFinding, DiagnosticIdentity, DiagnosticPolicy,
+    };
     use oneagent_common::{
         EntityId, EntityName, SourceLocation, SourcePath, SourcePosition, SourceSpan,
     };
     use oneagent_graph::{
-        Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
-        SemanticDiagnostic,
+        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
+        ResolutionState, SemanticDiagnostic, SemanticGraph, SemanticGraphValidationCode,
     };
     use oneagent_protocol::LspHandlerError;
     use oneagent_workspace::WorkspaceFormat;
@@ -1053,7 +1065,7 @@ mod tests {
             .iter()
             .find(|configuration| !configuration.diagnostics().is_empty())
             .expect("EDT fixture must contain diagnostics");
-        let diagnostic = &configuration.diagnostics()[0];
+        let finding = &configuration.diagnostic_report().findings()[0];
         let root_uri = workspace_root_uri(snapshot.root_path()).expect("root URI");
         let source_path = SourcePath::new(
             configuration
@@ -1084,7 +1096,7 @@ mod tests {
             project_document_diagnostic_from_source_node(
                 &snapshot,
                 configuration,
-                diagnostic,
+                finding,
                 &exact_max,
                 &root_uri,
                 &requested_uri,
@@ -1105,7 +1117,7 @@ mod tests {
             project_document_diagnostic_from_source_node(
                 &snapshot,
                 configuration,
-                diagnostic,
+                finding,
                 &one_over,
                 &root_uri,
                 &requested_uri,
@@ -1158,13 +1170,14 @@ mod tests {
         let document_uri =
             format!("{root_uri}/edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
         let located = configuration
-            .diagnostics()
+            .diagnostic_report()
+            .findings()
             .iter()
-            .find(|diagnostic| {
+            .find(|finding| {
                 project_document_diagnostic(
                     &snapshot,
                     configuration,
-                    diagnostic,
+                    finding,
                     &root_uri,
                     &document_uri,
                 )
@@ -1183,9 +1196,15 @@ mod tests {
             .is_none()
         );
 
-        let missing_source = located
+        let DiagnosticEvidence::Semantic(located_evidence) = located.evidence() else {
+            panic!("fixture located finding must retain semantic evidence");
+        };
+        let missing_source = located_evidence
             .clone()
             .with_source_node(EntityId::new("missing.source").expect("missing source ID"));
+        let missing_source =
+            DiagnosticFinding::from_semantic(&missing_source, &DiagnosticPolicy::default())
+                .expect("bounded missing-source finding");
         assert!(
             project_document_diagnostic(
                 &snapshot,
@@ -1199,12 +1218,15 @@ mod tests {
         );
 
         let absent_source = SemanticDiagnostic::new(
-            located.code(),
-            located.severity(),
-            located.kind(),
-            located.message(),
-            located.reference().clone(),
+            located_evidence.code(),
+            located_evidence.severity(),
+            located_evidence.kind(),
+            located_evidence.message(),
+            located_evidence.reference().clone(),
         );
+        let absent_source =
+            DiagnosticFinding::from_semantic(&absent_source, &DiagnosticPolicy::default())
+                .expect("bounded absent-source finding");
         assert!(
             project_document_diagnostic(
                 &snapshot,
@@ -1214,6 +1236,103 @@ mod tests {
                 &document_uri
             )
             .expect("absent source is not a projection error")
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn document_diagnostics_project_active_single_node_validation_only() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let root_uri = workspace_root_uri(snapshot.root_path()).expect("root URI");
+        let (configuration, source_node, location) = snapshot
+            .configurations()
+            .iter()
+            .find_map(|configuration| {
+                configuration.graph().nodes().find_map(|node| {
+                    lsp_symbol_location(&snapshot, configuration, node, &root_uri)
+                        .ok()
+                        .flatten()
+                        .map(|location| (configuration, node, location))
+                })
+            })
+            .expect("fixture must contain one confined located node");
+        let requested_uri = location["uri"].as_str().expect("location URI");
+        let mut validation_graph = SemanticGraph::new();
+        validation_graph.insert_node(GraphNode::new(
+            source_node.id().clone(),
+            EntityName::new("Validation").expect("validation node name"),
+            NodeKind::Procedure,
+        ));
+        let validation = validation_graph.validate();
+        let issue = validation
+            .issues()
+            .iter()
+            .find(|issue| issue.code() == SemanticGraphValidationCode::MissingNodeProvenance)
+            .expect("validation graph must report missing node provenance");
+        let active = DiagnosticFinding::from_validation(issue, &DiagnosticPolicy::default())
+            .expect("bounded active validation finding");
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                &active,
+                &root_uri,
+                requested_uri,
+            )
+            .expect("active validation location")
+            .is_some()
+        );
+
+        let policy = DiagnosticPolicy::new(std::collections::BTreeSet::from([
+            DiagnosticIdentity::from_validation(issue).expect("bounded validation identity"),
+        ]))
+        .expect("one suppression");
+        let suppressed = DiagnosticFinding::from_validation(issue, &policy)
+            .expect("bounded suppressed validation finding");
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                &suppressed,
+                &root_uri,
+                requested_uri,
+            )
+            .expect("suppressed finding is omitted")
+            .is_none()
+        );
+
+        let related = EntityId::new("metadata.related").expect("related node ID");
+        validation_graph.insert_node(GraphNode::new(
+            related.clone(),
+            EntityName::new("Related").expect("related node name"),
+            NodeKind::Procedure,
+        ));
+        validation_graph
+            .insert_edge(GraphEdge::new(
+                source_node.id().clone(),
+                related,
+                EdgeKind::Calls,
+            ))
+            .expect("validation edge must insert");
+        let validation = validation_graph.validate();
+        let multiple = validation
+            .issues()
+            .iter()
+            .find(|issue| issue.code() == SemanticGraphValidationCode::MissingEdgeProvenance)
+            .expect("validation graph must report missing edge provenance");
+        let multiple = DiagnosticFinding::from_validation(multiple, &DiagnosticPolicy::default())
+            .expect("bounded multi-node validation finding");
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                &multiple,
+                &root_uri,
+                requested_uri,
+            )
+            .expect("multiple anchors are omitted")
             .is_none()
         );
     }

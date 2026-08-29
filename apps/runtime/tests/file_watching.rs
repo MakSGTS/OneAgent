@@ -170,6 +170,17 @@ fn configuration_names(snapshot: &WorkspaceSnapshot) -> Vec<String> {
         .collect()
 }
 
+fn assert_diagnostic_snapshots_complete(snapshot: &WorkspaceSnapshot) {
+    for configuration in snapshot.configurations() {
+        assert!(configuration.validation().is_valid());
+        assert_eq!(
+            configuration.diagnostic_report().summary().total(),
+            configuration.diagnostic_report().findings().len()
+        );
+        assert_eq!(configuration.diagnostic_report().summary().suppressed(), 0);
+    }
+}
+
 async fn request(address: SocketAddr, target: &str) -> RawResponse {
     let mut stream = timeout(Duration::from_secs(5), TcpStream::connect(address))
         .await
@@ -276,6 +287,7 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     assert_eq!(initial_status.attempt(), 1);
     assert_eq!(initial_status.published(), 1);
     let initial = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    assert_diagnostic_snapshots_complete(&initial);
     assert_eq!(
         configuration_names(&initial),
         ["DNSWorldEdition", "WritesFixture"]
@@ -304,6 +316,7 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesWatched"]
     })
     .await;
+    assert_diagnostic_snapshots_complete(&modified_snapshot);
     assert_eq!(
         configuration_names(&initial),
         ["DNSWorldEdition", "WritesFixture"]
@@ -327,6 +340,7 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     fs::rename(root.path().join("designer"), &moved_designer)
         .expect("Designer root removal must succeed");
     let removed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 1).await;
+    assert_diagnostic_snapshots_complete(&removed);
     let removed_status = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.published() == followed_up.published() + 1
@@ -344,6 +358,7 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     let renamed_designer = root.path().join("designer-renamed");
     fs::rename(&moved_designer, &renamed_designer).expect("Designer root addition must succeed");
     let renamed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    assert_diagnostic_snapshots_complete(&renamed);
     let renamed_status = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.published() == removed_status.published() + 1
@@ -388,6 +403,7 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesRecovered"]
     })
     .await;
+    assert_diagnostic_snapshots_complete(&recovered);
     assert_eq!(
         configuration_names(&recovered),
         ["DNSWorldWatched", "WritesRecovered"]

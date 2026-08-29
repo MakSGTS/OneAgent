@@ -6,6 +6,7 @@
 //! 2. extract and resolve local and cross-module calls.
 
 pub mod context;
+pub mod diagnostics;
 
 use oneagent_bsl::{
     BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor, BslModuleSymbols,

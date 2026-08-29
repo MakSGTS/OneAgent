@@ -172,7 +172,12 @@ fn semantic_calls(
             "configurationId": configuration_id, "limit": 1
         }}),
         json!({"name": "oneagent.diagnostics", "arguments": {
-            "configurationId": diagnostic_configuration, "limit": 1
+            "configurationId": diagnostic_configuration,
+            "families": ["semantic"],
+            "severities": ["error"],
+            "categories": ["semantic"],
+            "includeSuppressed": true,
+            "limit": 1
         }}),
         json!({"name": "oneagent.impact", "arguments": {
             "previousConfigurationId": configuration_id,
@@ -684,6 +689,14 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
             "edgeKinds": ["calls", "calls"]
         }}),
     ));
+    frames.push(request_with_fields(
+        24,
+        "tools/call",
+        &json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": diagnostic_configuration,
+            "families": ["semantic", "semantic"]
+        }}),
+    ));
     let input = format!("{}\n", frames.join("\n"));
 
     let first = run_process_in(&root, input.as_bytes()).await;
@@ -702,11 +715,27 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
 }
 
 fn assert_semantic_responses(responses: &[Value]) {
-    assert_eq!(responses.len(), 11);
+    assert_eq!(responses.len(), 12);
     for response in &responses[..7] {
         assert!(response["result"].get("isError").is_none(), "{response}");
         assert!(response["result"].get("structuredContent").is_some());
     }
+    let diagnostics = &responses[3]["result"]["structuredContent"];
+    assert_eq!(diagnostics["total"], 3);
+    assert_eq!(
+        diagnostics["diagnostics"]
+            .as_array()
+            .expect("findings")
+            .len(),
+        1
+    );
+    assert_eq!(diagnostics["truncated"], true);
+    assert_eq!(diagnostics["summary"]["total"], 3);
+    assert_eq!(diagnostics["summary"]["active"], 3);
+    assert_eq!(diagnostics["summary"]["suppressed"], 0);
+    assert_eq!(diagnostics["diagnostics"][0]["family"], "semantic");
+    assert_eq!(diagnostics["diagnostics"][0]["disposition"], "active");
+    assert!(!diagnostics.to_string().contains("Configuration.xml"));
     let symbols = &responses[6]["result"]["structuredContent"];
     assert_eq!(symbols["total"], 5);
     assert_eq!(
@@ -735,6 +764,67 @@ fn assert_semantic_responses(responses: &[Value]) {
             "invalid_arguments"
         );
     }
+}
+
+#[tokio::test]
+async fn public_mcp_process_keeps_modern_and_legacy_diagnostic_payloads_equal() {
+    let root = fixture_root();
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(&root)
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot
+        .configurations()
+        .iter()
+        .find(|configuration| !configuration.diagnostic_report().findings().is_empty())
+        .expect("fixture must contain normalized findings")
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let mut payloads = Vec::new();
+
+    for initialize in [codex_initialize(), cursor_initialize()] {
+        let input = [
+            initialize,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_owned(),
+            legacy_request(
+                70,
+                "tools/call",
+                Some(&json!({"name": "oneagent.diagnostics", "arguments": {
+                    "configurationId": configuration_id,
+                    "families": ["semantic"],
+                    "severities": ["error"],
+                    "categories": ["semantic"],
+                    "includeSuppressed": false,
+                    "limit": 2
+                }})),
+            ),
+            legacy_request(71, "shutdown", None),
+            r#"{"jsonrpc":"2.0","method":"exit"}"#.to_owned(),
+        ]
+        .join("\n")
+            + "\n";
+        let output = run_process_in(&root, input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("protocol output must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("legacy response JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 3);
+        let payload = responses[1]["result"]["structuredContent"].clone();
+        assert_eq!(payload["total"], 3);
+        assert_eq!(
+            payload["diagnostics"].as_array().expect("findings").len(),
+            2
+        );
+        assert_eq!(payload["truncated"], true);
+        assert_eq!(payload["summary"]["total"], 3);
+        assert!(responses[1]["result"].get("resultType").is_none());
+        payloads.push(payload);
+    }
+
+    assert_eq!(payloads[0], payloads[1]);
 }
 
 fn request_with_fields(id: u64, method: &str, fields: &Value) -> String {

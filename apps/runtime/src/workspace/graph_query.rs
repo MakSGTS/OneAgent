@@ -1048,6 +1048,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy};
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticDiagnostic, SemanticGraph,
@@ -1084,6 +1085,10 @@ mod tests {
         graph: SemanticGraph,
     ) -> WorkspaceConfigurationSnapshot {
         let report = SemanticGraphReport::from_graph(&graph);
+        let validation = graph.validate();
+        let diagnostic_report = DiagnosticEngine
+            .build(&[], &validation, &DiagnosticPolicy::default())
+            .expect("test graph diagnostics must build");
         WorkspaceConfigurationSnapshot {
             root_path: PathBuf::from(configuration_id),
             format,
@@ -1094,6 +1099,8 @@ mod tests {
             reference_requests: Arc::new(SemanticReferenceRequestLedger::new()),
             reference_statistics: SemanticReferenceStatistics::new(),
             report,
+            validation: Arc::new(validation),
+            diagnostic_report: Arc::new(diagnostic_report),
         }
     }
 

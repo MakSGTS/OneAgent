@@ -237,9 +237,13 @@ immutable generation.
 
 ## Persistent cache
 
-Sprint 36 does not change cache schema or serialize validation/report derived
-values. Cache continues to store canonical graph, raw diagnostics, requests,
-statistics, and provenance.
+Sprint 36 does not change cache schema or serialized canonical evidence fields,
+and it does not serialize validation/report derived values. Cache continues to
+store canonical graph, raw diagnostics, requests, statistics, and provenance.
+The envelope semantic compatibility version advances from `2` to `3` because
+equal canonical source state now produces a snapshot with additional derived
+validation/report behavior. Version `2` entries are therefore intentionally
+invalidated; byte-level compatibility is not claimed.
 
 After decode, Runtime reconstructs complete Graph validation and the engine
 report from restored inputs. Cache acceptance retains the same valid
@@ -308,7 +312,9 @@ positions, lifecycle, framing, channel purity, and sensitive-data rules remain.
 - Analysis gains additive diagnostic domain and engine APIs.
 - Workspace Configuration snapshots gain additive validation/report accessors;
   raw diagnostics and graph report accessors remain.
-- Cache bytes and schema remain unchanged; derived evidence is recomputed.
+- Cache schema and serialized canonical evidence fields remain unchanged;
+  semantic compatibility version `2` entries are invalidated by version `3`,
+  and derived evidence is recomputed.
 - MCP keeps the tool name, catalog, semantic fields, policy, and envelopes while
   adding filters, normalized fields, summary, and validation findings.
 - LSP capability and payload shape remain unchanged while its source becomes

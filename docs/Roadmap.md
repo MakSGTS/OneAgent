@@ -35,7 +35,8 @@ closed with a `pass` decision in the
 [v0.5 release review](reviews/v0.5-release-review.md). The
 [v0.6 release review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`; v0.6 is completed and Sprint 36 Diagnostics
-Engine is the unique `next` planning target. The
+Engine is the unique active target pending its remediation and repeated
+integration review. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context

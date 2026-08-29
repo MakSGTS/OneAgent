@@ -223,9 +223,11 @@ The report owns checked complete totals and deterministic read-only filters.
 
 Runtime constructs complete build validation and the report before atomically
 publishing each immutable Configuration snapshot. Raw diagnostics and existing
-Graph reports remain available. Persistent cache schema and bytes are unchanged;
-decode reconstructs both derived values from canonical stored evidence. Cold,
-warm, watched, rebuilt, and repeated snapshots expose equal results.
+Graph reports remain available. Persistent cache schema and stored canonical
+input fields are unchanged, while the envelope semantic compatibility version
+advances from `2` to `3` and intentionally invalidates prior entries. Decode
+reconstructs both derived values from canonical stored evidence. Cold, warm,
+watched, rebuilt, and repeated snapshots expose equal results.
 
 MCP keeps the seven-tool catalog and Tool Policy gate. `oneagent.diagnostics`
 adds exact family/severity/category filters, optional suppressed visibility,

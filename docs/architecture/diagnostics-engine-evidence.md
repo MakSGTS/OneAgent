@@ -45,7 +45,7 @@ The committed implementation chain is:
 | Closed redacted errors with no rejected content, identity, path, reference, provenance, or internal chain | exhaustive error-kind/debug/display tests and protocol sensitive-data audit | pass |
 | Checked complete summary and read-only filtering without summary reconstruction | report reconciliation tests and MCP filtered/truncated summary tests | pass |
 | Workspace publishes raw diagnostics, exact complete validation, and equal complete report atomically | Runtime unit, Workspace service, and watching tests | pass |
-| Cache schema/bytes remain unchanged and derived validation/report are recomputed equally after decode | cache unit and public cold/warm/corruption/write-recovery tests | pass |
+| Cache schema and canonical evidence fields remain unchanged, semantic compatibility advances from version 2 to 3, and derived validation/report are recomputed equally after decode | cache unit and public cold/warm/corruption/write-recovery tests | pass |
 | Seven lexicographically ordered read-only MCP tools and unchanged Tool Policy execution | semantic catalog/schema tests, direct denied-policy unit test, protocol dispatch, stdio, and process suites | pass |
 | `oneagent.diagnostics` schema, filters, default suppression visibility, normalized fields, complete summary, limit, ordering, and redaction | MCP unit, semantic-tool, exact/over-bound, malformed-argument, repetition, and public-process tests | pass |
 | Stateless `2026-07-28` and negotiated `2025-06-18`/`2025-11-25` envelopes expose the same tool payload | modern semantic-tool suite, protocol session suite, and public two-revision payload equality test | pass |
@@ -159,9 +159,11 @@ executables using their `--list --format terse` output.
   diagnostics, validation semantics, graph reports, build diffs, and Coverage
   remain available with their existing meanings. Coverage stays at its
   pre-Sprint-36 status and count because the engine adds no fact capability.
-- Cache schema remains `1`; only the private semantic compatibility version
-  changed so stale derived behavior cannot be accepted. Validation/report
-  values are recomputed and are not serialized.
+- Cache schema remains `1` and serialized canonical evidence fields are
+  unchanged. The private semantic compatibility version advances from `2` to
+  `3`, so earlier entries are intentionally rejected and cache bytes are not
+  claimed to be compatible. Validation/report values are recomputed and are
+  not serialized.
 - MCP retains exactly seven lexicographically ordered tools, read-only
   annotations, Tool Policy authorization/execution, immutable startup state,
   request isolation, limits, and revision envelopes. Other tool payloads remain

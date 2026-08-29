@@ -26,7 +26,7 @@ Continue OneAgent development.
 - `docs/architecture/semantic-model-2.md`
 - `docs/architecture/diagnostics-engine-investigation.md`
 - `docs/adr/0039-workspace-service.md`
-- `docs/adr/0042-persistent-workspace-cache.md`
+- `docs/adr/0042-persistent-cache.md`
 - `docs/adr/0058-diagnostics-engine.md`
 
 ## Prerequisite

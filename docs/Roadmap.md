@@ -35,8 +35,7 @@ closed with a `pass` decision in the
 [v0.5 release review](reviews/v0.5-release-review.md). The
 [v0.6 release review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`; v0.6 is completed and Sprint 36 Diagnostics
-Engine is the unique active target pending its remediation and repeated
-integration review. The
+Engine is the unique active target pending its repeated integration review. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -8633,8 +8632,10 @@ in-memory identity suppression. Workspace uses the default no-suppression
 policy.
 
 Workspace retains raw diagnostics and adds derived complete validation and
-diagnostic-report evidence before immutable publication. Cache schema and bytes
-remain unchanged; warm loads recompute equal derived evidence. MCP keeps the
+diagnostic-report evidence before immutable publication. Cache schema and
+canonical serialized evidence fields remain unchanged; semantic compatibility
+advances from version `2` to `3`, intentionally invalidating version `2`
+entries, and warm loads recompute equal derived evidence. MCP keeps the
 seven-tool catalog and current semantic item fields while adding exact filters,
 normalized fields, summary, and validation findings with explicit truncation.
 LSP keeps its existing pull capability and complete 100-result bound while

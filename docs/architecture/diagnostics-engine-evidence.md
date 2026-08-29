@@ -2,10 +2,11 @@
 
 ## Status and scope
 
-This document records Task 7 evidence executed on 2026-08-29 from committed
-Task 6 head `49e0c647`. Sprint 36 remains `active` until the mandatory Task 8
-fresh-context integration review, primary reconciliation, and artifact-
-consistency check complete. Task 7 changes documentation only and introduces no
+This historical document records Task 7 evidence executed on 2026-08-29 from
+committed Task 6 head `49e0c647`. The subsequent
+[Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
+records `pass`, completed primary reconciliation and artifact consistency, and
+closes Sprint 36. Task 7 changed documentation only and introduced no
 production behavior.
 
 The implemented boundary is governed by

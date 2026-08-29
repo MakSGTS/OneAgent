@@ -1213,14 +1213,13 @@ fn build_designer_xml(
     let reference_requests = SemanticReferenceRequestLedger::new();
     let reference_statistics = SemanticReferenceStatistics::new();
     let report = graph.report();
-    let validation = SemanticGraphValidator::new()
-        .validate_build_result_with_reference_requests_and_report(
-            &graph,
-            &diagnostics,
-            &reference_requests,
-            reference_statistics,
-            &report,
-        );
+    let validation = validate_complete_build(
+        &graph,
+        &diagnostics,
+        &reference_requests,
+        reference_statistics,
+        &report,
+    );
     if !validation.is_valid() {
         return Err(WorkspaceBuildError::GraphValidation {
             root_path: root_path.to_path_buf(),
@@ -1237,6 +1236,22 @@ fn build_designer_xml(
         reference_statistics,
         report,
         validation,
+    )
+}
+
+fn validate_complete_build(
+    graph: &SemanticGraph,
+    diagnostics: &[SemanticDiagnostic],
+    reference_requests: &SemanticReferenceRequestLedger,
+    legacy_reference_statistics: SemanticReferenceStatistics,
+    report: &SemanticGraphReport,
+) -> SemanticGraphValidationResult {
+    SemanticGraphValidator::new().validate_build_result_with_reference_requests_and_report(
+        graph,
+        diagnostics,
+        reference_requests,
+        legacy_reference_statistics,
+        report,
     )
 }
 
@@ -1314,8 +1329,9 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         GraphNode, NodeKind, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
-        SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphReport, SemanticGraphValidator,
-        SemanticReference, SemanticReferenceRequestLedger, SemanticReferenceStatistics,
+        SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphReport,
+        SemanticGraphValidationCode, SemanticGraphValidator, SemanticReference,
+        SemanticReferenceRequestLedger, SemanticReferenceStatistics,
     };
     use oneagent_metadata::MetadataKind;
     use oneagent_workspace::WorkspaceFormat;
@@ -1331,7 +1347,7 @@ mod tests {
         WorkspaceCacheWriteOutcome, WorkspaceDetector, WorkspaceFileState, WorkspaceService,
         WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
         WorkspaceUpdatePhase, WorkspaceUpdateStatus, initialize_workspace, rebuild_workspace,
-        snapshot_from_parts,
+        snapshot_from_parts, validate_complete_build,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -1705,6 +1721,36 @@ mod tests {
         )
         .expect_err("one-over diagnostic input must not publish");
         assert_eq!(error.kind(), WorkspaceBuildErrorKind::SemanticBuildFailed);
+    }
+
+    #[test]
+    fn designer_complete_build_validation_rejects_a_mismatched_report() {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            EntityId::new("configuration:designer")
+                .expect("Designer configuration ID must be valid"),
+            EntityName::new("Designer").expect("Designer configuration name must be valid"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let mismatched_report = SemanticGraphReport::from_graph(&SemanticGraph::new());
+        let reference_requests = SemanticReferenceRequestLedger::new();
+
+        assert!(graph.validate().is_valid());
+        let validation = validate_complete_build(
+            &graph,
+            &[],
+            &reference_requests,
+            SemanticReferenceStatistics::new(),
+            &mismatched_report,
+        );
+
+        assert!(!validation.is_valid());
+        assert!(
+            validation
+                .issues()
+                .iter()
+                .any(|issue| { issue.code() == SemanticGraphValidationCode::InconsistentReport })
+        );
     }
 
     #[test]

@@ -29,7 +29,8 @@ use oneagent_designer_xml::{
 use oneagent_edt::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
     NodeKind, SemanticDiagnostic, SemanticGraph, SemanticGraphReport,
-    SemanticGraphValidationResult, SemanticReferenceRequestLedger, SemanticReferenceStatistics,
+    SemanticGraphValidationResult, SemanticGraphValidator, SemanticReferenceRequestLedger,
+    SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 use oneagent_workspace::{DiscoveredConfiguration, WorkspaceDetector, WorkspaceFormat};
@@ -1208,7 +1209,18 @@ fn build_designer_xml(
     let graph = FileSystemDesignerXmlSemanticGraphBuilder
         .build_graph(root_path, DesignerXmlBuildScope::Complete)
         .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::DesignerXml, source))?;
-    let validation = graph.validate();
+    let diagnostics = Vec::new();
+    let reference_requests = SemanticReferenceRequestLedger::new();
+    let reference_statistics = SemanticReferenceStatistics::new();
+    let report = graph.report();
+    let validation = SemanticGraphValidator::new()
+        .validate_build_result_with_reference_requests_and_report(
+            &graph,
+            &diagnostics,
+            &reference_requests,
+            reference_statistics,
+            &report,
+        );
     if !validation.is_valid() {
         return Err(WorkspaceBuildError::GraphValidation {
             root_path: root_path.to_path_buf(),
@@ -1216,15 +1228,13 @@ fn build_designer_xml(
             validation: Box::new(validation),
         });
     }
-    let report = graph.report();
-
     snapshot_from_parts(
         root_path,
         WorkspaceFormat::DesignerXml,
         graph,
-        Vec::new(),
-        SemanticReferenceRequestLedger::new(),
-        SemanticReferenceStatistics::new(),
+        diagnostics,
+        reference_requests,
+        reference_statistics,
         report,
         validation,
     )
@@ -1748,8 +1758,20 @@ mod tests {
             assert_eq!(actual.report(), expected.report());
             assert!(actual.graph().validate().is_valid());
         }
-        assert!(first.configurations()[1].diagnostics().is_empty());
-        assert!(first.configurations()[1].reference_requests().is_empty());
+        let designer = &first.configurations()[1];
+        assert!(designer.diagnostics().is_empty());
+        assert!(designer.reference_requests().is_empty());
+        assert_eq!(
+            designer.validation(),
+            &SemanticGraphValidator::new()
+                .validate_build_result_with_reference_requests_and_report(
+                    designer.graph(),
+                    designer.diagnostics(),
+                    designer.reference_requests(),
+                    SemanticReferenceStatistics::new(),
+                    designer.report(),
+                )
+        );
     }
 
     #[test]

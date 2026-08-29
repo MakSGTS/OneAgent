@@ -159,9 +159,12 @@ validation. The engine collapses exact duplicates, rejects conflicting evidence,
 applies only exact in-memory identity suppression, and returns one complete
 bounded deterministic report with checked summaries. Workspace publishes the
 default no-suppression report atomically and recomputes it after cache decode
-without changing cache schema. `oneagent.diagnostics` now filters both semantic
-and validation findings, retains the complete unfiltered summary, and exposes
-at most 100 path-free ordered items with explicit truncation. The
+without changing cache schema or canonical serialized evidence fields. Cache
+semantic compatibility advances from version `2` to `3`, so version `2`
+entries are intentionally rejected and rebuilt. `oneagent.diagnostics` now
+filters both semantic and validation findings, retains the complete unfiltered
+summary, and exposes at most 100 path-free ordered items with explicit
+truncation. The
 [Sprint 36 evidence](docs/architecture/diagnostics-engine-evidence.md) records
 the complete acceptance matrix and limitations.
 

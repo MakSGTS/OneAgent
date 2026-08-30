@@ -129,8 +129,10 @@ The roadmap assigns future boundaries explicitly:
   [v0.6 MCP and IDE release review](reviews/v0.6-release-review.md) records
   `pass with non-blocking follow-ups`. The
   [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-  records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-  next target.
+  records `pass` and completes Sprint 36. The
+  [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+  `pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+  Change Adapter is the unique `next` target.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -139,9 +141,11 @@ The roadmap assigns future boundaries explicitly:
   chat are implemented in Sprint 33. The bounded native EDT compatibility probe
   is implemented in Sprint 34. External Codex and Cursor compatibility is
   implemented in Sprint 35. Source-independent diagnostic orchestration and
-  immutable MCP/LSP projections are implemented in Sprint 36. Definition/
-  reference providers, diagnostics UI, model tools or edits, and semantic EDT
-  IDE workflows remain later work.
+  immutable MCP/LSP projections are implemented in Sprint 36. The bounded
+  source-independent rule registry, planning, execution, and immutable Runtime
+  composition boundary is implemented in Sprint 37 with an empty production
+  registry. Definition/reference providers, diagnostics UI, product rules,
+  model tools or edits, and semantic EDT IDE workflows remain later work.
 - Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
   authority.
 
@@ -243,10 +247,66 @@ The complete requirement matrix, focused/public process counts, compatibility
 checks, and limitations are recorded in the
 [Sprint 36 evidence](architecture/diagnostics-engine-evidence.md), and the
 [Sprint 36 review](reviews/sprint-36-diagnostics-engine.md) records `pass` and
-completion. Sprint 37 Rules Engine is the unique next target. Configurable rule
-registration/execution, persisted suppression, new producers, diagnostics UI,
-mutable documents, fixes, edits, remote access, and telemetry remain outside
-the completed Sprint 36 boundary.
+completion. Sprint 37 implements the accepted Rules Engine composition below;
+persisted suppression, new producers, diagnostics UI, mutable documents, fixes,
+edits, remote access, and telemetry remain outside the completed Sprint 36
+boundary.
+
+## Implemented Rules Engine boundary
+
+[ADR-0059](adr/0059-rules-engine.md) governs the implemented Sprint 37 slice.
+`oneagent-analysis::rules` borrows only one immutable `SemanticGraph`, one
+caller-supplied complete `SemanticGraphValidationResult`, and the base
+Semantic/Validation `DiagnosticReport`. Graph remains authoritative for facts,
+validation, recoverable semantic diagnostics, provenance, locations, reports,
+and diffs. The Diagnostics Engine remains authoritative for normalized
+diagnostic identity, exact suppression, ordering, checked summaries, bounds,
+and complete reports. Rules do not read source, parse, mutate Graph, invoke a
+validator, consume another rule result, or access Runtime, persistence, or
+protocol state.
+
+The rule domain owns validated globally scoped `RuleId` values, local
+diagnostic and failure codes, immutable definitions, and one bounded registry
+ordered by complete rule ID. Equal duplicate and conflicting registrations
+fail closed. In-memory configuration supports only explicit Enabled/Disabled
+settings and defaults absent settings to Enabled; no file, environment,
+persistence, protocol, or UI grammar exists. Planning validates missing, self,
+and cyclic dependencies and uses the smallest ready `RuleId` as its
+deterministic tie-breaker.
+
+Execution is synchronous and sequential. Dependencies require `Completed`;
+Disabled, NotApplicable, Blocked, Failed, and Cancelled remain distinct terminal
+results and block dependents, while independent rules continue until
+cancellation. Cancellation is cooperative before and after each evaluation.
+Per-rule invalid output fails that rule, while engine/domain/aggregate-bound
+errors return no partial report. Complete results and rule-produced diagnostics
+are bounded, canonical, reconciled, and redacted.
+
+Rule diagnostics add one typed ADR-0058 family. Their identity is rule ID,
+local code, and canonical Graph-node anchors; existing normalized severity,
+category, message, disposition, ordering, suppression, summary, provenance,
+location, conflict, and completeness contracts remain authoritative. Runtime
+constructs base diagnostics, plan, execution report, and final diagnostics
+before atomic snapshot publication. Production uses an empty registry, default
+configuration, and `NeverCancelled`, so it publishes a complete empty rule
+report and no Rule findings without claiming a product rule.
+
+Persistent cache schema remains `1`; rule definitions, executable objects,
+configuration, plans, results, and findings are not serialized. Decode reruns
+the complete composition boundary, while private semantic compatibility
+advances from `3` to `4`. MCP keeps seven read-only Tool Policy-gated tools and
+adds only diagnostic family `rule` plus Rule-only `ruleId`. LSP keeps its exact
+3.17 capability and payload shape and may project only active single-anchor
+findings with one confined typed span.
+
+The complete requirement matrix, focused/public process counts, cross-platform
+consumer checks, audits, and limitations are recorded in the
+[Sprint 37 evidence](architecture/rules-engine-evidence.md). Sprint 37 is
+complete with `pass with non-blocking follow-ups` in the
+[Sprint 37 review](reviews/sprint-37-rules-engine.md). Product rules, external
+configuration, plugins, scripts, remote rules, mutable documents, fixes, edits,
+rule-management protocol/UI, telemetry, and performance/security claims remain
+outside this boundary.
 
 ## Accepted LLM Provider abstraction boundary
 

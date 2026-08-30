@@ -1049,6 +1049,7 @@ mod tests {
     use std::sync::Arc;
 
     use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy};
+    use oneagent_analysis::rules::RuleExecutionReport;
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticDiagnostic, SemanticGraph,
@@ -1100,6 +1101,7 @@ mod tests {
             reference_statistics: SemanticReferenceStatistics::new(),
             report,
             validation: Arc::new(validation),
+            rule_execution_report: Arc::new(RuleExecutionReport::default()),
             diagnostic_report: Arc::new(diagnostic_report),
         }
     }

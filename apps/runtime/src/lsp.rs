@@ -794,8 +794,10 @@ mod tests {
     use std::path::Path;
 
     use oneagent_analysis::diagnostics::{
-        DiagnosticEvidence, DiagnosticFinding, DiagnosticIdentity, DiagnosticPolicy,
+        DiagnosticCategory, DiagnosticEvidence, DiagnosticFinding, DiagnosticIdentity,
+        DiagnosticPolicy, DiagnosticSeverity,
     };
+    use oneagent_analysis::rules::{RuleDiagnostic, RuleDiagnosticCode, RuleId};
     use oneagent_common::{
         EntityId, EntityName, SourceLocation, SourcePath, SourcePosition, SourceSpan,
     };
@@ -808,8 +810,8 @@ mod tests {
 
     use super::{
         complete_document_diagnostic_projection, complete_workspace_symbol_projection,
-        enforce_diagnostic_result_bound, enforce_symbol_result_bound, lsp_position,
-        lsp_symbol_kind, lsp_symbol_location, project_document_diagnostic,
+        enforce_diagnostic_result_bound, enforce_symbol_result_bound, lsp_diagnostic_severity,
+        lsp_position, lsp_symbol_kind, lsp_symbol_location, project_document_diagnostic,
         project_document_diagnostic_from_source_node, valid_document_uri, windows_file_uri,
         workspace_root_uri,
     };
@@ -1333,6 +1335,62 @@ mod tests {
                 requested_uri,
             )
             .expect("multiple anchors are omitted")
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn document_diagnostics_project_rule_findings_through_the_existing_wire_shape() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let root_uri = workspace_root_uri(snapshot.root_path()).expect("root URI");
+        let (configuration, source_node, location) = snapshot
+            .configurations()
+            .iter()
+            .find_map(|configuration| {
+                configuration.graph().nodes().find_map(|node| {
+                    lsp_symbol_location(&snapshot, configuration, node, &root_uri)
+                        .ok()
+                        .flatten()
+                        .map(|location| (configuration, node, location))
+                })
+            })
+            .expect("fixture must contain one confined located node");
+        let requested_uri = location["uri"].as_str().expect("location URI");
+        let diagnostic = RuleDiagnostic::new(
+            RuleId::new("runtime.rule").expect("rule ID"),
+            RuleDiagnosticCode::new("finding").expect("diagnostic code"),
+            DiagnosticSeverity::Warning,
+            DiagnosticCategory::Semantic,
+            "controlled rule finding",
+            [source_node.id().clone()],
+        );
+        let finding = DiagnosticFinding::from_rule(&diagnostic, &DiagnosticPolicy::default())
+            .expect("rule finding");
+        let projected = project_document_diagnostic(
+            &snapshot,
+            configuration,
+            &finding,
+            &root_uri,
+            requested_uri,
+        )
+        .expect("rule projection must not fail")
+        .expect("located active rule finding must project");
+
+        assert_eq!(projected.finding.code().as_str(), "finding");
+        assert_eq!(projected.finding.message(), "controlled rule finding");
+        assert_eq!(projected.range, location["range"]);
+        assert_eq!(lsp_diagnostic_severity(projected.finding.severity()), 2);
+        assert!(
+            project_document_diagnostic(
+                &snapshot,
+                configuration,
+                &finding,
+                &root_uri,
+                &format!("{root_uri}/missing.bsl"),
+            )
+            .expect("different document is not a projection error")
             .is_none()
         );
     }

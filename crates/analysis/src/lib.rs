@@ -7,6 +7,7 @@
 
 pub mod context;
 pub mod diagnostics;
+pub mod rules;
 
 use oneagent_bsl::{
     BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor, BslModuleSymbols,

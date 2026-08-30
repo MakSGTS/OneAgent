@@ -372,8 +372,10 @@ completed. The
 [v0.6 MCP and IDE release review](../reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`. The
 [Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-next target.
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+Change Adapter is the unique `next` target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -1392,10 +1394,70 @@ publication and deterministically recomputes them after cache decode without
 serializing either derived value.
 
 This boundary adds no Coverage capability because it emits no node, edge,
-parser result, or new diagnostic producer. Configurable rules, rule-produced
-findings, suppression files/patterns, baselines, UI, fixes, mutable documents,
-and telemetry remain deferred. The complete executable matrix is recorded in
-the [Sprint 36 evidence](diagnostics-engine-evidence.md).
+parser result, or new diagnostic producer. Sprint 37 adds the Rule diagnostic
+family through the Rules Engine boundary below without changing Graph or
+Coverage authority. Suppression files/patterns, baselines, UI, fixes, mutable
+documents, and telemetry remain deferred. The complete executable matrix is
+recorded in the [Sprint 36 evidence](diagnostics-engine-evidence.md).
+
+## Rules Engine
+
+The implemented ADR-0059 first slice is a derived source-independent evaluation
+boundary over immutable canonical evidence. `oneagent-analysis::rules` borrows
+exactly one `SemanticGraph`, one caller-supplied complete
+`SemanticGraphValidationResult`, and one base ADR-0058 report containing only
+Semantic and Validation findings. It does not parse or read source, mutate the
+graph, invoke validation, infer locations, own facts/provenance, access Runtime
+or persistence, or consume another rule's result.
+
+A validated globally scoped `RuleId` identifies each immutable registration.
+Diagnostic and failure codes are local to that rule. Definitions retain a
+canonical dependency-ID set; executable behavior does not participate in
+registry identity. The bounded registry sorts by complete ID and rejects every
+duplicate or conflicting registration. The only configuration authority is a
+bounded in-memory set of explicit Enabled/Disabled values; absence means
+Enabled, and there is no external grammar or persisted setting.
+
+Planning validates the complete registry and configuration before execution.
+Missing, self, and cyclic dependencies fail without a plan. Dependencies always
+precede dependents, and the smallest complete ready `RuleId` breaks ties. A
+dependency represents required successful completion, not result consumption.
+
+Execution is synchronous and sequential over the immutable context. Disabled,
+NotApplicable, Completed, Blocked, Failed, and Cancelled are distinct terminal
+states. Only Completed satisfies a dependent; independent rules continue after
+a failure until cooperative cancellation is observed. The engine checks
+cancellation before and after evaluation and discards output after a late
+request. Per-rule invalid output fails that rule, while registry, planning,
+context, aggregate-bound, and reconciliation failures return no partial report.
+
+A rule diagnostic carries rule ID, local code, normalized severity/category,
+bounded message, and canonical Graph-node anchors. Its diagnostic identity is
+rule ID, local code, and anchors. Graph supplies observed provenance counts and
+location evidence; ADR-0058 remains authoritative for conflicts, exact
+suppression, ordering, summaries, bounds, dispositions, and the final complete
+report. Rules create no Graph node, edge, validation issue, producer fact, or
+Coverage capability.
+
+Runtime constructs the base diagnostic report, rule plan, complete execution
+report, and final diagnostic report before atomically publishing a Configuration
+snapshot. Production supplies an empty registry, default configuration, and
+`NeverCancelled`, so its complete Rule report is empty and no product rule is
+claimed. Cache schema remains `1`; executable objects, configuration, plans,
+results, and Rule findings are not serialized. Decode recomputes them, while
+semantic compatibility advances from `3` to `4`.
+
+MCP retains seven tools and adds only diagnostic family `rule` plus Rule-only
+`ruleId`. LSP retains its exact capability and payload shape and projects a Rule
+finding only through the existing active, single-anchor, confined-span rule.
+External configuration, product rules, plugins, scripts, remote acquisition,
+hot reload, rule-management protocol/UI, mutable documents, fixes, edits,
+telemetry, and performance/security claims remain deferred. The complete
+executable matrix is recorded in the
+[Sprint 37 evidence](rules-engine-evidence.md). The
+[Sprint 37 review](../reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups`, completes Sprint 37, and makes Sprint 38
+Git Change Adapter the unique `next` target.
 
 ## Incremental indexing
 

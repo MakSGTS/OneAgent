@@ -3,7 +3,7 @@
 ## Status and scope
 
 This document records Task 6 evidence executed on 2026-08-30 from committed
-Task 5 head `e2818c83` plus the subsequent bounded reader-cleanup remediation.
+Task 5 head `175de804` plus the subsequent bounded reader-cleanup remediation.
 The remediation removes detached cleanup work, reserves bounded cleanup within
 the complete read deadline, adds production-child drop/deadline evidence, and
 completes the invalid status/path and UNC matrices. Sprint 38 remains active
@@ -24,13 +24,15 @@ The committed implementation chain is:
 
 | Slice | Commit |
 | --- | --- |
-| Reusable task framework | `7eac8515` |
-| Planning | `89c79c69` |
-| Investigation | `83650d2f` |
-| ADR-0060 | `095ac719` |
-| Normalized change-set domain | `926a5314` |
-| Local Git repository reader | `7173dea9` |
-| Workspace change input | `e2818c83` |
+| Reusable task framework | `580496eb` |
+| Planning | `e60b95c0` |
+| Investigation | `d82ba4cb` |
+| ADR-0060 | `3cff2f95` |
+| Normalized change-set domain | `e0aadfab` |
+| Local Git repository reader | `3ed8990f` |
+| Workspace change input | `175de804` |
+| Task 6 evidence | `550fa5df` |
+| Reader-cleanup remediation | `3e13e523` |
 
 ## Requirement-to-test matrix
 
@@ -136,18 +138,24 @@ folding, additions, modifications, deletions, type change, untracked and
 ignored policy, move/copy decomposition, conflict, gitlink rejection, operation
 order, and fresh repeated reads.
 
-Exact Task 5 head `e2818c83646aded18f485b3fbe0b47ce80a0261a`
-passed [CI run 33308295359](https://github.com/MakSGTS/OneAgent/actions/runs/33308295359).
+The original pre-rewrite Task 5 code head
+`e2818c83646aded18f485b3fbe0b47ce80a0261a` passed
+[CI run 33308295359](https://github.com/MakSGTS/OneAgent/actions/runs/33308295359).
 All six jobs completed successfully: Rust, VS Code, and EDT on both `macos-14`
 and `windows-latest`. The Rust jobs built both public Runtime processes and ran
 the complete workspace tests, focused Context/MCP compatibility, Clippy, and
 Rustdoc. The Windows reader target executed its six applicable public tests;
 the Unix-only type-change/non-UTF-8 test executed on macOS.
 
-That Task 5 run is historical platform evidence and is not presented as
-validation of the later cleanup remediation. The fresh integration review must
-resolve and authenticate exact remediation-head macOS/Windows CI before any
-Sprint 38 state transition.
+That Task 5 run is historical platform evidence. Exact remediation code head
+`3e13e5233f6e204583cf08c2873d3d465f6ed8f3` passed
+[CI run 33316316447](https://github.com/MakSGTS/OneAgent/actions/runs/33316316447)
+after the Sprint range was rebuilt without the unrelated roadmap commit. All
+six Rust, VS Code, and EDT jobs passed on macOS and Windows. The Rust jobs
+completed formatting, checking, public Runtime process builds, the complete
+workspace tests, focused Context/MCP compatibility, strict Clippy, and
+warning-denied Rustdoc. This is the accepted cross-platform evidence for the
+cleanup remediation and the exact code tree reviewed for Sprint 38.
 
 The local APFS environment rejected construction of the deliberately invalid
 non-UTF-8 filename with `Operation not permitted`. The test reported that
@@ -204,14 +212,14 @@ The accepted remediation cycle is:
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 80 test targets, 1,265 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 80 test targets, 1,266 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
 | `git diff --check` | exit 0 |
 
 The four zero-test targets are expected binary entry points:
 `oneagent-cli`, `oneagent-runtime`, `oneagent-mcp`, and `oneagent-lsp`. The
-other 76 targets contain all 1,265 tests. The inventory was recomputed from the
+other 76 targets contain all 1,266 tests. The inventory was recomputed from the
 compiled `--all-targets` executables using `--list --format terse`; no filtered
 test is included in that total.
 
@@ -256,14 +264,14 @@ test is included in that total.
 The exact read-only audit commands all exited zero:
 
 ```text
-git diff --name-only 095ac719..e2818c83 -- Cargo.toml Cargo.lock apps/runtime/Cargo.toml
-git diff --name-only 095ac719..e2818c83 -- crates/graph/src/coverage.rs adapters/edt/src/coverage.rs adapters/designer-xml/src/coverage.rs
-git diff --name-only 095ac719..e2818c83 -- crates/protocol apps/cli extensions/vscode extensions/edt apps/runtime/src/http apps/runtime/src/mcp.rs apps/runtime/src/mcp_tools.rs apps/runtime/src/lsp.rs
+git diff --name-only 3cff2f95..3e13e523 -- Cargo.toml Cargo.lock apps/runtime/Cargo.toml
+git diff --name-only 3cff2f95..3e13e523 -- crates/graph/src/coverage.rs adapters/edt/src/coverage.rs adapters/designer-xml/src/coverage.rs
+git diff --name-only 3cff2f95..3e13e523 -- crates/protocol apps/cli extensions/vscode extensions/edt apps/runtime/src/http apps/runtime/src/mcp.rs apps/runtime/src/mcp_tools.rs apps/runtime/src/lsp.rs
 ! git grep -n unsafe -- apps/runtime/src apps/runtime/tests
 ! git grep -nE '/Users/|maxim_tomshin|BEGIN [A-Z ]*PRIVATE KEY|ghp_|github_pat_|AKIA' -- apps/runtime/src apps/runtime/tests docs/adr/0060-git-change-adapter.md
 rg -n 'fetch|pull|push|clone|checkout|merge|rebase|reset|clean|add|commit|credential' apps/runtime/src/workspace/git.rs
 rg -n 'Command::new|\.args\(' apps/runtime/src/workspace/git.rs
-gh run view 33308295359 --json status,conclusion,url,jobs
+gh run view 33316316447 --json status,conclusion,url,jobs
 ```
 
 The first three diff audits returned zero changed paths. The unsafe and

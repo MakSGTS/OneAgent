@@ -9,11 +9,11 @@ behavior, add a dependency, or treat Git as semantic authority.
 
 ## Live baseline
 
-- Investigation head: `89c79c694021c2735d09318de2c5c6d9b8c5d32b`.
+- Investigation head: `e60b95c05d1977996d5468d87c1397ea8c9e17ae`.
 - Branch: `codex/v0.7-sprint-38`.
 - Sprint 37 review head: `b029544f4e4cd0c7561908f67fccbd0ca79b3b71`.
 - Version integration head: `a1434fa03529bc09874001264eb23cc651203bfe`.
-- Git Change Adapter framework prerequisite: `7eac8515`.
+- Git Change Adapter framework prerequisite: `580496eb`.
 - Roadmap state before this task: Sprint 37 is `completed`; Sprint 38 is the
   unique `next` target.
 - The task started from an empty `git status --short`.

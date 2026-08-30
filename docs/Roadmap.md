@@ -9072,7 +9072,7 @@ Plan Sprint 37 Rules Engine
 
 Sprint 38 is planned from completed Sprint 37 review head `b029544f`, version
 integration head `a1434fa0`, and the committed Git Change Adapter framework
-prerequisite `7eac8515`. The
+prerequisite `580496eb`. The
 [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups`; Sprint 38 is the unique `next` target and
 remains `next` during planning.
@@ -9102,7 +9102,7 @@ the investigation proves one is an unavoidable compatibility prerequisite.
 
 The framework readiness audit found a concrete reusable gap beyond generic
 Implementation, Source Adapter, and Runtime Service contracts. Commit
-`7eac8515` closes it with the
+`580496eb` closes it with the
 [Git Change Adapter profile](codex/profiles/git-change-adapter-implementation.md),
 [workflow](codex/workflows/git-change-adapter.md), and
 [template](codex/templates/git-change-adapter-task.md). They require endpoint
@@ -9171,7 +9171,7 @@ Excluded scope is:
 
 ###### Sprint 38 investigation evidence
 
-Task 1 starts from committed planning baseline `89c79c69`. The
+Task 1 starts from committed planning baseline `e60b95c0`. The
 [Git Change Adapter investigation](architecture/git-change-adapter-investigation.md)
 confirms that no production Git domain, endpoint, reader, Workspace input, or
 Git implementation dependency exists. It inventories the private complete-byte
@@ -9236,13 +9236,18 @@ order; Task 6 completes cross-platform and current-state evidence.
 
 ###### Sprint 38 implementation evidence
 
-Tasks 3–5 are committed as `926a5314`, `7173dea9`, and `e2818c83`. Runtime now
+Tasks 3–5 are committed as `e0aadfab`, `3ed8990f`, and `175de804`. Runtime now
 owns the additive normalized repository-change domain, explicit bounded local
 Git process reader, and capacity-one source-neutral Workspace input accepted by
 ADR-0060. The reader uses pinned `HEAD`, one exact worktree root, tracked final-
 worktree plus non-ignored untracked state, two-pass stability, confined UTF-8
 paths, deterministic delete/add move and copy evidence, closed conflicts and
 failures, fixed output/count/time bounds, and owned cancellation cleanup.
+
+Task 6 evidence and the bounded reader-cleanup remediation are committed as
+`550fa5df` and `3e13e523`. The remediation closes caller-drop ownership and the
+complete deadline, adds real child-process cleanup evidence, and completes the
+invalid status/path and UNC matrices without changing the accepted boundary.
 
 Every accepted non-empty input uses the existing complete filesystem scan,
 production discovery, EDT/Designer build and validation, stable rescan, cache
@@ -9253,7 +9258,7 @@ default Runtime remains independent from Git.
 
 The [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records
 the complete requirement matrix, exact non-zero focused/public-process counts,
-1,263-test canonical workspace inventory, API/dependency/executable/path/
+1,266-test canonical workspace inventory, API/dependency/executable/path/
 sensitive-data/scope audits, and exact-head macOS/Windows CI for Rust, VS Code,
 and EDT. No missing harness or production behavior was added by Task 6. Sprint
 38 remains `active`; only Task 7 may perform the independent review, mark the

@@ -46,7 +46,7 @@ publication, recovery, cache, lifecycle, and supported consumer behavior.
 
 Execution requires the committed planning baseline with subject
 `Plan Sprint 38 Git Change Adapter`, committed framework prerequisite
-`7eac8515 Establish Git Change Adapter task framework`, completed Sprint 37
+`580496eb Establish Git Change Adapter task framework`, completed Sprint 37
 review `b029544f`, and version integration `a1434fa0`. Sprint 38 must be the
 unique eligible target. Resolve commit mode from the current user instruction;
 this stored prompt does not authorize commits by itself.

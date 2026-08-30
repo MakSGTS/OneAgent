@@ -36,8 +36,8 @@ closed with a `pass` decision in the
 [v0.6 release review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`; v0.6 is completed. The
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-next target. The
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the active
+target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -104,10 +104,11 @@ before it is marked complete. A version closes with a release integration review
 after its final sprint; release gates are not separate numbered sprints unless
 they acquire independent implementation scope.
 
-Sprint status uses three values:
+Sprint status uses four values:
 
 - `completed` — implementation and integration review are complete;
 - `next` — the next planning and kickoff target, but not yet active;
+- `active` — the committed planning baseline is executing in dependency order;
 - `planned` — ordered future work whose detailed scope is defined at kickoff.
 
 ### Task prompt template readiness forecast
@@ -7104,8 +7105,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups` for Sprints 28–35. The release is
 `completed`. The
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-next target.
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the active
+target.
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8493,7 +8494,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
-| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | next |
+| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | active |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | planned |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
@@ -8748,7 +8749,8 @@ Plan Sprint 36 Diagnostics Engine
 Sprint 37 is planned from completed Sprint 36 review baseline `8240ed1a` and
 the committed reusable Rules Engine framework prerequisite `68045f0c`. The
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-records `pass`; Sprint 37 is the unique `next` target.
+records `pass`; the committed Sprint 37 planning baseline starts the active
+target.
 
 The data and testability gate passes for planning. The repository owns an
 immutable source-independent `SemanticGraph`, complete Graph validation,
@@ -8760,6 +8762,17 @@ These provide canonical input, result-integration, rebuild, persistence,
 cancellation, compatibility, and cleanup oracles. No general Rules Engine,
 rule registry, rule identity, dependency planner, rule configuration source, or
 aggregate rule execution result exists in production.
+
+Task 1 records the decision-ready
+[Rules Engine investigation](architecture/rules-engine-investigation.md).
+Current code confirms that Graph, complete validation, Diagnostics Engine,
+Workspace snapshots, cache reconstruction, watcher replacement, Runtime
+cancellation, and MCP/LSP projections provide deterministic inputs and oracles.
+It also confirms that no general rule domain, registry, dependency planner,
+rule configuration authority, execution aggregate, or directly representable
+ADR-0058 Rule diagnostic family exists. No new dependency is required by the
+evidence-backed ownership candidates. Task 2 must resolve these architecture
+questions in ADR-0059 before production changes.
 
 Exact rule inputs, ownership, identity, registration, dependency meanings,
 configuration authority, applicability, execution lifecycle, failure
@@ -8905,8 +8918,8 @@ Sprint 38 hand-off, and conditional retirement of the exact Sprint 36 suite.
 
 ###### State, failure, and validation gates
 
-Sprint 37 remains `next` during planning and becomes `active` only when Task
-1 starts from the committed planning baseline. A task may be
+Sprint 37 is `active` after Task 1 starts from the committed planning
+baseline. A task may be
 `already_complete` only when committed live evidence and successful required
 validation prove every acceptance criterion; no empty commit is created.
 Missing or contradictory canonical evidence, an unimplementable ADR,

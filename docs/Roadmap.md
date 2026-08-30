@@ -9244,10 +9244,13 @@ worktree plus non-ignored untracked state, two-pass stability, confined UTF-8
 paths, deterministic delete/add move and copy evidence, closed conflicts and
 failures, fixed output/count/time bounds, and owned cancellation cleanup.
 
-Task 6 evidence and the bounded reader-cleanup remediation are committed as
-`550fa5df` and `3e13e523`. The remediation closes caller-drop ownership and the
-complete deadline, adds real child-process cleanup evidence, and completes the
-invalid status/path and UNC matrices without changing the accepted boundary.
+Task 6 evidence and the bounded review remediations are committed as
+`550fa5df`, `3e13e523`, `a2cb0641`, `dffd2f1c`, `03281583`, and `b1d551a1`.
+They close caller-drop ownership and the complete deadline, add real
+child-process cleanup evidence, complete the invalid status/path and UNC
+matrices, prove equal complete Workspace results across opposite operation
+orders, and exercise injected spawn/read/exit failures without changing the
+accepted boundary.
 
 Every accepted non-empty input uses the existing complete filesystem scan,
 production discovery, EDT/Designer build and validation, stable rescan, cache
@@ -9258,7 +9261,7 @@ default Runtime remains independent from Git.
 
 The [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records
 the complete requirement matrix, exact non-zero focused/public-process counts,
-1,266-test canonical workspace inventory, API/dependency/executable/path/
+1,268-test canonical workspace inventory, API/dependency/executable/path/
 sensitive-data/scope audits, and exact-head macOS/Windows CI for Rust, VS Code,
 and EDT. No missing harness or production behavior was added by Task 6. Sprint
 38 remains `active`; only Task 7 may perform the independent review, mark the

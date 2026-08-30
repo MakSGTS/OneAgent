@@ -1,9 +1,10 @@
+use oneagent_graph::SemanticGraphDiff;
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GitRepositoryReader, GraphQueryLimit,
-    GraphQueryService, RepositoryChangeKind, RuntimeConfig, WorkspaceCacheLoadOutcome,
-    WorkspaceCacheWriteOutcome, WorkspaceChangeInputHandle, WorkspaceChangeSubmissionOutcome,
-    WorkspaceService, WorkspaceSnapshot, WorkspaceUpdateFailureKind, WorkspaceUpdatePhase,
-    WorkspaceUpdateStatus,
+    GraphQueryService, RepositoryChange, RepositoryChangeKind, RuntimeConfig,
+    WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome, WorkspaceChangeInputHandle,
+    WorkspaceChangeSubmissionOutcome, WorkspaceService, WorkspaceSnapshot,
+    WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
 };
 use std::ffi::OsStr;
 use std::fs;
@@ -197,6 +198,164 @@ async fn submit_after_current_update(
             )
     })
     .await
+}
+
+async fn build_equivalent_ordered_end_state(
+    repository: &GitWorkspace,
+    reverse_order: bool,
+) -> (Arc<WorkspaceSnapshot>, Vec<RepositoryChange>) {
+    let workspace = WorkspaceService::new();
+    let input = workspace.change_input_handle();
+    let observer = workspace.snapshot_observer();
+    let mut snapshots = observer.subscribe();
+    let updates = workspace.update_observer();
+    let mut update_changes = updates.subscribe();
+    let app = configured_builder(&repository.root)
+        .register_service("workspace", workspace)
+        .expect("ordered Workspace service must register")
+        .build()
+        .expect("ordered application must build");
+    let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+    let run = tokio::spawn(app.run(shutdown));
+
+    wait_for_update(&mut update_changes, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+    })
+    .await;
+    wait_for_snapshot(&mut snapshots, |snapshot| {
+        configuration_names(snapshot) == ["DNSWorldEdition", "WritesFixture"]
+    })
+    .await;
+
+    let edt_configuration = repository
+        .root
+        .join("edt/src/Configuration/Configuration.mdo");
+    if reverse_order {
+        repository.git(["mv", "tracked-move.txt", "moved.txt"]);
+        fs::remove_file(repository.root.join("tracked-remove.txt"))
+            .expect("reverse-order tracked removal must succeed");
+        fs::write(repository.root.join("added.txt"), "added\n")
+            .expect("reverse-order addition must be written");
+        repository.git(["add", "added.txt"]);
+        replace_exact(
+            &edt_configuration,
+            "<name>WritesFixture</name>",
+            "<name>WritesOrderEquivalent</name>",
+        );
+    } else {
+        replace_exact(
+            &edt_configuration,
+            "<name>WritesFixture</name>",
+            "<name>WritesOrderEquivalent</name>",
+        );
+        fs::write(repository.root.join("added.txt"), "added\n")
+            .expect("forward-order addition must be written");
+        repository.git(["add", "added.txt"]);
+        fs::remove_file(repository.root.join("tracked-remove.txt"))
+            .expect("forward-order tracked removal must succeed");
+        repository.git(["mv", "tracked-move.txt", "moved.txt"]);
+    }
+
+    let change_set = GitRepositoryReader::new()
+        .read(&repository.root)
+        .await
+        .expect("equivalent ordered repository state must be readable");
+    let normalized_changes = change_set.changes().to_vec();
+    submit_after_current_update(&input, &mut update_changes, change_set).await;
+    let snapshot = wait_for_snapshot(&mut snapshots, |snapshot| {
+        configuration_names(snapshot) == ["DNSWorldEdition", "WritesOrderEquivalent"]
+    })
+    .await;
+
+    shutdown_sender
+        .send(())
+        .expect("ordered Workspace shutdown must be observed");
+    timeout(TEST_TIMEOUT, run)
+        .await
+        .expect("ordered Workspace shutdown must not hang")
+        .expect("ordered Workspace task must join")
+        .expect("ordered requested shutdown must succeed");
+    (snapshot, normalized_changes)
+}
+
+#[tokio::test]
+async fn public_git_input_publishes_equal_complete_end_states_across_operation_orders() {
+    let repository = GitWorkspace::new();
+    let (forward, forward_changes) = build_equivalent_ordered_end_state(&repository, false).await;
+    repository.git(["reset", "--hard", "HEAD"]);
+    repository.git(["clean", "-fd"]);
+    let cache_root = repository.root.join(".oneagent");
+    if cache_root.exists() {
+        fs::remove_dir_all(cache_root).expect("ordered test cache must reset with its fixture");
+    }
+    let (reverse, reverse_changes) = build_equivalent_ordered_end_state(&repository, true).await;
+
+    assert_eq!(forward_changes, reverse_changes);
+    assert_eq!(configuration_names(&forward), configuration_names(&reverse));
+    assert_eq!(forward.len(), reverse.len());
+    for (forward_configuration, reverse_configuration) in forward
+        .configurations()
+        .iter()
+        .zip(reverse.configurations())
+    {
+        assert_eq!(
+            forward_configuration
+                .root_path()
+                .strip_prefix(forward.root_path())
+                .expect("forward project root must remain confined"),
+            reverse_configuration
+                .root_path()
+                .strip_prefix(reverse.root_path())
+                .expect("reverse project root must remain confined")
+        );
+        assert_eq!(
+            forward_configuration.format(),
+            reverse_configuration.format()
+        );
+        assert_eq!(
+            forward_configuration.configuration_id(),
+            reverse_configuration.configuration_id()
+        );
+        assert_eq!(
+            forward_configuration.configuration_name(),
+            reverse_configuration.configuration_name()
+        );
+        assert!(
+            SemanticGraphDiff::between(
+                forward_configuration.graph(),
+                reverse_configuration.graph(),
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            forward_configuration.diagnostics(),
+            reverse_configuration.diagnostics()
+        );
+        assert_eq!(
+            forward_configuration.reference_requests(),
+            reverse_configuration.reference_requests()
+        );
+        assert_eq!(
+            forward_configuration.reference_statistics(),
+            reverse_configuration.reference_statistics()
+        );
+        assert_eq!(
+            forward_configuration.report(),
+            reverse_configuration.report()
+        );
+        assert_eq!(
+            forward_configuration.validation(),
+            reverse_configuration.validation()
+        );
+        assert_eq!(
+            forward_configuration.rule_execution_report(),
+            reverse_configuration.rule_execution_report()
+        );
+        assert_eq!(
+            forward_configuration.diagnostic_report(),
+            reverse_configuration.diagnostic_report()
+        );
+    }
 }
 
 #[tokio::test]

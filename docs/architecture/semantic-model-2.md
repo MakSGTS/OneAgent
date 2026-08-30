@@ -374,8 +374,10 @@ completed. The
 [Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
-Change Adapter is the unique `next` target.
+`pass with non-blocking follow-ups` and completes Sprint 37. The bounded Sprint
+38 Git Change Adapter is implemented and its
+[evidence](git-change-adapter-evidence.md) is complete; Sprint 38 remains active
+pending integration review and the Sprint 39 hand-off.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -1456,8 +1458,34 @@ telemetry, and performance/security claims remain deferred. The complete
 executable matrix is recorded in the
 [Sprint 37 evidence](rules-engine-evidence.md). The
 [Sprint 37 review](../reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups`, completes Sprint 37, and makes Sprint 38
-Git Change Adapter the unique `next` target.
+`pass with non-blocking follow-ups` and completes Sprint 37. The implemented
+Sprint 38 Git Change Adapter does not change this rule or diagnostic boundary.
+
+## Repository change evidence
+
+[ADR-0060](../adr/0060-git-change-adapter.md) adds one bounded explicit-demand
+local repository-evidence boundary in Runtime without extending the semantic
+model. A `GitChangeSet` identifies pinned `HEAD`, the final exact-root worktree,
+explicit tracked-and-non-ignored-untracked completeness, and canonically ordered
+Added, Modified, Deleted, TypeChanged, or Untracked path evidence. Paths are
+validated confined UTF-8 relative values. Conflicts and unstable, incompatible,
+out-of-bound, or cancelled reads return no partial set. Rename/copy similarity
+is disabled and therefore creates no semantic identity.
+
+`WorkspaceService` maps one accepted non-empty set into a private
+source-neutral request for the existing complete rebuild. Git baseline,
+completeness, paths, statuses, and process evidence do not enter a Workspace
+snapshot, cache, Graph, diagnostics, rules, protocols, or Coverage. Production
+filesystem discovery and EDT/Designer adapters still construct complete facts;
+graph validation still precedes publication. Failure retains the last valid
+snapshot and later filesystem or explicit input may recover.
+
+This boundary does not alter the incremental-index contract below. Repository
+paths and statuses are not index operations or impact seeds. Sprint 39 must
+derive product-facing change impact from complete previous/current
+`SemanticGraph` snapshots and their canonical `SemanticGraphDiff`. The complete
+evidence and limitations are recorded in the
+[Sprint 38 evidence](git-change-adapter-evidence.md).
 
 ## Incremental indexing
 

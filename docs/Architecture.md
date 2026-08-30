@@ -52,7 +52,12 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      Workspace-local complete-snapshot cache, exact validity checks, safe
      replacement, and typed cache observation without making persisted bytes a
      semantic authority. Public status observers report rebuild phase, attempts,
-     publications, failures, and the latest cache load/write outcomes. Its sole
+     publications, failures, and the latest cache load/write outcomes. The
+     Runtime library also owns one explicit-demand bounded local Git reader and
+     one capacity-one source-neutral Workspace rebuild input. Git evidence is
+     never published, persisted, or used to select semantic work; accepted
+     input enters the same complete rebuild and atomic-publication path as
+     filesystem observation. Its sole
      Axum service exposes HTTP liveness and
      lifecycle-derived readiness probes plus the versioned read-only Graph
      Query route set. A transport-neutral observer-backed query component owns
@@ -101,6 +106,35 @@ as query, resolution, reports, diffs, impact analysis, and the Sprint 4 Semantic
 Index remain read-only views over graph snapshots. Context selection and
 assembly are another read-only derived view and do not become graph authority.
 
+## Accepted Git Change Adapter boundary
+
+[ADR-0060](adr/0060-git-change-adapter.md) governs the implemented Sprint 38
+first slice. `oneagent-runtime` exposes validated source-independent repository
+endpoints, paths, statuses, change sets, closed errors, and an explicit local
+`GitRepositoryReader`. One read pins a 40- or 64-hex `HEAD`, requires the caller's
+Workspace root to be the exact canonical worktree root, and compares it with
+the final tracked worktree plus non-ignored untracked files. Conflicts,
+unsupported entry kinds, unconfined or non-UTF-8 paths, unstable two-pass
+observations, bounds, incompatible Git, process failure, timeout, and
+cancellation fail atomically.
+
+The production adapter invokes only fixed non-shell, non-mutating local Git
+commands with bounded stdout/stderr, one child at a time, one 30-second read
+deadline, and owned cleanup. Rename/copy similarity is disabled: moves and
+copies remain ordinary delete/add evidence and never claim semantic identity.
+No Cargo package, native library, unsafe code, Runtime configuration, cache
+version, protocol, IDE capability, or Coverage capability is added.
+
+`WorkspaceService` offers one cloneable pre-registration input handle. Empty
+sets are ignored; one non-empty request is accepted; a full slot reports
+backpressure; a stopped service reports closed. The private mapping discards
+Git endpoints and completeness and requests only the existing complete
+filesystem scan, production discovery, EDT/Designer builds, validation, stable
+rescan, cache policy, and immutable publication. The filesystem watcher remains
+active and authoritative for complete source state. The
+[Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records the
+full domain, reader, Workspace, platform, consumer, and scope matrix.
+
 ## Planned boundaries
 
 The roadmap assigns future boundaries explicitly:
@@ -131,8 +165,10 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
   records `pass` and completes Sprint 36. The
   [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
-  `pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
-  Change Adapter is the unique `next` target.
+  `pass with non-blocking follow-ups` and completes Sprint 37. The bounded
+  Sprint 38 Git Change Adapter is implemented and its evidence is complete;
+  Sprint 38 remains active pending integration review and the Sprint 39
+  hand-off.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -146,8 +182,9 @@ The roadmap assigns future boundaries explicitly:
   composition boundary is implemented in Sprint 37 with an empty production
   registry. Definition/reference providers, diagnostics UI, product rules,
   model tools or edits, and semantic EDT IDE workflows remain later work.
-- Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
-  authority.
+- Git change ingestion is implemented in Sprint 38 as an explicit local input
+  adapter, not a semantic authority. Automatic orchestration and product-facing
+  impact analysis remain later work.
 
 Detailed accepted decisions live in `docs/adr`. The dependency-ordered delivery
 sequence and status live only in `docs/Roadmap.md`.

@@ -38,8 +38,10 @@ closed with a `pass` decision in the
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
-Change Adapter is the unique `next` target. The
+`pass with non-blocking follow-ups` and completes Sprint 37. The bounded Sprint
+38 Git Change Adapter implementation and evidence are complete; Sprint 38
+remains `active` pending Task 7 integration review, state transition, and the
+Sprint 39 hand-off. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -9231,6 +9233,32 @@ closed service rejects input. Accepted work always follows the existing
 complete filesystem rebuild and lifecycle; Git evidence is not serialized or
 published. Tasks 3–5 implement the domain, reader, and Workspace mapping in
 order; Task 6 completes cross-platform and current-state evidence.
+
+###### Sprint 38 implementation evidence
+
+Tasks 3–5 are committed as `926a5314`, `7173dea9`, and `e2818c83`. Runtime now
+owns the additive normalized repository-change domain, explicit bounded local
+Git process reader, and capacity-one source-neutral Workspace input accepted by
+ADR-0060. The reader uses pinned `HEAD`, one exact worktree root, tracked final-
+worktree plus non-ignored untracked state, two-pass stability, confined UTF-8
+paths, deterministic delete/add move and copy evidence, closed conflicts and
+failures, fixed output/count/time bounds, and owned cancellation cleanup.
+
+Every accepted non-empty input uses the existing complete filesystem scan,
+production discovery, EDT/Designer build and validation, stable rescan, cache
+policy, and atomic immutable publication. Git evidence does not enter cache,
+Workspace snapshots, Graph, Analysis, diagnostics, rules, Coverage, protocols,
+or IDE capabilities. The portable filesystem watcher remains active and the
+default Runtime remains independent from Git.
+
+The [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records
+the complete requirement matrix, exact non-zero focused/public-process counts,
+1,263-test canonical workspace inventory, API/dependency/executable/path/
+sensitive-data/scope audits, and exact-head macOS/Windows CI for Rust, VS Code,
+and EDT. No missing harness or production behavior was added by Task 6. Sprint
+38 remains `active`; only Task 7 may perform the independent review, mark the
+sprint completed, hand off Sprint 39 Change Impact Analysis, or retire the
+Sprint 37 prompt suite.
 
 ###### Accepted planning baseline and ordered task manifest
 

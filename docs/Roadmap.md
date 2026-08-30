@@ -139,13 +139,25 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence implemented by the [MCP Protocol profile](codex/profiles/mcp-protocol-implementation.md), [MCP Protocol workflow](codex/workflows/mcp-protocol.md), [MCP Protocol template](codex/templates/mcp-protocol-task.md), existing [Runtime Service modules](codex/profiles/runtime-service-implementation.md), and existing [AI Tool Policy modules](codex/profiles/ai-tool-policy-implementation.md). | Sprints 28–29 and 35; protocol baseline for Sprint 32 | completed |
 | Task prompt template update completed — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence implemented by the [IDE Extension profile](codex/profiles/ide-extension-implementation.md), [IDE Extension workflow](codex/workflows/ide-extension.md), and [IDE Extension template](codex/templates/ide-extension-task.md), with existing Runtime Service and MCP Protocol modules retained for their owned boundaries. | Sprints 30–34 | completed |
 | Task prompt template update completed — Diagnostics Engine | Sprint 36 | Canonical diagnostic inputs, stable typed identity, duplicate/conflict handling, suppression authority, deterministic ordering, bounds, summaries, sensitive-data policy, immutable snapshots, projections, and regression evidence implemented by the [Diagnostics Engine profile](codex/profiles/diagnostics-engine-implementation.md), [workflow](codex/workflows/diagnostics-engine.md), and [template](codex/templates/diagnostics-engine-task.md). | Sprints 36 and 39 | completed |
-| Task prompt template update required — Rules Engine | Sprint 37 | Deterministic rule registration, identity, dependencies, configuration, execution, result contracts, and integration with accepted diagnostic evidence. | Sprint 37 | planned |
+| Task prompt template update completed — Rules Engine | Sprint 37 | Deterministic rule registration, identity, dependencies, configuration, execution, result contracts, and integration with accepted diagnostic evidence implemented by the [Rules Engine profile](codex/profiles/rules-engine-implementation.md), [workflow](codex/workflows/rules-engine.md), and [template](codex/templates/rules-engine-task.md). | Sprint 37 | completed |
 | Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
 | Task prompt template update required — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation. | Sprints 40–41 | planned |
 | Task prompt template update required — API Stability and Plugin SDK | Sprint 42 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 42–43 | planned |
 | Task prompt template update required — Performance and Security | Sprint 44 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 44 | planned |
 | Task prompt template update required — Documentation and Examples | Sprint 45 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 45 | planned |
 | Task prompt template update required — Release | Sprint 46 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 46 | planned |
+
+The Rules Engine audit at committed Sprint 36 review head `8240ed1a` found
+that the generic Implementation and Diagnostics Engine contracts do not require
+deterministic rule registration ownership, typed identity, dependency
+validation and ordering, configuration authority and compatibility,
+applicability, execution lifecycle and failure containment, or typed aggregate
+results integrated through the accepted diagnostic boundary. The Rules Engine
+modules add only those reusable execution and evidence requirements. They do
+not select an engine owner, rule trait, identity grammar, registration source,
+dependency meaning, configuration format, scheduler, failure policy, result
+vocabulary, limits, persistence schema, public protocol, UI, or first rule set;
+those remain Sprint 37 investigation and architecture decisions.
 
 The Context Engine audit at committed v0.4 release head
 `b47e6ff493a5db2b1188761bc7b7bab362e511ca` found that the generic

@@ -111,6 +111,7 @@ docs/codex/
     parser.md
     persistent-state.md
     review.md
+    rules-engine.md
     runtime-service.md
     semantic-index.md
     sequential-sprint-execution.md
@@ -129,6 +130,7 @@ docs/codex/
     parser-implementation.md
     persistent-state-implementation.md
     review.md
+    rules-engine-implementation.md
     runtime-service-implementation.md
     semantic-index-implementation.md
     source-adapter-implementation.md
@@ -147,6 +149,7 @@ docs/codex/
     parser-task.md
     persistent-state-task.md
     review-task.md
+    rules-engine-task.md
     runtime-service-task.md
     semantic-index-task.md
     sprint-execution-loop.md
@@ -242,6 +245,10 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 - Use `docs/codex/profiles/diagnostics-engine-implementation.md` for
   source-independent diagnostic identity, orchestration, suppression, bounded
   reporting, immutable snapshot composition, and diagnostic projections.
+- Use `docs/codex/profiles/rules-engine-implementation.md` for
+  source-independent rule identity, registration, dependency validation,
+  configuration, deterministic execution, result production, and diagnostic
+  integration.
 - Use `docs/codex/profiles/ide-extension-implementation.md` for editor extension
   build, packaging, activation, configuration, Runtime connectivity, UI state,
   extension-host lifecycle, and integration evidence.
@@ -287,6 +294,9 @@ module composition.
 - Use `docs/codex/templates/diagnostics-engine-task.md` for diagnostic identity,
   normalization, orchestration, suppression, reporting, snapshot, or
   public-projection work.
+- Use `docs/codex/templates/rules-engine-task.md` for rule identity,
+  registration, dependencies, configuration, execution, results, or
+  diagnostic-integration work.
 - Use `docs/codex/templates/ide-extension-task.md` for editor extension build,
   packaging, activation, configuration, Runtime connectivity, UI state, or
   extension-host lifecycle work.
@@ -372,6 +382,13 @@ evidence without becoming semantic or validation authority. They must define
 typed identity, duplicate/conflict behavior, suppression, ordering, bounds,
 summaries, sensitive-data handling, and deterministic snapshot or projection
 evidence while keeping general rule execution separate.
+
+Rules Engine tasks register and execute accepted source-independent rules over
+canonical immutable evidence without becoming semantic, validation, or
+diagnostic authority. They must define typed identity, registration ownership,
+dependency validation and order, configuration, applicability, lifecycle,
+failure containment, bounds, result contracts, and deterministic diagnostic
+integration while keeping plugins, edits, and product UI separate.
 
 Review tasks inspect existing work. They may create explicitly authorized review
 artifacts and Roadmap state transitions, but they do not modify implementation

@@ -4,8 +4,9 @@ use oneagent_graph::{SemanticDiagnostic, SemanticGraphValidationResult};
 
 use super::{
     DiagnosticError, DiagnosticErrorKind, DiagnosticFinding, DiagnosticPolicy, DiagnosticReport,
-    MAX_SEMANTIC_DIAGNOSTICS, MAX_VALIDATION_ISSUES, validate_count,
+    MAX_DIAGNOSTIC_FINDINGS, MAX_SEMANTIC_DIAGNOSTICS, MAX_VALIDATION_ISSUES, validate_count,
 };
+use crate::rules::RuleDiagnostic;
 
 /// Stateless deterministic Diagnostics Engine.
 #[derive(Debug, Default, Clone, Copy)]
@@ -28,13 +29,39 @@ impl DiagnosticEngine {
         validation: &SemanticGraphValidationResult,
         policy: &DiagnosticPolicy,
     ) -> Result<DiagnosticReport, DiagnosticError> {
+        self.build_with_rules(semantic_diagnostics, validation, &[], policy)
+    }
+
+    /// Builds one complete bounded report including accepted Rule evidence.
+    ///
+    /// The caller supplies normalized Rules Engine diagnostics. This method
+    /// does not execute rules, inspect a graph, or derive provenance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed bounded error without a partial report when an input,
+    /// finding, normalized result, or identity collision violates the accepted
+    /// diagnostic domain contract.
+    pub fn build_with_rules(
+        &self,
+        semantic_diagnostics: &[SemanticDiagnostic],
+        validation: &SemanticGraphValidationResult,
+        rule_diagnostics: &[RuleDiagnostic],
+        policy: &DiagnosticPolicy,
+    ) -> Result<DiagnosticReport, DiagnosticError> {
         validate_input_counts(semantic_diagnostics.len(), validation.issues().len())?;
+        validate_count(
+            DiagnosticErrorKind::TooManyFindings,
+            rule_diagnostics.len(),
+            MAX_DIAGNOSTIC_FINDINGS,
+        )?;
 
         let mut findings = Vec::with_capacity(
             semantic_diagnostics
                 .len()
                 .checked_add(validation.issues().len())
-                .unwrap_or(MAX_SEMANTIC_DIAGNOSTICS + MAX_VALIDATION_ISSUES),
+                .and_then(|count| count.checked_add(rule_diagnostics.len()))
+                .unwrap_or(MAX_DIAGNOSTIC_FINDINGS),
         );
 
         let mut semantic_inputs = semantic_diagnostics.iter().collect::<Vec<_>>();
@@ -47,6 +74,12 @@ impl DiagnosticEngine {
         validation_inputs.sort();
         for issue in validation_inputs {
             findings.push(DiagnosticFinding::from_validation(issue, policy)?);
+        }
+
+        let mut rule_inputs = rule_diagnostics.iter().collect::<Vec<_>>();
+        rule_inputs.sort();
+        for diagnostic in rule_inputs {
+            findings.push(DiagnosticFinding::from_rule(diagnostic, policy)?);
         }
 
         DiagnosticReport::new(findings)
@@ -320,7 +353,8 @@ mod tests {
                 crate::diagnostics::DiagnosticEvidence::Semantic(diagnostic) => {
                     Some(diagnostic.clone())
                 }
-                crate::diagnostics::DiagnosticEvidence::Validation(_) => None,
+                crate::diagnostics::DiagnosticEvidence::Validation(_)
+                | crate::diagnostics::DiagnosticEvidence::Rule(_) => None,
             })
             .collect()
     }

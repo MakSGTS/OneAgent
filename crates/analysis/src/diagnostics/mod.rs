@@ -20,6 +20,8 @@ use oneagent_graph::{
     SemanticReferenceRequestId,
 };
 
+use crate::rules::{RuleDiagnostic, RuleDiagnosticCode, RuleId};
+
 /// Maximum number of semantic diagnostics accepted by one engine evaluation.
 pub const MAX_SEMANTIC_DIAGNOSTICS: usize = 65_536;
 /// Maximum number of validation issues accepted by one engine evaluation.
@@ -42,6 +44,8 @@ pub enum DiagnosticFamily {
     Semantic,
     /// Semantic graph validation evidence.
     Validation,
+    /// Source-independent Rules Engine evidence.
+    Rule,
 }
 
 impl DiagnosticFamily {
@@ -51,6 +55,7 @@ impl DiagnosticFamily {
         match self {
             Self::Semantic => "semantic",
             Self::Validation => "validation",
+            Self::Rule => "rule",
         }
     }
 }
@@ -130,21 +135,24 @@ impl DiagnosticDisposition {
 }
 
 /// Original typed diagnostic code, tagged by evidence family.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DiagnosticCode {
     /// Recoverable semantic diagnostic code.
     Semantic(SemanticDiagnosticCode),
     /// Semantic graph validation code.
     Validation(SemanticGraphValidationCode),
+    /// Rule-local diagnostic code.
+    Rule(RuleDiagnosticCode),
 }
 
 impl DiagnosticCode {
-    /// Returns the original stable Graph-owned code string.
+    /// Returns the original stable producer-owned code string.
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Semantic(code) => code.as_str(),
             Self::Validation(code) => code.as_str(),
+            Self::Rule(code) => code.as_str(),
         }
     }
 }
@@ -156,6 +164,8 @@ pub enum DiagnosticKind {
     Semantic(SemanticDiagnosticKind),
     /// Semantic graph validation issue kind.
     Validation(SemanticGraphValidationIssueKind),
+    /// Rules Engine finding.
+    Rule,
 }
 
 impl DiagnosticKind {
@@ -165,6 +175,7 @@ impl DiagnosticKind {
         match self {
             Self::Semantic(kind) => semantic_kind_str(kind),
             Self::Validation(kind) => validation_kind_str(kind),
+            Self::Rule => "rule_finding",
         }
     }
 }
@@ -203,6 +214,15 @@ pub enum DiagnosticIdentity {
         target_kind: Option<NodeKind>,
         /// Stable Graph-owned invariant name.
         invariant: &'static str,
+    },
+    /// Identity of one rule-produced finding.
+    Rule {
+        /// Globally scoped producing rule identifier.
+        rule_id: RuleId,
+        /// Rule-local diagnostic code.
+        code: RuleDiagnosticCode,
+        /// Canonical Graph node anchors.
+        node_anchors: Vec<EntityId>,
     },
 }
 
@@ -250,15 +270,17 @@ impl DiagnosticIdentity {
         match self {
             Self::Semantic { .. } => DiagnosticFamily::Semantic,
             Self::Validation { .. } => DiagnosticFamily::Validation,
+            Self::Rule { .. } => DiagnosticFamily::Rule,
         }
     }
 
     /// Returns the original tagged stable code.
     #[must_use]
-    pub const fn code(&self) -> DiagnosticCode {
+    pub fn code(&self) -> DiagnosticCode {
         match self {
             Self::Semantic { code, .. } => DiagnosticCode::Semantic(*code),
             Self::Validation { code, .. } => DiagnosticCode::Validation(*code),
+            Self::Rule { code, .. } => DiagnosticCode::Rule(code.clone()),
         }
     }
 
@@ -268,6 +290,7 @@ impl DiagnosticIdentity {
         match self {
             Self::Semantic { kind, .. } => DiagnosticKind::Semantic(*kind),
             Self::Validation { kind, .. } => DiagnosticKind::Validation(*kind),
+            Self::Rule { .. } => DiagnosticKind::Rule,
         }
     }
 }
@@ -279,6 +302,8 @@ pub enum DiagnosticEvidence {
     Semantic(SemanticDiagnostic),
     /// Semantic graph validation evidence.
     Validation(SemanticGraphValidationIssue),
+    /// Source-independent rule-produced evidence.
+    Rule(RuleDiagnostic),
 }
 
 /// Exact in-memory identity suppression policy.
@@ -507,6 +532,52 @@ impl DiagnosticFinding {
         })
     }
 
+    /// Validates and normalizes one accepted rule diagnostic under `policy`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a bounded typed error when a message, node-anchor collection,
+    /// or Graph-derived provenance count exceeds the diagnostic contract.
+    pub fn from_rule(
+        diagnostic: &RuleDiagnostic,
+        policy: &DiagnosticPolicy,
+    ) -> Result<Self, DiagnosticError> {
+        validate_message(diagnostic.message())?;
+        validate_count(
+            DiagnosticErrorKind::TooManyNodeAnchors,
+            diagnostic.node_anchors().len(),
+            MAX_DIAGNOSTIC_NODE_ANCHORS,
+        )?;
+        validate_count(
+            DiagnosticErrorKind::TooManyProvenanceRecords,
+            diagnostic.observed_provenance_count(),
+            MAX_DIAGNOSTIC_PROVENANCE_RECORDS,
+        )?;
+
+        let identity = DiagnosticIdentity::Rule {
+            rule_id: diagnostic.rule_id().clone(),
+            code: diagnostic.code().clone(),
+            node_anchors: diagnostic.node_anchors().to_vec(),
+        };
+
+        Ok(Self {
+            family: DiagnosticFamily::Rule,
+            severity: diagnostic.severity(),
+            category: diagnostic.category(),
+            code: DiagnosticCode::Rule(diagnostic.code().clone()),
+            kind: DiagnosticKind::Rule,
+            message: diagnostic.message().to_owned(),
+            disposition: policy.disposition(&identity),
+            node_anchors: diagnostic.node_anchors().to_vec(),
+            related_nodes: Vec::new(),
+            edge_id: None,
+            reference_request_id: None,
+            provenance_count: diagnostic.observed_provenance_count(),
+            evidence: DiagnosticEvidence::Rule(diagnostic.clone()),
+            identity,
+        })
+    }
+
     /// Returns the stable typed identity.
     #[must_use]
     pub const fn identity(&self) -> &DiagnosticIdentity {
@@ -533,8 +604,8 @@ impl DiagnosticFinding {
 
     /// Returns the original tagged stable code.
     #[must_use]
-    pub const fn code(&self) -> DiagnosticCode {
-        self.code
+    pub const fn code(&self) -> &DiagnosticCode {
+        &self.code
     }
 
     /// Returns the original tagged stable kind.

@@ -1,5 +1,13 @@
 //! Source-independent rule identity, definitions, and registration.
 
+mod execution;
+
+pub use execution::{
+    MAX_RULE_DIAGNOSTICS, MAX_RULE_DIAGNOSTICS_PER_RULE, NeverCancelled, Rule,
+    RuleCancellationSignal, RuleContext, RuleDiagnostic, RuleEngine, RuleEvaluation,
+    RuleExecutionReport, RuleExecutionSummary, RuleFailureCode, RuleResult, RuleStatus,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -46,6 +54,16 @@ pub enum RuleEngineErrorKind {
     SelfDependency,
     /// The complete dependency graph contains a cycle.
     DependencyCycle,
+    /// A rule failure code violated the accepted grammar or byte bound.
+    InvalidRuleFailureCode,
+    /// A supplied plan does not match the registry and configuration.
+    InvalidRulePlan,
+    /// A rule execution context contains incompatible diagnostic evidence.
+    InvalidRuleContext,
+    /// The complete execution report contains too many rule diagnostics.
+    TooManyRuleDiagnostics,
+    /// Complete rule execution result reconciliation failed.
+    InconsistentRuleExecution,
 }
 
 /// Bounded redacted Rules Engine construction failure.

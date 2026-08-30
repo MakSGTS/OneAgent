@@ -8743,6 +8743,208 @@ Suggested planning commit message:
 Plan Sprint 36 Diagnostics Engine
 ```
 
+##### Sprint 37 Rules Engine execution plan
+
+Sprint 37 is planned from completed Sprint 36 review baseline `8240ed1a` and
+the committed reusable Rules Engine framework prerequisite `68045f0c`. The
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+records `pass`; Sprint 37 is the unique `next` target.
+
+The data and testability gate passes for planning. The repository owns an
+immutable source-independent `SemanticGraph`, complete Graph validation,
+recoverable semantic diagnostics, the ADR-0058 `DiagnosticEngine` and
+`DiagnosticReport`, immutable Workspace Configuration snapshots, deterministic
+cache reconstruction and watcher replacement, Runtime cancellation/lifecycle,
+bounded MCP/LSP projections, and non-zero package and public-process tests.
+These provide canonical input, result-integration, rebuild, persistence,
+cancellation, compatibility, and cleanup oracles. No general Rules Engine,
+rule registry, rule identity, dependency planner, rule configuration source, or
+aggregate rule execution result exists in production.
+
+Exact rule inputs, ownership, identity, registration, dependency meanings,
+configuration authority, applicability, execution lifecycle, failure
+containment, cancellation, result vocabulary, diagnostic mapping, bounds,
+snapshot/cache behavior, and public compatibility remain unresolved. Task 1
+must produce decision-ready repository evidence and Task 2 must accept ADR-0059
+before production changes. Unknown external configuration, plugin, script,
+remote-rule, UI, or edit behavior is not required data for the bounded first
+slice and remains deferred.
+
+The live framework audit found a concrete reusable gap beyond generic
+Implementation and Diagnostics Engine contracts. Commit `68045f0c` closes it
+with the [Rules Engine profile](codex/profiles/rules-engine-implementation.md),
+[workflow](codex/workflows/rules-engine.md), and
+[template](codex/templates/rules-engine-task.md). They require deterministic
+identity, registration, dependencies, configuration, execution, results,
+diagnostic integration, bounds, failures, snapshots, persistence, and evidence
+without selecting concrete architecture. Existing Investigation, Architecture,
+Diagnostics Engine, Runtime Service, Persistent State, Review, sprint planning,
+and sequential execution contracts cover all other planned boundaries. No
+additional framework or post-sprint framework-audit task is planned.
+
+The complete Sprint 37 prompt suite is owned by
+`docs/codex/prompts/sprint-37-rules-engine/`. The verified immediately
+preceding suite is
+`docs/codex/prompts/sprint-36-diagnostics-engine/`; its nine tracked files
+exactly match the filesystem inventory and it contains no untracked addition.
+Only Task 8 may conditionally retire that exact suite after a non-blocking
+review, successful complete validation, and same-reviewer artifact consistency.
+
+###### Sprint 37 objective
+
+Define and implement one source-independent deterministic Rules Engine
+boundary for bounded rule identity, registration, dependencies, configuration,
+execution, and typed results over accepted immutable evidence. Compose only the
+accepted rule-produced diagnostic evidence into immutable Workspace snapshots
+while preserving Graph, validation, provenance, location, and Diagnostics
+Engine authority and existing truthful public projections.
+
+Included scope is:
+
+- repository investigation and one accepted ADR for canonical inputs,
+  ownership, identity, registry, dependencies, configuration, applicability,
+  execution, cancellation, failures, results, diagnostic mapping, bounds,
+  errors, snapshots, cache, compatibility, and deterministic evidence;
+- one source-independent typed rule domain and immutable deterministic
+  registry with validated registration and explicit duplicate/conflict
+  behavior;
+- deterministic dependency validation and execution planning for accepted
+  topologies and failure cases;
+- one bounded first-slice configuration authority and explicit applicability
+  outcomes, without inventing an external grammar;
+- one deterministic execution boundary with accepted cancellation, failure
+  containment, terminal per-rule and aggregate results, and repository-owned
+  conformance rules;
+- accepted mapping of rule-produced evidence through ADR-0058 diagnostic
+  identity, collision, ordering, suppression, summary, provenance, location,
+  bounds, and completeness;
+- immutable Workspace snapshot composition, cache/rebuild/invalidation,
+  watching/lifecycle, reporting compatibility, focused/public/full evidence,
+  current-state documentation, independent review, Sprint 38 hand-off, and
+  conditional Sprint 36 prompt-suite retirement.
+
+Excluded scope is:
+
+- dynamic plugin loading, scripting, remote rule acquisition, third-party rule
+  SDK, filesystem discovery, hot reload, mutable global registration, or
+  runtime code loading;
+- user/project configuration file grammar, environment variables, persistent
+  preferences, configuration migration, protocol configuration, settings UI,
+  profiles, baselines, directives, or policy administration unless ADR-0059
+  proves one smaller repository-owned prerequisite;
+- new graph facts, source parsers, adapters, validator authority, source reads
+  inside rules, graph mutation, hidden validation, diagnostic suppression
+  redesign, or Coverage transition;
+- new MCP tools, rule-management protocol, LSP capability, VS Code/EDT UI,
+  mutable-document analysis, push/workspace diagnostics, remote transport,
+  authentication, or external-client expansion;
+- automatic fixes, code actions, refactoring plans, safe edits, source
+  mutation, Git Change Adapter work, telemetry, performance/security claims,
+  release review, or Sprint 38 implementation.
+
+###### Accepted planning baseline and ordered task manifest
+
+ADR-0008 keeps Graph source-format independent. ADR-0039 preserves immutable
+Workspace publication and lifecycle. ADR-0042 preserves cache authority,
+compatibility, invalidation, and recovery. ADR-0058 keeps diagnostic identity,
+normalization, suppression, ordering, summary, and reporting in the Diagnostics
+Engine while explicitly deferring rule registration and execution. Task 1 must
+resolve all remaining rule-specific decisions from current repository evidence.
+Task 2 must accept ADR-0059 before Cargo, public API, or production Rust changes.
+Any new production dependency requires explicit approval before its first use.
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Rules Engine. | Investigation / investigation | Complete input, owner, registry, dependency, configuration, execution, result, diagnostic, compatibility, and oracle evidence. | Sprint 37 planning baseline and Rules Engine framework prerequisite. | `Investigate Sprint 37 rules engine` |
+| 2 | Define the Rules Engine. | Architecture / architecture | Accepted ADR-0059 for the bounded source-independent Rules Engine. | Task 1. | `Define Sprint 37 rules engine` |
+| 3 | Implement the rule registry. | Rules Engine / Rules Engine | Accepted typed rule domain and deterministic immutable registry. | Accepted ADR-0059. | `Implement Sprint 37 rule registry` |
+| 4 | Implement rule planning. | Rules Engine / Rules Engine | Deterministic dependency validation, execution planning, configuration, and applicability. | Task 3. | `Implement Sprint 37 rule planning` |
+| 5 | Implement rule execution. | Rules Engine + Diagnostics Engine / Rules Engine | Bounded execution, terminal results, failure/cancellation behavior, and accepted diagnostic integration. | Task 4. | `Implement Sprint 37 rule execution` |
+| 6 | Integrate rule snapshots. | Rules Engine + Runtime Service / Rules Engine | Immutable Workspace/cache/rebuild result composition, lifecycle, and unchanged truthful projections. | Task 5. | `Integrate Sprint 37 rule snapshots` |
+| 7 | Complete Rules Engine evidence. | Rules Engine / Rules Engine | Complete validation, compatibility/dependency/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 37 rules engine evidence` |
+| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 38 hand-off, and conditional Sprint 36 suite retirement. | Task 7 and all validation. | `Complete Sprint 37 rules engine review` |
+
+Task 1 creates only
+`docs/architecture/rules-engine-investigation.md` and the minimal Roadmap
+state update needed to mark execution active. It traces canonical inputs and
+owners, existing similarly named non-engine rule concepts, registry and
+dependency alternatives, configuration evidence, execution/cancellation/
+failure/result options, diagnostic integration, consumers, compatibility,
+dependency impact, and deterministic test oracles. It implements no production
+behavior.
+
+Task 2 creates `docs/adr/0059-rules-engine.md` and only planning-level
+architecture synchronization. It accepts exact ownership, dependency direction,
+inputs, identity, registration, dependency semantics/order, configuration,
+applicability, execution lifecycle, cancellation, failures, results,
+diagnostic mapping, bounds, errors, snapshot/cache behavior, compatibility,
+evidence, first slice, and deferred scope.
+
+Task 3 implements only the accepted typed domain and immutable registry. It
+adds no dependency planning, configuration, rule body execution, diagnostics,
+Workspace composition, or public projection.
+
+Task 4 implements only accepted dependency validation, canonical execution
+planning, first-slice configuration, and applicability. It adds no rule body
+execution or diagnostics.
+
+Task 5 implements accepted rule execution, cancellation and failure
+containment, terminal results, and diagnostic evidence integration. It adds no
+Workspace/cache or protocol composition.
+
+Task 6 composes the complete accepted result into immutable Workspace
+Configuration snapshots, implements accepted cache/recompute/invalidation and
+watching/lifecycle behavior, and proves existing MCP/LSP/HTTP/CLI/IDE
+compatibility without advertising an unsupported rule-management surface.
+
+Task 7 adds only missing evidence harnesses and current-state documentation,
+runs the exact complete focused/public/full matrix, and introduces no new
+production behavior. Task 8 owns the independent review, primary
+reconciliation, same-reviewer artifact-consistency check, state transition,
+Sprint 38 hand-off, and conditional retirement of the exact Sprint 36 suite.
+
+###### State, failure, and validation gates
+
+Sprint 37 remains `next` during planning and becomes `active` only when Task
+1 starts from the committed planning baseline. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing or contradictory canonical evidence, an unimplementable ADR,
+unapproved dependency, unstable identity or ordering, registry conflict
+selection by input order, unresolved dependency cycle, invented configuration,
+unrecorded partial execution, cancellation or cleanup leak, diagnostic
+authority duplication, snapshot/cache mismatch, false schema/capability claim,
+zero matched tests, failed validation, staging/commit/push failure, reviewer
+mutation or incompleteness, unresolved evidence disagreement, failed artifact
+consistency, or retirement inventory drift stops the sprint immediately.
+
+Documentation-only Tasks 1–2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3–6 run non-zero focused and affected
+package/public-process tests plus the canonical full workspace gate. Task 7
+reruns the complete requirement matrix and compatibility audits. Task 8
+independently and primarily reruns the required matrix before any transition:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership,
+exact Sprint 36 retirement inventory, mandatory independent reviewer handoff
+and consistency gate, `git diff --check`, and unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 37 Rules Engine
+```
+
 The v0.7 release integration review follows Sprint 41.
 
 #### v1.0 — Stable Platform

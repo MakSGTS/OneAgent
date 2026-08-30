@@ -9197,6 +9197,41 @@ repositories for future production-reader evidence. No external data, remote,
 credential, user repository, or source format is required. Sprint 38 is now
 `active`; Task 2 owns architecture acceptance.
 
+###### Sprint 38 architecture decision
+
+Task 2 accepts [ADR-0060](adr/0060-git-change-adapter.md).
+`oneagent-runtime` owns one explicit-demand local repository-change domain,
+bounded Git process reader, and source-neutral Workspace input mapping. The
+default Runtime and filesystem watcher remain unchanged; Git input is
+supplementary and can request only the existing complete discovery, build,
+validation, cache, and atomic publication path. It never identifies semantic
+entities or becomes Graph, Diff, Impact, diagnostic, rule, cache, refactoring,
+edit, protocol, or IDE authority.
+
+The accepted reader resolves pinned `HEAD` as a 40- or 64-hex baseline and
+compares it with one exact worktree root containing tracked final-worktree and
+non-ignored untracked files. It rejects conflicts, unborn/bare/mismatched
+repositories, unsupported entry kinds, unconfined or non-UTF-8 paths, one-over
+bounds, unstable two-pass reads, incompatible Git, process failures, timeout,
+and cancellation. Rename/copy detection is disabled, so moves remain
+deterministic delete/add evidence. Normalized paths are bounded confined UTF-8
+forward-slash values; changes use a closed Added/Modified/Deleted/TypeChanged/
+Untracked vocabulary and canonical bytewise order.
+
+The process family uses fixed non-shell, NUL-delimited local Git commands under
+16 MiB stdout, 64 KiB stderr, 10,000-change, 4,096-byte-path, two-pass, and
+30-second complete-read bounds. It owns and joins every child and performs no
+network or repository mutation. No Cargo dependency, manifest, lockfile,
+schema, cache-version, protocol, Coverage, or default Runtime change is
+accepted.
+
+`WorkspaceService` gains one explicit one-slot input handle. Empty sets are
+ignored, one non-empty set is accepted, full input reports backpressure, and a
+closed service rejects input. Accepted work always follows the existing
+complete filesystem rebuild and lifecycle; Git evidence is not serialized or
+published. Tasks 3–5 implement the domain, reader, and Workspace mapping in
+order; Task 6 completes cross-platform and current-state evidence.
+
 ###### Accepted planning baseline and ordered task manifest
 
 ADR-0027 keeps Graph/index change input canonical and source-independent.

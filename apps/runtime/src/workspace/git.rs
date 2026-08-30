@@ -956,14 +956,16 @@ mod tests {
     };
     use crate::{MAX_REPOSITORY_CHANGE_PATH_BYTES, MAX_REPOSITORY_CHANGES, RepositoryChangeKind};
     use std::collections::VecDeque;
+    use std::io;
     use std::path::{Path, PathBuf};
     use std::pin::Pin;
     use std::process::Stdio;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
+    use std::task::{Context, Poll};
     use std::time::Duration;
     use tempfile::TempDir;
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncRead, AsyncWriteExt, ReadBuf};
     use tokio::sync::{Notify, oneshot};
     use tokio::time::{sleep_until, timeout};
 
@@ -972,11 +974,30 @@ mod tests {
 
     enum ScriptResult {
         Output(Vec<u8>),
-        Error(GitRepositoryReadErrorKind),
+        Failure(ScriptFailure),
         Pending {
             dropped: Arc<AtomicBool>,
             started: Arc<Notify>,
         },
+    }
+
+    #[derive(Clone, Copy)]
+    enum ScriptFailure {
+        Spawn,
+        StdoutRead,
+        StderrRead,
+        Exit,
+    }
+
+    impl ScriptFailure {
+        const fn kind(self) -> GitRepositoryReadErrorKind {
+            match self {
+                Self::Spawn => GitRepositoryReadErrorKind::SpawnFailed,
+                Self::StdoutRead | Self::StderrRead | Self::Exit => {
+                    GitRepositoryReadErrorKind::ProcessFailed
+                }
+            }
+        }
     }
 
     struct ScriptStep {
@@ -1014,7 +1035,7 @@ mod tests {
             Box::pin(async move {
                 match step.result {
                     ScriptResult::Output(stdout) => Ok(CommandOutput { stdout }),
-                    ScriptResult::Error(kind) => Err(kind),
+                    ScriptResult::Failure(failure) => Err(failure.kind()),
                     ScriptResult::Pending { dropped, started } => {
                         struct DropSignal(Arc<AtomicBool>);
                         impl Drop for DropSignal {
@@ -1042,6 +1063,18 @@ mod tests {
     struct ProductionBoundaryRunner {
         started: Arc<Notify>,
         reaped: Arc<AtomicBool>,
+    }
+
+    struct FailingAsyncReader;
+
+    impl AsyncRead for FailingAsyncReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+            _buffer: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Ready(Err(io::Error::other("injected read failure")))
+        }
     }
 
     impl GitCommandRunner for ProductionBoundaryRunner {
@@ -1272,7 +1305,7 @@ mod tests {
         let runner = reader(
             vec![ScriptStep {
                 command: GitCommand::BareRepository,
-                result: ScriptResult::Error(GitRepositoryReadErrorKind::ProcessFailed),
+                result: ScriptResult::Failure(ScriptFailure::Exit),
             }],
             Duration::from_secs(1),
         );
@@ -1281,6 +1314,57 @@ mod tests {
             .await
             .expect_err("bare probe process failure must classify repository absence");
         assert_eq!(error.kind(), GitRepositoryReadErrorKind::NotRepository);
+    }
+
+    #[tokio::test]
+    async fn injected_runner_executes_spawn_read_and_exit_failure_matrix() {
+        let (_temp, root) = root();
+
+        let spawn = reader(
+            vec![ScriptStep {
+                command: GitCommand::BareRepository,
+                result: ScriptResult::Failure(ScriptFailure::Spawn),
+            }],
+            Duration::from_secs(1),
+        );
+        let error = spawn
+            .read(&root)
+            .await
+            .expect_err("injected spawn failure must close the complete read");
+        assert_eq!(error.kind(), GitRepositoryReadErrorKind::SpawnFailed);
+
+        for (failure, command) in [
+            (ScriptFailure::StdoutRead, GitCommand::Conflicts),
+            (ScriptFailure::StderrRead, GitCommand::TrackedChanges),
+            (ScriptFailure::Exit, GitCommand::UntrackedPaths),
+        ] {
+            let mut steps = vec![output(GitCommand::BareRepository, b"false\n".to_vec())];
+            steps.push(output(
+                GitCommand::TopLevel,
+                format!("{}\n", root.display()).into_bytes(),
+            ));
+            steps.push(output(GitCommand::Head, format!("{SHA1}\n").into_bytes()));
+            if command != GitCommand::Conflicts {
+                steps.push(output(GitCommand::Conflicts, Vec::new()));
+            }
+            if command == GitCommand::UntrackedPaths {
+                steps.push(output(GitCommand::TrackedChanges, Vec::new()));
+            }
+            steps.push(ScriptStep {
+                command,
+                result: ScriptResult::Failure(failure),
+            });
+            let error = reader(steps, Duration::from_secs(1))
+                .read(&root)
+                .await
+                .expect_err("injected post-context process failure must close the complete read");
+            assert_eq!(error.kind(), GitRepositoryReadErrorKind::ProcessFailed);
+        }
+
+        let error = read_bounded(FailingAsyncReader, STDOUT_LIMIT)
+            .await
+            .expect_err("injected AsyncRead failure must remain closed");
+        assert_eq!(error, GitRepositoryReadErrorKind::ProcessFailed);
     }
 
     #[tokio::test]

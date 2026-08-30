@@ -622,7 +622,12 @@ mod tests {
         let cases = [
             ("", RepositoryChangePathErrorKind::Empty),
             ("/root", RepositoryChangePathErrorKind::NotRelative),
+            ("//server/share", RepositoryChangePathErrorKind::NotRelative),
             ("C:/root", RepositoryChangePathErrorKind::NotRelative),
+            (
+                "\\\\server\\share",
+                RepositoryChangePathErrorKind::UnsupportedSeparator,
+            ),
             (
                 "src\\file",
                 RepositoryChangePathErrorKind::UnsupportedSeparator,
@@ -657,29 +662,81 @@ mod tests {
             assert_eq!(change(kind, "src/file").kind(), kind);
         }
 
-        let missing = RepositoryChange::new(RepositoryChangeKind::Added, None, None)
-            .expect_err("added change without current path must fail");
-        assert_eq!(
-            missing.kind(),
-            RepositoryChangeErrorKind::MissingCurrentPath
-        );
-        let unexpected = RepositoryChange::new(
+        let assert_invalid = |kind, previous: Option<&str>, current: Option<&str>, expected| {
+            let error = RepositoryChange::new(kind, previous.map(path), current.map(path))
+                .expect_err("invalid status/path row must fail");
+            assert_eq!(error.kind(), expected);
+        };
+
+        for kind in [RepositoryChangeKind::Added, RepositoryChangeKind::Untracked] {
+            assert_invalid(
+                kind,
+                Some("old"),
+                None,
+                RepositoryChangeErrorKind::UnexpectedPreviousPath,
+            );
+            assert_invalid(
+                kind,
+                Some("old"),
+                Some("new"),
+                RepositoryChangeErrorKind::UnexpectedPreviousPath,
+            );
+            assert_invalid(
+                kind,
+                None,
+                None,
+                RepositoryChangeErrorKind::MissingCurrentPath,
+            );
+        }
+
+        assert_invalid(
             RepositoryChangeKind::Deleted,
-            Some(path("old")),
-            Some(path("new")),
-        )
-        .expect_err("deleted change with current path must fail");
-        assert_eq!(
-            unexpected.kind(),
-            RepositoryChangeErrorKind::UnexpectedCurrentPath
+            None,
+            None,
+            RepositoryChangeErrorKind::MissingPreviousPath,
         );
-        let mismatch = RepositoryChange::new(
+        assert_invalid(
+            RepositoryChangeKind::Deleted,
+            None,
+            Some("new"),
+            RepositoryChangeErrorKind::MissingPreviousPath,
+        );
+        assert_invalid(
+            RepositoryChangeKind::Deleted,
+            Some("old"),
+            Some("new"),
+            RepositoryChangeErrorKind::UnexpectedCurrentPath,
+        );
+
+        for kind in [
             RepositoryChangeKind::Modified,
-            Some(path("old")),
-            Some(path("new")),
-        )
-        .expect_err("modified paths must match");
-        assert_eq!(mismatch.kind(), RepositoryChangeErrorKind::MismatchedPaths);
+            RepositoryChangeKind::TypeChanged,
+        ] {
+            assert_invalid(
+                kind,
+                None,
+                None,
+                RepositoryChangeErrorKind::MissingPreviousPath,
+            );
+            assert_invalid(
+                kind,
+                None,
+                Some("new"),
+                RepositoryChangeErrorKind::MissingPreviousPath,
+            );
+            assert_invalid(
+                kind,
+                Some("old"),
+                None,
+                RepositoryChangeErrorKind::MissingCurrentPath,
+            );
+            assert_invalid(
+                kind,
+                Some("old"),
+                Some("new"),
+                RepositoryChangeErrorKind::MismatchedPaths,
+            );
+        }
     }
 
     #[test]

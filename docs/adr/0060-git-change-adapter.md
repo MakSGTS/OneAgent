@@ -259,9 +259,13 @@ The first slice accepts these fixed non-configurable limits:
 - one 30-second timeout for the complete read, including both passes and child
   cleanup.
 
-One-over values fail before publication. The reader parses NUL-delimited output
-incrementally and enforces byte limits while reading; `wait_with_output` or an
-equivalent unbounded collection is not accepted.
+The operation deadline reserves its final second for child cleanup. A shorter
+test-only timeout reserves at most half of its duration. Cancellation can begin
+cleanup earlier, and caller drop performs synchronous kill and reap before the
+drop completes. One-over values fail before publication. The reader drains
+stdout and stderr incrementally under their byte limits and then parses the
+bounded NUL-delimited buffers; `wait_with_output` or an equivalent unbounded
+collection is not accepted.
 
 These are safety and deterministic-test bounds, not performance guarantees.
 Configuration, benchmarks, and tuning are deferred.
@@ -300,6 +304,13 @@ Every child:
 - is owned by the read future with kill-on-drop behavior; and
 - is terminated and joined on cancellation, timeout, read-limit failure, or
   caller drop.
+
+Stdout and stderr read futures are owned directly by the same read future and
+are never detached tasks. Cancellation, timeout, or a read failure uses the
+reserved cleanup interval to kill and asynchronously reap the child. If that
+interval is exhausted, the guard synchronously reaps before control can leave
+the read future. Dropping the caller future invokes that same synchronous
+kill-and-reap fallback, so no process or pipe-reader task outlives its owner.
 
 Locale-dependent human messages are never parsed. Exit code and typed parser
 state determine the closed error. The adapter validates behavior by capability,
@@ -434,7 +445,8 @@ Task 4 must prove the real reader and injected process boundary:
 - conflict, unborn HEAD, bare, missing, root mismatch, nested exact-root,
   submodule/gitlink, non-UTF-8 where constructible, unsupported output,
   spawn/exit/read/output-limit/timeout/cancellation, first/second-pass drift,
-  cleanup, local config isolation, no network, and sensitive-data redaction;
+  production-boundary future-drop and deadline cleanup, local config isolation,
+  no network, and sensitive-data redaction;
 - equivalent operation order and both SHA-1 plus SHA-256 when the installed Git
   capability supports repository-format selection; unsupported SHA-256 is
   recorded as an environment limitation, not silently skipped.

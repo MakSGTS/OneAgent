@@ -1,7 +1,7 @@
 use oneagent_runtime::{
     GitChangeCompleteness, GitChangeSet, GitChangeSetErrorKind, GitCommitId, GitCurrentEndpoint,
-    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeKind, RepositoryChangePath,
-    RepositoryChangePathErrorKind,
+    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeErrorKind, RepositoryChangeKind,
+    RepositoryChangePath, RepositoryChangePathErrorKind,
 };
 
 const SHA1: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -66,6 +66,85 @@ fn public_domain_exposes_every_closed_status_with_accepted_paths() {
 }
 
 #[test]
+fn public_domain_rejects_every_invalid_status_path_shape_deterministically() {
+    let assert_invalid = |kind, previous: Option<&str>, current: Option<&str>, expected| {
+        let error = RepositoryChange::new(kind, previous.map(path), current.map(path))
+            .expect_err("invalid public status/path row must fail");
+        assert_eq!(error.kind(), expected);
+    };
+
+    for kind in [RepositoryChangeKind::Added, RepositoryChangeKind::Untracked] {
+        assert_invalid(
+            kind,
+            Some("old"),
+            None,
+            RepositoryChangeErrorKind::UnexpectedPreviousPath,
+        );
+        assert_invalid(
+            kind,
+            Some("old"),
+            Some("new"),
+            RepositoryChangeErrorKind::UnexpectedPreviousPath,
+        );
+        assert_invalid(
+            kind,
+            None,
+            None,
+            RepositoryChangeErrorKind::MissingCurrentPath,
+        );
+    }
+
+    assert_invalid(
+        RepositoryChangeKind::Deleted,
+        None,
+        None,
+        RepositoryChangeErrorKind::MissingPreviousPath,
+    );
+    assert_invalid(
+        RepositoryChangeKind::Deleted,
+        None,
+        Some("new"),
+        RepositoryChangeErrorKind::MissingPreviousPath,
+    );
+    assert_invalid(
+        RepositoryChangeKind::Deleted,
+        Some("old"),
+        Some("new"),
+        RepositoryChangeErrorKind::UnexpectedCurrentPath,
+    );
+
+    for kind in [
+        RepositoryChangeKind::Modified,
+        RepositoryChangeKind::TypeChanged,
+    ] {
+        assert_invalid(
+            kind,
+            None,
+            None,
+            RepositoryChangeErrorKind::MissingPreviousPath,
+        );
+        assert_invalid(
+            kind,
+            None,
+            Some("new"),
+            RepositoryChangeErrorKind::MissingPreviousPath,
+        );
+        assert_invalid(
+            kind,
+            Some("old"),
+            None,
+            RepositoryChangeErrorKind::MissingCurrentPath,
+        );
+        assert_invalid(
+            kind,
+            Some("old"),
+            Some("new"),
+            RepositoryChangeErrorKind::MismatchedPaths,
+        );
+    }
+}
+
+#[test]
 fn public_domain_is_equal_across_input_order_and_duplicate_delivery() {
     let baseline = GitCommitId::new(SHA1).expect("baseline must be valid");
     let first = GitChangeSet::new(
@@ -97,6 +176,16 @@ fn public_domain_rejects_escape_and_conflict_without_sensitive_values() {
         RepositoryChangePath::new("../private/secret.bsl").expect_err("escaping path must fail");
     assert_eq!(escape.kind(), RepositoryChangePathErrorKind::NonCanonical);
     assert!(!escape.to_string().contains("secret"));
+
+    let slash_unc =
+        RepositoryChangePath::new("//server/share").expect_err("slash-form UNC path must fail");
+    assert_eq!(slash_unc.kind(), RepositoryChangePathErrorKind::NotRelative);
+    let backslash_unc = RepositoryChangePath::new("\\\\server\\share")
+        .expect_err("backslash-form UNC path must fail");
+    assert_eq!(
+        backslash_unc.kind(),
+        RepositoryChangePathErrorKind::UnsupportedSeparator
+    );
 
     let conflict = GitChangeSet::new(
         GitCommitId::new(SHA1).expect("baseline must be valid"),

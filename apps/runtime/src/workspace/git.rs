@@ -14,16 +14,33 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, Command};
-use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
 
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_CLEANUP_RESERVE: Duration = Duration::from_secs(1);
 const STDOUT_LIMIT: usize = 16 * 1024 * 1024;
 const STDERR_LIMIT: usize = 64 * 1024;
 
 type CancellationFuture = dyn Future<Output = ()> + Send;
 type CommandFuture<'a> =
     Pin<Box<dyn Future<Output = Result<CommandOutput, GitRepositoryReadErrorKind>> + Send + 'a>>;
+
+#[derive(Debug, Clone, Copy)]
+struct ReadDeadlines {
+    operation: Instant,
+    complete: Instant,
+}
+
+impl ReadDeadlines {
+    fn new(timeout: Duration) -> Self {
+        let complete = Instant::now() + timeout;
+        let cleanup_reserve = std::cmp::min(timeout / 2, MAX_CLEANUP_RESERVE);
+        Self {
+            operation: complete - cleanup_reserve,
+            complete,
+        }
+    }
+}
 
 /// Closed failure vocabulary for one local Git repository read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,7 +166,8 @@ impl GitRepositoryReader {
     }
 
     /// Reads one stable normalized change set without an explicit cancellation
-    /// signal. Dropping the returned future still terminates any active child.
+    /// signal. Dropping the returned future synchronously terminates and reaps
+    /// any active child before the drop completes.
     ///
     /// # Errors
     ///
@@ -183,9 +201,9 @@ impl GitRepositoryReader {
         F: Future<Output = ()> + Send + 'static,
     {
         let root = root.as_ref().to_path_buf();
-        let deadline = Instant::now() + self.timeout;
+        let deadlines = ReadDeadlines::new(self.timeout);
         let mut cancellation: Pin<Box<CancellationFuture>> = Box::pin(cancellation);
-        self.read_inner(&root, deadline, &mut cancellation)
+        self.read_inner(&root, deadlines, &mut cancellation)
             .await
             .map_err(GitRepositoryReadError::new)
     }
@@ -193,18 +211,22 @@ impl GitRepositoryReader {
     async fn read_inner(
         &self,
         root: &Path,
-        deadline: Instant,
+        deadlines: ReadDeadlines,
         cancellation: &mut Pin<Box<CancellationFuture>>,
     ) -> Result<GitChangeSet, GitRepositoryReadErrorKind> {
-        let metadata = controlled(tokio::fs::metadata(root), deadline, cancellation.as_mut())
-            .await?
-            .map_err(|_| GitRepositoryReadErrorKind::RootUnavailable)?;
+        let metadata = controlled(
+            tokio::fs::metadata(root),
+            deadlines.operation,
+            cancellation.as_mut(),
+        )
+        .await?
+        .map_err(|_| GitRepositoryReadErrorKind::RootUnavailable)?;
         if !metadata.is_dir() {
             return Err(GitRepositoryReadErrorKind::RootNotDirectory);
         }
         let canonical_root = controlled(
             tokio::fs::canonicalize(root),
-            deadline,
+            deadlines.operation,
             cancellation.as_mut(),
         )
         .await?
@@ -214,7 +236,7 @@ impl GitRepositoryReader {
             .run(
                 GitCommand::BareRepository,
                 &canonical_root,
-                deadline,
+                deadlines,
                 cancellation.as_mut(),
             )
             .await
@@ -226,10 +248,10 @@ impl GitRepositoryReader {
         }
 
         let first = self
-            .read_pass(&canonical_root, deadline, cancellation)
+            .read_pass(&canonical_root, deadlines, cancellation)
             .await?;
         let second = self
-            .read_pass(&canonical_root, deadline, cancellation)
+            .read_pass(&canonical_root, deadlines, cancellation)
             .await?;
         if first != second {
             return Err(GitRepositoryReadErrorKind::UnstableRepository);
@@ -240,17 +262,17 @@ impl GitRepositoryReader {
     async fn read_pass(
         &self,
         root: &Path,
-        deadline: Instant,
+        deadlines: ReadDeadlines,
         cancellation: &mut Pin<Box<CancellationFuture>>,
     ) -> Result<PassEvidence, GitRepositoryReadErrorKind> {
         let top_level = self
-            .run(GitCommand::TopLevel, root, deadline, cancellation.as_mut())
+            .run(GitCommand::TopLevel, root, deadlines, cancellation.as_mut())
             .await
             .map_err(|kind| contextual_process_error(GitCommand::TopLevel, kind))?;
         let top_level = parse_top_level(&top_level.stdout)?;
         let top_level = controlled(
             tokio::fs::canonicalize(top_level),
-            deadline,
+            deadlines.operation,
             cancellation.as_mut(),
         )
         .await?
@@ -260,13 +282,18 @@ impl GitRepositoryReader {
         }
 
         let head = self
-            .run(GitCommand::Head, root, deadline, cancellation.as_mut())
+            .run(GitCommand::Head, root, deadlines, cancellation.as_mut())
             .await
             .map_err(|kind| contextual_process_error(GitCommand::Head, kind))?;
         let baseline = parse_head(&head.stdout)?;
 
         let conflicts = self
-            .run(GitCommand::Conflicts, root, deadline, cancellation.as_mut())
+            .run(
+                GitCommand::Conflicts,
+                root,
+                deadlines,
+                cancellation.as_mut(),
+            )
             .await?;
         if !conflicts.stdout.is_empty() {
             return Err(GitRepositoryReadErrorKind::ConflictedRepository);
@@ -276,7 +303,7 @@ impl GitRepositoryReader {
             .run(
                 GitCommand::TrackedChanges,
                 root,
-                deadline,
+                deadlines,
                 cancellation.as_mut(),
             )
             .await?;
@@ -288,7 +315,7 @@ impl GitRepositoryReader {
             .run(
                 GitCommand::UntrackedPaths,
                 root,
-                deadline,
+                deadlines,
                 cancellation.as_mut(),
             )
             .await?;
@@ -316,10 +343,12 @@ impl GitRepositoryReader {
         &self,
         command: GitCommand,
         root: &Path,
-        deadline: Instant,
+        deadlines: ReadDeadlines,
         cancellation: Pin<&mut CancellationFuture>,
     ) -> Result<CommandOutput, GitRepositoryReadErrorKind> {
-        self.runner.run(command, root, deadline, cancellation).await
+        self.runner
+            .run(command, root, deadlines, cancellation)
+            .await
     }
 
     #[cfg(test)]
@@ -363,7 +392,7 @@ trait GitCommandRunner: Send + Sync {
         &'a self,
         command: GitCommand,
         root: &'a Path,
-        deadline: Instant,
+        deadlines: ReadDeadlines,
         cancellation: Pin<&'a mut CancellationFuture>,
     ) -> CommandFuture<'a>;
 }
@@ -376,13 +405,13 @@ impl GitCommandRunner for ProductionGitCommandRunner {
         &'a self,
         command: GitCommand,
         root: &'a Path,
-        deadline: Instant,
+        deadlines: ReadDeadlines,
         cancellation: Pin<&'a mut CancellationFuture>,
     ) -> CommandFuture<'a> {
         Box::pin(run_production_command(
             command,
             root,
-            deadline,
+            deadlines,
             cancellation,
         ))
     }
@@ -391,13 +420,13 @@ impl GitCommandRunner for ProductionGitCommandRunner {
 async fn run_production_command(
     operation: GitCommand,
     root: &Path,
-    deadline: Instant,
+    deadlines: ReadDeadlines,
     cancellation: Pin<&mut CancellationFuture>,
 ) -> Result<CommandOutput, GitRepositoryReadErrorKind> {
     let child = production_command(operation, root)
         .spawn()
         .map_err(|_| GitRepositoryReadErrorKind::SpawnFailed)?;
-    collect_child_output(child, deadline, cancellation).await
+    Box::pin(collect_child_output(child, deadlines, cancellation)).await
 }
 
 fn production_command(operation: GitCommand, root: &Path) -> Command {
@@ -465,10 +494,22 @@ fn production_command(operation: GitCommand, root: &Path) -> Command {
 
 async fn collect_child_output(
     child: Child,
-    deadline: Instant,
+    deadlines: ReadDeadlines,
+    cancellation: Pin<&mut CancellationFuture>,
+) -> Result<CommandOutput, GitRepositoryReadErrorKind> {
+    Box::pin(collect_guarded_child_output(
+        ChildGuard::new(child),
+        deadlines,
+        cancellation,
+    ))
+    .await
+}
+
+async fn collect_guarded_child_output(
+    mut child: ChildGuard,
+    deadlines: ReadDeadlines,
     mut cancellation: Pin<&mut CancellationFuture>,
 ) -> Result<CommandOutput, GitRepositoryReadErrorKind> {
-    let mut child = ChildGuard::new(child);
     let stdout = child
         .child_mut()
         .stdout
@@ -479,8 +520,10 @@ async fn collect_child_output(
         .stderr
         .take()
         .ok_or(GitRepositoryReadErrorKind::ProcessFailed)?;
-    let mut stdout_task = tokio::spawn(read_bounded(stdout, STDOUT_LIMIT));
-    let mut stderr_task = tokio::spawn(read_bounded(stderr, STDERR_LIMIT));
+    let stdout_read = read_bounded(stdout, STDOUT_LIMIT);
+    let stderr_read = read_bounded(stderr, STDERR_LIMIT);
+    tokio::pin!(stdout_read);
+    tokio::pin!(stderr_read);
     let mut stdout_finished = false;
     let mut stderr_finished = false;
 
@@ -489,7 +532,7 @@ async fn collect_child_output(
         let mut status = None;
         let mut stdout = None;
         let mut stderr = None;
-        let mut timeout = Box::pin(sleep_until(deadline));
+        let mut timeout = Box::pin(sleep_until(deadlines.operation));
 
         'completion: loop {
             tokio::select! {
@@ -514,18 +557,18 @@ async fn collect_child_output(
                         }
                     }
                 }
-                result = &mut stdout_task, if !stdout_finished =>
+                result = &mut stdout_read, if !stdout_finished =>
                 {
                     stdout_finished = true;
-                    match flatten_reader_result(result) {
+                    match result {
                         Ok(value) => stdout = Some(value),
                         Err(kind) => break 'completion ProcessOutcome::Interrupted(kind),
                     }
                 }
-                result = &mut stderr_task, if !stderr_finished =>
+                result = &mut stderr_read, if !stderr_finished =>
                 {
                     stderr_finished = true;
-                    match flatten_reader_result(result) {
+                    match result {
                         Ok(value) => stderr = Some(value),
                         Err(kind) => break 'completion ProcessOutcome::Interrupted(kind),
                     }
@@ -556,9 +599,7 @@ async fn collect_child_output(
             }
         }
         ProcessOutcome::Interrupted(kind) => {
-            child.terminate_and_wait().await;
-            abort_reader(&mut stdout_task, stdout_finished).await;
-            abort_reader(&mut stderr_task, stderr_finished).await;
+            child.terminate_and_wait(deadlines.complete).await;
             Err(kind)
         }
     }
@@ -575,11 +616,25 @@ enum ProcessOutcome {
 
 struct ChildGuard {
     child: Option<Child>,
+    #[cfg(test)]
+    reaped: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl ChildGuard {
     fn new(child: Child) -> Self {
-        Self { child: Some(child) }
+        Self {
+            child: Some(child),
+            #[cfg(test)]
+            reaped: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_reap_observer(child: Child, reaped: Arc<std::sync::atomic::AtomicBool>) -> Self {
+        Self {
+            child: Some(child),
+            reaped: Some(reaped),
+        }
     }
 
     fn child_mut(&mut self) -> &mut Child {
@@ -590,13 +645,36 @@ impl ChildGuard {
 
     fn disarm(&mut self) {
         self.child.take();
+        Self::mark_reaped(self);
     }
 
-    async fn terminate_and_wait(&mut self) {
+    async fn terminate_and_wait(&mut self, deadline: Instant) {
         if let Some(mut child) = self.child.take() {
             let _ = child.start_kill();
-            let _ = child.wait().await;
+            let reaped = {
+                let wait = child.wait();
+                tokio::pin!(wait);
+                let timeout = sleep_until(deadline);
+                tokio::pin!(timeout);
+                tokio::select! {
+                    biased;
+                    result = &mut wait => result.is_ok(),
+                    () = &mut timeout => false,
+                }
+            };
+            if reaped || reap_child_blocking(&mut child) {
+                Self::mark_reaped(self);
+            }
         }
+    }
+
+    fn mark_reaped(guard: &Self) {
+        #[cfg(test)]
+        if let Some(reaped) = &guard.reaped {
+            reaped.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        #[cfg(not(test))]
+        let _ = guard;
     }
 }
 
@@ -604,11 +682,19 @@ impl Drop for ChildGuard {
     fn drop(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.start_kill();
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                drop(handle.spawn(async move {
-                    let _ = child.wait().await;
-                }));
+            if reap_child_blocking(&mut child) {
+                Self::mark_reaped(self);
             }
+        }
+    }
+}
+
+fn reap_child_blocking(child: &mut Child) -> bool {
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) => std::thread::sleep(Duration::from_millis(1)),
+            Err(_) => return false,
         }
     }
 }
@@ -631,22 +717,6 @@ where
             return Err(GitRepositoryReadErrorKind::OutputLimitExceeded);
         }
         output.extend_from_slice(&buffer[..count]);
-    }
-}
-
-fn flatten_reader_result(
-    result: Result<Result<Vec<u8>, GitRepositoryReadErrorKind>, tokio::task::JoinError>,
-) -> Result<Vec<u8>, GitRepositoryReadErrorKind> {
-    result.map_err(|_| GitRepositoryReadErrorKind::ProcessFailed)?
-}
-
-async fn abort_reader(
-    task: &mut JoinHandle<Result<Vec<u8>, GitRepositoryReadErrorKind>>,
-    finished: bool,
-) {
-    if !finished {
-        task.abort();
-        let _ = task.await;
     }
 }
 
@@ -880,23 +950,25 @@ fn parse_change_path(value: &[u8]) -> Result<RepositoryChangePath, GitRepository
 #[cfg(test)]
 mod tests {
     use super::{
-        CancellationFuture, CommandFuture, CommandOutput, GitCommand, GitCommandRunner,
-        GitRepositoryReadErrorKind, GitRepositoryReader, STDOUT_LIMIT, parse_tracked_changes,
-        parse_untracked_changes, read_bounded,
+        CancellationFuture, ChildGuard, CommandFuture, CommandOutput, GitCommand, GitCommandRunner,
+        GitRepositoryReadErrorKind, GitRepositoryReader, ReadDeadlines, STDOUT_LIMIT,
+        collect_guarded_child_output, parse_tracked_changes, parse_untracked_changes, read_bounded,
     };
     use crate::{MAX_REPOSITORY_CHANGE_PATH_BYTES, MAX_REPOSITORY_CHANGES, RepositoryChangeKind};
     use std::collections::VecDeque;
     use std::path::{Path, PathBuf};
     use std::pin::Pin;
+    use std::process::Stdio;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::io::AsyncWriteExt;
     use tokio::sync::{Notify, oneshot};
-    use tokio::time::{Instant, sleep_until};
+    use tokio::time::{sleep_until, timeout};
 
     const SHA1: &str = "0123456789abcdef0123456789abcdef01234567";
+    const CLEANUP_HELPER_ENV: &str = "ONEAGENT_GIT_CLEANUP_HELPER";
 
     enum ScriptResult {
         Output(Vec<u8>),
@@ -929,7 +1001,7 @@ mod tests {
             &'a self,
             command: GitCommand,
             _root: &'a Path,
-            deadline: Instant,
+            deadlines: ReadDeadlines,
             mut cancellation: Pin<&'a mut CancellationFuture>,
         ) -> CommandFuture<'a> {
             let step = self
@@ -952,7 +1024,7 @@ mod tests {
                         }
                         let _signal = DropSignal(dropped);
                         started.notify_one();
-                        let timeout = sleep_until(deadline);
+                        let timeout = sleep_until(deadlines.operation);
                         tokio::pin!(timeout);
                         tokio::select! {
                             biased;
@@ -965,6 +1037,65 @@ mod tests {
                 }
             })
         }
+    }
+
+    struct ProductionBoundaryRunner {
+        started: Arc<Notify>,
+        reaped: Arc<AtomicBool>,
+    }
+
+    impl GitCommandRunner for ProductionBoundaryRunner {
+        fn run<'a>(
+            &'a self,
+            command: GitCommand,
+            _root: &'a Path,
+            deadlines: ReadDeadlines,
+            cancellation: Pin<&'a mut CancellationFuture>,
+        ) -> CommandFuture<'a> {
+            assert_eq!(command, GitCommand::BareRepository);
+            let started = Arc::clone(&self.started);
+            let reaped = Arc::clone(&self.reaped);
+            Box::pin(async move {
+                let executable =
+                    std::env::current_exe().map_err(|_| GitRepositoryReadErrorKind::SpawnFailed)?;
+                let child = tokio::process::Command::new(executable)
+                    .args([
+                        "--exact",
+                        "workspace::git::tests::production_cleanup_child_helper",
+                        "--nocapture",
+                    ])
+                    .env(CLEANUP_HELPER_ENV, "1")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .kill_on_drop(true)
+                    .spawn()
+                    .map_err(|_| GitRepositoryReadErrorKind::SpawnFailed)?;
+                started.notify_one();
+                Box::pin(collect_guarded_child_output(
+                    ChildGuard::with_reap_observer(child, reaped),
+                    deadlines,
+                    cancellation,
+                ))
+                .await
+            })
+        }
+    }
+
+    fn production_boundary_reader(
+        read_timeout: Duration,
+    ) -> (GitRepositoryReader, Arc<Notify>, Arc<AtomicBool>) {
+        let started = Arc::new(Notify::new());
+        let reaped = Arc::new(AtomicBool::new(false));
+        let runner = ProductionBoundaryRunner {
+            started: Arc::clone(&started),
+            reaped: Arc::clone(&reaped),
+        };
+        (
+            GitRepositoryReader::with_runner(Arc::new(runner), read_timeout),
+            started,
+            reaped,
+        )
     }
 
     fn output(command: GitCommand, value: impl Into<Vec<u8>>) -> ScriptStep {
@@ -1003,6 +1134,13 @@ mod tests {
         let temp = tempfile::tempdir().expect("temporary root must be created");
         let root = std::fs::canonicalize(temp.path()).expect("temporary root must canonicalize");
         (temp, root)
+    }
+
+    #[test]
+    fn production_cleanup_child_helper() {
+        if std::env::var_os(CLEANUP_HELPER_ENV).is_some() {
+            std::thread::sleep(Duration::from_secs(10));
+        }
     }
 
     #[tokio::test]
@@ -1195,6 +1333,38 @@ mod tests {
             .expect_err("deadline must stop the read");
         assert_eq!(error.kind(), GitRepositoryReadErrorKind::TimedOut);
         assert!(timeout_drop.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn production_child_boundary_reaps_on_future_drop_and_within_deadline() {
+        let (_second_temp, second_root) = self::root();
+        let (reader, started, reaped) = production_boundary_reader(Duration::from_millis(400));
+        let read = tokio::spawn(async move { reader.read(second_root).await });
+        timeout(Duration::from_secs(2), started.notified())
+            .await
+            .expect("production-boundary child must start");
+        read.abort();
+        assert!(
+            read.await
+                .expect_err("aborted read task must be cancelled")
+                .is_cancelled()
+        );
+        assert!(reaped.load(Ordering::SeqCst));
+
+        let (_temp, root) = root();
+        let complete_timeout = Duration::from_secs(2);
+        let (reader, started, reaped) = production_boundary_reader(complete_timeout);
+        let read = tokio::spawn(async move { reader.read(root).await });
+        timeout(Duration::from_secs(2), started.notified())
+            .await
+            .expect("deadline child must start");
+        let error = timeout(complete_timeout, read)
+            .await
+            .expect("complete deadline and cleanup must remain bounded")
+            .expect("deadline read task must join")
+            .expect_err("deadline must stop the production-boundary child");
+        assert_eq!(error.kind(), GitRepositoryReadErrorKind::TimedOut);
+        assert!(reaped.load(Ordering::SeqCst));
     }
 
     #[tokio::test]

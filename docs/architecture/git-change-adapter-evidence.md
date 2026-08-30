@@ -3,10 +3,14 @@
 ## Status and scope
 
 This document records Task 6 evidence executed on 2026-08-30 from committed
-Task 5 head `e2818c83`. Sprint 38 remains active until Task 7 completes the
-fresh-context independent review, primary reconciliation, artifact-consistency
-check, Sprint 39 hand-off, and conditional Sprint 37 prompt-suite retirement.
-Task 6 changes documentation only and introduces no production behavior.
+Task 5 head `e2818c83` plus the subsequent bounded reader-cleanup remediation.
+The remediation removes detached cleanup work, reserves bounded cleanup within
+the complete read deadline, adds production-child drop/deadline evidence, and
+completes the invalid status/path and UNC matrices. Sprint 38 remains active
+until a fresh-context independent review, primary reconciliation, artifact-
+consistency check, Sprint 39 hand-off, and conditional Sprint 37 prompt-suite
+retirement. No Git endpoint, state-layer, Workspace, Graph, cache, protocol, or
+consumer behavior changes.
 
 The implemented boundary is governed by
 [ADR-0060](../adr/0060-git-change-adapter.md). Git supplies bounded local
@@ -32,7 +36,7 @@ The committed implementation chain is:
 
 | ADR-0060 requirement | Repository-owned evidence | Result |
 | --- | --- | --- |
-| Runtime owns the local repository domain, reader, and Workspace input without making Git a Workspace, adapter, Graph, Analysis, diagnostic, rule, impact, cache, protocol, or edit authority | Public API/source audit, 117 Runtime unit tests, 86 focused Graph tests, and 117 Analysis tests | pass |
+| Runtime owns the local repository domain, reader, and Workspace input without making Git a Workspace, adapter, Graph, Analysis, diagnostic, rule, impact, cache, protocol, or edit authority | Public API/source audit, 119 Runtime unit tests, 86 focused Graph tests, and 117 Analysis tests | pass |
 | The reader is explicit-demand only; default `App`, `RuntimeConfig`, `WorkspaceService`, CLI, HTTP, MCP, LSP, VS Code, and EDT do not discover or start Git | Construction/source audit plus default Runtime, public process, VS Code, and EDT matrices | pass |
 | One caller-supplied existing directory must be the exact canonical worktree root | Public missing/file/plain/mismatch/nested tests and real normal/linked worktree tests | pass |
 | Normal, detached, linked, and exact-root nested worktrees are accepted; bare, unborn, missing, non-repository, and mismatched roots are typed failures | 7 public reader tests over disposable repositories | pass |
@@ -44,17 +48,17 @@ The committed implementation chain is:
 | Concurrent mutation has one closed `UnstableRepository` outcome with no third pass or partial result | Controlled pass-drift test and bounded-runner call assertions | pass |
 | Paths are non-empty confined UTF-8 relative values using `/`, normal components, preserved case/code points, and at most 4,096 bytes | Domain exact/over, absolute, drive, UNC, slash, backslash, dot, traversal, NUL, Unicode, and redaction tests | pass |
 | Non-UTF-8 process output is rejected before publication and never echoed | Injected reader/parser test; real filesystem construction limitation is recorded below | pass with recorded platform limitation |
-| The closed status vocabulary is Added, Modified, Deleted, TypeChanged, and Untracked with the exact old/new path matrix | Domain unit and 5 public domain tests | pass |
+| The closed status vocabulary is Added, Modified, Deleted, TypeChanged, and Untracked with the exact old/new path matrix | Exhaustive valid/invalid domain unit matrix and 6 public domain tests | pass |
 | Rename and copy similarity are disabled; moves and copies remain deterministic delete/add or ordinary addition evidence | Fixed `--no-renames` process audit and public move/copy repository test | pass |
 | Change identity and total order use effective path, kind, previous path, and current path independently from encounter order | Domain reorder, public duplicate/reorder, injected output reorder, and real operation-order tests | pass |
 | Exact duplicates collapse; non-identical records on one effective path fail atomically without selecting by encounter order | Domain unit/public duplicate and conflict tests | pass |
 | Empty, exact 10,000-change, and one-over sets have deterministic complete outcomes | Domain unit/public count-bound tests | pass |
-| Stdout is bounded to 16 MiB, stderr to 64 KiB, path and change counts are checked, and outputs are drained incrementally | Injected exact/over reader tests and production source audit | pass |
-| One read owns at most one child at a time, one 30-second deadline, exactly two passes, and no retry | Injected call-order, timeout, cancellation, and drop/cleanup tests | pass |
+| Stdout is bounded to 16 MiB, stderr to 64 KiB, path and change counts are checked, and outputs are drained incrementally without detached reader tasks | Injected exact/over reader tests and production source audit | pass |
+| One read owns at most one child at a time, one 30-second complete deadline with a reserved cleanup interval, exactly two passes, and no retry | Injected call-order/cancellation tests plus real-child drop/deadline/reap evidence | pass |
 | Production invokes only `git` with fixed non-shell, NUL-oriented, non-mutating local argument vectors | Production command-construction audit and real disposable-repository tests | pass |
 | Stdin is closed; stdout/stderr are concurrently drained; pager, color, quoting, rename detection, fsmonitor, untracked cache, credentials, and ambient repository override variables are disabled or removed | Production command/environment audit and injected bounded-runner tests | pass |
 | Spawn, exit, read, malformed output, incompatible mode, output limit, timeout, cancellation, and contextual repository failures are closed and redacted | Runtime Git unit tests and public error-kind assertions | pass |
-| Cancellation, timeout, and future drop terminate owned work without a detached result or partial change set | Gated runner cancellation/timeout/drop tests and exact-head macOS/Windows Rust CI | pass |
+| Cancellation, timeout, and future drop terminate and reap owned work without a detached process, pipe-reader task, result, or partial change set | Gated runner cancellation/timeout tests, real child-process drop/deadline/reap test, and source audit | pass |
 | No Rust Git package, native library, Cargo feature, manifest, lockfile, license inventory, or unsafe surface is added | Task 3-5 manifest/lockfile diff, workspace `unsafe_code = "forbid"`, Clippy, and CI audits | pass |
 | The public reader supports capability-based system Git rather than a hard-coded version and requires no installer, network, credential, or user repository | Real temporary-repository tests with isolated local identity plus process/scope audit | pass |
 | A cloneable pre-registration Workspace handle maps only ordered non-empty path/status records into a private source-neutral request | Runtime handle unit test, public Git-to-Workspace tests, and source/API audit | pass |
@@ -78,6 +82,15 @@ No required matrix row uses a zero-match filter and no required row is skipped.
 The four zero-test all-target entries are expected executable entry points and
 are not acceptance evidence.
 
+The first remediation matrix attempt stopped at `cargo fmt --all -- --check`
+because one new public UNC assertion required rustfmt line wrapping. `cargo
+fmt --all` applied only that mechanical formatting and the complete matrix was
+rerun from the beginning. An earlier focused strict-Clippy run rejected the
+initial direct in-future readers as large futures and one test duration style;
+the readers were boxed without spawning, the duration was corrected, and the
+same strict-Clippy command then passed. Neither failed attempt is acceptance
+evidence.
+
 ## Focused Rust evidence
 
 The following commands were executed sequentially from the repository root.
@@ -85,8 +98,8 @@ All exited zero.
 
 | Command or exact suite | Tests passed | Failed / ignored |
 | --- | ---: | --- |
-| `cargo test -p oneagent-runtime --lib` | 117 | 0 / 0 |
-| `cargo test -p oneagent-runtime --test repository_change_domain` | 5 | 0 / 0 |
+| `cargo test -p oneagent-runtime --lib` | 119 | 0 / 0 |
+| `cargo test -p oneagent-runtime --test repository_change_domain` | 6 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test git_change_reader` | 7 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test git_change_workspace` | 2 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test workspace_service` | 6 | 0 / 0 |
@@ -105,8 +118,8 @@ All exited zero.
 | `cargo test -p oneagent-runtime --test http_health` | 4 | 0 / 0 |
 | `cargo test -p oneagent-cli --test runtime_client` | 2 | 0 / 0 |
 
-Runtime's 117 unit tests include 9 normalized-domain tests, 6 injected-reader
-tests, 5 complete-file observation tests, 3 explicit-input tests, and the
+Runtime's 119 unit tests include 9 normalized-domain tests, 8 reader and
+production-process-boundary tests, 5 complete-file observation tests, 3 explicit-input tests, and the
 existing cache, lifecycle, protocol-projection, Graph Query, diagnostics, and
 rules coverage. The Graph total is validation (55), report (3), build diff
 (2), reference-request build (7), and Coverage (19). Analysis is library (71)
@@ -130,6 +143,11 @@ and `windows-latest`. The Rust jobs built both public Runtime processes and ran
 the complete workspace tests, focused Context/MCP compatibility, Clippy, and
 Rustdoc. The Windows reader target executed its six applicable public tests;
 the Unix-only type-change/non-UTF-8 test executed on macOS.
+
+That Task 5 run is historical platform evidence and is not presented as
+validation of the later cleanup remediation. The fresh integration review must
+resolve and authenticate exact remediation-head macOS/Windows CI before any
+Sprint 38 state transition.
 
 The local APFS environment rejected construction of the deliberately invalid
 non-UTF-8 filename with `Operation not permitted`. The test reported that
@@ -180,20 +198,20 @@ capability, package, or command changed in Sprint 38.
 
 ## Canonical gate and inventory
 
-The accepted Task 6 cycle is:
+The accepted remediation cycle is:
 
 | Command | Exact outcome |
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 80 test targets, 1,263 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 80 test targets, 1,265 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
 | `git diff --check` | exit 0 |
 
 The four zero-test targets are expected binary entry points:
 `oneagent-cli`, `oneagent-runtime`, `oneagent-mcp`, and `oneagent-lsp`. The
-other 76 targets contain all 1,263 tests. The inventory was recomputed from the
+other 76 targets contain all 1,265 tests. The inventory was recomputed from the
 compiled `--all-targets` executables using `--list --format terse`; no filtered
 test is included in that total.
 

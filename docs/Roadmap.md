@@ -8512,7 +8512,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 |---|---|---|
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
-| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | next |
+| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | active |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
@@ -9166,6 +9166,36 @@ Excluded scope is:
   symlink-traversal, arbitrary encoding, or platform behavior not accepted by
   ADR-0060; and
 - Sprint 39 Change Impact Analysis or later Sprint 40–41 planning/edit scope.
+
+###### Sprint 38 investigation evidence
+
+Task 1 starts from committed planning baseline `89c79c69`. The
+[Git Change Adapter investigation](architecture/git-change-adapter-investigation.md)
+confirms that no production Git domain, endpoint, reader, Workspace input, or
+Git implementation dependency exists. It inventories the private complete-byte
+`WorkspaceFileState`, latest-revision source, complete rebuild coordinator,
+cache source identity, immutable publication, failure/recovery, lifecycle,
+consumers, tracked mixed-format fixture, local Git 2.50.1 evidence, and
+macOS/Windows CI constraints.
+
+The evidence is decision-ready for ADR-0060. It separates repository/worktree
+identity, baseline/current endpoints, committed/index/worktree/untracked/
+ignored/conflict layers, status and path identity, rename/copy policy,
+ordering, bounds, errors, process/library families, source-neutral Workspace
+mapping, and complete end-state equivalence into explicit decisions. The
+existing-executable family requires an accepted production executable contract;
+an external Rust Git library additionally requires dependency approval. Direct
+`.git` parsing and an injected-only production source lack evidence for a
+bounded complete first slice.
+
+Seventeen existing non-zero focused tests pass: five change-source unit tests,
+six public Workspace tests, two public File Watching tests, and four public
+Persistent Cache tests. They prove the reusable complete-state, publication,
+recovery, cancellation, cache, and fresh-run oracles but no Git behavior. The
+tracked fixture can be copied and initialized only inside disposable temporary
+repositories for future production-reader evidence. No external data, remote,
+credential, user repository, or source format is required. Sprint 38 is now
+`active`; Task 2 owns architecture acceptance.
 
 ###### Accepted planning baseline and ordered task manifest
 

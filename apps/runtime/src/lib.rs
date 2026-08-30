@@ -30,7 +30,8 @@ pub use service::{
 pub use state::AppState;
 pub use workspace::{
     GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,
-    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, GraphQueryConfiguration,
+    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, GitRepositoryReadError,
+    GitRepositoryReadErrorKind, GitRepositoryReader, GraphQueryConfiguration,
     GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind, GraphQueryError,
     GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth, GraphQueryMetadataKind,
     GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult, GraphQueryRelation,

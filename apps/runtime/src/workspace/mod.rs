@@ -2,6 +2,7 @@
 
 mod cache;
 mod change;
+mod git;
 mod graph_query;
 mod repository_change;
 
@@ -14,6 +15,8 @@ pub use graph_query::{
     GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
     GraphQueryTraversalResult, GraphQueryWorkspaceFormat,
 };
+
+pub use git::{GitRepositoryReadError, GitRepositoryReadErrorKind, GitRepositoryReader};
 
 pub use repository_change::{
     GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,

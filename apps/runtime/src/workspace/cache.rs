@@ -37,7 +37,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 3;
+const SEMANTIC_VERSION: u32 = 4;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -2481,7 +2481,7 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 3);
+        assert_eq!(envelope.semantic_version, 4);
         assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
@@ -2596,6 +2596,23 @@ mod tests {
         assert_eq!(
             decoded.configurations()[0].validation(),
             snapshot.configurations()[0].validation()
+        );
+        assert_eq!(
+            decoded.configurations()[0].rule_execution_report(),
+            snapshot.configurations()[0].rule_execution_report()
+        );
+        assert!(
+            decoded.configurations()[0]
+                .rule_execution_report()
+                .results()
+                .is_empty()
+        );
+        assert_eq!(
+            decoded.configurations()[0]
+                .rule_execution_report()
+                .summary()
+                .total(),
+            0
         );
         assert_eq!(
             decoded.configurations()[0].diagnostic_report(),

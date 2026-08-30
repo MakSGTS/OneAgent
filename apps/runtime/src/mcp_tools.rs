@@ -10,7 +10,7 @@ use oneagent_analysis::context::{
 };
 use oneagent_analysis::diagnostics::{
     DiagnosticCategory, DiagnosticDisposition, DiagnosticFamily, DiagnosticFilter,
-    DiagnosticFinding, DiagnosticReport, DiagnosticSeverity, DiagnosticSummary,
+    DiagnosticFinding, DiagnosticIdentity, DiagnosticReport, DiagnosticSeverity, DiagnosticSummary,
 };
 use oneagent_common::{EntityId, SourceLocation};
 use oneagent_graph::{
@@ -157,7 +157,7 @@ fn diagnostic_schema() -> Value {
             "configurationId": {"type": "string"},
             "families": {
                 "type": "array",
-                "items": {"enum": ["semantic", "validation"]},
+                "items": {"enum": ["semantic", "validation", "rule"]},
                 "minItems": 1,
                 "uniqueItems": true
             },
@@ -1051,7 +1051,7 @@ fn project_diagnostic_finding(finding: &DiagnosticFinding) -> Value {
     } else {
         Vec::new()
     };
-    json!({
+    let mut projected = json!({
         "family": finding.family().as_str(),
         "code": finding.code().as_str(),
         "severity": finding.severity().as_str(),
@@ -1066,7 +1066,14 @@ fn project_diagnostic_finding(finding: &DiagnosticFinding) -> Value {
         "referenceRequestId": finding
             .reference_request_id()
             .map(oneagent_graph::SemanticReferenceRequestId::as_str)
-    })
+    });
+    if let DiagnosticIdentity::Rule { rule_id, .. } = finding.identity() {
+        projected
+            .as_object_mut()
+            .expect("diagnostic projection must be an object")
+            .insert("ruleId".to_owned(), json!(rule_id.as_str()));
+    }
+    projected
 }
 
 fn project_diagnostic_summary(summary: &DiagnosticSummary) -> Value {
@@ -1079,7 +1086,8 @@ fn project_diagnostic_summary(summary: &DiagnosticSummary) -> Value {
         "suppressed": summary.suppressed(),
         "byFamily": {
             "semantic": family_count(DiagnosticFamily::Semantic),
-            "validation": family_count(DiagnosticFamily::Validation)
+            "validation": family_count(DiagnosticFamily::Validation),
+            "rule": family_count(DiagnosticFamily::Rule)
         },
         "bySeverity": {
             "error": severity_count(DiagnosticSeverity::Error),
@@ -1476,6 +1484,7 @@ fn diagnostic_family(value: &str) -> Option<DiagnosticFamily> {
     match value {
         "semantic" => Some(DiagnosticFamily::Semantic),
         "validation" => Some(DiagnosticFamily::Validation),
+        "rule" => Some(DiagnosticFamily::Rule),
         _ => None,
     }
 }
@@ -1505,7 +1514,11 @@ mod tests {
     use std::path::Path;
     use std::sync::Arc;
 
-    use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticIdentity, DiagnosticPolicy};
+    use oneagent_analysis::diagnostics::{
+        DiagnosticCategory, DiagnosticEngine, DiagnosticIdentity, DiagnosticPolicy,
+        DiagnosticSeverity,
+    };
+    use oneagent_analysis::rules::{RuleDiagnostic, RuleDiagnosticCode, RuleId};
     use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
     use oneagent_graph::{
         Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
@@ -1518,8 +1531,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        DIAGNOSTICS, GRAPH, Handler, SYMBOLS, diagnostic_arguments, project_diagnostic_report,
-        project_symbol_location, unique_symbol_location,
+        DIAGNOSTICS, GRAPH, Handler, SYMBOLS, diagnostic_arguments, project_diagnostic_finding,
+        project_diagnostic_report, project_symbol_location, unique_symbol_location,
     };
     use crate::WorkspaceSnapshotBuilder;
 
@@ -1571,7 +1584,7 @@ mod tests {
 
         let arguments = json!({
             "configurationId": "configuration.test",
-            "families": ["semantic", "validation"],
+            "families": ["semantic", "validation", "rule"],
             "severities": ["warning"],
             "categories": ["semantic", "provenance"],
             "includeSuppressed": true,
@@ -1600,6 +1613,7 @@ mod tests {
         assert_eq!(projected["summary"]["suppressed"], 1);
         assert_eq!(projected["summary"]["byFamily"]["semantic"], 2);
         assert_eq!(projected["summary"]["byFamily"]["validation"], 1);
+        assert_eq!(projected["summary"]["byFamily"]["rule"], 0);
         assert_eq!(projected["summary"]["bySeverity"]["error"], 1);
         assert_eq!(projected["summary"]["bySeverity"]["warning"], 2);
         assert_eq!(projected["summary"]["byCategory"]["provenance"], 1);
@@ -1630,6 +1644,44 @@ mod tests {
                 .all(|finding| finding["disposition"] == "active")
         );
         assert_eq!(active_only["summary"], projected["summary"]);
+    }
+
+    #[test]
+    fn diagnostic_projection_exposes_rule_identity_only_for_rule_findings() {
+        let rule_diagnostic = RuleDiagnostic::new(
+            RuleId::new("runtime.rule").expect("rule ID"),
+            RuleDiagnosticCode::new("finding").expect("diagnostic code"),
+            DiagnosticSeverity::Warning,
+            DiagnosticCategory::Semantic,
+            "controlled rule finding",
+            [EntityId::new("metadata.node").expect("node ID")],
+        );
+        let finding = oneagent_analysis::diagnostics::DiagnosticFinding::from_rule(
+            &rule_diagnostic,
+            &DiagnosticPolicy::default(),
+        )
+        .expect("rule finding");
+        let projected = project_diagnostic_finding(&finding);
+
+        assert_eq!(projected["family"], "rule");
+        assert_eq!(projected["kind"], "rule_finding");
+        assert_eq!(projected["code"], "finding");
+        assert_eq!(projected["ruleId"], "runtime.rule");
+        assert_eq!(projected["nodeIds"], json!(["metadata.node"]));
+        assert!(projected["sourceNodeId"].is_null());
+        assert_eq!(projected["candidateNodeIds"], json!([]));
+
+        let semantic = diagnostic("metadata.source", SemanticDiagnosticSeverity::Error);
+        let semantic = oneagent_analysis::diagnostics::DiagnosticFinding::from_semantic(
+            &semantic,
+            &DiagnosticPolicy::default(),
+        )
+        .expect("semantic finding");
+        assert!(
+            project_diagnostic_finding(&semantic)
+                .get("ruleId")
+                .is_none()
+        );
     }
 
     #[test]

@@ -155,7 +155,7 @@ fn assert_diagnostic_schema(listed: &Value) {
         diagnostics["inputSchema"]["properties"]["families"],
         json!({
             "type": "array",
-            "items": {"enum": ["semantic", "validation"]},
+            "items": {"enum": ["semantic", "validation", "rule"]},
             "minItems": 1,
             "uniqueItems": true
         })
@@ -354,6 +354,7 @@ fn assert_projection(offset: usize, content: &Value) {
             assert_eq!(content["summary"]["suppressed"], 0);
             assert_eq!(content["summary"]["byFamily"]["semantic"], 3);
             assert_eq!(content["summary"]["byFamily"]["validation"], 0);
+            assert_eq!(content["summary"]["byFamily"]["rule"], 0);
             assert!(diagnostics.iter().all(|finding| {
                 finding["family"] == "semantic"
                     && finding["severity"] == "error"
@@ -591,6 +592,25 @@ async fn public_diagnostics_filter_complete_findings_without_rebuilding_summary(
     assert_eq!(empty["total"], 0);
     assert_eq!(empty["truncated"], false);
     assert_eq!(empty["summary"], content["summary"]);
+
+    let rules = dispatch(
+        &server,
+        &request(
+            37,
+            "tools/call",
+            &json!({"name": "oneagent.diagnostics", "arguments": {
+                "configurationId": configuration_id,
+                "families": ["rule"]
+            }}),
+        ),
+    )
+    .await;
+    let rules = &rules["result"]["structuredContent"];
+    assert_eq!(rules["diagnostics"], json!([]));
+    assert_eq!(rules["total"], 0);
+    assert_eq!(rules["truncated"], false);
+    assert_eq!(rules["summary"]["byFamily"]["rule"], 0);
+    assert_eq!(rules["summary"], content["summary"]);
 }
 
 #[tokio::test]

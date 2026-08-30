@@ -97,6 +97,14 @@ fn observe(snapshot: &WorkspaceSnapshot) -> SnapshotObservation {
                     configuration.diagnostic_report().summary().total(),
                     configuration.diagnostic_report().findings().len()
                 );
+                assert!(configuration.rule_execution_report().results().is_empty());
+                assert!(
+                    configuration
+                        .rule_execution_report()
+                        .diagnostics()
+                        .is_empty()
+                );
+                assert_eq!(configuration.rule_execution_report().summary().total(), 0);
 
                 ConfigurationObservation {
                     id: configuration.configuration_id().as_str().to_owned(),

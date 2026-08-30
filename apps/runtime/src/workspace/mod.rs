@@ -21,6 +21,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy, DiagnosticReport};
+use oneagent_analysis::rules::{
+    NeverCancelled as NeverRuleCancelled, Rule, RuleCancellationSignal, RuleConfiguration,
+    RuleContext, RuleEngine, RuleExecutionReport, RulePlan, RuleRegistry,
+};
 use oneagent_common::{EntityId, EntityName};
 use oneagent_designer_xml::{
     DesignerXmlBuildScope, DesignerXmlSemanticGraphBuilder,
@@ -967,6 +971,7 @@ pub struct WorkspaceConfigurationSnapshot {
     reference_statistics: SemanticReferenceStatistics,
     report: SemanticGraphReport,
     validation: Arc<SemanticGraphValidationResult>,
+    rule_execution_report: Arc<RuleExecutionReport>,
     diagnostic_report: Arc<DiagnosticReport>,
 }
 
@@ -1029,6 +1034,12 @@ impl WorkspaceConfigurationSnapshot {
     #[must_use]
     pub fn validation(&self) -> &SemanticGraphValidationResult {
         &self.validation
+    }
+
+    /// Returns the complete deterministic Rules Engine execution report.
+    #[must_use]
+    pub fn rule_execution_report(&self) -> &RuleExecutionReport {
+        &self.rule_execution_report
     }
 
     /// Returns the complete normalized diagnostic report.
@@ -1286,9 +1297,22 @@ fn snapshot_from_parts(
                 actual,
             }
         })?;
-    let diagnostic_report = DiagnosticEngine
-        .build(&diagnostics, &validation, &DiagnosticPolicy::default())
+    let registry = RuleRegistry::<Arc<dyn Rule>>::new([])
         .map_err(|source| semantic_build_error(root_path, format, source))?;
+    let configuration = RuleConfiguration::default();
+    let (rule_execution_report, diagnostic_report) = compose_rule_evidence(
+        &registry,
+        &configuration,
+        &graph,
+        &validation,
+        &diagnostics,
+        &NeverRuleCancelled,
+    )
+    .map_err(|source| WorkspaceBuildError::SemanticBuild {
+        root_path: root_path.to_path_buf(),
+        format,
+        source,
+    })?;
 
     Ok(WorkspaceConfigurationSnapshot {
         root_path: root_path.to_path_buf(),
@@ -1301,8 +1325,36 @@ fn snapshot_from_parts(
         reference_statistics,
         report,
         validation: Arc::new(validation),
+        rule_execution_report: Arc::new(rule_execution_report),
         diagnostic_report: Arc::new(diagnostic_report),
     })
+}
+
+fn compose_rule_evidence<R>(
+    registry: &RuleRegistry<R>,
+    configuration: &RuleConfiguration,
+    graph: &SemanticGraph,
+    validation: &SemanticGraphValidationResult,
+    diagnostics: &[SemanticDiagnostic],
+    cancellation: &dyn RuleCancellationSignal,
+) -> Result<(RuleExecutionReport, DiagnosticReport), BoxError>
+where
+    R: Rule,
+{
+    let policy = DiagnosticPolicy::default();
+    let base = DiagnosticEngine
+        .build(diagnostics, validation, &policy)
+        .map_err(|error| Box::new(error) as BoxError)?;
+    let plan =
+        RulePlan::new(registry, configuration).map_err(|error| Box::new(error) as BoxError)?;
+    let context = RuleContext::new(graph, validation, &base);
+    let rule_report = RuleEngine
+        .execute(registry, &plan, configuration, &context, cancellation)
+        .map_err(|error| Box::new(error) as BoxError)?;
+    let final_report = DiagnosticEngine
+        .build_with_rules(diagnostics, validation, rule_report.diagnostics(), &policy)
+        .map_err(|error| Box::new(error) as BoxError)?;
+    Ok((rule_report, final_report))
 }
 
 fn configuration_identity(graph: &SemanticGraph) -> Result<(EntityId, EntityName), usize> {
@@ -1325,7 +1377,14 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use oneagent_analysis::diagnostics::MAX_SEMANTIC_DIAGNOSTICS;
+    use oneagent_analysis::diagnostics::{
+        DiagnosticCategory, DiagnosticFamily, DiagnosticSeverity, MAX_SEMANTIC_DIAGNOSTICS,
+    };
+    use oneagent_analysis::rules::{
+        Rule, RuleCancellationSignal, RuleConfiguration, RuleContext, RuleDefinition,
+        RuleDiagnostic, RuleDiagnosticCode, RuleEvaluation, RuleId, RuleRegistration, RuleRegistry,
+        RuleStatus,
+    };
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         GraphNode, NodeKind, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
@@ -1346,8 +1405,8 @@ mod tests {
         DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
         WorkspaceCacheWriteOutcome, WorkspaceDetector, WorkspaceFileState, WorkspaceService,
         WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
-        WorkspaceUpdatePhase, WorkspaceUpdateStatus, initialize_workspace, rebuild_workspace,
-        snapshot_from_parts, validate_complete_build,
+        WorkspaceUpdatePhase, WorkspaceUpdateStatus, compose_rule_evidence, initialize_workspace,
+        rebuild_workspace, snapshot_from_parts, validate_complete_build,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -1392,6 +1451,35 @@ mod tests {
     #[derive(Debug, Clone)]
     struct FailingDetector {
         calls: Arc<AtomicUsize>,
+    }
+
+    struct ControlledRule {
+        definition: RuleDefinition,
+        diagnostic: RuleDiagnostic,
+    }
+
+    impl RuleRegistration for ControlledRule {
+        fn definition(&self) -> &RuleDefinition {
+            &self.definition
+        }
+    }
+
+    impl Rule for ControlledRule {
+        fn evaluate(
+            &self,
+            _context: &RuleContext<'_>,
+            _cancellation: &dyn RuleCancellationSignal,
+        ) -> RuleEvaluation {
+            RuleEvaluation::Completed(vec![self.diagnostic.clone()])
+        }
+    }
+
+    struct AlwaysCancelled;
+
+    impl RuleCancellationSignal for AlwaysCancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
     }
 
     struct ControlledCacheStorage {
@@ -1695,6 +1783,9 @@ mod tests {
         )
         .expect("exact diagnostic input bound must publish");
         assert_eq!(snapshot.diagnostics().len(), MAX_SEMANTIC_DIAGNOSTICS);
+        assert!(snapshot.rule_execution_report().results().is_empty());
+        assert!(snapshot.rule_execution_report().diagnostics().is_empty());
+        assert_eq!(snapshot.rule_execution_report().summary().total(), 0);
         assert_eq!(snapshot.diagnostic_report().summary().total(), 2);
 
         let over = vec![diagnostic; MAX_SEMANTIC_DIAGNOSTICS + 1];
@@ -1721,6 +1812,76 @@ mod tests {
         )
         .expect_err("one-over diagnostic input must not publish");
         assert_eq!(error.kind(), WorkspaceBuildErrorKind::SemanticBuildFailed);
+    }
+
+    #[test]
+    fn rule_composition_publishes_complete_and_cancelled_evidence_atomically() {
+        let configuration_id =
+            EntityId::new("configuration:test").expect("configuration ID must be valid");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            configuration_id.clone(),
+            EntityName::new("Test").expect("configuration name must be valid"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let validation = graph.validate();
+        let rule_id = RuleId::new("runtime.rule").expect("rule ID must be valid");
+        let rule: Arc<dyn Rule> = Arc::new(ControlledRule {
+            definition: RuleDefinition::new(rule_id.clone(), [])
+                .expect("rule definition must be valid"),
+            diagnostic: RuleDiagnostic::new(
+                rule_id,
+                RuleDiagnosticCode::new("finding").expect("diagnostic code must be valid"),
+                DiagnosticSeverity::Warning,
+                DiagnosticCategory::Semantic,
+                "controlled runtime rule finding",
+                [configuration_id],
+            ),
+        });
+        let registry =
+            RuleRegistry::<Arc<dyn Rule>>::new([rule]).expect("controlled registry must be valid");
+
+        let (completed, diagnostics) = compose_rule_evidence(
+            &registry,
+            &RuleConfiguration::default(),
+            &graph,
+            &validation,
+            &[],
+            &super::NeverRuleCancelled,
+        )
+        .expect("complete rule evidence must compose");
+        assert_eq!(completed.results().len(), 1);
+        assert_eq!(completed.results()[0].status(), RuleStatus::Completed);
+        assert_eq!(completed.diagnostics().len(), 1);
+        assert_eq!(diagnostics.summary().total(), 2);
+        assert_eq!(
+            diagnostics
+                .summary()
+                .by_family()
+                .get(&DiagnosticFamily::Rule),
+            Some(&1)
+        );
+
+        let (cancelled, diagnostics) = compose_rule_evidence(
+            &registry,
+            &RuleConfiguration::default(),
+            &graph,
+            &validation,
+            &[],
+            &AlwaysCancelled,
+        )
+        .expect("cancelled rule evidence must compose");
+        assert_eq!(cancelled.results().len(), 1);
+        assert_eq!(cancelled.results()[0].status(), RuleStatus::Cancelled);
+        assert!(cancelled.diagnostics().is_empty());
+        assert_eq!(diagnostics.summary().total(), 1);
+        assert!(
+            diagnostics
+                .summary()
+                .by_family()
+                .get(&DiagnosticFamily::Rule)
+                .is_none()
+        );
     }
 
     #[test]

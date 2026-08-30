@@ -178,6 +178,14 @@ fn assert_diagnostic_snapshots_complete(snapshot: &WorkspaceSnapshot) {
             configuration.diagnostic_report().findings().len()
         );
         assert_eq!(configuration.diagnostic_report().summary().suppressed(), 0);
+        assert!(configuration.rule_execution_report().results().is_empty());
+        assert!(
+            configuration
+                .rule_execution_report()
+                .diagnostics()
+                .is_empty()
+        );
+        assert_eq!(configuration.rule_execution_report().summary().total(), 0);
     }
 }
 

@@ -350,6 +350,13 @@ fn assert_snapshot_equivalent(expected: &WorkspaceSnapshot, actual: &WorkspaceSn
         );
         assert_eq!(expected.report(), actual.report());
         assert_eq!(expected.validation(), actual.validation());
+        assert_eq!(
+            expected.rule_execution_report(),
+            actual.rule_execution_report()
+        );
+        assert!(actual.rule_execution_report().results().is_empty());
+        assert!(actual.rule_execution_report().diagnostics().is_empty());
+        assert_eq!(actual.rule_execution_report().summary().total(), 0);
         assert_eq!(expected.diagnostic_report(), actual.diagnostic_report());
         assert_eq!(
             actual.diagnostic_report().summary().total(),
@@ -483,7 +490,8 @@ async fn public_persistent_cache_invalidates_rejects_and_cleanly_recovers() {
         ("schema_version", 0),
         ("schema_version", 2),
         ("semantic_version", 0),
-        ("semantic_version", 4),
+        ("semantic_version", 3),
+        ("semantic_version", 5),
     ] {
         set_cache_version(root.path(), field, version);
         let recovered = run_once(root.path()).await;

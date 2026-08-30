@@ -1401,19 +1401,26 @@ mod tests {
         assert!(cancelled_drop.load(Ordering::SeqCst));
 
         let timeout_drop = Arc::new(AtomicBool::new(false));
+        let timeout_started = Arc::new(Notify::new());
         let timed = reader(
             vec![ScriptStep {
                 command: GitCommand::BareRepository,
                 result: ScriptResult::Pending {
                     dropped: Arc::clone(&timeout_drop),
-                    started: Arc::new(Notify::new()),
+                    started: Arc::clone(&timeout_started),
                 },
             }],
-            Duration::from_millis(10),
+            Duration::from_secs(1),
         );
-        let error = timed
-            .read(&root)
+        let timed_root = root.clone();
+        let read = tokio::spawn(async move { timed.read(timed_root).await });
+        timeout(Duration::from_secs(2), timeout_started.notified())
             .await
+            .expect("timeout runner must start before its deadline");
+        let error = timeout(Duration::from_secs(2), read)
+            .await
+            .expect("timeout read must remain bounded")
+            .expect("timeout read task must join")
             .expect_err("deadline must stop the read");
         assert_eq!(error.kind(), GitRepositoryReadErrorKind::TimedOut);
         assert!(timeout_drop.load(Ordering::SeqCst));

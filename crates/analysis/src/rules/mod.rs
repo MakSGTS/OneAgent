@@ -1,6 +1,6 @@
 //! Source-independent rule identity, definitions, and registration.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 
@@ -12,6 +12,10 @@ pub const MAX_RULE_DIAGNOSTIC_CODE_BYTES: usize = 128;
 pub const MAX_RULE_REGISTRATIONS: usize = 4_096;
 /// Maximum number of unique dependencies accepted by one rule definition.
 pub const MAX_RULE_DEPENDENCIES: usize = 256;
+/// Maximum number of unique dependency relationships accepted by one plan.
+pub const MAX_RULE_DEPENDENCY_RELATIONSHIPS: usize = 65_536;
+/// Maximum number of input settings accepted by one configuration.
+pub const MAX_RULE_SETTINGS: usize = 4_096;
 
 /// Closed Rules Engine construction failure kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -28,6 +32,20 @@ pub enum RuleEngineErrorKind {
     DuplicateRule,
     /// Different definitions were registered under one rule identifier.
     ConflictingRule,
+    /// A complete registry contains too many dependency relationships.
+    TooManyRuleDependencyRelationships,
+    /// A configuration contains too many input settings.
+    TooManyRuleSettings,
+    /// A configuration contains more than one setting for one rule.
+    DuplicateSetting,
+    /// A configuration names a rule that is absent from the registry.
+    UnknownConfiguredRule,
+    /// A rule depends on an identifier that is absent from the registry.
+    MissingDependency,
+    /// A rule directly depends on itself.
+    SelfDependency,
+    /// The complete dependency graph contains a cycle.
+    DependencyCycle,
 }
 
 /// Bounded redacted Rules Engine construction failure.
@@ -84,7 +102,7 @@ impl Display for RuleEngineError {
             ),
             _ => write!(
                 formatter,
-                "rules engine rejected registration data: kind={:?}",
+                "rules engine rejected input: kind={:?}",
                 self.kind
             ),
         }
@@ -383,12 +401,303 @@ where
 
 impl<R> Eq for RuleRegistry<R> where R: RuleRegistration {}
 
+/// Accepted first-slice activation value for one rule.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RuleSettingValue {
+    /// The rule is eligible for evaluation when its dependencies complete.
+    #[default]
+    Enabled,
+    /// The rule remains observable in the plan but is not evaluated.
+    Disabled,
+}
+
+/// One exact in-memory activation setting for a registered rule.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RuleSetting {
+    rule_id: RuleId,
+    value: RuleSettingValue,
+}
+
+impl RuleSetting {
+    /// Creates one exact source-independent rule setting.
+    #[must_use]
+    pub const fn new(rule_id: RuleId, value: RuleSettingValue) -> Self {
+        Self { rule_id, value }
+    }
+
+    /// Returns the exact configured rule identifier.
+    #[must_use]
+    pub const fn rule_id(&self) -> &RuleId {
+        &self.rule_id
+    }
+
+    /// Returns the configured activation value.
+    #[must_use]
+    pub const fn value(&self) -> RuleSettingValue {
+        self.value
+    }
+}
+
+/// Immutable source-independent first-slice rule configuration.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RuleConfiguration {
+    settings: Vec<RuleSetting>,
+}
+
+impl RuleConfiguration {
+    /// Constructs and validates a complete in-memory configuration.
+    ///
+    /// Accepted settings are exposed in ascending complete [`RuleId`] order.
+    /// Absence of a setting means [`RuleSettingValue::Enabled`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed error for an over-limit input or any repeated exact
+    /// rule identifier, including an equal repeated value.
+    pub fn new(settings: impl IntoIterator<Item = RuleSetting>) -> Result<Self, RuleEngineError> {
+        let mut canonical = Vec::new();
+        for setting in settings {
+            if canonical.len() == MAX_RULE_SETTINGS {
+                return Err(RuleEngineError::bounded(
+                    RuleEngineErrorKind::TooManyRuleSettings,
+                    MAX_RULE_SETTINGS + 1,
+                    MAX_RULE_SETTINGS,
+                ));
+            }
+            canonical.push(setting);
+        }
+        canonical.sort_by(|left, right| left.rule_id().cmp(right.rule_id()));
+        if canonical
+            .windows(2)
+            .any(|pair| pair[0].rule_id() == pair[1].rule_id())
+        {
+            return Err(RuleEngineError::new(RuleEngineErrorKind::DuplicateSetting));
+        }
+        Ok(Self {
+            settings: canonical,
+        })
+    }
+
+    /// Returns whether the configuration contains no explicit settings.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.settings.is_empty()
+    }
+
+    /// Returns the number of explicit settings.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.settings.len()
+    }
+
+    /// Returns explicit settings in ascending complete rule-ID order.
+    #[must_use]
+    pub fn settings(&self) -> &[RuleSetting] {
+        &self.settings
+    }
+
+    /// Returns the explicit setting for an exact rule identifier.
+    #[must_use]
+    pub fn get(&self, rule_id: &RuleId) -> Option<&RuleSetting> {
+        self.settings
+            .binary_search_by(|setting| setting.rule_id().cmp(rule_id))
+            .ok()
+            .map(|index| &self.settings[index])
+    }
+
+    /// Returns the configured value or the accepted enabled default.
+    #[must_use]
+    pub fn value(&self, rule_id: &RuleId) -> RuleSettingValue {
+        self.get(rule_id)
+            .map_or(RuleSettingValue::Enabled, RuleSetting::value)
+    }
+}
+
+/// One canonical planned rule with its immutable dependency and setting data.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RulePlanEntry {
+    rule_id: RuleId,
+    dependencies: Vec<RuleId>,
+    setting: RuleSettingValue,
+}
+
+impl RulePlanEntry {
+    /// Returns the planned rule identifier.
+    #[must_use]
+    pub const fn rule_id(&self) -> &RuleId {
+        &self.rule_id
+    }
+
+    /// Returns dependencies in ascending complete rule-ID order.
+    #[must_use]
+    pub fn dependencies(&self) -> &[RuleId] {
+        &self.dependencies
+    }
+
+    /// Returns the explicit or default activation value.
+    #[must_use]
+    pub const fn setting(&self) -> RuleSettingValue {
+        self.setting
+    }
+}
+
+/// Immutable deterministic complete rule execution plan.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RulePlan {
+    entries: Vec<RulePlanEntry>,
+}
+
+impl RulePlan {
+    /// Validates configuration and dependencies and constructs a complete plan.
+    ///
+    /// Dependencies always precede dependents. The smallest complete
+    /// [`RuleId`] wins every ready-set tie independently from registration and
+    /// dependency input order. Disabled rules remain in the plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed error for incompatible configuration, aggregate
+    /// dependency bounds, missing or self dependencies, or a cycle. No partial
+    /// plan is returned.
+    pub fn new<R>(
+        registry: &RuleRegistry<R>,
+        configuration: &RuleConfiguration,
+    ) -> Result<Self, RuleEngineError>
+    where
+        R: RuleRegistration,
+    {
+        for setting in configuration.settings() {
+            if registry.get(setting.rule_id()).is_none() {
+                return Err(RuleEngineError::new(
+                    RuleEngineErrorKind::UnknownConfiguredRule,
+                ));
+            }
+        }
+
+        let mut relationship_count = 0usize;
+        for registration in registry.registrations() {
+            relationship_count = relationship_count
+                .checked_add(registration.definition().dependencies().len())
+                .ok_or_else(|| {
+                    RuleEngineError::bounded(
+                        RuleEngineErrorKind::TooManyRuleDependencyRelationships,
+                        MAX_RULE_DEPENDENCY_RELATIONSHIPS + 1,
+                        MAX_RULE_DEPENDENCY_RELATIONSHIPS,
+                    )
+                })?;
+            if relationship_count > MAX_RULE_DEPENDENCY_RELATIONSHIPS {
+                return Err(RuleEngineError::bounded(
+                    RuleEngineErrorKind::TooManyRuleDependencyRelationships,
+                    relationship_count,
+                    MAX_RULE_DEPENDENCY_RELATIONSHIPS,
+                ));
+            }
+        }
+
+        for registration in registry.registrations() {
+            let definition = registration.definition();
+            for dependency in definition.dependencies() {
+                if dependency == definition.id() {
+                    return Err(RuleEngineError::new(RuleEngineErrorKind::SelfDependency));
+                }
+                if registry.get(dependency).is_none() {
+                    return Err(RuleEngineError::new(RuleEngineErrorKind::MissingDependency));
+                }
+            }
+        }
+
+        let mut indegrees = registry
+            .registrations()
+            .iter()
+            .map(|registration| {
+                (
+                    registration.definition().id().clone(),
+                    registration.definition().dependencies().len(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut dependents = registry
+            .registrations()
+            .iter()
+            .map(|registration| (registration.definition().id().clone(), Vec::new()))
+            .collect::<BTreeMap<_, Vec<RuleId>>>();
+        for registration in registry.registrations() {
+            for dependency in registration.definition().dependencies() {
+                dependents
+                    .entry(dependency.clone())
+                    .or_default()
+                    .push(registration.definition().id().clone());
+            }
+        }
+
+        let mut ready = indegrees
+            .iter()
+            .filter(|&(_, &indegree)| indegree == 0)
+            .map(|(rule_id, _)| rule_id.clone())
+            .collect::<BTreeSet<_>>();
+        let mut entries = Vec::with_capacity(registry.len());
+        while let Some(rule_id) = ready.pop_first() {
+            let Some(registration) = registry.get(&rule_id) else {
+                return Err(RuleEngineError::new(RuleEngineErrorKind::MissingDependency));
+            };
+            let definition = registration.definition();
+            entries.push(RulePlanEntry {
+                rule_id: rule_id.clone(),
+                dependencies: definition.dependencies().to_vec(),
+                setting: configuration.value(&rule_id),
+            });
+            for dependent in dependents.remove(&rule_id).unwrap_or_default() {
+                let Some(indegree) = indegrees.get_mut(&dependent) else {
+                    return Err(RuleEngineError::new(RuleEngineErrorKind::DependencyCycle));
+                };
+                let Some(next_indegree) = indegree.checked_sub(1) else {
+                    return Err(RuleEngineError::new(RuleEngineErrorKind::DependencyCycle));
+                };
+                *indegree = next_indegree;
+                if *indegree == 0 {
+                    ready.insert(dependent);
+                }
+            }
+        }
+
+        if entries.len() != registry.len() {
+            return Err(RuleEngineError::new(RuleEngineErrorKind::DependencyCycle));
+        }
+        Ok(Self { entries })
+    }
+
+    /// Returns whether the complete plan contains no rules.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Returns the number of planned rules.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Returns all entries in canonical execution order.
+    #[must_use]
+    pub fn entries(&self) -> &[RulePlanEntry] {
+        &self.entries
+    }
+
+    /// Returns a planned entry by exact rule identifier.
+    #[must_use]
+    pub fn get(&self, rule_id: &RuleId) -> Option<&RulePlanEntry> {
+        self.entries.iter().find(|entry| entry.rule_id() == rule_id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         MAX_RULE_DEPENDENCIES, MAX_RULE_DIAGNOSTIC_CODE_BYTES, MAX_RULE_ID_BYTES,
-        MAX_RULE_REGISTRATIONS, RuleDefinition, RuleDiagnosticCode, RuleEngineErrorKind, RuleId,
-        RuleRegistration, RuleRegistry,
+        MAX_RULE_REGISTRATIONS, MAX_RULE_SETTINGS, RuleConfiguration, RuleDefinition,
+        RuleDiagnosticCode, RuleEngineErrorKind, RuleId, RulePlan, RuleRegistration, RuleRegistry,
+        RuleSetting, RuleSettingValue,
     };
 
     fn id(value: impl Into<String>) -> RuleId {
@@ -581,5 +890,243 @@ mod tests {
             assert!(!format!("{error}").contains(sentinel));
             assert!(!format!("{error:?}").contains(sentinel));
         }
+    }
+
+    #[test]
+    fn configuration_is_empty_by_default_and_canonicalizes_explicit_settings() {
+        let empty = RuleConfiguration::default();
+        assert!(empty.is_empty());
+        assert_eq!(empty.len(), 0);
+        assert_eq!(empty.value(&id("absent")), RuleSettingValue::Enabled);
+
+        let configuration = RuleConfiguration::new([
+            RuleSetting::new(id("z"), RuleSettingValue::Disabled),
+            RuleSetting::new(id("a"), RuleSettingValue::Enabled),
+        ])
+        .expect("configuration must pass");
+        assert_eq!(
+            configuration
+                .settings()
+                .iter()
+                .map(|setting| setting.rule_id().as_str())
+                .collect::<Vec<_>>(),
+            ["a", "z"]
+        );
+        assert_eq!(
+            configuration.get(&id("z")).map(RuleSetting::value),
+            Some(RuleSettingValue::Disabled)
+        );
+    }
+
+    #[test]
+    fn configuration_rejects_every_repeated_rule_id() {
+        for settings in [
+            [
+                RuleSetting::new(id("rule"), RuleSettingValue::Enabled),
+                RuleSetting::new(id("rule"), RuleSettingValue::Enabled),
+            ],
+            [
+                RuleSetting::new(id("rule"), RuleSettingValue::Disabled),
+                RuleSetting::new(id("rule"), RuleSettingValue::Enabled),
+            ],
+        ] {
+            let error = RuleConfiguration::new(settings).expect_err("duplicate must fail");
+            assert_eq!(error.kind(), RuleEngineErrorKind::DuplicateSetting);
+        }
+    }
+
+    #[test]
+    fn configuration_accepts_exact_setting_bound_and_rejects_one_over() {
+        let exact = (0..MAX_RULE_SETTINGS).map(|index| {
+            RuleSetting::new(id(format!("rule{index:04}")), RuleSettingValue::Enabled)
+        });
+        assert_eq!(
+            RuleConfiguration::new(exact)
+                .expect("exact configuration must pass")
+                .len(),
+            MAX_RULE_SETTINGS
+        );
+
+        let over = (0..=MAX_RULE_SETTINGS).map(|index| {
+            RuleSetting::new(id(format!("rule{index:04}")), RuleSettingValue::Enabled)
+        });
+        let error = RuleConfiguration::new(over).expect_err("over-limit configuration must fail");
+        assert_eq!(error.kind(), RuleEngineErrorKind::TooManyRuleSettings);
+        assert_eq!(error.actual(), Some(MAX_RULE_SETTINGS + 1));
+        assert_eq!(error.maximum(), Some(MAX_RULE_SETTINGS));
+    }
+
+    #[test]
+    fn plan_handles_empty_single_independent_chain_and_diamond_graphs() {
+        let configuration = RuleConfiguration::default();
+        let cases = [
+            (Vec::new(), Vec::<&str>::new()),
+            (vec![definition("single", &[])], vec!["single"]),
+            (
+                vec![definition("z", &[]), definition("a", &[])],
+                vec!["a", "z"],
+            ),
+            (
+                vec![
+                    definition("c", &["b"]),
+                    definition("a", &[]),
+                    definition("b", &["a"]),
+                ],
+                vec!["a", "b", "c"],
+            ),
+            (
+                vec![
+                    definition("d", &["c", "b"]),
+                    definition("c", &["a"]),
+                    definition("b", &["a"]),
+                    definition("a", &[]),
+                ],
+                vec!["a", "b", "c", "d"],
+            ),
+        ];
+
+        for (definitions, expected) in cases {
+            let registry = RuleRegistry::new(definitions).expect("registry must pass");
+            let plan = RulePlan::new(&registry, &configuration).expect("plan must pass");
+            assert_eq!(
+                plan.entries()
+                    .iter()
+                    .map(|entry| entry.rule_id().as_str())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(plan.len(), expected.len());
+        }
+    }
+
+    #[test]
+    fn plan_rejects_unknown_configuration_missing_self_and_cycles() {
+        let registry = RuleRegistry::new([definition("a", &[])]).expect("registry must pass");
+        let unknown =
+            RuleConfiguration::new([RuleSetting::new(id("unknown"), RuleSettingValue::Disabled)])
+                .expect("configuration construction must pass");
+        assert_eq!(
+            RulePlan::new(&registry, &unknown)
+                .expect_err("unknown configuration must fail")
+                .kind(),
+            RuleEngineErrorKind::UnknownConfiguredRule
+        );
+
+        for (definitions, kind) in [
+            (
+                vec![definition("a", &["missing"])],
+                RuleEngineErrorKind::MissingDependency,
+            ),
+            (
+                vec![definition("a", &["a"])],
+                RuleEngineErrorKind::SelfDependency,
+            ),
+            (
+                vec![definition("a", &["b"]), definition("b", &["a"])],
+                RuleEngineErrorKind::DependencyCycle,
+            ),
+        ] {
+            let registry = RuleRegistry::new(definitions).expect("registry must pass");
+            let error = RulePlan::new(&registry, &RuleConfiguration::default())
+                .expect_err("invalid dependency graph must fail");
+            assert_eq!(error.kind(), kind);
+        }
+    }
+
+    #[test]
+    fn disabled_rules_remain_in_plan_with_dependencies_intact() {
+        let registry =
+            RuleRegistry::new([definition("dependent", &["root"]), definition("root", &[])])
+                .expect("registry must pass");
+        let configuration =
+            RuleConfiguration::new([RuleSetting::new(id("root"), RuleSettingValue::Disabled)])
+                .expect("configuration must pass");
+        let plan = RulePlan::new(&registry, &configuration).expect("plan must pass");
+
+        assert_eq!(plan.len(), 2);
+        assert_eq!(
+            plan.get(&id("root")).map(super::RulePlanEntry::setting),
+            Some(RuleSettingValue::Disabled)
+        );
+        let dependent = plan.get(&id("dependent")).expect("entry must exist");
+        assert_eq!(dependent.setting(), RuleSettingValue::Enabled);
+        assert_eq!(dependent.dependencies(), [id("root")]);
+    }
+
+    fn dense_registry(source_count: usize) -> RuleRegistry<RuleDefinition> {
+        let dependencies = (0..MAX_RULE_DEPENDENCIES)
+            .map(|index| id(format!("dependency{index:03}")))
+            .collect::<Vec<_>>();
+        let mut definitions = dependencies
+            .iter()
+            .cloned()
+            .map(|dependency| {
+                RuleDefinition::new(dependency, []).expect("dependency definition must pass")
+            })
+            .collect::<Vec<_>>();
+        definitions.extend((0..source_count).map(|index| {
+            RuleDefinition::new(id(format!("source{index:03}")), dependencies.clone())
+                .expect("source definition must pass")
+        }));
+        RuleRegistry::new(definitions).expect("dense registry must pass")
+    }
+
+    #[test]
+    fn plan_accepts_exact_aggregate_dependency_bound_and_rejects_one_over() {
+        let exact = dense_registry(256);
+        assert_eq!(
+            RulePlan::new(&exact, &RuleConfiguration::default())
+                .expect("exact plan must pass")
+                .len(),
+            512
+        );
+
+        let over = dense_registry(257);
+        let error = RulePlan::new(&over, &RuleConfiguration::default())
+            .expect_err("over-limit plan must fail");
+        assert_eq!(
+            error.kind(),
+            RuleEngineErrorKind::TooManyRuleDependencyRelationships
+        );
+        assert_eq!(error.actual(), Some(65_792));
+        assert_eq!(error.maximum(), Some(65_536));
+    }
+
+    #[test]
+    fn planning_is_equal_across_reordered_equivalent_inputs_and_repetition() {
+        let first = RuleRegistry::new([
+            definition("d", &["c", "b"]),
+            definition("a", &[]),
+            definition("c", &["a"]),
+            definition("b", &["a"]),
+        ])
+        .expect("registry must pass");
+        let second = RuleRegistry::new([
+            definition("b", &["a", "a"]),
+            definition("c", &["a"]),
+            definition("d", &["b", "c"]),
+            definition("a", &[]),
+        ])
+        .expect("registry must pass");
+        let first_configuration = RuleConfiguration::new([
+            RuleSetting::new(id("d"), RuleSettingValue::Enabled),
+            RuleSetting::new(id("b"), RuleSettingValue::Disabled),
+        ])
+        .expect("configuration must pass");
+        let second_configuration = RuleConfiguration::new([
+            RuleSetting::new(id("b"), RuleSettingValue::Disabled),
+            RuleSetting::new(id("d"), RuleSettingValue::Enabled),
+        ])
+        .expect("configuration must pass");
+
+        let expected = RulePlan::new(&first, &first_configuration).expect("plan must pass");
+        assert_eq!(
+            RulePlan::new(&second, &second_configuration).expect("plan must pass"),
+            expected
+        );
+        assert_eq!(
+            RulePlan::new(&first, &first_configuration).expect("plan must pass"),
+            expected
+        );
     }
 }

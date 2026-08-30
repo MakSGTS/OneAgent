@@ -25,9 +25,10 @@ complete. Sprint 35 External AI Client Compatibility is complete, and the
 [v0.6 MCP and IDE release review](docs/reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`. The
 [Sprint 36 Diagnostics Engine review](docs/reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-active target; Tasks 1–7 implement and verify its bounded source-independent
-boundary, while Task 8 still owns independent review and completion.
+records `pass` and completes Sprint 36. Sprint 37 Rules Engine is completed; its
+[integration review](docs/reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups`. Sprint 38 Git Change Adapter is the unique
+`next` target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -184,7 +185,9 @@ compatibility advances from `3` to `4`. MCP keeps seven tools and adds only the
 `rule` diagnostic family plus Rule-only `ruleId`; LSP capability and payload
 shape remain unchanged. The
 [Sprint 37 evidence](docs/architecture/rules-engine-evidence.md) records the
-complete executable matrix, audits, limitations, and Task 8 hand-off.
+complete executable matrix, audits, and limitations. The
+[Sprint 37 review](docs/reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups`, completion, and the Sprint 38 hand-off.
 
 The process constructs no long-running Runtime `App`, watcher, cache, HTTP
 listener, background task, remote client, or real side effect. Each stdio run

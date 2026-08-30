@@ -372,9 +372,10 @@ completed. The
 [v0.6 MCP and IDE release review](../reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`. The
 [Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-active target; Tasks 1–7 are implemented and verified, while Task 8 still owns
-independent review and completion.
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+Change Adapter is the unique `next` target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -1453,7 +1454,10 @@ External configuration, product rules, plugins, scripts, remote acquisition,
 hot reload, rule-management protocol/UI, mutable documents, fixes, edits,
 telemetry, and performance/security claims remain deferred. The complete
 executable matrix is recorded in the
-[Sprint 37 evidence](rules-engine-evidence.md).
+[Sprint 37 evidence](rules-engine-evidence.md). The
+[Sprint 37 review](../reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups`, completes Sprint 37, and makes Sprint 38
+Git Change Adapter the unique `next` target.
 
 ## Incremental indexing
 

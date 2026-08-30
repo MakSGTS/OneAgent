@@ -129,9 +129,10 @@ The roadmap assigns future boundaries explicitly:
   [v0.6 MCP and IDE release review](reviews/v0.6-release-review.md) records
   `pass with non-blocking follow-ups`. The
   [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-  records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-  active target; Tasks 1–7 are implemented and verified, while Task 8 still
-  owns independent review and completion.
+  records `pass` and completes Sprint 36. The
+  [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+  `pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+  Change Adapter is the unique `next` target.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -300,8 +301,9 @@ findings with one confined typed span.
 
 The complete requirement matrix, focused/public process counts, cross-platform
 consumer checks, audits, and limitations are recorded in the
-[Sprint 37 evidence](architecture/rules-engine-evidence.md). Sprint 37 remains
-active until its Task 8 independent review. Product rules, external
+[Sprint 37 evidence](architecture/rules-engine-evidence.md). Sprint 37 is
+complete with `pass with non-blocking follow-ups` in the
+[Sprint 37 review](reviews/sprint-37-rules-engine.md). Product rules, external
 configuration, plugins, scripts, remote rules, mutable documents, fixes, edits,
 rule-management protocol/UI, telemetry, and performance/security claims remain
 outside this boundary.

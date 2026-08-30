@@ -36,8 +36,10 @@ closed with a `pass` decision in the
 [v0.6 release review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups`; v0.6 is completed. The
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the active
-target. The
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+Change Adapter is the unique `next` target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -7105,8 +7107,10 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups` for Sprints 28–35. The release is
 `completed`. The
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
-records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the active
-target.
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+Change Adapter is the unique `next` target.
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8494,8 +8498,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint | Goal | Status |
 |---|---|---|
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
-| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | active |
-| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | planned |
+| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
+| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | next |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
@@ -8982,11 +8986,30 @@ p2 package audit. The first local EDT attempt used ambient Java 17 and stopped
 before tests; it is recorded as non-evidence rather than weakening the exact-
 head CI result.
 
-Task 7 changes documentation only. Sprint 37 remains `active`; Task 8 still
-owns the fresh-context independent integration review, primary reconciliation,
-same-reviewer artifact-consistency check, Sprint 38 hand-off, and conditional
-retirement of the exact Sprint 36 prompt suite. No review decision, state
-transition, next-sprint activation, or prompt retirement is claimed here.
+Task 7 changes documentation only. Task 8 reviews exact range
+`8240ed1a1e56bac4e6fef985cce31c56ec7233ce..d82b9d12e25b6fea737656f8803c03bb1d06a82e`.
+Fresh read-only reviewer `/root/sprint37_rules_engine_reviewer` reports one Low
+source-compatibility documentation issue: `DiagnosticFinding::code()` now
+returns a borrow and `DiagnosticCode` is no longer `Copy`, so arbitrary
+external Rust source compatibility is not established even though every
+repository consumer is migrated and green. Primary reconciliation accepts the
+finding; no blocking finding or missing evidence remains.
+
+The independent and primary focused matrices pass with Rules 19/5/6/15/6,
+Diagnostics 25/3, Graph 86, Runtime 99, Workspace/cache/watching 6/4/2,
+Protocol 53, Tool Policy 33, MCP 7/8/17, LSP 5/8, HTTP 4, and CLI 2. Both full
+gates pass with 77 targets, 73 non-zero targets, four expected zero-test binary
+entry points, and 1,231 tests. Exact code head `ca054770` also passes all six
+macOS/Windows Rust, VS Code, and EDT CI jobs; Task 7 changes documentation only.
+
+The same reviewer confirms the drafted
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md), Roadmap
+transition, finding, risks, validation, Sprint 38 hand-off, and exact retirement
+inventory without weakening. The effective decision is
+`pass with non-blocking follow-ups`: Sprint 37 is `completed`, Sprint 38 Git
+Change Adapter is the unique `next` target, and exactly the nine verified
+Sprint 36 prompt files are retired. The Sprint 37 suite and every unrelated
+prompt path remain tracked and unchanged.
 
 ###### State, failure, and validation gates
 

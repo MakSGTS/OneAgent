@@ -8855,6 +8855,36 @@ Excluded scope is:
   mutation, Git Change Adapter work, telemetry, performance/security claims,
   release review, or Sprint 38 implementation.
 
+###### Sprint 37 architecture decision
+
+Task 2 accepts [ADR-0059](adr/0059-rules-engine.md).
+`oneagent-analysis::rules` owns the source-independent typed rule domain,
+immutable registry, enable/disable-only in-memory configuration, deterministic
+dependency plan, synchronous sequential execution, cooperative cancellation
+contract, terminal per-rule results, and complete aggregate report. Rules
+borrow only Graph, complete validation, and the base ADR-0058
+Semantic/Validation report; they do not read source, mutate facts, invoke
+validation, or own Runtime and protocols.
+
+The accepted plan orders independent ready rules by complete validated
+`RuleId`. Dependencies require `Completed`; Disabled, NotApplicable,
+Blocked, Failed, and Cancelled outcomes block dependents while independent
+rules continue until cancellation. Engine/domain failures return no partial
+report. Rule output adds one typed `DiagnosticFamily::Rule` with rule ID,
+local code, existing normalized severity/category, bounded message, and
+canonical graph-node anchors. Existing `DiagnosticEngine::build` remains;
+an additive entry point normalizes Rule evidence through the same identity,
+suppression, order, summary, bounds, and location contracts.
+
+Production uses an empty immutable registry and default configuration. It
+publishes a complete empty Rule execution report and makes no product-rule
+claim. Cache schema remains `1`, derived Rule and final diagnostic reports are
+recomputed, and semantic compatibility advances from `3` to `4`. MCP keeps
+seven tools and adds only the `rule` diagnostic family and optional
+`ruleId`; LSP keeps its exact capability and payload shape. No new
+dependency, Coverage transition, external configuration, plugin, script,
+source edit, or protocol capability is accepted.
+
 ###### Accepted planning baseline and ordered task manifest
 
 ADR-0008 keeps Graph source-format independent. ADR-0039 preserves immutable

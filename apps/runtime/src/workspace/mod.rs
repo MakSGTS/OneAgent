@@ -3,6 +3,7 @@
 mod cache;
 mod change;
 mod graph_query;
+mod repository_change;
 
 pub use cache::{WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome};
 
@@ -12,6 +13,14 @@ pub use graph_query::{
     GraphQueryMetadataKind, GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult,
     GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
     GraphQueryTraversalResult, GraphQueryWorkspaceFormat,
+};
+
+pub use repository_change::{
+    GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,
+    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, MAX_REPOSITORY_CHANGE_PATH_BYTES,
+    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeError, RepositoryChangeErrorKind,
+    RepositoryChangeKind, RepositoryChangePath, RepositoryChangePathError,
+    RepositoryChangePathErrorKind,
 };
 
 use std::collections::BTreeMap;

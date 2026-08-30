@@ -29,14 +29,19 @@ pub use service::{
 };
 pub use state::AppState;
 pub use workspace::{
-    GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
-    GraphQueryError, GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth,
-    GraphQueryMetadataKind, GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult,
-    GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
-    GraphQueryTraversalResult, GraphQueryWorkspaceFormat, WorkspaceBuildError,
-    WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome, WorkspaceCacheObserver,
-    WorkspaceCacheStatus, WorkspaceCacheWriteOutcome, WorkspaceConfigurationSnapshot,
-    WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
+    GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,
+    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, GraphQueryConfiguration,
+    GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind, GraphQueryError,
+    GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth, GraphQueryMetadataKind,
+    GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult, GraphQueryRelation,
+    GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
+    GraphQueryTraversalResult, GraphQueryWorkspaceFormat, MAX_REPOSITORY_CHANGE_PATH_BYTES,
+    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeError, RepositoryChangeErrorKind,
+    RepositoryChangeKind, RepositoryChangePath, RepositoryChangePathError,
+    RepositoryChangePathErrorKind, WorkspaceBuildError, WorkspaceBuildErrorKind,
+    WorkspaceCacheLoadOutcome, WorkspaceCacheObserver, WorkspaceCacheStatus,
+    WorkspaceCacheWriteOutcome, WorkspaceConfigurationSnapshot, WorkspaceService,
+    WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
     WorkspaceUpdateFailureKind, WorkspaceUpdateObserver, WorkspaceUpdatePhase,
     WorkspaceUpdateStatus,
 };

@@ -8946,6 +8946,48 @@ production behavior. Task 8 owns the independent review, primary
 reconciliation, same-reviewer artifact-consistency check, state transition,
 Sprint 38 hand-off, and conditional retirement of the exact Sprint 36 suite.
 
+###### Sprint 37 implementation and completion evidence
+
+Tasks 3–6 implement ADR-0059 in dependency order. Analysis owns validated rule
+identity, immutable registration, in-memory enable/disable configuration,
+canonical dependency planning, synchronous sequential execution, cooperative
+cancellation, terminal results, and bounded Rule diagnostic evidence. Runtime
+publishes a complete rule report and final diagnostic report atomically and
+recomputes both after cache decode. Production uses an empty registry and
+default configuration, so this boundary makes no product-rule claim.
+
+Cache schema remains `1` and semantic compatibility advances from `3` to `4`.
+MCP retains exactly seven read-only Tool Policy-gated tools and adds only the
+`rule` diagnostic family plus Rule-only `ruleId`. LSP retains its exact 3.17
+capability and payload shape. Graph facts, validation, provenance, locations,
+reports, diffs, adapters, HTTP, CLI, VS Code, EDT, and Coverage remain under
+their existing authorities and behavior.
+
+Task 7 records the complete requirement-to-test matrix in the
+[Sprint 37 Rules Engine evidence](architecture/rules-engine-evidence.md). The
+accepted canonical Rust gate contains 77 test targets and 1,231 passing tests
+with zero failures, ignored, measured, or filtered tests. Four expected binary
+entry-point targets contain zero tests; the other 73 are non-empty. Focused
+evidence includes 19 rule-domain unit tests; 5 registry, 6 planning, 15
+execution, and 6 diagnostic public tests; 86 Graph tests; 99 Runtime unit tests;
+12 Workspace/cache/watching tests; 53 Protocol tests; 33 Tool Policy tests; 7
+semantic MCP, 8 MCP stdio, 17 MCP process, 5 LSP stdio, 8 LSP process, 4 HTTP,
+and 2 CLI tests.
+
+Exact Task 6 head `ca054770` also passes all six cross-platform CI jobs. macOS
+and Windows VS Code jobs pass typecheck, 62 unit tests, 18 Extension Host
+scenarios, 2 real-process tests, and package/scope audits. macOS and Windows EDT
+jobs use JDK 25 and pass 41 tests with zero failures, errors, or skips plus the
+p2 package audit. The first local EDT attempt used ambient Java 17 and stopped
+before tests; it is recorded as non-evidence rather than weakening the exact-
+head CI result.
+
+Task 7 changes documentation only. Sprint 37 remains `active`; Task 8 still
+owns the fresh-context independent integration review, primary reconciliation,
+same-reviewer artifact-consistency check, Sprint 38 hand-off, and conditional
+retirement of the exact Sprint 36 prompt suite. No review decision, state
+transition, next-sprint activation, or prompt retirement is claimed here.
+
 ###### State, failure, and validation gates
 
 Sprint 37 is `active` after Task 1 starts from the committed planning

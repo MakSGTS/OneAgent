@@ -26,7 +26,8 @@ complete. Sprint 35 External AI Client Compatibility is complete, and the
 `pass with non-blocking follow-ups`. The
 [Sprint 36 Diagnostics Engine review](docs/reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. Sprint 37 Rules Engine is the unique
-next target.
+active target; Tasks 1–7 implement and verify its bounded source-independent
+boundary, while Task 8 still owns independent review and completion.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -39,7 +40,7 @@ See
 - `crates/metadata` — typed 1C metadata model
 - `crates/graph` — canonical semantic graph, query, validation, diff, impact, coverage, and resolution APIs
 - `crates/bsl` — BSL lexical and syntax analysis
-- `crates/analysis` — source-independent declaration/call analysis, deterministic semantic Context Engine, and deterministic bounded Diagnostics Engine
+- `crates/analysis` — source-independent declaration/call analysis, deterministic semantic Context Engine, deterministic bounded Diagnostics Engine, and deterministic bounded Rules Engine
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
 - `crates/protocol` — bounded MCP 2025-06-18, 2025-11-25, and 2026-07-28 plus LSP 3.17 domain values, validation, encoding, lifecycle, capabilities, and dispatch contracts
@@ -59,7 +60,8 @@ serializes rebuilds, atomically publishes valid replacements, and retains the
 last valid snapshot across failed rebuilds until a later change recovers. The
 transport-neutral snapshot contains separate ordered per-configuration graphs
 plus preserved raw diagnostics, reference evidence, complete validation, graph
-reports, and one complete normalized diagnostic report; a public status
+reports, one complete Rule execution report, and one complete normalized
+diagnostic report; a public status
 observer reports rebuild attempts, publications, phases, and failures. Runtime
 stores complete validated snapshots in the fixed Workspace-local
 `.oneagent/cache/workspace-v1.json` entry. Startup restores only an exact
@@ -168,6 +170,21 @@ summary, and exposes at most 100 path-free ordered items with explicit
 truncation. The
 [Sprint 36 evidence](docs/architecture/diagnostics-engine-evidence.md) records
 the complete acceptance matrix and limitations.
+
+ADR-0059 adds the source-independent `oneagent-analysis::rules` boundary over
+immutable Graph, complete validation, and the base Semantic/Validation report.
+It owns validated rule identity and registration, in-memory enable/disable
+configuration, canonical dependency planning, synchronous sequential
+execution, cooperative cancellation, terminal results, and bounded Rule
+diagnostic candidates. Production uses an empty immutable registry and default
+configuration, publishes a complete empty Rule report atomically, and makes no
+claim that a product rule exists. Cache schema remains `1`; derived rule and
+final diagnostic reports are recomputed after decode, while semantic
+compatibility advances from `3` to `4`. MCP keeps seven tools and adds only the
+`rule` diagnostic family plus Rule-only `ruleId`; LSP capability and payload
+shape remain unchanged. The
+[Sprint 37 evidence](docs/architecture/rules-engine-evidence.md) records the
+complete executable matrix, audits, limitations, and Task 8 hand-off.
 
 The process constructs no long-running Runtime `App`, watcher, cache, HTTP
 listener, background task, remote client, or real side effect. Each stdio run

@@ -102,6 +102,7 @@ docs/codex/
     architecture.md
     context-engine.md
     diagnostics-engine.md
+    git-change-adapter.md
     ide-extension.md
     graph-emission.md
     graph-model.md
@@ -121,6 +122,7 @@ docs/codex/
     architecture.md
     context-engine-implementation.md
     diagnostics-engine-implementation.md
+    git-change-adapter-implementation.md
     graph-implementation.md
     ide-extension-implementation.md
     implementation.md
@@ -139,6 +141,7 @@ docs/codex/
     architecture-task.md
     context-engine-task.md
     diagnostics-engine-task.md
+    git-change-adapter-task.md
     graph-emission-task.md
     graph-model-task.md
     ide-extension-task.md
@@ -245,6 +248,10 @@ The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
 - Use `docs/codex/profiles/diagnostics-engine-implementation.md` for
   source-independent diagnostic identity, orchestration, suppression, bounded
   reporting, immutable snapshot composition, and diagnostic projections.
+- Use `docs/codex/profiles/git-change-adapter-implementation.md` for bounded
+  Git repository change-set identity, endpoint and state-layer validation,
+  deterministic normalization, path confinement, and Workspace change-input
+  integration.
 - Use `docs/codex/profiles/rules-engine-implementation.md` for
   source-independent rule identity, registration, dependency validation,
   configuration, deterministic execution, result production, and diagnostic
@@ -294,6 +301,9 @@ module composition.
 - Use `docs/codex/templates/diagnostics-engine-task.md` for diagnostic identity,
   normalization, orchestration, suppression, reporting, snapshot, or
   public-projection work.
+- Use `docs/codex/templates/git-change-adapter-task.md` for Git repository
+  boundaries, endpoints, state layers, normalized changes, path confinement,
+  or Workspace change-input integration.
 - Use `docs/codex/templates/rules-engine-task.md` for rule identity,
   registration, dependencies, configuration, execution, results, or
   diagnostic-integration work.
@@ -382,6 +392,14 @@ evidence without becoming semantic or validation authority. They must define
 typed identity, duplicate/conflict behavior, suppression, ordering, bounds,
 summaries, sensitive-data handling, and deterministic snapshot or projection
 evidence while keeping general rule execution separate.
+
+Git Change Adapter tasks convert bounded repository change evidence into
+accepted source-independent Workspace change inputs without becoming semantic,
+impact, or edit authority. They must define repository and endpoint identity,
+included state layers, normalized status and paths, rename/copy/delete/conflict
+behavior, deterministic ordering, bounds, failures, confinement, and Workspace
+equivalence while keeping remote access, impact analysis, refactoring, and
+source mutation separate.
 
 Rules Engine tasks register and execute accepted source-independent rules over
 canonical immutable evidence without becoming semantic, validation, or

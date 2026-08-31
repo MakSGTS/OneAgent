@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use oneagent_analysis::change_impact::ConfigurationImpactKind;
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GraphQueryService, HttpService,
-    LifecycleState, RuntimeConfig, WorkspaceService, WorkspaceSnapshot, WorkspaceUpdateFailureKind,
-    WorkspaceUpdatePhase, WorkspaceUpdateStatus,
+    LifecycleState, RuntimeConfig, WorkspaceChangeImpact, WorkspaceService, WorkspaceSnapshot,
+    WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
 };
 use serde_json::Value;
 use tempfile::TempDir;
@@ -295,6 +296,11 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     assert_eq!(initial_status.attempt(), 1);
     assert_eq!(initial_status.published(), 1);
     let initial = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    assert_eq!(initial.publication_id().get(), 1);
+    assert!(matches!(
+        initial.change_impact(),
+        WorkspaceChangeImpact::NoPreviousPublication { .. }
+    ));
     assert_diagnostic_snapshots_complete(&initial);
     assert_eq!(
         configuration_names(&initial),
@@ -324,6 +330,19 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesWatched"]
     })
     .await;
+    let modified_impact = modified_snapshot
+        .change_impact()
+        .report()
+        .expect("replacement must contain adjacent impact");
+    assert_eq!(
+        modified_impact.current_publication_id(),
+        modified_snapshot.publication_id()
+    );
+    assert_eq!(
+        modified_impact.current_publication_id().get(),
+        modified_impact.previous_publication_id().get() + 1
+    );
+    assert_eq!(modified_impact.summary().compared_configurations(), 2);
     assert_diagnostic_snapshots_complete(&modified_snapshot);
     assert_eq!(
         configuration_names(&initial),
@@ -349,6 +368,21 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         .expect("Designer root removal must succeed");
     let removed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 1).await;
     assert_diagnostic_snapshots_complete(&removed);
+    let removed_impact = removed
+        .change_impact()
+        .report()
+        .expect("removal publication must contain impact");
+    assert_eq!(removed_impact.summary().removed_configurations(), 1);
+    assert_eq!(
+        removed_impact
+            .configuration(
+                &oneagent_common::EntityId::new(DESIGNER_ID)
+                    .expect("Designer fixture identity must be valid")
+            )
+            .expect("removed Designer transition must remain queryable")
+            .kind(),
+        ConfigurationImpactKind::Removed
+    );
     let removed_status = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.published() == followed_up.published() + 1
@@ -367,6 +401,11 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     fs::rename(&moved_designer, &renamed_designer).expect("Designer root addition must succeed");
     let renamed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
     assert_diagnostic_snapshots_complete(&renamed);
+    let renamed_impact = renamed
+        .change_impact()
+        .report()
+        .expect("addition publication must contain impact");
+    assert_eq!(renamed_impact.summary().added_configurations(), 1);
     let renamed_status = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.published() == removed_status.published() + 1
@@ -393,6 +432,8 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     let retained = observer
         .snapshot()
         .expect("last valid snapshot must be retained");
+    assert_eq!(retained.publication_id(), renamed.publication_id());
+    assert_eq!(retained.change_impact(), renamed.change_impact());
     assert_eq!(
         configuration_names(&retained),
         ["DNSWorldWatched", "WritesWatched"]
@@ -411,6 +452,18 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesRecovered"]
     })
     .await;
+    assert_eq!(
+        recovered.publication_id().get(),
+        retained.publication_id().get() + 1
+    );
+    assert_eq!(
+        recovered
+            .change_impact()
+            .report()
+            .expect("recovery publication must contain impact")
+            .previous_publication_id(),
+        retained.publication_id()
+    );
     assert_diagnostic_snapshots_complete(&recovered);
     assert_eq!(
         configuration_names(&recovered),

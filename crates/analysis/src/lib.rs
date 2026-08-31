@@ -5,6 +5,7 @@
 //! 1. collect every module and declaration into the semantic graph;
 //! 2. extract and resolve local and cross-module calls.
 
+pub mod change_impact;
 pub mod context;
 pub mod diagnostics;
 pub mod rules;

@@ -27,10 +27,10 @@ complete. Sprint 35 External AI Client Compatibility is complete, and the
 [Sprint 36 Diagnostics Engine review](docs/reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. Sprint 37 Rules Engine is completed; its
 [integration review](docs/reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups`. The bounded Sprint 38 Git Change Adapter
-is implemented and its
-[evidence](docs/architecture/git-change-adapter-evidence.md) is complete;
-Sprint 38 remains active pending integration review and the Sprint 39 hand-off.
+`pass with non-blocking follow-ups`. The
+[Sprint 38 Git Change Adapter review](docs/reviews/sprint-38-git-change-adapter.md)
+records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is the
+unique `next` target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

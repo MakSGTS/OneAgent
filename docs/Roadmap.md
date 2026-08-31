@@ -40,8 +40,8 @@ records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups` and completes Sprint 37. The
 [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
-records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is the
-unique `next` target. The
+records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
+`active` from its committed Task 1 investigation. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -8515,7 +8515,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
-| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | next |
+| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | active |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
 
@@ -9364,7 +9364,8 @@ Sprint 39 is planned from completed Sprint 38 review head `56bb3004` and
 version integration `295a5454`. The
 [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
 records `pass`, completes Sprint 38, and makes Sprint 39 Change Impact Analysis
-the unique `next` target. Sprint 39 remains `next` during planning.
+the unique `next` target. Sprint 39 remained `next` during planning and is
+`active` from Task 1.
 
 The data and testability gate passes. `oneagent-graph` already owns the
 directional `SemanticGraphDiff`, bounded deterministic `SemanticImpactAnalyzer`,
@@ -9478,6 +9479,43 @@ compatibility matrix. Task 7 gives the exact planning-through-Task-6 range to
 one fresh-context read-only reviewer, then the primary independently inspects
 and reruns the complete matrix. The same reviewer must pass the drafted
 artifact before any Roadmap transition or prompt deletion.
+
+###### Sprint 39 investigation evidence
+
+Task 1 starts from committed planning baseline `6d9fd0ff`. The
+[Change Impact Analysis investigation](architecture/change-impact-analysis-investigation.md)
+inventories canonical Graph diff/build-diff/impact inputs and results, the 18
+focused Graph impact cases, complete Workspace Configuration identity and
+publication, filesystem/Git rebuild inputs, cache schema `1` and semantic
+compatibility `4`, the immutable seven-tool MCP process and current
+two-Configuration `oneagent.impact` contract, Tool Policy, consumers,
+compatibility, sensitive-data boundaries, and executable test oracles.
+
+The evidence is decision-ready for ADR-0061. No product report currently
+compares successive complete Workspace publications; snapshots retain no
+predecessor or publication identity; equal rebuilds publish; failed attempts
+retain the last valid snapshot; and a warm cache hit supplies no proven prior
+live endpoint. The current MCP impact tool instead compares distinct
+Configuration IDs inside one immutable startup snapshot. Graph result
+completeness covers requested traversal depth only and product-level report,
+reason, history, persistence, and projection bounds remain unresolved.
+
+ADR-0061 must select the product owner, exact Graph input boundary,
+previous/current publication and Configuration matching, report identity and
+vocabulary, duplicate/conflict handling, total order, completeness, summaries,
+bounds, redacted failures, atomic snapshot lifecycle, cache policy,
+filesystem/Git end-state equivalence, and compatible MCP migration before
+production changes. Repository paths, statuses, baselines, completeness, and
+operation order remain excluded from semantic impact identity, seeds, reasons,
+summaries, persistence, and output.
+
+The focused Task 1 matrix passes 18 Graph impact, 6 Workspace, 2 filesystem
+watching, 3 Git-to-Workspace, 4 persistent-cache, 7 MCP semantic-tool, and 17
+public MCP process tests: 57 total with zero failures, ignored, measured, or
+filtered tests. No external data, production dependency, source fixture family,
+protocol revision, Graph concept, Coverage transition, GUI process, or network
+access is required. Sprint 39 is now `active`; Task 2 owns architecture
+acceptance.
 
 ###### State, failure, and validation gates
 

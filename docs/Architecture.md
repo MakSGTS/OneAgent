@@ -165,10 +165,10 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
   records `pass` and completes Sprint 36. The
   [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
-  `pass with non-blocking follow-ups` and completes Sprint 37. The bounded
-  Sprint 38 Git Change Adapter is implemented and its evidence is complete;
-  Sprint 38 remains active pending integration review and the Sprint 39
-  hand-off.
+  `pass with non-blocking follow-ups` and completes Sprint 37. The
+  [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
+  records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
+  the unique `next` target.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The

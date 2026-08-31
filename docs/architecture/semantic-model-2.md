@@ -374,10 +374,10 @@ completed. The
 [Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups` and completes Sprint 37. The bounded Sprint
-38 Git Change Adapter is implemented and its
-[evidence](git-change-adapter-evidence.md) is complete; Sprint 38 remains active
-pending integration review and the Sprint 39 hand-off.
+`pass with non-blocking follow-ups` and completes Sprint 37. The
+[Sprint 38 Git Change Adapter review](../reviews/sprint-38-git-change-adapter.md)
+records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is the
+unique `next` target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes

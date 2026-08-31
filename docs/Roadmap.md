@@ -38,10 +38,10 @@ closed with a `pass` decision in the
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups` and completes Sprint 37. The bounded Sprint
-38 Git Change Adapter implementation and evidence are complete; Sprint 38
-remains `active` pending Task 7 integration review, state transition, and the
-Sprint 39 hand-off. The
+`pass with non-blocking follow-ups` and completes Sprint 37. The
+[Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
+records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is the
+unique `next` target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -8514,8 +8514,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 |---|---|---|
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
-| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | active |
-| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
+| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
+| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | next |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
 
@@ -9268,9 +9268,10 @@ the historical 1,268-test inventory and exact-head CI run `33323588901` at
 `b1d551a1`, and the current 80-target, 1,270-test inventory plus successful
 six-job macOS/Windows CI run `33399662895` at final production-code head
 `129b69c8`. It also records the API/dependency/executable/path/sensitive-data/
-scope audits through that final head. Sprint 38 remains `active`; only Task 7
-may perform the independent review, mark the sprint completed, hand off Sprint
-39 Change Impact Analysis, or retire the Sprint 37 prompt suite.
+scope audits through that final head. The
+[Sprint 38 integration review](reviews/sprint-38-git-change-adapter.md) records
+`pass`, completes Sprint 38, preserves Git as bounded input evidence, and hands
+off Sprint 39 Change Impact Analysis as the unique `next` target.
 
 ###### Accepted planning baseline and ordered task manifest
 

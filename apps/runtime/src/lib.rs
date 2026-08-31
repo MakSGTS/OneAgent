@@ -22,7 +22,7 @@ pub use lsp::{
     LspStdioTransport, lsp_server, workspace_root_uri,
 };
 pub use mcp::{McpStdioError, McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
-pub use mcp_tools::{McpSemanticServerError, semantic_server};
+pub use mcp_tools::{McpSemanticServerError, semantic_server, semantic_server_observer};
 pub use service::{
     Cancellation, RunningServices, RuntimeService, ServiceContainer, ServiceContainerBuilder,
     ServiceContext, ServiceStartFuture, ServiceTask,

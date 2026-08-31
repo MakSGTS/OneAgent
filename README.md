@@ -27,14 +27,16 @@ complete. Sprint 35 External AI Client Compatibility is complete, and the
 [Sprint 36 Diagnostics Engine review](docs/reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. Sprint 37 Rules Engine is completed; its
 [integration review](docs/reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups`. Sprint 38 Git Change Adapter is the unique
-`next` target.
+`pass with non-blocking follow-ups`. The bounded Sprint 38 Git Change Adapter
+is implemented and its
+[evidence](docs/architecture/git-change-adapter-evidence.md) is complete;
+Sprint 38 remains active pending integration review and the Sprint 39 hand-off.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
 ## Workspace
 
-- `apps/runtime` — long-running Runtime composition, owned service lifecycle, cancellation, shutdown, EDT/Designer Workspace discovery and file-change rebuilds, validated persistent snapshot caching, immutable semantic snapshots, public update/cache observation, HTTP liveness/readiness, the versioned read-only Graph Query API, and the separate bounded `oneagent-mcp` and `oneagent-lsp` stdio processes
+- `apps/runtime` — long-running Runtime composition, owned service lifecycle, cancellation, shutdown, EDT/Designer Workspace discovery, portable file-change rebuilds, an explicit bounded local Git change reader and source-neutral rebuild input, validated persistent snapshot caching, immutable semantic snapshots, public update/cache observation, HTTP liveness/readiness, the versioned read-only Graph Query API, and the separate bounded `oneagent-mcp` and `oneagent-lsp` stdio processes
 - `apps/cli` — supported dependency-free CLI client for Runtime health, Workspace configuration listing, exact node lookup, direct relations, and bounded traversal
 - `crates/common` — shared primitives
 - `crates/workspace` — project and workspace model
@@ -59,7 +61,12 @@ root through the production filesystem detector and EDT/Designer builders. It
 then observes complete file bytes through a Runtime-owned polling source,
 serializes rebuilds, atomically publishes valid replacements, and retains the
 last valid snapshot across failed rebuilds until a later change recovers. The
-transport-neutral snapshot contains separate ordered per-configuration graphs
+explicit-demand Git Change Adapter can read pinned `HEAD` versus one exact
+local worktree and submit one bounded non-empty source-neutral rebuild request;
+it never replaces filesystem observation or selects semantic work from paths.
+Every accepted request uses the same complete discovery, build, validation,
+cache, and atomic-publication pipeline. The transport-neutral snapshot contains
+separate ordered per-configuration graphs
 plus preserved raw diagnostics, reference evidence, complete validation, graph
 reports, one complete Rule execution report, and one complete normalized
 diagnostic report; a public status
@@ -77,11 +84,12 @@ success/error schemas. The supported CLI maps its exact commands to those health
 and Graph Query GET routes through one bounded HTTP/1.1 connection, preserves
 Runtime JSON, and distinguishes usage, transport, server, protocol, and output
 failures with stable exit codes. Runtime process management, endpoint discovery,
-configuration files, richer output, alternate transports, packaging, Git,
-additional MCP/LSP-client compatibility and AI-provider integration remain
-planned capabilities with explicit ownership. The bounded desktop VS Code client uses
-the separate MCP process for explicit connection and symbol-search/navigation
-only. Health remains available through exact `GET /health/live` and
+configuration files, richer output, alternate transports, packaging, automatic
+Git orchestration, additional MCP/LSP-client compatibility, and AI-provider
+integration remain planned capabilities with explicit ownership. The bounded
+desktop VS Code client uses the separate MCP process for explicit connection
+and symbol-search/navigation only. Health remains available through exact
+`GET /health/live` and
 `GET /health/ready` probes.
 
 The additive `oneagent-analysis` Context Engine borrows one immutable

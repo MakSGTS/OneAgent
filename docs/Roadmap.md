@@ -38,8 +38,10 @@ closed with a `pass` decision in the
 [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
 records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
-`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
-Change Adapter is the unique `next` target. The
+`pass with non-blocking follow-ups` and completes Sprint 37. The bounded Sprint
+38 Git Change Adapter implementation and evidence are complete; Sprint 38
+remains `active` pending Task 7 integration review, state transition, and the
+Sprint 39 hand-off. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -143,12 +145,25 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence implemented by the [IDE Extension profile](codex/profiles/ide-extension-implementation.md), [IDE Extension workflow](codex/workflows/ide-extension.md), and [IDE Extension template](codex/templates/ide-extension-task.md), with existing Runtime Service and MCP Protocol modules retained for their owned boundaries. | Sprints 30–34 | completed |
 | Task prompt template update completed — Diagnostics Engine | Sprint 36 | Canonical diagnostic inputs, stable typed identity, duplicate/conflict handling, suppression authority, deterministic ordering, bounds, summaries, sensitive-data policy, immutable snapshots, projections, and regression evidence implemented by the [Diagnostics Engine profile](codex/profiles/diagnostics-engine-implementation.md), [workflow](codex/workflows/diagnostics-engine.md), and [template](codex/templates/diagnostics-engine-task.md). | Sprints 36 and 39 | completed |
 | Task prompt template update completed — Rules Engine | Sprint 37 | Deterministic rule registration, identity, dependencies, configuration, execution, result contracts, and integration with accepted diagnostic evidence implemented by the [Rules Engine profile](codex/profiles/rules-engine-implementation.md), [workflow](codex/workflows/rules-engine.md), and [template](codex/templates/rules-engine-task.md). | Sprint 37 | completed |
-| Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
+| Task prompt template update completed — Git Change Adapter | Sprint 38 | Repository change-set identity, endpoint and state-layer validation, rename/copy/delete/conflict behavior, deterministic ordering, path confinement, Workspace change-input equivalence, and the boundary between Git evidence and semantic authority implemented by the [Git Change Adapter profile](codex/profiles/git-change-adapter-implementation.md), [workflow](codex/workflows/git-change-adapter.md), and [template](codex/templates/git-change-adapter-task.md). | Sprint 38 | completed |
 | Task prompt template update required — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation. | Sprints 40–41 | planned |
 | Task prompt template update required — API Stability and Plugin SDK | Sprint 42 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 42–43 | planned |
 | Task prompt template update required — Performance and Security | Sprint 44 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 44 | planned |
 | Task prompt template update required — Documentation and Examples | Sprint 45 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 45 | planned |
 | Task prompt template update required — Release | Sprint 46 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 46 | planned |
+
+The Git Change Adapter audit at committed Sprint 37 review head `b029544f`
+found that the generic Implementation, Source Adapter, and Runtime Service
+contracts do not require typed repository baseline/current endpoints, explicit
+index/worktree/untracked/conflict layer ownership, Git change identity,
+rename/copy/delete/type-change policy, canonical ordering, repository and path
+confinement, process or dependency boundaries, or equivalence with accepted
+Workspace change inputs. The Git Change Adapter modules add only those reusable
+execution and evidence requirements. They do not select a Git library or
+executable, repository-discovery rule, endpoint vocabulary, included state
+layers, status model, rename threshold, path representation, bounds,
+persistence schema, Runtime surface, protocol, UI, or first production slice;
+those remain Sprint 38 investigation and architecture decisions.
 
 The Rules Engine audit at committed Sprint 36 review head `8240ed1a` found
 that the generic Implementation and Diagnostics Engine contracts do not require
@@ -8499,7 +8514,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 |---|---|---|
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
-| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | next |
+| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | active |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
@@ -9051,6 +9066,291 @@ Suggested planning commit message:
 
 ```text
 Plan Sprint 37 Rules Engine
+```
+
+##### Sprint 38 Git Change Adapter execution plan
+
+Sprint 38 is planned from completed Sprint 37 review head `b029544f`, version
+integration head `a1434fa0`, and the committed Git Change Adapter framework
+prerequisite `580496eb`. The
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups`; Sprint 38 is the unique `next` target and
+remains `next` during planning.
+
+The data and testability gate passes. ADR-0041 and production Runtime code own
+deterministic complete-byte Workspace observations, bounded latest-revision
+change signals, serialized complete rebuilds, atomic immutable publication,
+last-valid failure retention, recovery, cancellation, and cleanup. Public
+tests already prove modifications, additions, removals, rename-equivalent end
+states, invalid builds, recovery, repeated fresh runs, and EDT/Designer
+consumer compatibility. The repository itself supplies real Git history and
+Git 2.50.1 is available for repository-owned temporary-repository evidence.
+ADR-0027 explicitly prevents filesystem or Git events from becoming canonical
+Graph/index inputs.
+
+No Git change-set domain, repository endpoint contract, reader, injected port,
+Workspace Git input, or Git-specific fixture exists in production. Exact
+repository discovery, baseline/current endpoints, included committed/index/
+worktree/untracked/conflict layers, status vocabulary, rename/copy policy,
+path representation, ordering, limits, process or library boundary,
+concurrent-mutation behavior, and Workspace integration remain unresolved.
+Task 1 must make these questions decision-ready from live evidence and Task 2
+must accept ADR-0060 before production changes. Remote repositories,
+credentials, submodule traversal, semantic impact, refactoring, and edits are
+not required data for the bounded local first slice and remain deferred unless
+the investigation proves one is an unavoidable compatibility prerequisite.
+
+The framework readiness audit found a concrete reusable gap beyond generic
+Implementation, Source Adapter, and Runtime Service contracts. Commit
+`580496eb` closes it with the
+[Git Change Adapter profile](codex/profiles/git-change-adapter-implementation.md),
+[workflow](codex/workflows/git-change-adapter.md), and
+[template](codex/templates/git-change-adapter-task.md). They require endpoint
+and state-layer validation, normalized change identity, status/path handling,
+rename/copy/delete/conflict policy, deterministic order, bounds, process or
+dependency evidence, confinement, and Workspace equivalence without selecting
+concrete architecture. Existing Investigation, Architecture, Runtime Service,
+Review, sprint-planning, and sequential-execution modules cover the remaining
+boundaries. No additional framework or post-sprint framework audit is planned.
+
+The complete Sprint 38 prompt suite is owned by
+`docs/codex/prompts/sprint-38-git-change-adapter/`. The verified immediately
+preceding suite is `docs/codex/prompts/sprint-37-rules-engine/`; its nine
+tracked files exactly match the filesystem inventory and it contains no
+untracked addition at planning time. Only Task 7 may conditionally retire that
+exact suite after a non-blocking independent and primary review, successful
+complete validation, and same-reviewer artifact consistency.
+
+###### Sprint 38 objective
+
+Define and implement one bounded deterministic local Git Change Adapter that
+converts accepted repository change evidence into source-independent Workspace
+change inputs without making Git a semantic, validation, impact, or edit
+authority. Integrate the accepted input through existing complete rebuild,
+atomic publication, failure recovery, lifecycle, cache, and consumer contracts.
+
+Included scope is:
+
+- repository, history, API, dependency, platform, security, consumer, fixture,
+  and deterministic-oracle investigation followed by one accepted ADR;
+- one source-independent typed normalized repository change-set domain with
+  validated endpoints, paths, statuses, deterministic identity/order, bounds,
+  and closed failures selected by ADR-0060;
+- one accepted local Git repository reader boundary with deterministic
+  repository-owned temporary-repository evidence for included state layers and
+  change classes;
+- mapping of the accepted Git-derived change set into one source-independent
+  Workspace change-input boundary with equivalence to relevant complete
+  filesystem end states;
+- preservation of complete production discovery/parsing/build/validation,
+  serialized rebuilds, coalescing, immutable atomic publication, last-valid
+  recovery, cache behavior, cancellation, shutdown, and supported consumers;
+- complete focused, public, cross-platform, dependency, API, path-confinement,
+  sensitive-data, scope, and full-workspace evidence plus current-state docs;
+- one mandatory fresh-context read-only integration review, primary
+  reconciliation, artifact consistency, Sprint 39 hand-off, and conditional
+  Sprint 37 prompt-suite retirement.
+
+Excluded scope is:
+
+- Git as graph, semantic identity, validation, diagnostic, impact, rule,
+  provenance, source-location, cache, refactoring, plan, or edit authority;
+- incremental Graph/index mutation, changed-entity inference, semantic impact
+  analysis, diagnostics from Git status, selective parsing/building, or partial
+  snapshot publication;
+- remote repository access, fetch/pull/push, credentials, authentication,
+  hosting-provider APIs, network workspaces, repository mutation, staging,
+  commits, branch manipulation, checkout, merge, rebase, reset, or cleanup;
+- source edits, refactoring plans, safe edit transactions, rollback, code
+  actions, mutable documents, protocol/IDE Git UI, telemetry, benchmarks, or
+  broad performance/security claims;
+- unsupported nested-repository, submodule-content, worktree-management,
+  symlink-traversal, arbitrary encoding, or platform behavior not accepted by
+  ADR-0060; and
+- Sprint 39 Change Impact Analysis or later Sprint 40–41 planning/edit scope.
+
+###### Sprint 38 investigation evidence
+
+Task 1 starts from committed planning baseline `e60b95c0`. The
+[Git Change Adapter investigation](architecture/git-change-adapter-investigation.md)
+confirms that no production Git domain, endpoint, reader, Workspace input, or
+Git implementation dependency exists. It inventories the private complete-byte
+`WorkspaceFileState`, latest-revision source, complete rebuild coordinator,
+cache source identity, immutable publication, failure/recovery, lifecycle,
+consumers, tracked mixed-format fixture, local Git 2.50.1 evidence, and
+macOS/Windows CI constraints.
+
+The evidence is decision-ready for ADR-0060. It separates repository/worktree
+identity, baseline/current endpoints, committed/index/worktree/untracked/
+ignored/conflict layers, status and path identity, rename/copy policy,
+ordering, bounds, errors, process/library families, source-neutral Workspace
+mapping, and complete end-state equivalence into explicit decisions. The
+existing-executable family requires an accepted production executable contract;
+an external Rust Git library additionally requires dependency approval. Direct
+`.git` parsing and an injected-only production source lack evidence for a
+bounded complete first slice.
+
+Seventeen existing non-zero focused tests pass: five change-source unit tests,
+six public Workspace tests, two public File Watching tests, and four public
+Persistent Cache tests. They prove the reusable complete-state, publication,
+recovery, cancellation, cache, and fresh-run oracles but no Git behavior. The
+tracked fixture can be copied and initialized only inside disposable temporary
+repositories for future production-reader evidence. No external data, remote,
+credential, user repository, or source format is required. Sprint 38 is now
+`active`; Task 2 owns architecture acceptance.
+
+###### Sprint 38 architecture decision
+
+Task 2 accepts [ADR-0060](adr/0060-git-change-adapter.md).
+`oneagent-runtime` owns one explicit-demand local repository-change domain,
+bounded Git process reader, and source-neutral Workspace input mapping. The
+default Runtime and filesystem watcher remain unchanged; Git input is
+supplementary and can request only the existing complete discovery, build,
+validation, cache, and atomic publication path. It never identifies semantic
+entities or becomes Graph, Diff, Impact, diagnostic, rule, cache, refactoring,
+edit, protocol, or IDE authority.
+
+The accepted reader resolves pinned `HEAD` as a 40- or 64-hex baseline and
+compares it with one exact worktree root containing tracked final-worktree and
+non-ignored untracked files. It rejects conflicts, unborn/bare/mismatched
+repositories, unsupported entry kinds, unconfined or non-UTF-8 paths, one-over
+bounds, unstable two-pass reads, incompatible Git, process failures, timeout,
+and cancellation. Rename/copy detection is disabled, so moves remain
+deterministic delete/add evidence. Normalized paths are bounded confined UTF-8
+forward-slash values; changes use a closed Added/Modified/Deleted/TypeChanged/
+Untracked vocabulary and canonical bytewise order.
+
+The process family uses fixed non-shell, NUL-delimited local Git commands under
+16 MiB stdout, 64 KiB stderr, 10,000-change, 4,096-byte-path, two-pass, and
+30-second complete-read bounds. It owns and joins every child and performs no
+network or repository mutation. No Cargo dependency, manifest, lockfile,
+schema, cache-version, protocol, Coverage, or default Runtime change is
+accepted.
+
+`WorkspaceService` gains one explicit one-slot input handle. Empty sets are
+ignored, one non-empty set is accepted, full input reports backpressure, and a
+closed service rejects input. Accepted work always follows the existing
+complete filesystem rebuild and lifecycle; Git evidence is not serialized or
+published. Tasks 3–5 implement the domain, reader, and Workspace mapping in
+order; Task 6 completes cross-platform and current-state evidence.
+
+###### Sprint 38 implementation evidence
+
+Tasks 3–5 are committed as `e0aadfab`, `3ed8990f`, and `175de804`. Runtime now
+owns the additive normalized repository-change domain, explicit bounded local
+Git process reader, and capacity-one source-neutral Workspace input accepted by
+ADR-0060. The reader uses pinned `HEAD`, one exact worktree root, tracked final-
+worktree plus non-ignored untracked state, two-pass stability, confined UTF-8
+paths, deterministic delete/add move and copy evidence, closed conflicts and
+failures, fixed output/count/time bounds, and owned cancellation cleanup.
+
+Task 6 evidence and the bounded review remediations are committed as
+`550fa5df`, `3e13e523`, `a2cb0641`, `dffd2f1c`, `03281583`, and `b1d551a1`.
+They close caller-drop ownership and the complete deadline, add real
+child-process cleanup evidence, complete the invalid status/path and UNC
+matrices, prove equal complete Workspace results across opposite operation
+orders, and exercise injected spawn/read/exit failures without changing the
+accepted boundary.
+
+Every accepted non-empty input uses the existing complete filesystem scan,
+production discovery, EDT/Designer build and validation, stable rescan, cache
+policy, and atomic immutable publication. Git evidence does not enter cache,
+Workspace snapshots, Graph, Analysis, diagnostics, rules, Coverage, protocols,
+or IDE capabilities. The portable filesystem watcher remains active and the
+default Runtime remains independent from Git.
+
+The [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records
+the complete requirement matrix, exact non-zero focused/public-process counts,
+1,268-test canonical workspace inventory, API/dependency/executable/path/
+sensitive-data/scope audits, and exact-head macOS/Windows CI for Rust, VS Code,
+and EDT. No missing harness or production behavior was added by Task 6. Sprint
+38 remains `active`; only Task 7 may perform the independent review, mark the
+sprint completed, hand off Sprint 39 Change Impact Analysis, or retire the
+Sprint 37 prompt suite.
+
+###### Accepted planning baseline and ordered task manifest
+
+ADR-0027 keeps Graph/index change input canonical and source-independent.
+ADR-0039 owns complete immutable Workspace snapshots. ADR-0041 owns the
+implemented complete filesystem observation and rebuild lifecycle. ADR-0042
+owns cache validation, recovery, and publication order. Task 1 must resolve all
+Git-specific choices from current evidence; Task 2 must accept ADR-0060 before
+Cargo, public API, or production Rust changes. Any new production dependency
+requires explicit approval before its first use.
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Git Change Adapter. | Investigation / investigation | Complete repository, endpoint, state-layer, status, path, ordering, process/dependency, Workspace-equivalence, compatibility, and oracle evidence. | Sprint 38 planning baseline and Git Change Adapter framework prerequisite. | `Investigate Sprint 38 Git Change Adapter` |
+| 2 | Define the Git Change Adapter. | Architecture / architecture | Accepted ADR-0060 for the bounded local Git Change Adapter. | Task 1. | `Define Sprint 38 Git Change Adapter` |
+| 3 | Implement the normalized change-set domain. | Git Change Adapter / Git Change Adapter | Accepted typed endpoints, normalized changes, paths, ordering, bounds, and failures without repository I/O. | Accepted ADR-0060. | `Implement Sprint 38 change-set domain` |
+| 4 | Implement the Git repository reader. | Git Change Adapter / Git Change Adapter | Accepted local reader/process or library boundary and deterministic repository-state evidence. | Task 3. | `Implement Sprint 38 Git repository reader` |
+| 5 | Integrate Workspace change inputs. | Git Change Adapter + Runtime Service / Git Change Adapter | Accepted source-independent Workspace mapping, rebuild equivalence, lifecycle, cache, and consumer compatibility. | Task 4. | `Integrate Sprint 38 Workspace change inputs` |
+| 6 | Complete Git Change Adapter evidence. | Git Change Adapter / Git Change Adapter | Complete validation, cross-platform/dependency/API/scope audits, and synchronized current-state documentation. | Task 5. | `Complete Sprint 38 Git Change Adapter evidence` |
+| 7 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 39 hand-off, and conditional Sprint 37 suite retirement. | Task 6 and all validation. | `Complete Sprint 38 Git Change Adapter review` |
+
+Task 1 creates only
+`docs/architecture/git-change-adapter-investigation.md` and the minimal Roadmap
+state update needed to mark execution `active`. It inventories live Git,
+Workspace, watcher, cache, lifecycle, consumer, dependency, platform,
+confinement, sensitive-data, and test evidence and leaves every concrete
+architecture choice to Task 2.
+
+Task 2 creates `docs/adr/0060-git-change-adapter.md` and only planning-level
+architecture synchronization. Task 3 implements only the accepted normalized
+domain and adds no repository I/O. Task 4 implements only the accepted local
+repository reader and its deterministic temporary-repository evidence. Task 5
+integrates the accepted source-independent input through the existing complete
+Workspace lifecycle without adding selective semantic mutation or a public Git
+control surface.
+
+Task 6 adds only missing evidence harnesses and current-state documentation,
+runs the exact complete focused/public/full matrix, and introduces no new
+production behavior. Task 7 owns the independent review, primary
+reconciliation, same-reviewer artifact-consistency check, state transition,
+Sprint 39 hand-off, and conditional retirement of the exact Sprint 37 suite.
+
+###### State, failure, and validation gates
+
+Sprint 38 remains `next` during planning, becomes `active` only when Task 1
+starts from the committed planning baseline, and may become `completed` only
+after Task 7. A task may be `already_complete` only when committed live
+evidence and successful required validation prove every criterion; no empty
+commit is created.
+
+Missing or contradictory repository evidence, an unimplementable ADR,
+unapproved dependency, ambiguous endpoints or state layers, order-dependent
+identity, escaping or absolute output path, raw output/credential leak,
+unsupported conflict or rename selection, incomplete Workspace mapping,
+selective semantic authority, cache/snapshot mismatch, zero matched tests,
+failed validation, staging/commit/push failure, reviewer mutation or
+incompleteness, unresolved evidence disagreement, failed artifact consistency,
+or retirement inventory drift stops the sprint immediately.
+
+Documentation-only Tasks 1–2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3–5 run non-zero focused and affected
+package/public-process tests plus the canonical full workspace gate. Task 6
+reruns the complete requirement matrix and compatibility audits. Task 7
+independently and primarily reruns the required matrix before any transition:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership,
+exact Sprint 37 retirement inventory, mandatory independent reviewer handoff
+and consistency gate, `git diff --check`, and unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 38 Git Change Adapter
 ```
 
 The v0.7 release integration review follows Sprint 41.

@@ -2,7 +2,9 @@
 
 mod cache;
 mod change;
+mod git;
 mod graph_query;
+mod repository_change;
 
 pub use cache::{WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome};
 
@@ -12,6 +14,16 @@ pub use graph_query::{
     GraphQueryMetadataKind, GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult,
     GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
     GraphQueryTraversalResult, GraphQueryWorkspaceFormat,
+};
+
+pub use git::{GitRepositoryReadError, GitRepositoryReadErrorKind, GitRepositoryReader};
+
+pub use repository_change::{
+    GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,
+    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, MAX_REPOSITORY_CHANGE_PATH_BYTES,
+    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeError, RepositoryChangeErrorKind,
+    RepositoryChangeKind, RepositoryChangePath, RepositoryChangePathError,
+    RepositoryChangePathErrorKind,
 };
 
 use std::collections::BTreeMap;
@@ -39,7 +51,7 @@ use oneagent_graph::{
 use oneagent_metadata::MetadataKind;
 use oneagent_workspace::{DiscoveredConfiguration, WorkspaceDetector, WorkspaceFormat};
 use oneagent_workspace_fs::FileSystemWorkspaceDetector;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinError;
 
 use crate::{BoxError, RuntimeService, ServiceContext, ServiceStartFuture, ServiceTask};
@@ -464,6 +476,88 @@ pub struct WorkspaceSnapshotObserver {
     snapshot: watch::Receiver<Option<Arc<WorkspaceSnapshot>>>,
 }
 
+/// Closed outcome of one non-blocking Workspace change-input submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceChangeSubmissionOutcome {
+    /// The supplied change set was empty and queued no work.
+    IgnoredEmpty,
+    /// One non-empty complete-rebuild request entered the bounded slot.
+    Accepted,
+    /// The one-slot input already contains a pending request.
+    Backpressure,
+    /// The Workspace service no longer owns the input receiver.
+    Closed,
+}
+
+/// Cloneable pre-registration input for explicit complete Workspace rebuilds.
+#[derive(Clone)]
+pub struct WorkspaceChangeInputHandle {
+    sender: mpsc::Sender<WorkspaceChangeRequest>,
+}
+
+impl WorkspaceChangeInputHandle {
+    /// Submits one validated Git-derived change set without blocking.
+    ///
+    /// Only normalized path and status evidence enters the private request;
+    /// repository endpoints and completeness are discarded before submission.
+    #[must_use]
+    pub fn submit(&self, change_set: GitChangeSet) -> WorkspaceChangeSubmissionOutcome {
+        if change_set.is_empty() {
+            return WorkspaceChangeSubmissionOutcome::IgnoredEmpty;
+        }
+        match self
+            .sender
+            .try_send(WorkspaceChangeRequest::from(change_set))
+        {
+            Ok(()) => WorkspaceChangeSubmissionOutcome::Accepted,
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                WorkspaceChangeSubmissionOutcome::Backpressure
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => WorkspaceChangeSubmissionOutcome::Closed,
+        }
+    }
+}
+
+impl std::fmt::Debug for WorkspaceChangeInputHandle {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WorkspaceChangeInputHandle")
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
+struct WorkspaceChangeRequest {
+    _changes: Box<[WorkspaceChangeRecord]>,
+}
+
+impl From<GitChangeSet> for WorkspaceChangeRequest {
+    fn from(change_set: GitChangeSet) -> Self {
+        let changes = change_set
+            .changes()
+            .iter()
+            .map(|change| WorkspaceChangeRecord {
+                _kind: change.kind(),
+                _previous_path: change
+                    .previous_path()
+                    .map(|path| Box::<str>::from(path.as_str())),
+                _current_path: change
+                    .current_path()
+                    .map(|path| Box::<str>::from(path.as_str())),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Self { _changes: changes }
+    }
+}
+
+#[derive(Debug)]
+struct WorkspaceChangeRecord {
+    _kind: RepositoryChangeKind,
+    _previous_path: Option<Box<str>>,
+    _current_path: Option<Box<str>>,
+}
+
 impl WorkspaceSnapshotObserver {
     /// Returns the currently published complete snapshot, when present.
     #[must_use]
@@ -509,6 +603,8 @@ impl std::fmt::Debug for WorkspaceCacheBackend {
 pub struct WorkspaceService<D = FileSystemWorkspaceDetector> {
     builder: WorkspaceSnapshotBuilder<D>,
     cache_backend: WorkspaceCacheBackend,
+    change_input: WorkspaceChangeInputHandle,
+    change_requests: mpsc::Receiver<WorkspaceChangeRequest>,
     cache_status: watch::Sender<WorkspaceCacheStatus>,
     snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
     updates: watch::Sender<WorkspaceUpdateStatus>,
@@ -529,9 +625,14 @@ impl<D> WorkspaceService<D> {
         let (cache_status, _receiver) = watch::channel(WorkspaceCacheStatus::starting());
         let (snapshot, _receiver) = watch::channel(None);
         let (updates, _receiver) = watch::channel(WorkspaceUpdateStatus::starting());
+        let (change_sender, change_requests) = mpsc::channel(1);
         Self {
             builder,
             cache_backend: WorkspaceCacheBackend::Production,
+            change_input: WorkspaceChangeInputHandle {
+                sender: change_sender,
+            },
+            change_requests,
             cache_status,
             snapshot,
             updates,
@@ -562,6 +663,12 @@ impl<D> WorkspaceService<D> {
         WorkspaceUpdateObserver {
             status: self.updates.subscribe(),
         }
+    }
+
+    /// Creates the cloneable explicit change-input handle before registration.
+    #[must_use]
+    pub fn change_input_handle(&self) -> WorkspaceChangeInputHandle {
+        self.change_input.clone()
     }
 
     #[cfg(test)]
@@ -600,12 +707,15 @@ where
             let WorkspaceService {
                 builder,
                 cache_backend,
+                change_input,
+                change_requests,
                 cache_status,
                 snapshot,
                 updates,
                 #[cfg(test)]
                 controlled_change_ticks,
             } = *self;
+            drop(change_input);
             let cache = cache_backend.open(root_path.clone());
             updates.send_replace(WorkspaceUpdateStatus {
                 attempt: 1,
@@ -670,6 +780,7 @@ where
                     updates,
                     cancellation,
                     source,
+                    change_requests,
                 )
                 .await
                 .map_err(|error| Box::new(error) as BoxError)
@@ -797,6 +908,7 @@ async fn run_workspace_updates<D>(
     updates: watch::Sender<WorkspaceUpdateStatus>,
     mut cancellation: crate::Cancellation,
     source: RunningWorkspaceChangeSource,
+    mut change_requests: mpsc::Receiver<WorkspaceChangeRequest>,
 ) -> Result<(), WorkspaceUpdateRuntimeError>
 where
     D: WorkspaceDetector + Clone + Send + 'static,
@@ -804,73 +916,18 @@ where
     let (mut observations, mut source_task) = source.into_parts();
     let mut processed_revision = 0_u64;
     let mut status = *updates.borrow();
+    let mut explicit_rebuild_pending = false;
+    let mut change_input_open = true;
 
     loop {
+        let mut rebuild_requested = explicit_rebuild_pending;
+        explicit_rebuild_pending = false;
         let observation = *observations.borrow_and_update();
-        if observation.revision() > processed_revision {
+        if !rebuild_requested && observation.revision() > processed_revision {
             processed_revision = observation.revision();
             match observation.outcome() {
                 Some(WorkspaceChangeOutcome::Changed) => {
-                    status.attempt = status
-                        .attempt
-                        .checked_add(1)
-                        .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
-                    status.phase = WorkspaceUpdatePhase::Rebuilding;
-                    status.failure = None;
-                    updates.send_replace(status);
-
-                    let build_root = root_path.clone();
-                    let build_builder = builder.clone();
-                    let build_cache = Arc::clone(&cache);
-                    let mut build = tokio::task::spawn_blocking(move || {
-                        rebuild_workspace(&build_builder, &build_root, build_cache.as_ref())
-                    });
-                    let build_result = tokio::select! {
-                        biased;
-                        () = cancellation.cancelled() => {
-                            let _ = (&mut build).await;
-                            let source_result = source_task.await;
-                            return finish_workspace_updates(
-                                &snapshot,
-                                &updates,
-                                source_result,
-                                true,
-                            );
-                        }
-                        source_result = &mut source_task => {
-                            let _ = (&mut build).await;
-                            return finish_workspace_updates(
-                                &snapshot,
-                                &updates,
-                                source_result,
-                                false,
-                            );
-                        }
-                        result = &mut build => result,
-                    };
-
-                    match build_result {
-                        Ok(Ok(rebuilt)) => {
-                            publish_cache_write(&cache_status, rebuilt.write);
-                            snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
-                            status.published = status
-                                .published
-                                .checked_add(1)
-                                .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
-                            status.phase = WorkspaceUpdatePhase::Watching;
-                            status.failure = None;
-                        }
-                        Ok(Err(error)) => {
-                            status.phase = WorkspaceUpdatePhase::Failed;
-                            status.failure = Some(error.kind().into());
-                        }
-                        Err(_) => {
-                            status.phase = WorkspaceUpdatePhase::Failed;
-                            status.failure = Some(WorkspaceUpdateFailureKind::BuildTask);
-                        }
-                    }
-                    updates.send_replace(status);
-                    continue;
+                    rebuild_requested = true;
                 }
                 Some(WorkspaceChangeOutcome::ObservationFailed(_)) => {
                     status.phase = WorkspaceUpdatePhase::Failed;
@@ -882,13 +939,80 @@ where
             }
         }
 
+        if rebuild_requested {
+            status.attempt = status
+                .attempt
+                .checked_add(1)
+                .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
+            status.phase = WorkspaceUpdatePhase::Rebuilding;
+            status.failure = None;
+            updates.send_replace(status);
+
+            let build_root = root_path.clone();
+            let build_builder = builder.clone();
+            let build_cache = Arc::clone(&cache);
+            let mut build = tokio::task::spawn_blocking(move || {
+                rebuild_workspace(&build_builder, &build_root, build_cache.as_ref())
+            });
+            let build_result = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => {
+                    change_requests.close();
+                    let _ = (&mut build).await;
+                    let source_result = source_task.await;
+                    return finish_workspace_updates(
+                        &snapshot,
+                        &updates,
+                        source_result,
+                        true,
+                    );
+                }
+                source_result = &mut source_task => {
+                    change_requests.close();
+                    let _ = (&mut build).await;
+                    return finish_workspace_updates(
+                        &snapshot,
+                        &updates,
+                        source_result,
+                        false,
+                    );
+                }
+                result = &mut build => result,
+            };
+
+            match build_result {
+                Ok(Ok(rebuilt)) => {
+                    publish_cache_write(&cache_status, rebuilt.write);
+                    snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
+                    status.published = status
+                        .published
+                        .checked_add(1)
+                        .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
+                    status.phase = WorkspaceUpdatePhase::Watching;
+                    status.failure = None;
+                }
+                Ok(Err(error)) => {
+                    status.phase = WorkspaceUpdatePhase::Failed;
+                    status.failure = Some(error.kind().into());
+                }
+                Err(_) => {
+                    status.phase = WorkspaceUpdatePhase::Failed;
+                    status.failure = Some(WorkspaceUpdateFailureKind::BuildTask);
+                }
+            }
+            updates.send_replace(status);
+            continue;
+        }
+
         tokio::select! {
             biased;
             () = cancellation.cancelled() => {
+                change_requests.close();
                 let source_result = source_task.await;
                 return finish_workspace_updates(&snapshot, &updates, source_result, true);
             }
             source_result = &mut source_task => {
+                change_requests.close();
                 return finish_workspace_updates(
                     &snapshot,
                     &updates,
@@ -898,6 +1022,7 @@ where
             }
             changed = observations.changed() => {
                 if changed.is_err() {
+                    change_requests.close();
                     let source_result = source_task.await;
                     return finish_workspace_updates(
                         &snapshot,
@@ -905,6 +1030,13 @@ where
                         source_result,
                         false,
                     );
+                }
+            }
+            request = change_requests.recv(), if change_input_open => {
+                if request.is_some() {
+                    explicit_rebuild_pending = true;
+                } else {
+                    change_input_open = false;
                 }
             }
         }
@@ -1402,14 +1534,40 @@ mod tests {
 
     use super::cache::{WorkspaceCacheLoad, WorkspaceCacheStorage};
     use super::{
-        DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
-        WorkspaceCacheWriteOutcome, WorkspaceDetector, WorkspaceFileState, WorkspaceService,
-        WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
-        WorkspaceUpdatePhase, WorkspaceUpdateStatus, compose_rule_evidence, initialize_workspace,
-        rebuild_workspace, snapshot_from_parts, validate_complete_build,
+        DiscoveredConfiguration, GitChangeSet, GitCommitId, RepositoryChange, RepositoryChangeKind,
+        RepositoryChangePath, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
+        WorkspaceCacheWriteOutcome, WorkspaceChangeSubmissionOutcome, WorkspaceDetector,
+        WorkspaceFileState, WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder,
+        WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
+        compose_rule_evidence, initialize_workspace, rebuild_workspace, snapshot_from_parts,
+        validate_complete_build,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
+    const TEST_HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn explicit_change(path: &str) -> GitChangeSet {
+        let path = RepositoryChangePath::new(path).expect("test change path must be valid");
+        let change = RepositoryChange::new(
+            RepositoryChangeKind::Modified,
+            Some(path.clone()),
+            Some(path),
+        )
+        .expect("test change must be valid");
+        GitChangeSet::new(
+            GitCommitId::new(TEST_HEAD).expect("test baseline must be valid"),
+            [change],
+        )
+        .expect("test change set must be valid")
+    }
+
+    fn empty_change() -> GitChangeSet {
+        GitChangeSet::new(
+            GitCommitId::new(TEST_HEAD).expect("test baseline must be valid"),
+            [],
+        )
+        .expect("empty test change set must be valid")
+    }
 
     #[derive(Debug, Clone)]
     struct StaticDetector {
@@ -2448,12 +2606,44 @@ mod tests {
         assert!(observer.snapshot().is_none());
     }
 
+    #[test]
+    fn workspace_change_input_outcomes_are_exact_bounded_and_redacted() {
+        let service = WorkspaceService::new();
+        let input = service.change_input_handle();
+        let repeated = input.clone();
+
+        assert_eq!(
+            input.submit(empty_change()),
+            WorkspaceChangeSubmissionOutcome::IgnoredEmpty
+        );
+        assert_eq!(
+            input.submit(explicit_change("private/first.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        assert_eq!(
+            repeated.submit(explicit_change("private/second.bsl")),
+            WorkspaceChangeSubmissionOutcome::Backpressure
+        );
+        assert!(!format!("{input:?}").contains("private"));
+
+        drop(service);
+        assert_eq!(
+            input.submit(explicit_change("private/closed.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
+        assert_eq!(
+            input.submit(empty_change()),
+            WorkspaceChangeSubmissionOutcome::IgnoredEmpty
+        );
+    }
+
     #[tokio::test]
     async fn workspace_service_reports_named_start_failure_without_publication() {
         let parent = tempdir().expect("temporary parent must be created");
         let missing = parent.path().join("missing");
         let service = WorkspaceService::new();
         let observer = service.snapshot_observer();
+        let input = service.change_input_handle();
         let provider = TestConfigurationProvider {
             workspace_root: missing,
         };
@@ -2480,6 +2670,10 @@ mod tests {
             .expect("Workspace startup error must preserve the build classification");
         assert_eq!(source.kind(), WorkspaceBuildErrorKind::ObservationFailed);
         assert!(observer.snapshot().is_none());
+        assert_eq!(
+            input.submit(explicit_change("after-start-failure.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
     }
 
     #[tokio::test]
@@ -2697,6 +2891,162 @@ mod tests {
             .expect("Workspace shutdown must not hang")
             .expect("Workspace task must join")
             .expect("requested shutdown must succeed");
+    }
+
+    #[tokio::test]
+    async fn workspace_service_rebuilds_each_accepted_input_with_one_bounded_follow_up() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (second_started_sender, second_started) = std::sync::mpsc::channel();
+        let (second_release, second_release_receiver) = std::sync::mpsc::channel();
+        let detector = GatedDetector {
+            calls: Arc::clone(&calls),
+            second_started: second_started_sender,
+            second_release: Arc::new(Mutex::new(second_release_receiver)),
+        };
+        let (_ticks, controlled_ticks) = mpsc::channel(8);
+        let service =
+            WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(detector))
+                .with_controlled_change_ticks(controlled_ticks);
+        let input = service.change_input_handle();
+        assert_eq!(
+            input.submit(explicit_change("first.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+        timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || second_started.recv()),
+        )
+        .await
+        .expect("input rebuild must start")
+        .expect("input-build observer must join")
+        .expect("input-build start must be observed");
+        assert_eq!(
+            input.submit(explicit_change("second.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        assert_eq!(
+            input.submit(explicit_change("third.bsl")),
+            WorkspaceChangeSubmissionOutcome::Backpressure
+        );
+        second_release
+            .send(())
+            .expect("input rebuild must be released");
+
+        let followed_up = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 3
+        })
+        .await;
+        assert_eq!(followed_up.attempt(), 3);
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+        assert_eq!(
+            input.submit(explicit_change("after-shutdown.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_service_cancellation_joins_input_build_and_closes_pending_slot() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (second_started_sender, second_started) = std::sync::mpsc::channel();
+        let (second_release, second_release_receiver) = std::sync::mpsc::channel();
+        let detector = GatedDetector {
+            calls: Arc::clone(&calls),
+            second_started: second_started_sender,
+            second_release: Arc::new(Mutex::new(second_release_receiver)),
+        };
+        let (_ticks, controlled_ticks) = mpsc::channel(8);
+        let service =
+            WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(detector))
+                .with_controlled_change_ticks(controlled_ticks);
+        let input = service.change_input_handle();
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let mut run = tokio::spawn(app.run(shutdown));
+        wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching
+        })
+        .await;
+
+        assert_eq!(
+            input.submit(explicit_change("active.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || second_started.recv()),
+        )
+        .await
+        .expect("input rebuild must start")
+        .expect("input-build observer must join")
+        .expect("input-build start must be observed");
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), async {
+            loop {
+                match input.submit(explicit_change("after-cancellation.bsl")) {
+                    WorkspaceChangeSubmissionOutcome::Closed => break,
+                    WorkspaceChangeSubmissionOutcome::Accepted
+                    | WorkspaceChangeSubmissionOutcome::Backpressure => {
+                        tokio::task::yield_now().await;
+                    }
+                    WorkspaceChangeSubmissionOutcome::IgnoredEmpty => {
+                        panic!("non-empty test input must not be ignored")
+                    }
+                }
+            }
+        })
+        .await
+        .expect("input receiver must close before the active build is released");
+        assert!(
+            timeout(Duration::from_millis(50), &mut run).await.is_err(),
+            "shutdown must join the active complete rebuild"
+        );
+        second_release
+            .send(())
+            .expect("input rebuild must be released");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang after release")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(updates.status().phase(), WorkspaceUpdatePhase::Stopped);
+        assert_eq!(
+            input.submit(explicit_change("closed.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
     }
 
     #[tokio::test]

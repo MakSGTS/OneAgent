@@ -957,6 +957,7 @@ where
             let build_result = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => {
+                    change_requests.close();
                     let _ = (&mut build).await;
                     let source_result = source_task.await;
                     return finish_workspace_updates(
@@ -967,6 +968,7 @@ where
                     );
                 }
                 source_result = &mut source_task => {
+                    change_requests.close();
                     let _ = (&mut build).await;
                     return finish_workspace_updates(
                         &snapshot,
@@ -1005,10 +1007,12 @@ where
         tokio::select! {
             biased;
             () = cancellation.cancelled() => {
+                change_requests.close();
                 let source_result = source_task.await;
                 return finish_workspace_updates(&snapshot, &updates, source_result, true);
             }
             source_result = &mut source_task => {
+                change_requests.close();
                 return finish_workspace_updates(
                     &snapshot,
                     &updates,
@@ -1018,6 +1022,7 @@ where
             }
             changed = observations.changed() => {
                 if changed.is_err() {
+                    change_requests.close();
                     let source_result = source_task.await;
                     return finish_workspace_updates(
                         &snapshot,
@@ -3007,11 +3012,23 @@ mod tests {
         .expect("input rebuild must start")
         .expect("input-build observer must join")
         .expect("input-build start must be observed");
-        assert_eq!(
-            input.submit(explicit_change("pending.bsl")),
-            WorkspaceChangeSubmissionOutcome::Accepted
-        );
         shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), async {
+            loop {
+                match input.submit(explicit_change("after-cancellation.bsl")) {
+                    WorkspaceChangeSubmissionOutcome::Closed => break,
+                    WorkspaceChangeSubmissionOutcome::Accepted
+                    | WorkspaceChangeSubmissionOutcome::Backpressure => {
+                        tokio::task::yield_now().await;
+                    }
+                    WorkspaceChangeSubmissionOutcome::IgnoredEmpty => {
+                        panic!("non-empty test input must not be ignored")
+                    }
+                }
+            }
+        })
+        .await
+        .expect("input receiver must close before the active build is released");
         assert!(
             timeout(Duration::from_millis(50), &mut run).await.is_err(),
             "shutdown must join the active complete rebuild"

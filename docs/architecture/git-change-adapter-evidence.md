@@ -8,7 +8,9 @@ review remediations. The
 remediations remove detached cleanup work, reserve bounded cleanup within the
 complete read deadline, add production-child drop/deadline evidence, complete
 the invalid status/path and UNC matrices, prove equal Workspace results across
-different operation orders, and exercise injected spawn/read/exit failures.
+different operation orders, exercise injected spawn/read/exit failures, close
+the Workspace input receiver as soon as terminal state is selected, and disable
+Git lazy fetching before every production child is spawned.
 Sprint 38 remains active
 until a fresh-context independent review, primary reconciliation, artifact-
 consistency check, Sprint 39 hand-off, and conditional Sprint 37 prompt-suite
@@ -45,10 +47,10 @@ The committed implementation chain is:
 
 | ADR-0060 requirement | Repository-owned evidence | Result |
 | --- | --- | --- |
-| Runtime owns the local repository domain, reader, and Workspace input without making Git a Workspace, adapter, Graph, Analysis, diagnostic, rule, impact, cache, protocol, or edit authority | Public API/source audit, 120 Runtime unit tests, 86 focused Graph tests, and 117 Analysis tests | pass |
+| Runtime owns the local repository domain, reader, and Workspace input without making Git a Workspace, adapter, Graph, Analysis, diagnostic, rule, impact, cache, protocol, or edit authority | Public API/source audit, 121 Runtime unit tests, 86 focused Graph tests, and 117 Analysis tests | pass |
 | The reader is explicit-demand only; default `App`, `RuntimeConfig`, `WorkspaceService`, CLI, HTTP, MCP, LSP, VS Code, and EDT do not discover or start Git | Construction/source audit plus default Runtime, public process, VS Code, and EDT matrices | pass |
 | One caller-supplied existing directory must be the exact canonical worktree root | Public missing/file/plain/mismatch/nested tests and real normal/linked worktree tests | pass |
-| Normal, detached, linked, and exact-root nested worktrees are accepted; bare, unborn, missing, non-repository, and mismatched roots are typed failures | 7 public reader tests over disposable repositories | pass |
+| Normal, detached, linked, and exact-root nested worktrees are accepted; bare, unborn, missing, non-repository, and mismatched roots are typed failures | 8 public reader tests over disposable repositories | pass |
 | `GitCommitId` accepts exactly 40- or 64-character lowercase hexadecimal identities and exposes no ref, branch, tag, root, or common-directory identity | Domain unit/public tests and local SHA-1/SHA-256 production-reader evidence | pass |
 | The current endpoint is the final tracked worktree plus non-ignored untracked files; staged and unstaged layers are folded relative to pinned `HEAD` | Public staged, unstaged, combined, cancelled-to-HEAD, added, modified, deleted, and untracked repository states | pass |
 | Ignored paths and empty untracked directories are deliberately outside Git completeness and remain filesystem-observation concerns | Public ignored/untracked test and explicit `TrackedAndUntrackedNonIgnored` domain assertion | pass |
@@ -69,7 +71,7 @@ The committed implementation chain is:
 | Spawn, exit, stdout-read, stderr-read, malformed output, incompatible mode, output limit, timeout, cancellation, and contextual repository failures are closed and redacted | End-to-end injected command-failure matrix, failing `AsyncRead` boundary test, Runtime Git unit tests, and public error-kind assertions | pass |
 | Cancellation, timeout, and future drop terminate and reap owned work without a detached process, pipe-reader task, result, or partial change set | Gated runner cancellation/timeout tests, real child-process drop/deadline/reap test, and source audit | pass |
 | No Rust Git package, native library, Cargo feature, manifest, lockfile, license inventory, or unsafe surface is added | Task 3-5 manifest/lockfile diff, workspace `unsafe_code = "forbid"`, Clippy, and CI audits | pass |
-| The public reader supports capability-based system Git rather than a hard-coded version and requires no installer, network, credential, or user repository | Real temporary-repository tests with isolated local identity plus process/scope audit | pass |
+| The public reader supports capability-based system Git rather than a hard-coded version and requires no installer, network, credential, or user repository | Real temporary-repository tests with isolated local identity, `GIT_NO_LAZY_FETCH=1` on every production command, missing-promisor-object evidence, and process/scope audit | pass |
 | A cloneable pre-registration Workspace handle maps only ordered non-empty path/status records into a private source-neutral request | Runtime handle unit test, public Git-to-Workspace tests, and source/API audit | pass |
 | Empty, Accepted, Backpressure, and Closed submission outcomes are exact; empty takes precedence and submission never blocks | Runtime outcome/redaction test and startup/shutdown tests | pass |
 | Capacity is one; one accepted request can remain pending during a build; later input observes backpressure; accepted submissions remain separate | Gated Workspace rebuild/follow-up test | pass |
@@ -78,7 +80,7 @@ The committed implementation chain is:
 | Git paths never select configurations, parsers, nodes, invalidation, diagnostics, rules, impact seeds, or partial Graph mutation | Source audit, equal complete snapshots, Graph Query comparison, and unchanged Graph/Analysis suites | pass |
 | Build failure retains the last valid snapshot and a later explicit input can recover atomically | Public invalid EDT build/repair/recovery sequence | pass |
 | Cache schema remains 1, semantic compatibility remains 4, and no Git identity, path, status, process data, or queue is serialized | Cache constants/diff audit, 4 public cache tests, and cold/warm/change Git Workspace test | pass |
-| Cancellation joins an active complete rebuild and watcher, closes the input receiver and observers, clears the snapshot, and publishes Stopped | Gated cancellation unit test, public fresh-service/shutdown test, and Runtime lifecycle matrix | pass |
+| Cancellation closes the input receiver before joining an active complete rebuild and watcher, then closes observers, clears the snapshot, and publishes Stopped | Gated pre-release receiver-closure unit test, public fresh-service/shutdown test, and Runtime lifecycle matrix | pass |
 | Graph validation, reports, canonical diffs, impact behavior, diagnostics, rules, and Coverage remain unchanged | 86 Graph tests, 117 Analysis tests, Runtime composition tests, and unchanged Coverage source audit | pass |
 | HTTP and CLI retain their exact routes, schemas, exit behavior, and lifecycle gating | 4 HTTP public tests and 2 CLI real-process tests | pass |
 | MCP retains seven lexicographically ordered read-only Tool Policy-gated tools and all three negotiated revisions | 53 Protocol, 33 Tool Policy, 7 semantic-tool, 8 stdio, and 17 process tests | pass |
@@ -107,9 +109,9 @@ All exited zero.
 
 | Command or exact suite | Tests passed | Failed / ignored |
 | --- | ---: | --- |
-| `cargo test -p oneagent-runtime --lib` | 120 | 0 / 0 |
+| `cargo test -p oneagent-runtime --lib` | 121 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test repository_change_domain` | 6 | 0 / 0 |
-| `cargo test -p oneagent-runtime --test git_change_reader` | 7 | 0 / 0 |
+| `cargo test -p oneagent-runtime --test git_change_reader` | 8 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test git_change_workspace` | 3 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test workspace_service` | 6 | 0 / 0 |
 | `cargo test -p oneagent-runtime --test file_watching` | 2 | 0 / 0 |
@@ -127,7 +129,7 @@ All exited zero.
 | `cargo test -p oneagent-runtime --test http_health` | 4 | 0 / 0 |
 | `cargo test -p oneagent-cli --test runtime_client` | 2 | 0 / 0 |
 
-Runtime's 120 unit tests include 9 normalized-domain tests, 9 reader and
+Runtime's 121 unit tests include 9 normalized-domain tests, 10 reader and
 production-process-boundary tests, 5 complete-file observation tests, 3 explicit-input tests, and the
 existing cache, lifecycle, protocol-projection, Graph Query, diagnostics, and
 rules coverage. The Graph total is validation (55), report (3), build diff
@@ -231,14 +233,14 @@ The accepted remediation cycle is:
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 80 test targets, 1,268 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 80 test targets, 1,270 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
 | `git diff --check` | exit 0 |
 
 The four zero-test targets are expected binary entry points:
 `oneagent-cli`, `oneagent-runtime`, `oneagent-mcp`, and `oneagent-lsp`. The
-other 76 targets contain all 1,268 tests. The inventory was recomputed from the
+other 76 targets contain all 1,270 tests. The inventory was recomputed from the
 compiled `--all-targets` executables using `--list --format terse`; no filtered
 test is included in that total.
 
@@ -261,7 +263,9 @@ test is included in that total.
   clean, hook, remote, or credential operation.
 - Tests use only repository-owned fixtures copied into `tempfile` directories.
   They set local commit identity and signing policy and do not require ambient
-  user repositories, global identity, credentials, network, or a remote.
+  user repositories, global identity, credentials, or network. The lazy-fetch
+  boundary test creates a disposable local bare promisor remote and proves that
+  a missing object remains missing after the production reader fails closed.
 - Cache schema remains `1` and semantic compatibility remains `4`. Git
   baseline, endpoint, completeness, paths, statuses, errors, process data, and
   queued requests do not enter cache bytes or snapshot equality.

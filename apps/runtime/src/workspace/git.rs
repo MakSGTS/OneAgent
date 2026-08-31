@@ -479,6 +479,7 @@ fn production_command(operation: GitCommand, root: &Path) -> Command {
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_PAGER", "cat")
         .env("GIT_LITERAL_PATHSPECS", "1")
+        .env("GIT_NO_LAZY_FETCH", "1")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("LC_ALL", "C")
         .env_remove("GIT_DIR")
@@ -952,10 +953,12 @@ mod tests {
     use super::{
         CancellationFuture, ChildGuard, CommandFuture, CommandOutput, GitCommand, GitCommandRunner,
         GitRepositoryReadErrorKind, GitRepositoryReader, ReadDeadlines, STDOUT_LIMIT,
-        collect_guarded_child_output, parse_tracked_changes, parse_untracked_changes, read_bounded,
+        collect_guarded_child_output, parse_tracked_changes, parse_untracked_changes,
+        production_command, read_bounded,
     };
     use crate::{MAX_REPOSITORY_CHANGE_PATH_BYTES, MAX_REPOSITORY_CHANGES, RepositoryChangeKind};
     use std::collections::VecDeque;
+    use std::ffi::OsStr;
     use std::io;
     use std::path::{Path, PathBuf};
     use std::pin::Pin;
@@ -1173,6 +1176,27 @@ mod tests {
     fn production_cleanup_child_helper() {
         if std::env::var_os(CLEANUP_HELPER_ENV).is_some() {
             std::thread::sleep(Duration::from_secs(10));
+        }
+    }
+
+    #[test]
+    fn production_commands_disable_lazy_fetch_before_spawn() {
+        let (_temp, root) = root();
+        for operation in [
+            GitCommand::BareRepository,
+            GitCommand::TopLevel,
+            GitCommand::Head,
+            GitCommand::Conflicts,
+            GitCommand::TrackedChanges,
+            GitCommand::UntrackedPaths,
+        ] {
+            let command = production_command(operation, &root);
+            let lazy_fetch = command
+                .as_std()
+                .get_envs()
+                .find(|(key, _)| *key == OsStr::new("GIT_NO_LAZY_FETCH"))
+                .and_then(|(_, value)| value);
+            assert_eq!(lazy_fetch, Some(OsStr::new("1")));
         }
     }
 

@@ -189,6 +189,67 @@ async fn public_reader_is_operation_order_independent_for_equal_end_states() {
 }
 
 #[tokio::test]
+async fn public_reader_does_not_fetch_missing_promisor_objects() {
+    let repository = Repository::new(&[("tracked.txt", "content\n")]);
+    let remote = repository
+        .root
+        .parent()
+        .expect("repository has a temporary parent")
+        .join("promisor.git");
+    git_at(
+        &repository.root,
+        [
+            OsStr::new("clone"),
+            OsStr::new("--bare"),
+            OsStr::new("."),
+            remote.as_os_str(),
+        ],
+    );
+    repository.git([
+        OsStr::new("remote"),
+        OsStr::new("add"),
+        OsStr::new("origin"),
+        remote.as_os_str(),
+    ]);
+    repository.git(["config", "core.repositoryFormatVersion", "1"]);
+    repository.git(["config", "extensions.partialClone", "origin"]);
+    repository.git(["config", "remote.origin.promisor", "true"]);
+    repository.git(["config", "remote.origin.partialCloneFilter", "blob:none"]);
+
+    let tree = repository.git(["rev-parse", "HEAD^{tree}"]);
+    let tree = String::from_utf8(tree.stdout)
+        .expect("tree identity must be UTF-8")
+        .trim()
+        .to_owned();
+    let missing_object = repository
+        .root
+        .join(".git/objects")
+        .join(&tree[..2])
+        .join(&tree[2..]);
+    fs::remove_file(&missing_object).expect("loose tree object must be removed from the fixture");
+
+    let error = GitRepositoryReader::new()
+        .read(&repository.root)
+        .await
+        .expect_err("missing promisor object must fail without fetching");
+    assert_eq!(error.kind(), GitRepositoryReadErrorKind::ProcessFailed);
+
+    let object_probe = Command::new("git")
+        .current_dir(&repository.root)
+        .args(["cat-file", "-e", &tree])
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", repository.root.join("missing-global"))
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .expect("local object probe must start");
+    assert!(
+        !object_probe.status.success(),
+        "the reader must not fetch the missing object from the promisor remote"
+    );
+}
+
+#[tokio::test]
 async fn public_reader_accepts_detached_and_linked_exact_root_worktrees() {
     let repository = Repository::new(&[("tracked.txt", "content\n")]);
     let reader = GitRepositoryReader::new();

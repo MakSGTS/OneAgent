@@ -9517,6 +9517,48 @@ protocol revision, Graph concept, Coverage transition, GUI process, or network
 access is required. Sprint 39 is now `active`; Task 2 owns architecture
 acceptance.
 
+###### Sprint 39 architecture decision
+
+[ADR-0061](adr/0061-change-impact-analysis.md) is `Accepted`. A new
+`oneagent-analysis::change_impact` domain owns one complete bounded product
+report over adjacent process-local Workspace publications while Graph remains
+the sole diff, dependency, propagation, seed, reason, and impact authority.
+Configurations match only by canonical `EntityId`; additions and removals use
+the canonical empty graph, ID changes never infer renames, and equal rebuilds
+produce distinct complete empty transitions. Runtime embeds the report and
+checked publication identity in the new immutable snapshot before one atomic
+replacement; failed, cancelled, stale, or over-bound attempts retain the last
+valid publication, and recovery compares with that last success.
+
+The in-memory report is complete through fixed Graph depth four or is rejected
+as a whole. It admits at most 4,096 Configurations per endpoint, 4,096 bytes per
+Configuration/node/edge identifier, 65,536 affected nodes, 256 reasons per
+node, and 262,144 reasons total. It owns canonical ordered transitions, Graph
+results, checked reconciled summaries, closed redacted failures, and no
+diagnostic suppression. Initial cold and warm publications explicitly have no
+previous publication. Transition reports and process-local publication IDs are
+not cached; cache schema remains `1` and semantic compatibility advances from
+`4` to `5`.
+
+`oneagent.impact` retains its exact legacy two-Configuration mode and adds one
+exclusive publication mode selected by `configurationId`, with depth, item,
+and reason bounds plus explicit availability, completeness, truncation, and
+omission counts. The seven-tool catalog, MCP revision `2026-07-28`, Tool Policy,
+and static immutable server constructor remain compatible. The public
+`oneagent-mcp` executable deliberately migrates to observer-backed
+`WorkspaceService` composition: each call clones one immutable atomic snapshot,
+while later calls may observe a newer successful publication. Filesystem and
+Git triggers remain equivalent only through complete semantic end states;
+repository evidence never enters report identity, seeds, reasons, cache, wire,
+or failures.
+
+Tasks 3–6 own the Analysis report, Workspace/cache lifecycle, compatible MCP
+and public-process integration, and complete evidence respectively. No Rust or
+Cargo behavior changes in Task 2. Selective rebuilding, new Graph semantics,
+diagnostics/rules, scoring, refactoring, mutation, history, new product UI,
+telemetry, benchmarks, and broad claims remain deferred to their accepted
+future boundaries.
+
 ###### State, failure, and validation gates
 
 Sprint 39 remains `next` during planning, becomes `active` only when Task 1

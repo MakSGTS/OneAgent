@@ -41,7 +41,8 @@ records `pass` and completes Sprint 36. The
 `pass with non-blocking follow-ups` and completes Sprint 37. The
 [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
 records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
-`active` from its committed Task 1 investigation. The
+`active` through its committed Task 6 evidence; the mandatory Task 7 review is
+the remaining completion and Sprint 40 transition gate. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -9558,6 +9559,49 @@ Cargo behavior changes in Task 2. Selective rebuilding, new Graph semantics,
 diagnostics/rules, scoring, refactoring, mutation, history, new product UI,
 telemetry, benchmarks, and broad claims remain deferred to their accepted
 future boundaries.
+
+###### Sprint 39 implementation and Task 6 evidence
+
+Tasks 3–5 are committed as `c1ea37fb`, `483a0865`, and `9ea95dbf`. The first
+adds the bounded `oneagent-analysis::change_impact` report over Graph-owned
+diff/impact results. The second embeds checked publication identity and the
+complete adjacent report in one atomic Workspace snapshot, advances cache
+semantic compatibility to `5` without serializing reports/history, and proves
+filesystem/Git complete-end-state equivalence. The third retains the legacy
+impact mode, adds the exclusive publication projection, and migrates the public
+MCP executable to one live Runtime-owned Workspace while cloning one immutable
+snapshot per call.
+
+The [Sprint 39 evidence](architecture/change-impact-analysis-evidence.md)
+records the complete requirement matrix and limitations. Focused local evidence
+passes 18 Graph Impact tests, 128 Analysis tests including 9 public Change
+Impact tests, 123 Runtime unit tests, the 15-test Workspace/watching/Git/cache
+matrix, 53 Protocol tests, 33 Tool Policy tests, and the 35-test MCP
+semantic/stdio/process matrix with zero failures, ignores, or filtered tests.
+The complete Rust inventory contains 81 targets, 77 non-zero targets, four
+expected zero-test binaries, and 1,286 passing tests. Local VS Code evidence
+passes 62 unit and 2 public-process tests. Exact-head CI run `33431687151` at
+`9ea95dbf` passes Rust, VS Code, and EDT jobs on macOS and Windows, including 18
+Extension Host scenarios, the 41-test EDT real-process gate, and both package
+audits.
+
+Dependency, public API, cache/schema, protocol/capability, Coverage,
+sensitive-data, generated-artifact, and deferred-scope audits pass. No Cargo
+manifest or lockfile changes, production dependency, feature, license, unsafe
+surface, Graph/Coverage authority change, credential/configuration surface, or
+new HTTP/CLI/LSP/IDE impact operation is introduced. Repository paths,
+statuses, baselines, completeness, and operation order remain absent from
+impact identity, Configuration matching, seeds, reasons, summaries, cache,
+wire results, and errors.
+
+Task 6 changes only current-state documentation and adds no fixture or
+production behavior because the Task 3–5 evidence matrix is complete. Sprint
+39 remains `active`: Task 7 must perform the fresh-context review, primary
+reconciliation, full validation, artifact consistency, and conditional Sprint
+38 prompt-suite retirement before marking Sprint 39 `completed` and promoting
+Sprint 40 Refactoring Planner from `planned` to `next`. Sprint 40 must define a
+separate accepted plan/precondition contract and cannot treat Change Impact as
+edit authorization, path-to-node mapping, risk scoring, or unbounded closure.
 
 ###### State, failure, and validation gates
 

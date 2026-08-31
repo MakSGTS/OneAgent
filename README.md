@@ -29,8 +29,9 @@ records `pass` and completes Sprint 36. Sprint 37 Rules Engine is completed; its
 [integration review](docs/reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups`. The
 [Sprint 38 Git Change Adapter review](docs/reviews/sprint-38-git-change-adapter.md)
-records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is the
-unique `next` target.
+records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
+active through its complete Task 6 evidence; the mandatory Task 7 review is
+the remaining completion gate.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -43,7 +44,7 @@ See
 - `crates/metadata` — typed 1C metadata model
 - `crates/graph` — canonical semantic graph, query, validation, diff, impact, coverage, and resolution APIs
 - `crates/bsl` — BSL lexical and syntax analysis
-- `crates/analysis` — source-independent declaration/call analysis, deterministic semantic Context Engine, deterministic bounded Diagnostics Engine, and deterministic bounded Rules Engine
+- `crates/analysis` — source-independent declaration/call analysis, deterministic semantic Context Engine, deterministic bounded Diagnostics and Rules Engines, and the bounded Change Impact product report over canonical Graph impact
 - `crates/llm` — provider-neutral bounded identity, model discovery, text request/response, policy, cancellation, error, and asynchronous provider contracts
 - `crates/tool-policy` — std-only bounded tool request, fail-closed authorization, exact one-use confirmation, cancellation-aware one-attempt execution gate, terminal result, and redacted audit contracts
 - `crates/protocol` — bounded MCP 2025-06-18, 2025-11-25, and 2026-07-28 plus LSP 3.17 domain values, validation, encoding, lifecycle, capabilities, and dispatch contracts
@@ -69,7 +70,9 @@ cache, and atomic-publication pipeline. The transport-neutral snapshot contains
 separate ordered per-configuration graphs
 plus preserved raw diagnostics, reference evidence, complete validation, graph
 reports, one complete Rule execution report, and one complete normalized
-diagnostic report; a public status
+diagnostic report plus a process-local publication ID and either explicit
+no-predecessor availability or one complete adjacent-publication Change Impact
+report; a public status
 observer reports rebuild attempts, publications, phases, and failures. Runtime
 stores complete validated snapshots in the fixed Workspace-local
 `.oneagent/cache/workspace-v1.json` entry. Startup restores only an exact
@@ -77,6 +80,9 @@ source/schema/semantic-version hit; otherwise it clean-builds and safely replace
 the entry after stable initial or watched builds. Incompatible, stale, corrupt,
 unavailable, or failed cache work remains recoverable and observable through a
 closed typed in-process cache status without changing readiness or query wires.
+Cache schema remains `1`; semantic compatibility is `5`, and publication IDs
+and Change Impact reports are reconstructed as live process state rather than
+serialized history.
 Runtime exposes exact read-only configuration listing, node lookup, direct
 relation, and bounded traversal operations through `GET /api/v1/...`, with
 lifecycle/snapshot gating, bounded deterministic results, and closed JSON
@@ -154,13 +160,16 @@ ordered read-only catalog: `oneagent.context`, `oneagent.diagnostics`,
 `oneagent.validation`.
 `oneagent-protocol` owns bounded discovery, `tools/list`, `tools/call`, schemas,
 wire errors/results, and asynchronous sequential dispatch. `oneagent-runtime`
-builds one immutable Workspace snapshot from the process working directory,
-composes every known call through the fail-closed Tool Policy execution gate,
-and serves it through the separate newline-framed 1 MiB `oneagent-mcp` stdio
-process. Successful tool results contain both compact JSON text and identical
-structured content; known semantic failures are tool errors, while malformed
-or unknown calls are protocol `Invalid params` errors. Outputs are bounded and
-deterministic. The six original tools remain path-free; `oneagent.symbols`
+starts one live Runtime-owned `WorkspaceService` from the process working
+directory, waits for its first complete immutable publication, clones exactly
+one current snapshot per call, composes every known call through the fail-closed
+Tool Policy execution gate, and serves it through the separate newline-framed
+1 MiB `oneagent-mcp` stdio process. Later calls may observe a newer complete
+publication without making one call mutable. Successful tool results contain
+both compact JSON text and identical structured content; known semantic
+failures are tool errors, while malformed or unknown calls are protocol
+`Invalid params` errors. Outputs are bounded and deterministic. The six original
+tools remain path-free; `oneagent.symbols`
 returns only confined Workspace-relative forward-slash source paths and
 one-based locations for the accepted Module, Procedure, Function, and EDT Query
 slice.
@@ -197,17 +206,33 @@ complete executable matrix, audits, and limitations. The
 [Sprint 37 review](docs/reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups`, completion, and the Sprint 38 hand-off.
 
-The process constructs no long-running Runtime `App`, watcher, cache, HTTP
-listener, background task, remote client, or real side effect. Each stdio run
-owns one fresh negotiated session over the immutable server. It keeps stdout
-protocol-pure, treats EOF as successful completion, and reports only stable
-startup or transport categories on stderr. Exact Codex CLI
+ADR-0061 adds `oneagent-analysis::change_impact`, which matches complete
+Configuration graphs only by canonical ID and owns a checked complete report
+through fixed Graph depth four. Graph still computes every canonical diff and
+impact result. Runtime assigns adjacent process-local publication IDs and
+atomically embeds the report with the current snapshot; initial cold and warm
+publications explicitly have no predecessor, failed attempts retain the last
+valid publication, and equal rebuilds publish a distinct complete empty
+transition. The compatible `oneagent.impact` schema retains its legacy
+two-Configuration mode and adds one exclusive publication mode with explicit
+availability, completeness, item/reason bounds, truncation, and omitted counts.
+Filesystem and Git inputs remain equivalent only through complete semantic end
+states; repository paths and statuses are never impact seeds. The
+[Sprint 39 evidence](docs/architecture/change-impact-analysis-evidence.md)
+records the complete acceptance matrix and limitations.
+
+The MCP process constructs one long-running Runtime `App`, Workspace watcher,
+and cache owner but no HTTP listener, remote client, or real side effect beyond
+the accepted local cache. Each stdio run owns one fresh negotiated session and
+one structured Runtime lifecycle. It keeps stdout protocol-pure, treats EOF as
+successful completion after joined cleanup, and reports only stable startup or
+transport categories on stderr. Exact Codex CLI
 `0.150.0-alpha.8` and Cursor Agent `2026.08.25-3e8eec8` evidence is recorded in
 the [Sprint 35 compatibility evidence](docs/architecture/external-ai-client-compatibility-evidence.md).
 Cursor's public `mcp list-tools` command proves discovery but exposes no direct
 tool-call command; Codex directly exercises all seven tools, including semantic
 success and domain failure. Additional revisions and clients, remote
-transports, authentication, snapshot refresh, Runtime packaging, references,
+transports, authentication, publication history, Runtime packaging, references,
 diagnostics UI, and broader IDE integration remain deferred. The desktop VS
 Code extension also consumes the accepted Context and symbol tools through the
 bounded Sprint 33 UI described below.

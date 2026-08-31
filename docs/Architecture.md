@@ -24,7 +24,9 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-analysis` contributes source-independent declaration and call
      analysis over the BSL and graph contracts. It also owns the additive
      source-independent Context Engine that derives deterministic budgeted
-     semantic bundles from one borrowed immutable graph.
+     semantic bundles from one borrowed immutable graph, the bounded
+     Diagnostics and Rules reports, and the bounded Change Impact product
+     report over Graph-owned diff and impact results.
 3. **Source adapters**
    - `oneagent-edt` reads supported EDT artifacts and contributes facts to the
      canonical semantic graph.
@@ -63,9 +65,10 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      Query route set. A transport-neutral observer-backed query component owns
      exact configuration, node, direct-relation, and bounded-traversal
      operations without becoming a background service. A separate bounded MCP
-     stdio adapter and `oneagent-mcp` binary build one immutable startup
-     snapshot and serve the seven read-only semantic tools without constructing
-     `App`, watching files, or changing Runtime service ownership. A separate
+     stdio adapter and `oneagent-mcp` binary compose one live Runtime-owned
+     `WorkspaceService`, wait for the initial complete publication, clone one
+     immutable current snapshot per call, and serve the seven read-only
+     semantic tools while later calls may observe accepted replacements. A separate
      bounded LSP stdio adapter and `oneagent-lsp` binary expose immutable
      workspace symbols and pull diagnostics through Content-Length framing and
      the accepted LSP lifecycle without changing Graph authority.
@@ -135,6 +138,47 @@ active and authoritative for complete source state. The
 [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records the
 full domain, reader, Workspace, platform, consumer, and scope matrix.
 
+## Accepted Change Impact Analysis boundary
+
+[ADR-0061](adr/0061-change-impact-analysis.md) governs the implemented Sprint
+39 first slice. `oneagent-analysis::change_impact` accepts only adjacent
+process-local publication IDs, canonical Configuration IDs, complete borrowed
+validated graphs, and cooperative cancellation. It calls the Graph-owned diff
+and impact APIs with fixed depth four, default dependency kinds, ownership
+disabled, and provenance changes direct-only. Analysis owns Configuration
+matching, transition/report identity, canonical order, checked summaries,
+complete admission bounds, and closed redacted errors; it does not create a
+second semantic, diff, propagation, seed, reason, or traversal authority.
+
+Configurations match only by canonical `EntityId`. Exact duplicates collapse;
+conflicting same-ID graph evidence fails closed; previous-only and current-only
+IDs become Removed and Added transitions through one canonical empty graph; an
+ID change never infers a rename. Equal graphs still produce a complete empty
+Compared transition. The complete report owns all admitted transitions and
+Graph results through configured depth four or is rejected as a whole; no
+diagnostic suppression or partial in-memory report applies.
+
+Every `WorkspaceSnapshot` atomically embeds one checked process-local
+publication ID and either `NoPreviousPublication` or the complete report from
+its immediately preceding successful publication. Cold, warm-cache, standalone,
+and fresh-service starts use publication `1` without invented history. Failed,
+cancelled, stale, invalid, or over-bound rebuilds retain the last valid
+publication and consume no ID; later recovery compares against that last
+success. Cache schema remains `1`, semantic compatibility is `5`, and neither
+publication IDs nor reports are serialized.
+
+The MCP catalog remains seven tools at revision `2026-07-28` with the existing
+legacy negotiated revisions and Tool Policy gate. `oneagent.impact` retains the
+legacy same-snapshot two-Configuration mode and adds an exclusive publication
+selector with depth, item, and reason bounds plus explicit availability,
+completeness, truncation, and omission counts. The public MCP executable uses
+the live Workspace observer while each call remains internally immutable.
+Filesystem and Git input are equivalent only through complete semantic end
+states; repository evidence never enters report identity, seeds, reasons,
+summaries, cache, errors, or wire output. The complete executable matrix,
+compatibility audits, and limitations are recorded in the
+[Sprint 39 evidence](architecture/change-impact-analysis-evidence.md).
+
 ## Planned boundaries
 
 The roadmap assigns future boundaries explicitly:
@@ -168,7 +212,8 @@ The roadmap assigns future boundaries explicitly:
   `pass with non-blocking follow-ups` and completes Sprint 37. The
   [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
   records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
-  the unique `next` target.
+  active through complete Task 6 evidence; its Task 7 review remains the
+  completion gate.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -183,8 +228,9 @@ The roadmap assigns future boundaries explicitly:
   registry. Definition/reference providers, diagnostics UI, product rules,
   model tools or edits, and semantic EDT IDE workflows remain later work.
 - Git change ingestion is implemented in Sprint 38 as an explicit local input
-  adapter, not a semantic authority. Automatic orchestration and product-facing
-  impact analysis remain later work.
+  adapter, not a semantic authority. Product-facing Change Impact Analysis is
+  implemented in Sprint 39 over complete semantic publications; automatic Git
+  orchestration remains later work.
 
 Detailed accepted decisions live in `docs/adr`. The dependency-ordered delivery
 sequence and status live only in `docs/Roadmap.md`.
@@ -457,11 +503,13 @@ server. The adapter accepts LF and CRLF framing, enforces a 1 MiB payload limit
 and bounded JSON nesting, emits no response for notifications, flushes every
 response, maps controlled read/write/flush/shutdown failures to stable
 categories, and treats cancellation and EOF as successful completion. The
-separate `oneagent-mcp` binary constructs one immutable Workspace snapshot from
-its working directory before reading stdin and creates no Runtime `App`,
-watcher, cache, listener, or background task. Stdout contains protocol frames
-only, EOF exits with status zero, and startup or terminal failures use stable
-redacted stderr categories.
+separate `oneagent-mcp` binary constructs one Runtime `App` with the live
+Workspace service, waits for one complete initial snapshot before reading
+stdin, and clones one atomic immutable snapshot at the beginning of every call.
+The process owns the watcher, cache, and structured cleanup tree but creates no
+HTTP listener or remote client. Stdout contains protocol frames only, EOF exits
+with status zero after joined Runtime shutdown, and startup or terminal failures
+use stable redacted stderr categories.
 
 The exact lexicographic catalog is `oneagent.context`,
 `oneagent.diagnostics`, `oneagent.graph`, `oneagent.impact`, `oneagent.query`,
@@ -476,6 +524,16 @@ Results contain equivalent compact JSON text and structured content. Known-tool
 semantic failures set `isError`; malformed or unknown calls remain protocol
 `Invalid params` failures. No tool mutates files, graphs, processes, network
 state, or other external state.
+
+Under ADR-0061, `oneagent.impact` advertises two exclusive selectors. Legacy
+mode retains the exact two-Configuration same-snapshot Graph calculation.
+Publication mode selects one Configuration from the embedded latest transition
+report, including a removed Configuration, and projects only the requested
+depth before independent item/reason limits. Its summary and `total` describe
+the complete requested-depth view; `truncated` and `omittedReasons` describe
+only protocol projection. Initial no-predecessor availability has no invented
+previous ID, transition, completeness, summary, or items. The handler never
+reruns or widens Graph traversal.
 
 Under ADR-0058, `oneagent.diagnostics` consumes the Configuration snapshot's
 complete normalized report rather than raw diagnostics. Its required
@@ -501,7 +559,7 @@ Codex directly calls all seven tools and observes semantic success and domain
 failure. Cursor's public `mcp list-tools` command proves all seven definitions;
 that client version exposes no non-interactive direct-call command, so no
 Cursor call result is claimed. Additional revisions and clients, remote
-transports, authentication, snapshot refresh, Runtime packaging, references,
+transports, authentication, publication history, Runtime packaging, references,
 diagnostics UI, and broader IDE integration remain deferred. Sprint 31 is
 completed; the additive LSP boundary is described below.
 

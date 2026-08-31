@@ -9245,12 +9245,15 @@ paths, deterministic delete/add move and copy evidence, closed conflicts and
 failures, fixed output/count/time bounds, and owned cancellation cleanup.
 
 Task 6 evidence and the bounded review remediations are committed as
-`550fa5df`, `3e13e523`, `a2cb0641`, `dffd2f1c`, `03281583`, and `b1d551a1`.
-They close caller-drop ownership and the complete deadline, add real
-child-process cleanup evidence, complete the invalid status/path and UNC
-matrices, prove equal complete Workspace results across opposite operation
-orders, and exercise injected spawn/read/exit failures without changing the
-accepted boundary.
+`550fa5df`, `3e13e523`, `a2cb0641`, `dffd2f1c`, `03281583`, `b1d551a1`, and
+`43165bfe`, with the complete production chain integrated into the version
+branch by merge `129b69c8`. They close caller-drop ownership and the complete
+deadline, add real child-process cleanup evidence, complete the invalid
+status/path and UNC matrices, prove equal complete Workspace results across
+opposite operation orders, exercise injected spawn/read/exit failures, close
+the Workspace change-request receiver immediately after terminal state
+selection and before joining active owned work, and set `GIT_NO_LAZY_FETCH=1`
+on every production Git command without changing the accepted boundary.
 
 Every accepted non-empty input uses the existing complete filesystem scan,
 production discovery, EDT/Designer build and validation, stable rescan, cache
@@ -9261,12 +9264,13 @@ default Runtime remains independent from Git.
 
 The [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records
 the complete requirement matrix, exact non-zero focused/public-process counts,
-1,268-test canonical workspace inventory, API/dependency/executable/path/
-sensitive-data/scope audits, and exact-head macOS/Windows CI for Rust, VS Code,
-and EDT. No missing harness or production behavior was added by Task 6. Sprint
-38 remains `active`; only Task 7 may perform the independent review, mark the
-sprint completed, hand off Sprint 39 Change Impact Analysis, or retire the
-Sprint 37 prompt suite.
+the historical 1,268-test inventory and exact-head CI run `33323588901` at
+`b1d551a1`, and the current 80-target, 1,270-test inventory plus successful
+six-job macOS/Windows CI run `33399662895` at final production-code head
+`129b69c8`. It also records the API/dependency/executable/path/sensitive-data/
+scope audits through that final head. Sprint 38 remains `active`; only Task 7
+may perform the independent review, mark the sprint completed, hand off Sprint
+39 Change Impact Analysis, or retire the Sprint 37 prompt suite.
 
 ###### Accepted planning baseline and ordered task manifest
 

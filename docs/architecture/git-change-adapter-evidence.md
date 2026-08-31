@@ -42,6 +42,8 @@ The committed implementation chain is:
 | Workspace order-equivalence evidence | `dffd2f1c` |
 | Injected failure-matrix evidence | `03281583` |
 | Injected timeout-evidence stabilization | `b1d551a1` |
+| Final production remediation | `43165bfe` |
+| Version-branch remediation merge and final production-code head | `129b69c8` |
 
 ## Requirement-to-test matrix
 
@@ -166,7 +168,7 @@ workspace tests, focused Context/MCP compatibility, strict Clippy, and
 warning-denied Rustdoc. It is historical cross-platform evidence for the first
 cleanup remediation.
 
-Exact final remediation code head
+The later historical remediation head
 `b1d551a120e25760847f36916299d7c4331660da` passed
 [CI run 33323588901](https://github.com/MakSGTS/OneAgent/actions/runs/33323588901).
 All six Rust, VS Code, and EDT jobs passed on macOS and Windows. In particular,
@@ -175,8 +177,28 @@ the synchronized timeout/drop test, injected spawn/read/exit matrix, and public
 Workspace operation-order oracle. Earlier intermediate runs exposed the
 timeout test starting its deadline before the injected runner was guaranteed
 to start; `b1d551a1` added that synchronization without changing production
-behavior. Run `33323588901` is the accepted exact-code-head cross-platform
-evidence for the final remediation.
+behavior. Run `33323588901` remains accepted exact-head cross-platform evidence
+for that historical 1,268-test code head; it predates and does not claim the
+two tests added by the final production remediation.
+
+Final production remediation
+`43165bfeb17d74c6d26b1e3f56fa42b82214cadb` closes the Workspace change-request
+receiver immediately after terminal state selection and before joining active
+owned work. It also sets `GIT_NO_LAZY_FETCH=1` on every production Git command.
+The corresponding gated cancellation test proves that the input slot becomes
+closed before an active build is released, while the disposable local promisor-
+repository test proves that a missing object remains missing when the reader
+fails rather than being fetched.
+
+The remediation was merged into the version branch as
+`129b69c81987112d07741f3bd0abf06114430816`, the exact final production-code
+head. That head passed
+[CI run 33399662895](https://github.com/MakSGTS/OneAgent/actions/runs/33399662895),
+which the read-only query reported as `completed` / `success` at that exact
+SHA. Its six successful jobs were `rust (macos-14)`, `rust (windows-latest)`,
+`vscode (macos-14)`, `vscode (windows-latest)`, `edt (macos-14)`, and
+`edt (windows-latest)`. The Rust jobs ran the current 80-target, 1,270-test
+workspace inventory, including the two final-remediation tests.
 
 The local APFS environment rejected construction of the deliberately invalid
 non-UTF-8 filename with `Operation not permitted`. The test reported that
@@ -287,22 +309,23 @@ test is included in that total.
 The exact read-only audit commands all exited zero:
 
 ```text
-git diff --name-only 3cff2f95..b1d551a1 -- Cargo.toml Cargo.lock apps/runtime/Cargo.toml
-git diff --name-only 3cff2f95..b1d551a1 -- crates/graph/src/coverage.rs adapters/edt/src/coverage.rs adapters/designer-xml/src/coverage.rs
-git diff --name-only 3cff2f95..b1d551a1 -- crates/protocol apps/cli extensions/vscode extensions/edt apps/runtime/src/http apps/runtime/src/mcp.rs apps/runtime/src/mcp_tools.rs apps/runtime/src/lsp.rs
+git diff --name-only 3cff2f95..129b69c8 -- Cargo.toml Cargo.lock apps/runtime/Cargo.toml
+git diff --name-only 3cff2f95..129b69c8 -- crates/graph/src/coverage.rs adapters/edt/src/coverage.rs adapters/designer-xml/src/coverage.rs
+git diff --name-only 3cff2f95..129b69c8 -- crates/protocol apps/cli extensions/vscode extensions/edt apps/runtime/src/http apps/runtime/src/mcp.rs apps/runtime/src/mcp_tools.rs apps/runtime/src/lsp.rs
 ! git grep -n unsafe -- apps/runtime/src apps/runtime/tests
 ! git grep -nE '/Users/|maxim_tomshin|BEGIN [A-Z ]*PRIVATE KEY|ghp_|github_pat_|AKIA' -- apps/runtime/src apps/runtime/tests docs/adr/0060-git-change-adapter.md
 rg -n 'fetch|pull|push|clone|checkout|merge|rebase|reset|clean|add|commit|credential' apps/runtime/src/workspace/git.rs
 rg -n 'Command::new|\.args\(' apps/runtime/src/workspace/git.rs
-gh run view 33323588901 --json status,conclusion,url,jobs
+gh run view 33399662895 --json status,conclusion,url,headSha,jobs
 ```
 
 The first three diff audits returned zero changed paths. The unsafe and
 sensitive-value searches returned zero matches. The command/scope searches
-returned only the fixed reader operations, the credential-helper disablement,
-domain prose, and ordinary collection operations; they exposed no forbidden
-Git operation. The exact-head CI query returned `completed` / `success` and six
-successful jobs.
+returned only the fixed reader operations, the credential-helper and lazy-
+fetch disablement, domain prose, and ordinary collection operations; they
+exposed no forbidden Git operation. The exact-head CI query returned
+`completed` / `success`, head SHA `129b69c81987112d07741f3bd0abf06114430816`,
+and six successful jobs.
 
 The repository-owned evidence artifacts are:
 

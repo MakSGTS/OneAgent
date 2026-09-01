@@ -858,6 +858,18 @@ impl RefactoringCancellationSignal for Cancellation {
 fn planner_cancellation_publication_and_configuration_failures_are_atomic() {
     let fixture = planner_fixture(false);
     let cancelled = Cancellation(AtomicBool::new(true));
+    let selected_cancellation_error = RefactoringPlanner
+        .evaluate_selected_configuration(
+            WorkspacePublicationId::initial(),
+            None,
+            &fixture.request,
+            &cancelled,
+        )
+        .expect_err("selection entry cancellation must precede missing Configuration");
+    assert_eq!(
+        selected_cancellation_error.kind(),
+        RefactoringErrorKind::Cancelled
+    );
     let cancellation_error = RefactoringPlanner
         .evaluate(fixture.input(), &fixture.request, &cancelled)
         .expect_err("entry cancellation must fail without output");
@@ -871,6 +883,18 @@ fn planner_cancellation_publication_and_configuration_failures_are_atomic() {
         NEW_NAME,
     )
     .expect("request must be valid");
+    let selected_publication_error = RefactoringPlanner
+        .evaluate_selected_configuration(
+            WorkspacePublicationId::initial(),
+            None,
+            &stale_request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("publication mismatch must precede missing Configuration");
+    assert_eq!(
+        selected_publication_error.kind(),
+        RefactoringErrorKind::PublicationMismatch
+    );
     let publication_error = RefactoringPlanner
         .evaluate(fixture.input(), &stale_request, &NeverCancelledRefactoring)
         .expect_err("stale publication must fail without output");
@@ -887,6 +911,18 @@ fn planner_cancellation_publication_and_configuration_failures_are_atomic() {
         NEW_NAME,
     )
     .expect("request must be valid");
+    let selected_configuration_error = RefactoringPlanner
+        .evaluate_selected_configuration(
+            WorkspacePublicationId::initial(),
+            None,
+            &missing_configuration,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("missing selected Configuration must fail without output");
+    assert_eq!(
+        selected_configuration_error.kind(),
+        RefactoringErrorKind::ConfigurationNotFound
+    );
     let configuration_error = RefactoringPlanner
         .evaluate(
             fixture.input(),

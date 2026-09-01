@@ -37,6 +37,10 @@ use oneagent_analysis::change_impact::{
     ChangeImpactEvaluator, ChangeImpactPublicationId, ChangeImpactReport,
 };
 use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy, DiagnosticReport};
+use oneagent_analysis::refactoring::{
+    RefactoringCancellationSignal, RefactoringError, RefactoringEvaluation, RefactoringPlanner,
+    RefactoringPlannerInput, RefactoringRequest, SourceEvidenceSet,
+};
 use oneagent_analysis::rules::{
     NeverCancelled as NeverRuleCancelled, Rule, RuleCancellationSignal, RuleConfiguration,
     RuleContext, RuleEngine, RuleExecutionReport, RulePlan, RuleRegistry,
@@ -66,6 +70,12 @@ use change::{
 };
 
 impl ChangeImpactCancellationSignal for crate::Cancellation {
+    fn is_cancelled(&self) -> bool {
+        self.is_requested()
+    }
+}
+
+impl RefactoringCancellationSignal for crate::Cancellation {
     fn is_cancelled(&self) -> bool {
         self.is_requested()
     }
@@ -1197,6 +1207,7 @@ pub struct WorkspaceConfigurationSnapshot {
     configuration_id: EntityId,
     configuration_name: EntityName,
     graph: Arc<SemanticGraph>,
+    source_evidence: SourceEvidenceSet,
     diagnostics: Arc<[SemanticDiagnostic]>,
     reference_requests: Arc<SemanticReferenceRequestLedger>,
     reference_statistics: SemanticReferenceStatistics,
@@ -1235,6 +1246,12 @@ impl WorkspaceConfigurationSnapshot {
     #[must_use]
     pub fn graph(&self) -> &SemanticGraph {
         &self.graph
+    }
+
+    /// Returns complete immutable source evidence captured with the Graph.
+    #[must_use]
+    pub const fn source_evidence(&self) -> &SourceEvidenceSet {
+        &self.source_evidence
     }
 
     /// Returns ordered recoverable semantic diagnostics.
@@ -1366,6 +1383,37 @@ impl WorkspaceSnapshot {
             .map(|index| &self.configurations[index])
     }
 
+    /// Builds one complete read-only refactoring plan from this publication.
+    ///
+    /// The selected Configuration Graph and source evidence are borrowed only
+    /// from this immutable snapshot. Source files are never read or changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns one closed domain failure and no partial plan or preview.
+    pub fn plan_refactoring(
+        &self,
+        request: &RefactoringRequest,
+        cancellation: &dyn RefactoringCancellationSignal,
+    ) -> Result<RefactoringEvaluation, RefactoringError> {
+        let input = self
+            .configuration(request.configuration_id())
+            .map(|configuration| {
+                RefactoringPlannerInput::new(
+                    self.publication_id(),
+                    configuration.configuration_id(),
+                    configuration.graph(),
+                    configuration.source_evidence(),
+                )
+            });
+        RefactoringPlanner.evaluate_selected_configuration(
+            self.publication_id(),
+            input,
+            request,
+            cancellation,
+        )
+    }
+
     /// Returns the number of discovered and built configurations.
     #[must_use]
     pub const fn len(&self) -> usize {
@@ -1432,7 +1480,7 @@ where
             BTreeMap::new();
 
         for project in discovered {
-            let snapshot = build_configuration(&project)?;
+            let snapshot = build_configuration(root, &project)?;
             let configuration_id = snapshot.configuration_id.clone();
             if let Some(existing) = configurations.get(&configuration_id) {
                 return Err(WorkspaceBuildError::DuplicateConfigurationIdentity {
@@ -1458,11 +1506,12 @@ impl Default for WorkspaceSnapshotBuilder<FileSystemWorkspaceDetector> {
 }
 
 fn build_configuration(
+    workspace_root: &Path,
     project: &DiscoveredConfiguration,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     match project.format() {
-        WorkspaceFormat::Edt => build_edt(project),
-        WorkspaceFormat::DesignerXml => build_designer_xml(project),
+        WorkspaceFormat::Edt => build_edt(workspace_root, project),
+        WorkspaceFormat::DesignerXml => build_designer_xml(workspace_root, project),
         format @ (WorkspaceFormat::Extension | WorkspaceFormat::Unknown) => {
             Err(WorkspaceBuildError::UnsupportedFormat {
                 root_path: project.root_path().to_path_buf(),
@@ -1473,13 +1522,15 @@ fn build_configuration(
 }
 
 fn build_edt(
+    workspace_root: &Path,
     project: &DiscoveredConfiguration,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     let root_path = project.root_path();
     let result = FileSystemEdtSemanticGraphBuilder
-        .build_graph_with_diagnostics(root_path)
+        .build_graph_with_source_evidence(workspace_root, root_path)
         .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::Edt, source))?;
-    let validation = result.validate();
+    let build = result.build();
+    let validation = build.validate();
     if !validation.is_valid() {
         return Err(WorkspaceBuildError::GraphValidation {
             root_path: root_path.to_path_buf(),
@@ -1488,17 +1539,19 @@ fn build_edt(
         });
     }
     let reference_requests =
-        SemanticReferenceRequestLedger::from_requests(result.reference_requests().iter().cloned())
+        SemanticReferenceRequestLedger::from_requests(build.reference_requests().iter().cloned())
             .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::Edt, source))?;
-    let graph = result.graph().clone();
-    let diagnostics = result.diagnostics().to_vec();
-    let reference_statistics = *result.reference_statistics();
-    let report = result.report();
+    let graph = build.graph().clone();
+    let source_evidence = result.source_evidence().clone();
+    let diagnostics = build.diagnostics().to_vec();
+    let reference_statistics = *build.reference_statistics();
+    let report = build.report();
 
     snapshot_from_parts(
         root_path,
         WorkspaceFormat::Edt,
         graph,
+        source_evidence,
         diagnostics,
         reference_requests,
         reference_statistics,
@@ -1508,12 +1561,19 @@ fn build_edt(
 }
 
 fn build_designer_xml(
+    workspace_root: &Path,
     project: &DiscoveredConfiguration,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     let root_path = project.root_path();
-    let graph = FileSystemDesignerXmlSemanticGraphBuilder
-        .build_graph(root_path, DesignerXmlBuildScope::Complete)
+    let result = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
+            workspace_root,
+            root_path,
+            DesignerXmlBuildScope::Complete,
+        )
         .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::DesignerXml, source))?;
+    let graph = result.graph().clone();
+    let source_evidence = result.source_evidence().clone();
     let diagnostics = Vec::new();
     let reference_requests = SemanticReferenceRequestLedger::new();
     let reference_statistics = SemanticReferenceStatistics::new();
@@ -1536,6 +1596,7 @@ fn build_designer_xml(
         root_path,
         WorkspaceFormat::DesignerXml,
         graph,
+        source_evidence,
         diagnostics,
         reference_requests,
         reference_statistics,
@@ -1577,6 +1638,7 @@ fn snapshot_from_parts(
     root_path: &Path,
     format: WorkspaceFormat,
     graph: SemanticGraph,
+    source_evidence: SourceEvidenceSet,
     diagnostics: Vec<SemanticDiagnostic>,
     reference_requests: SemanticReferenceRequestLedger,
     reference_statistics: SemanticReferenceStatistics,
@@ -1591,6 +1653,16 @@ fn snapshot_from_parts(
                 actual,
             }
         })?;
+    if source_evidence.configuration_id() != &configuration_id {
+        return Err(semantic_build_error(
+            root_path,
+            format,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Workspace source evidence Configuration does not match the Graph",
+            ),
+        ));
+    }
     let registry = RuleRegistry::<Arc<dyn Rule>>::new([])
         .map_err(|source| semantic_build_error(root_path, format, source))?;
     let configuration = RuleConfiguration::default();
@@ -1614,6 +1686,7 @@ fn snapshot_from_parts(
         configuration_id,
         configuration_name,
         graph: Arc::new(graph),
+        source_evidence,
         diagnostics: Arc::from(diagnostics.into_boxed_slice()),
         reference_requests: Arc::new(reference_requests),
         reference_statistics,
@@ -1678,6 +1751,7 @@ mod tests {
     use oneagent_analysis::diagnostics::{
         DiagnosticCategory, DiagnosticFamily, DiagnosticSeverity, MAX_SEMANTIC_DIAGNOSTICS,
     };
+    use oneagent_analysis::refactoring::SourceEvidenceSet;
     use oneagent_analysis::rules::{
         Rule, RuleCancellationSignal, RuleConfiguration, RuleContext, RuleDefinition,
         RuleDiagnostic, RuleDiagnosticCode, RuleEvaluation, RuleId, RuleRegistration, RuleRegistry,
@@ -2159,6 +2233,11 @@ mod tests {
             std::path::Path::new("configuration"),
             WorkspaceFormat::Edt,
             graph.clone(),
+            SourceEvidenceSet::new(
+                EntityId::new("configuration:test").expect("configuration ID must be valid"),
+                Vec::new(),
+            )
+            .expect("empty source evidence must be valid"),
             exact,
             SemanticReferenceRequestLedger::new(),
             SemanticReferenceStatistics::new(),
@@ -2188,6 +2267,11 @@ mod tests {
             std::path::Path::new("configuration"),
             WorkspaceFormat::Edt,
             graph,
+            SourceEvidenceSet::new(
+                EntityId::new("configuration:test").expect("configuration ID must be valid"),
+                Vec::new(),
+            )
+            .expect("empty source evidence must be valid"),
             over,
             SemanticReferenceRequestLedger::new(),
             SemanticReferenceStatistics::new(),

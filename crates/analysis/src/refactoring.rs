@@ -1933,6 +1933,40 @@ impl RefactoringEvaluation {
 pub struct RefactoringPlanner;
 
 impl RefactoringPlanner {
+    /// Evaluates one optionally selected Configuration from a complete publication.
+    ///
+    /// Runtime uses this boundary after cloning one immutable Workspace snapshot.
+    /// Publication and cancellation checks therefore precede a missing
+    /// Configuration result without requiring a synthetic Graph or source set.
+    ///
+    /// # Errors
+    ///
+    /// Returns one closed redacted failure and no partial evaluation when the
+    /// request, publication, selected Configuration, evidence, or cancellation
+    /// state is invalid.
+    pub fn evaluate_selected_configuration(
+        &self,
+        current_publication_id: WorkspacePublicationId,
+        input: Option<RefactoringPlannerInput<'_>>,
+        request: &RefactoringRequest,
+        cancellation: &dyn RefactoringCancellationSignal,
+    ) -> Result<RefactoringEvaluation, RefactoringError> {
+        observe_refactoring_cancellation(cancellation)?;
+        validate_plan_identity(request.configuration_id())?;
+        validate_plan_identity(request.target_node_id())?;
+        validate_desired_name(request.desired_name())?;
+        observe_refactoring_cancellation(cancellation)?;
+        if request.expected_publication_id() != current_publication_id {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::PublicationMismatch,
+            ));
+        }
+        observe_refactoring_cancellation(cancellation)?;
+        let input = input
+            .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::ConfigurationNotFound))?;
+        self.evaluate(input, request, cancellation)
+    }
+
     /// Validates one immutable publication and builds a complete plan and preview.
     ///
     /// The evaluator uses only the supplied Graph query API and retained source

@@ -40,9 +40,10 @@ records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups` and completes Sprint 37. The
 [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
-records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
-`active` through its committed Task 6 evidence; the mandatory Task 7 review is
-the remaining completion and Sprint 40 transition gate. The
+records `pass` and completes Sprint 38. The
+[Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is the
+unique `next` target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -8516,8 +8517,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
-| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | active |
-| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
+| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
+| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | next |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
 
 ##### Sprint 36 Diagnostics Engine execution plan
@@ -9602,6 +9603,40 @@ reconciliation, full validation, artifact consistency, and conditional Sprint
 Sprint 40 Refactoring Planner from `planned` to `next`. Sprint 40 must define a
 separate accepted plan/precondition contract and cannot treat Change Impact as
 edit authorization, path-to-node mapping, risk scoring, or unbounded closure.
+
+###### Sprint 39 remediation and integration review
+
+The first fresh-context review of `295a5454..e9a9c3a0` blocked completion
+because Analysis did not enforce the accepted 4,096-byte bound on canonical
+Graph `EdgeId` values when equal graphs produced no affected reasons. The
+implementation was merged as `91181fd7`, and the separate remediation commits
+`eee6b615` and `eb2f56ca` reuse Graph-owned
+`SemanticGraphQuery::edge_id`, add exact 4,096 and one-over 4,097 equal-graph
+public evidence, and correct the requirement matrix. The remediation was
+merged into the version branch as `e522d852`.
+
+The [Sprint 39 integration review](reviews/sprint-39-change-impact-analysis.md)
+records `pass` for exact range `295a5454..e522d852`. The final fresh-context
+reviewer reports no blocking or non-blocking findings and no missing evidence;
+the primary independently reproduces that result. Both paths pass 18 Graph
+Impact tests, the 86-test Graph compatibility matrix, 129 Analysis tests
+including 10 public Change Impact tests, 123 Runtime unit tests, the complete
+Workspace/watching/Git/cache/query and protocol/public-process matrices, 339
+Rust EDT tests, and the canonical workspace gate. The current executable
+inventory is 81 targets, 77 non-zero targets, four expected zero-test binary
+entry points, and 1,287 tests.
+
+Exact-head CI runs `33457248893`, `33457813120`, and `33458360180` each pass
+all six macOS and Windows Rust, VS Code, and EDT jobs at remediation code,
+evidence, and final merge heads respectively. The same final reviewer passed
+the complete review artifact, current-state transition, Sprint 40 hand-off,
+and exact eight-path Sprint 38 retirement inventory before any state change,
+deletion, staging, or commit.
+
+Sprint 39 is `completed`, and Sprint 40 Refactoring Planner is the unique
+`next` target. Sprint 40 still requires a separate accepted plan and
+precondition contract; Change Impact remains evidence rather than edit
+authorization, path-to-node mapping, risk scoring, or unbounded closure.
 
 ###### State, failure, and validation gates
 

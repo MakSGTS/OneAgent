@@ -29,9 +29,10 @@ records `pass` and completes Sprint 36. Sprint 37 Rules Engine is completed; its
 [integration review](docs/reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups`. The
 [Sprint 38 Git Change Adapter review](docs/reviews/sprint-38-git-change-adapter.md)
-records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
-active through its complete Task 6 evidence; the mandatory Task 7 review is
-the remaining completion gate.
+records `pass` and completes Sprint 38. The
+[Sprint 39 Change Impact Analysis review](docs/reviews/sprint-39-change-impact-analysis.md)
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is the
+unique `next` target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 
@@ -219,7 +220,9 @@ availability, completeness, item/reason bounds, truncation, and omitted counts.
 Filesystem and Git inputs remain equivalent only through complete semantic end
 states; repository paths and statuses are never impact seeds. The
 [Sprint 39 evidence](docs/architecture/change-impact-analysis-evidence.md)
-records the complete acceptance matrix and limitations.
+records the complete acceptance matrix and limitations. The
+[Sprint 39 review](docs/reviews/sprint-39-change-impact-analysis.md) records
+`pass`.
 
 The MCP process constructs one long-running Runtime `App`, Workspace watcher,
 and cache owner but no HTTP listener, remote client, or real side effect beyond

@@ -378,9 +378,10 @@ records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups` and completes Sprint 37. The
 [Sprint 38 Git Change Adapter review](../reviews/sprint-38-git-change-adapter.md)
-records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
-active through complete Task 6 evidence; Task 7 review remains its completion
-gate.
+records `pass` and completes Sprint 38. The
+[Sprint 39 Change Impact Analysis review](../reviews/sprint-39-change-impact-analysis.md)
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is the
+unique `next` target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -1534,7 +1535,9 @@ requested depth `0..=4`, then applies independent `1..=100` item and reason
 limits. Complete requested-depth summaries are not reconstructed from the
 bounded prefix. Availability, completeness, truncation, and omitted reasons
 remain distinct. The full executable matrix and limitations are recorded in
-the [Sprint 39 evidence](change-impact-analysis-evidence.md).
+the [Sprint 39 evidence](change-impact-analysis-evidence.md). The
+[Sprint 39 review](../reviews/sprint-39-change-impact-analysis.md) records
+`pass`.
 
 ## Incremental indexing
 

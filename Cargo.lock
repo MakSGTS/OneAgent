@@ -704,6 +704,7 @@ dependencies = [
  "oneagent-bsl",
  "oneagent-common",
  "oneagent-graph",
+ "oneagent-metadata",
 ]
 
 [[package]]

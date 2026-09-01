@@ -1,16 +1,21 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use oneagent_analysis::refactoring::{
-    ConfinedSourcePath, DEFAULT_REFACTORING_PREVIEW_ENTRIES, MAX_REFACTORING_CANDIDATES,
-    MAX_REFACTORING_DEPENDENCIES, MAX_REFACTORING_OPERATIONS, MAX_REFACTORING_PREVIEW_ENTRIES,
-    MAX_SOURCE_IDENTIFIER_BYTES, OperationId, RefactoringBound, RefactoringCompleteness,
+    BslModuleRole, ConfinedSourcePath, DEFAULT_REFACTORING_PREVIEW_ENTRIES,
+    MAX_REFACTORING_CANDIDATES, MAX_REFACTORING_DEPENDENCIES, MAX_REFACTORING_OPERATIONS,
+    MAX_REFACTORING_PREVIEW_ENTRIES, MAX_SOURCE_IDENTIFIER_BYTES, NeverCancelledRefactoring,
+    OperationId, RefactoringBound, RefactoringCancellationSignal, RefactoringCompleteness,
     RefactoringErrorKind, RefactoringFamily, RefactoringOperation, RefactoringOperationKind,
-    RefactoringPlan, RefactoringPreconditionSet, RefactoringPreview, RefactoringPreviewEntry,
-    RefactoringRequest, RefactoringSourcePrecondition, RefactoringTarget, SourceByteRange,
-    SourceContentVersion, SourceDocumentId, SourceOccurrence, SourceOccurrenceKind,
-    SourceOccurrenceResolution, WorkspacePublicationId,
+    RefactoringPlan, RefactoringPlanner, RefactoringPlannerInput, RefactoringPreconditionSet,
+    RefactoringPreview, RefactoringPreviewEntry, RefactoringRequest, RefactoringSourcePrecondition,
+    RefactoringTarget, SourceByteRange, SourceContentVersion, SourceDocument, SourceDocumentId,
+    SourceEvidenceCompleteness, SourceEvidenceSet, SourceFormat, SourceOccurrence,
+    SourceOccurrenceKind, SourceOccurrenceResolution, WorkspacePublicationId,
 };
 use oneagent_bsl::{BslSymbolKind, bsl_callable_id};
-use oneagent_common::{EntityId, SourcePath, SourcePosition, SourceSpan};
-use oneagent_graph::NodeKind;
+use oneagent_common::{EntityId, EntityName, SourcePath, SourcePosition, SourceSpan};
+use oneagent_graph::{GraphEdge, GraphNode, NodeKind, SemanticGraph};
+use oneagent_metadata::MetadataKind;
 
 const CONFIGURATION: &str = "configuration.main";
 const MODULE: &str = "module.main";
@@ -632,4 +637,596 @@ fn no_change_and_incomplete_or_reordered_preview_fail_closed() {
         RefactoringBound::PreviewEntries.maximum(),
         MAX_REFACTORING_PREVIEW_ENTRIES
     );
+}
+
+fn name(value: &str) -> EntityName {
+    EntityName::new(value).expect("name must be valid")
+}
+
+fn insert_node(graph: &mut SemanticGraph, identity: &EntityId, value: &str, kind: NodeKind) {
+    graph.insert_node(GraphNode::new(identity.clone(), name(value), kind));
+}
+
+fn insert_contains(graph: &mut SemanticGraph, owner: &EntityId, child: &EntityId) {
+    graph
+        .insert_edge(GraphEdge::new(
+            owner.clone(),
+            child.clone(),
+            oneagent_graph::EdgeKind::Contains,
+        ))
+        .expect("ownership endpoints must exist");
+}
+
+struct PlannerFixture {
+    configuration_id: EntityId,
+    graph: SemanticGraph,
+    evidence: SourceEvidenceSet,
+    request: RefactoringRequest,
+}
+
+impl PlannerFixture {
+    fn input(&self) -> RefactoringPlannerInput<'_> {
+        RefactoringPlannerInput::new(
+            WorkspacePublicationId::initial(),
+            &self.configuration_id,
+            &self.graph,
+            &self.evidence,
+        )
+    }
+}
+
+fn planner_fixture(reverse: bool) -> PlannerFixture {
+    planner_fixture_for(reverse, OLD_NAME, NEW_NAME, NodeKind::Procedure)
+}
+
+fn planner_fixture_for(
+    reverse: bool,
+    old_name: &str,
+    new_name: &str,
+    target_kind: NodeKind,
+) -> PlannerFixture {
+    let configuration_id = id(CONFIGURATION);
+    let module_id = id(MODULE);
+    let symbol_kind = match target_kind {
+        NodeKind::Procedure => BslSymbolKind::Procedure,
+        NodeKind::Function => BslSymbolKind::Function,
+        _ => panic!("planner fixture requires a supported callable kind"),
+    };
+    let callable_id = bsl_callable_id(&module_id, symbol_kind, old_name)
+        .expect("fixture target identity must be valid");
+    let mut graph = SemanticGraph::new();
+    let nodes = [
+        (
+            configuration_id.clone(),
+            "Main",
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ),
+        (module_id.clone(), "Main", NodeKind::Module),
+        (callable_id.clone(), old_name, target_kind),
+    ];
+    let node_order: Box<dyn Iterator<Item = _>> = if reverse {
+        Box::new(nodes.into_iter().rev())
+    } else {
+        Box::new(nodes.into_iter())
+    };
+    for (identity, node_name, kind) in node_order {
+        insert_node(&mut graph, &identity, node_name, kind);
+    }
+    insert_contains(&mut graph, &configuration_id, &module_id);
+    insert_contains(&mut graph, &module_id, &callable_id);
+
+    let keyword = match target_kind {
+        NodeKind::Procedure => "Procedure",
+        NodeKind::Function => "Function",
+        _ => unreachable!("fixture kind was validated above"),
+    };
+    let raw = format!(
+        "\u{feff}{keyword} {old_name}()\r\n{old_name}(); Module.{old_name}();\rEnd{keyword}\n"
+    )
+    .into_bytes();
+    let version = SourceContentVersion::from_bytes(&raw);
+    let document_id = document_id(MODULE);
+    let source = std::str::from_utf8(&raw).expect("planner fixture must be UTF-8");
+    let mut matches = source.match_indices(old_name);
+    let mut occurrences = [
+        SourceOccurrenceKind::Declaration,
+        SourceOccurrenceKind::LocalCall,
+        SourceOccurrenceKind::QualifiedCall,
+    ]
+    .into_iter()
+    .map(|kind| {
+        let (start, token) = matches.next().expect("fixture occurrence must exist");
+        SourceOccurrence::new(
+            document_id.clone(),
+            version,
+            SourceByteRange::new(start, start + token.len()).expect("range must be valid"),
+            kind,
+            token,
+            Some(callable_id.clone()),
+            SourceOccurrenceResolution::Unique,
+        )
+        .expect("fixture occurrence must be valid")
+    })
+    .collect::<Vec<_>>();
+    if reverse {
+        occurrences.reverse();
+    }
+    let document = SourceDocument::new(
+        document_id,
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        ConfinedSourcePath::new(
+            SourcePath::new("configuration/CommonModules/Main/Module.bsl")
+                .expect("path must be valid"),
+            &SourcePath::new("configuration").expect("root must be valid"),
+        )
+        .expect("path must be confined"),
+        raw,
+        occurrences,
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect("source document must be valid");
+    let evidence = SourceEvidenceSet::new(configuration_id.clone(), vec![document])
+        .expect("source evidence must be valid");
+    let request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::initial(),
+        configuration_id.clone(),
+        callable_id,
+        new_name,
+    )
+    .expect("request must be valid");
+    PlannerFixture {
+        configuration_id,
+        graph,
+        evidence,
+        request,
+    }
+}
+
+#[test]
+fn planner_evaluates_graph_target_source_preconditions_and_mixed_line_preview() {
+    let fixture = planner_fixture(false);
+    let evaluation = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &fixture.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect("complete Graph-backed evaluation must pass");
+
+    assert_eq!(evaluation.plan().operations().len(), 3);
+    assert_eq!(evaluation.plan().summary().declaration_operations(), 1);
+    assert_eq!(evaluation.plan().summary().local_call_operations(), 1);
+    assert_eq!(evaluation.plan().summary().qualified_call_operations(), 1);
+    assert_eq!(evaluation.plan().summary().omitted_operations(), 0);
+    assert_eq!(evaluation.preview().entries().len(), 3);
+    let positions = evaluation
+        .preview()
+        .entries()
+        .iter()
+        .map(|entry| {
+            (
+                entry.position().start().line(),
+                entry.position().start().column(),
+                entry.position().end().line(),
+                entry.position().end().column(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(positions, [(2, 19, 2, 26), (2, 1, 2, 8), (1, 11, 1, 18)]);
+    assert_eq!(
+        evaluation.preview().entries()[0].path().path().as_str(),
+        "configuration/CommonModules/Main/Module.bsl"
+    );
+}
+
+#[test]
+fn planner_is_equal_across_reordered_graph_evidence_and_fresh_repetition() {
+    let first = planner_fixture(false);
+    let reordered = planner_fixture(true);
+    let planner = RefactoringPlanner;
+    let first_result = planner
+        .evaluate(first.input(), &first.request, &NeverCancelledRefactoring)
+        .expect("first evaluation must pass");
+    let repeated = planner
+        .evaluate(first.input(), &first.request, &NeverCancelledRefactoring)
+        .expect("repeated evaluation must pass");
+    let reordered_result = planner
+        .evaluate(
+            reordered.input(),
+            &reordered.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect("reordered evaluation must pass");
+
+    assert_eq!(first_result, repeated);
+    assert_eq!(first_result, reordered_result);
+    assert_eq!(first_result.plan().id(), reordered_result.plan().id());
+    assert_eq!(first_result.preview(), reordered_result.preview());
+}
+
+struct Cancellation(AtomicBool);
+
+impl RefactoringCancellationSignal for Cancellation {
+    fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+#[test]
+fn planner_cancellation_publication_and_configuration_failures_are_atomic() {
+    let fixture = planner_fixture(false);
+    let cancelled = Cancellation(AtomicBool::new(true));
+    let cancellation_error = RefactoringPlanner
+        .evaluate(fixture.input(), &fixture.request, &cancelled)
+        .expect_err("entry cancellation must fail without output");
+    assert_eq!(cancellation_error.kind(), RefactoringErrorKind::Cancelled);
+
+    let stale_request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::new(2).expect("publication must be non-zero"),
+        fixture.configuration_id.clone(),
+        target_id(),
+        NEW_NAME,
+    )
+    .expect("request must be valid");
+    let publication_error = RefactoringPlanner
+        .evaluate(fixture.input(), &stale_request, &NeverCancelledRefactoring)
+        .expect_err("stale publication must fail without output");
+    assert_eq!(
+        publication_error.kind(),
+        RefactoringErrorKind::PublicationMismatch
+    );
+
+    let missing_configuration = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::initial(),
+        id("configuration.missing"),
+        target_id(),
+        NEW_NAME,
+    )
+    .expect("request must be valid");
+    let configuration_error = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &missing_configuration,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("missing Configuration must fail without output");
+    assert_eq!(
+        configuration_error.kind(),
+        RefactoringErrorKind::ConfigurationNotFound
+    );
+}
+
+#[test]
+fn planner_rejects_ambiguous_owner_name_and_identity_collisions() {
+    let mut ambiguous = planner_fixture(false);
+    let second_module = id("module.second");
+    insert_node(
+        &mut ambiguous.graph,
+        &second_module,
+        "Second",
+        NodeKind::Module,
+    );
+    insert_contains(
+        &mut ambiguous.graph,
+        &ambiguous.configuration_id,
+        &second_module,
+    );
+    insert_contains(&mut ambiguous.graph, &second_module, &target_id());
+    let owner_error = RefactoringPlanner
+        .evaluate(
+            ambiguous.input(),
+            &ambiguous.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("multiple owners must fail");
+    assert_eq!(owner_error.kind(), RefactoringErrorKind::AmbiguousOwner);
+
+    let mut name_collision = planner_fixture(false);
+    let sibling = id("module.main:function:another");
+    insert_node(
+        &mut name_collision.graph,
+        &sibling,
+        NEW_NAME,
+        NodeKind::Function,
+    );
+    insert_contains(&mut name_collision.graph, &id(MODULE), &sibling);
+    let name_error = RefactoringPlanner
+        .evaluate(
+            name_collision.input(),
+            &name_collision.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("equivalent sibling name must fail");
+    assert_eq!(name_error.kind(), RefactoringErrorKind::NameCollision);
+
+    let mut identity_collision = planner_fixture(false);
+    let expected = bsl_callable_id(&id(MODULE), BslSymbolKind::Procedure, NEW_NAME)
+        .expect("expected identity must be valid");
+    insert_node(
+        &mut identity_collision.graph,
+        &expected,
+        "DifferentIdentityOwner",
+        NodeKind::Unknown,
+    );
+    let identity_error = RefactoringPlanner
+        .evaluate(
+            identity_collision.input(),
+            &identity_collision.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("occupied post-rename identity must fail");
+    assert_eq!(
+        identity_error.kind(),
+        RefactoringErrorKind::IdentityCollision
+    );
+}
+
+#[test]
+fn planner_rejects_missing_ambiguous_and_incompatible_source_evidence() {
+    let mut missing = planner_fixture(false);
+    missing.evidence = SourceEvidenceSet::new(missing.configuration_id.clone(), Vec::new())
+        .expect("empty evidence shape must be constructible");
+    let missing_error = RefactoringPlanner
+        .evaluate(
+            missing.input(),
+            &missing.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("empty evidence must fail");
+    assert_eq!(
+        missing_error.kind(),
+        RefactoringErrorKind::SourceEvidenceMissing
+    );
+
+    let mut ambiguous = planner_fixture(false);
+    let original = &ambiguous.evidence.documents()[0];
+    let local_call_range = original.occurrences()[1].range();
+    let ambiguous_occurrence = SourceOccurrence::new(
+        original.id().clone(),
+        original.content_version(),
+        local_call_range,
+        SourceOccurrenceKind::LocalCall,
+        OLD_NAME,
+        None,
+        SourceOccurrenceResolution::Ambiguous,
+    )
+    .expect("ambiguous occurrence shape must be valid");
+    let mut occurrences = original.occurrences().to_vec();
+    occurrences[1] = ambiguous_occurrence;
+    let document = SourceDocument::new(
+        original.id().clone(),
+        original.format(),
+        original.module_role(),
+        original.path().clone(),
+        original.raw_content().to_vec(),
+        occurrences,
+        original.completeness(),
+    )
+    .expect("ambiguous complete ledger must remain structurally valid");
+    ambiguous.evidence = SourceEvidenceSet::new(ambiguous.configuration_id.clone(), vec![document])
+        .expect("ambiguous source set must be valid");
+    let ambiguous_error = RefactoringPlanner
+        .evaluate(
+            ambiguous.input(),
+            &ambiguous.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("target-related ambiguous call must fail");
+    assert_eq!(
+        ambiguous_error.kind(),
+        RefactoringErrorKind::AmbiguousOccurrence
+    );
+
+    let incompatible = planner_fixture(false);
+    let other_evidence = SourceEvidenceSet::new(id("configuration.other"), Vec::new())
+        .expect("other empty evidence must be valid");
+    let input = RefactoringPlannerInput::new(
+        WorkspacePublicationId::initial(),
+        &incompatible.configuration_id,
+        &incompatible.graph,
+        &other_evidence,
+    );
+    let incompatible_error = RefactoringPlanner
+        .evaluate(input, &incompatible.request, &NeverCancelledRefactoring)
+        .expect_err("mismatched source Configuration must fail");
+    assert_eq!(
+        incompatible_error.kind(),
+        RefactoringErrorKind::IncompatibleEvidence
+    );
+}
+
+#[test]
+fn planner_supports_russian_function_and_rejects_missing_unsupported_and_no_change_targets() {
+    let russian = planner_fixture_for(false, "СтараяФункция", "НоваяФункция", NodeKind::Function);
+    let evaluation = RefactoringPlanner
+        .evaluate(
+            russian.input(),
+            &russian.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect("Russian Function rename must pass");
+    assert_eq!(evaluation.plan().target().target_kind(), NodeKind::Function);
+    assert_eq!(evaluation.plan().operations().len(), 3);
+    assert!(
+        evaluation
+            .preview()
+            .entries()
+            .iter()
+            .all(|entry| entry.replacement() == "НоваяФункция")
+    );
+
+    let fixture = planner_fixture(false);
+    let missing_request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::initial(),
+        fixture.configuration_id.clone(),
+        id("callable.missing"),
+        NEW_NAME,
+    )
+    .expect("missing-target request must be valid");
+    let missing = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &missing_request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("missing target must fail");
+    assert_eq!(missing.kind(), RefactoringErrorKind::TargetNotFound);
+
+    let unsupported_request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::initial(),
+        fixture.configuration_id.clone(),
+        id(MODULE),
+        NEW_NAME,
+    )
+    .expect("unsupported-target request must be valid");
+    let unsupported = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &unsupported_request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("Module target must fail");
+    assert_eq!(unsupported.kind(), RefactoringErrorKind::UnsupportedTarget);
+
+    let no_change_request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::initial(),
+        fixture.configuration_id.clone(),
+        target_id(),
+        "oldname",
+    )
+    .expect("case-only request shape must be valid");
+    let no_change = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &no_change_request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("case-only target rename must fail");
+    assert_eq!(no_change.kind(), RefactoringErrorKind::NoChange);
+}
+
+fn candidate_bound_document(
+    index: usize,
+    occurrence_count: usize,
+    include_target_declaration: bool,
+) -> SourceDocument {
+    let module = if include_target_declaration {
+        id(MODULE)
+    } else {
+        id(format!("module.bound.{index:02}"))
+    };
+    let document_id = SourceDocumentId::new(id(CONFIGURATION), module)
+        .expect("bounded document identity must be valid");
+    let mut raw = Vec::with_capacity(
+        occurrence_count
+            .saturating_mul(2)
+            .saturating_add(OLD_NAME.len()),
+    );
+    let mut ranges = Vec::with_capacity(occurrence_count);
+    if include_target_declaration {
+        raw.extend_from_slice(OLD_NAME.as_bytes());
+        ranges.push((
+            SourceOccurrenceKind::Declaration,
+            0,
+            OLD_NAME.len(),
+            OLD_NAME,
+            target_id(),
+        ));
+        raw.push(b' ');
+    }
+    while ranges.len() < occurrence_count {
+        let start = raw.len();
+        raw.extend_from_slice(b"X ");
+        ranges.push((
+            SourceOccurrenceKind::LocalCall,
+            start,
+            start + 1,
+            "X",
+            id("callable.unrelated"),
+        ));
+    }
+    let version = SourceContentVersion::from_bytes(&raw);
+    let occurrences = ranges
+        .into_iter()
+        .map(|(kind, start, end, token, mapped_target)| {
+            SourceOccurrence::new(
+                document_id.clone(),
+                version,
+                SourceByteRange::new(start, end).expect("range must be valid"),
+                kind,
+                token,
+                Some(mapped_target),
+                SourceOccurrenceResolution::Unique,
+            )
+            .expect("bounded occurrence must be valid")
+        })
+        .collect();
+    SourceDocument::new(
+        document_id,
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        ConfinedSourcePath::new(
+            SourcePath::new(format!("configuration/Bound/{index:02}.bsl"))
+                .expect("path must be valid"),
+            &SourcePath::new("configuration").expect("root must be valid"),
+        )
+        .expect("path must be confined"),
+        raw,
+        occurrences,
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect("bounded source document must be valid")
+}
+
+#[test]
+fn planner_accepts_exact_candidate_bound_and_rejects_one_over_atomically() {
+    let mut fixture = planner_fixture(false);
+    let documents_at_exact_bound = (0..16)
+        .map(|index| candidate_bound_document(index, 4_096, index == 0))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        documents_at_exact_bound
+            .iter()
+            .map(|document| document.occurrences().len())
+            .sum::<usize>(),
+        MAX_REFACTORING_CANDIDATES
+    );
+    fixture.evidence = SourceEvidenceSet::new(
+        fixture.configuration_id.clone(),
+        documents_at_exact_bound.clone(),
+    )
+    .expect("exact candidate bound evidence must be valid");
+    let exact = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &fixture.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect("exact admitted candidate bound must pass");
+    assert_eq!(exact.plan().operations().len(), 1);
+
+    let mut one_over_documents = documents_at_exact_bound;
+    one_over_documents.push(candidate_bound_document(16, 1, false));
+    fixture.evidence = SourceEvidenceSet::new(fixture.configuration_id.clone(), one_over_documents)
+        .expect("one-over planner evidence must remain valid source evidence");
+    let one_over = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &fixture.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("one-over admitted candidate bound must fail atomically");
+    assert_eq!(one_over.kind(), RefactoringErrorKind::BoundExceeded);
+    assert_eq!(
+        one_over.bound(),
+        Some(RefactoringBound::CandidateOccurrences)
+    );
+    assert_eq!(one_over.actual(), Some(MAX_REFACTORING_CANDIDATES + 1));
 }

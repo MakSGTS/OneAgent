@@ -1,7 +1,7 @@
-//! Immutable source evidence for deterministic refactoring planning.
+//! Immutable source evidence and deterministic read-only refactoring planning.
 //!
-//! This module owns source-independent retained documents and occurrences. It
-//! performs no filesystem access, semantic resolution, planning, or mutation.
+//! This module owns source-independent retained documents, occurrences, plans,
+//! and previews. It performs no filesystem access or source mutation.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,8 +9,8 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
 use oneagent_bsl::{BslSymbolKind, bsl_callable_id, bsl_name_key, bsl_names_equal};
-use oneagent_common::{EntityId, SourcePath, SourceSpan, sha256, sha256_hex};
-use oneagent_graph::NodeKind;
+use oneagent_common::{EntityId, SourcePath, SourcePosition, SourceSpan, sha256, sha256_hex};
+use oneagent_graph::{GraphNode, NodeId, NodeKind, SemanticGraph, SemanticGraphQuery};
 
 pub use crate::change_impact::ChangeImpactPublicationId as WorkspacePublicationId;
 
@@ -1831,6 +1831,569 @@ impl RefactoringPreview {
     #[must_use]
     pub const fn completeness(&self) -> RefactoringCompleteness {
         self.completeness
+    }
+}
+
+/// Borrowed immutable Graph and source evidence for one Configuration publication.
+#[derive(Debug, Clone, Copy)]
+pub struct RefactoringPlannerInput<'evidence> {
+    publication_id: WorkspacePublicationId,
+    configuration_id: &'evidence EntityId,
+    graph: &'evidence SemanticGraph,
+    source_evidence: &'evidence SourceEvidenceSet,
+}
+
+impl<'evidence> RefactoringPlannerInput<'evidence> {
+    /// Creates a borrowed planner input without reading or cloning source content.
+    #[must_use]
+    pub const fn new(
+        publication_id: WorkspacePublicationId,
+        configuration_id: &'evidence EntityId,
+        graph: &'evidence SemanticGraph,
+        source_evidence: &'evidence SourceEvidenceSet,
+    ) -> Self {
+        Self {
+            publication_id,
+            configuration_id,
+            graph,
+            source_evidence,
+        }
+    }
+
+    /// Returns the immutable Workspace publication identity.
+    #[must_use]
+    pub const fn publication_id(self) -> WorkspacePublicationId {
+        self.publication_id
+    }
+
+    /// Returns the selected canonical Configuration identity.
+    #[must_use]
+    pub const fn configuration_id(self) -> &'evidence EntityId {
+        self.configuration_id
+    }
+
+    /// Returns the complete semantic Graph snapshot.
+    #[must_use]
+    pub const fn graph(self) -> &'evidence SemanticGraph {
+        self.graph
+    }
+
+    /// Returns the complete retained source evidence.
+    #[must_use]
+    pub const fn source_evidence(self) -> &'evidence SourceEvidenceSet {
+        self.source_evidence
+    }
+}
+
+/// Minimal cooperative cancellation observation boundary for planning.
+pub trait RefactoringCancellationSignal: Send + Sync {
+    /// Returns whether planning cancellation was requested.
+    fn is_cancelled(&self) -> bool;
+}
+
+/// Cancellation signal that never requests cancellation.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NeverCancelledRefactoring;
+
+impl RefactoringCancellationSignal for NeverCancelledRefactoring {
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+}
+
+/// Atomic complete plan and deterministic read-only preview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefactoringEvaluation {
+    plan: RefactoringPlan,
+    preview: RefactoringPreview,
+}
+
+impl RefactoringEvaluation {
+    /// Returns the complete immutable plan.
+    #[must_use]
+    pub const fn plan(&self) -> &RefactoringPlan {
+        &self.plan
+    }
+
+    /// Returns the complete deterministic read-only preview.
+    #[must_use]
+    pub const fn preview(&self) -> &RefactoringPreview {
+        &self.preview
+    }
+
+    /// Splits the atomic evaluation into its immutable plan and preview values.
+    #[must_use]
+    pub fn into_parts(self) -> (RefactoringPlan, RefactoringPreview) {
+        (self.plan, self.preview)
+    }
+}
+
+/// Stateless Graph-backed evaluator for the accepted first refactoring family.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RefactoringPlanner;
+
+impl RefactoringPlanner {
+    /// Validates one immutable publication and builds a complete plan and preview.
+    ///
+    /// The evaluator uses only the supplied Graph query API and retained source
+    /// evidence. Any failure or cancellation returns no partial plan or preview.
+    ///
+    /// # Errors
+    ///
+    /// Returns one closed redacted failure for invalid, missing, ambiguous,
+    /// stale, conflicting, incomplete, cancelled, or over-bound evidence.
+    pub fn evaluate(
+        &self,
+        input: RefactoringPlannerInput<'_>,
+        request: &RefactoringRequest,
+        cancellation: &dyn RefactoringCancellationSignal,
+    ) -> Result<RefactoringEvaluation, RefactoringError> {
+        validate_planner_request(input, request, cancellation)?;
+        let query = SemanticGraphQuery::new(input.graph());
+        let (target_node, owner_module) = resolve_planner_target(
+            &query,
+            input.configuration_id(),
+            request.target_node_id(),
+            cancellation,
+        )?;
+        let admitted = admit_planner_source_evidence(input, target_node, cancellation)?;
+        let target = validate_planner_collisions(
+            input.configuration_id(),
+            request,
+            &query,
+            target_node,
+            owner_module,
+            admitted.declaration,
+        )?;
+
+        observe_refactoring_cancellation(cancellation)?;
+        if admitted.candidate_count > MAX_REFACTORING_CANDIDATES {
+            return Err(RefactoringError::bounded(
+                RefactoringBound::CandidateOccurrences,
+                admitted.candidate_count,
+            ));
+        }
+        let plan =
+            build_refactoring_plan(input, request, target, admitted.occurrences, cancellation)?;
+
+        observe_refactoring_cancellation(cancellation)?;
+        let preview = build_refactoring_preview(&plan, input.source_evidence(), cancellation)?;
+        observe_refactoring_cancellation(cancellation)?;
+        Ok(RefactoringEvaluation { plan, preview })
+    }
+}
+
+fn validate_planner_request(
+    input: RefactoringPlannerInput<'_>,
+    request: &RefactoringRequest,
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<(), RefactoringError> {
+    observe_refactoring_cancellation(cancellation)?;
+    validate_plan_identity(input.configuration_id())?;
+    validate_plan_identity(request.configuration_id())?;
+    validate_plan_identity(request.target_node_id())?;
+    validate_desired_name(request.desired_name())?;
+    observe_refactoring_cancellation(cancellation)?;
+    if request.expected_publication_id() != input.publication_id() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::PublicationMismatch,
+        ));
+    }
+    observe_refactoring_cancellation(cancellation)?;
+    if request.configuration_id() != input.configuration_id() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::ConfigurationNotFound,
+        ));
+    }
+    Ok(())
+}
+
+fn resolve_planner_target<'graph>(
+    query: &SemanticGraphQuery<'graph>,
+    configuration_id: &EntityId,
+    target_id: &EntityId,
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<(&'graph GraphNode, &'graph GraphNode), RefactoringError> {
+    let configuration = query
+        .node_by_entity_id(configuration_id)
+        .filter(|node| {
+            matches!(node.kind(), NodeKind::Metadata(kind) if kind.as_str() == "configuration")
+        })
+        .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::ConfigurationNotFound))?;
+    let target = query
+        .node_by_entity_id(target_id)
+        .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::TargetNotFound))?;
+    if !matches!(target.kind(), NodeKind::Procedure | NodeKind::Function) {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::UnsupportedTarget,
+        ));
+    }
+    validate_plan_identity(target.id())?;
+    let owners = query.owners(&NodeId::new(target.id().as_str()));
+    if owners.len() != 1 || owners[0].kind() != NodeKind::Module {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::AmbiguousOwner,
+        ));
+    }
+    let module = owners[0];
+    validate_plan_identity(module.id())?;
+    if !has_unique_configuration_owner_chain(query, module.id(), configuration.id(), cancellation)?
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::AmbiguousOwner,
+        ));
+    }
+    Ok((target, module))
+}
+
+struct AdmittedPlannerSourceEvidence {
+    candidate_count: usize,
+    declaration: SourceOccurrence,
+    occurrences: Vec<SourceOccurrence>,
+}
+
+fn admit_planner_source_evidence(
+    input: RefactoringPlannerInput<'_>,
+    target: &GraphNode,
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<AdmittedPlannerSourceEvidence, RefactoringError> {
+    observe_refactoring_cancellation(cancellation)?;
+    let evidence = input.source_evidence();
+    if evidence.configuration_id() != input.configuration_id() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IncompatibleEvidence,
+        ));
+    }
+    if evidence.documents().is_empty() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::SourceEvidenceMissing,
+        ));
+    }
+
+    let mut candidate_count = 0_usize;
+    let mut occurrences = Vec::new();
+    let mut declaration_count = 0_usize;
+    let mut declaration = None;
+    let mut failure = None;
+    for document in evidence.documents() {
+        observe_refactoring_cancellation(cancellation)?;
+        validate_planner_document(document)?;
+        candidate_count = candidate_count
+            .checked_add(document.occurrences().len())
+            .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow))?;
+        for occurrence in document.occurrences() {
+            if let Some(kind) = planner_occurrence_failure(target, occurrence) {
+                let candidate = (kind, document.id().clone(), occurrence.range());
+                if failure.as_ref().is_none_or(|current| &candidate < current) {
+                    failure = Some(candidate);
+                }
+            }
+            if occurrence.mapped_target_id() == Some(target.id()) {
+                if occurrence.kind() == SourceOccurrenceKind::Declaration {
+                    declaration_count = declaration_count.checked_add(1).ok_or_else(|| {
+                        RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow)
+                    })?;
+                    declaration.get_or_insert_with(|| occurrence.clone());
+                }
+                if occurrences.len() < MAX_REFACTORING_CANDIDATES {
+                    occurrences.push(occurrence.clone());
+                }
+            }
+        }
+    }
+    observe_refactoring_cancellation(cancellation)?;
+    if let Some((kind, _, _)) = failure {
+        return Err(RefactoringError::closed(kind));
+    }
+    if declaration_count == 0 {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::SourceEvidenceMissing,
+        ));
+    }
+    if declaration_count != 1 {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidOccurrence,
+        ));
+    }
+    Ok(AdmittedPlannerSourceEvidence {
+        candidate_count,
+        declaration: declaration
+            .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::SourceEvidenceMissing))?,
+        occurrences,
+    })
+}
+
+fn validate_planner_document(document: &SourceDocument) -> Result<(), RefactoringError> {
+    if document.format() == SourceFormat::DesignerXml
+        && !matches!(
+            document.module_role(),
+            BslModuleRole::Object | BslModuleRole::Manager | BslModuleRole::Common
+        )
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::UnsupportedSourceFormat,
+        ));
+    }
+    if document.completeness() != SourceEvidenceCompleteness::BslCallableRenameV1 {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::SourceEvidenceIncomplete,
+        ));
+    }
+    Ok(())
+}
+
+fn planner_occurrence_failure(
+    target: &GraphNode,
+    occurrence: &SourceOccurrence,
+) -> Option<RefactoringErrorKind> {
+    if occurrence.resolution() != SourceOccurrenceResolution::Unique
+        && bsl_names_equal(occurrence.token(), target.name().as_str())
+    {
+        Some(RefactoringErrorKind::AmbiguousOccurrence)
+    } else if occurrence.mapped_target_id() == Some(target.id())
+        && !bsl_names_equal(occurrence.token(), target.name().as_str())
+    {
+        Some(RefactoringErrorKind::InvalidOccurrence)
+    } else {
+        None
+    }
+}
+
+fn validate_planner_collisions(
+    configuration_id: &EntityId,
+    request: &RefactoringRequest,
+    query: &SemanticGraphQuery<'_>,
+    target_node: &GraphNode,
+    owner_module: &GraphNode,
+    declaration: SourceOccurrence,
+) -> Result<RefactoringTarget, RefactoringError> {
+    if bsl_names_equal(request.desired_name(), target_node.name().as_str()) {
+        return Err(RefactoringError::closed(RefactoringErrorKind::NoChange));
+    }
+    for kind in [NodeKind::Procedure, NodeKind::Function] {
+        for sibling in query.children_by_kind(&NodeId::new(owner_module.id().as_str()), kind) {
+            if sibling.id() != target_node.id()
+                && bsl_names_equal(sibling.name().as_str(), request.desired_name())
+            {
+                return Err(RefactoringError::closed(
+                    RefactoringErrorKind::NameCollision,
+                ));
+            }
+        }
+    }
+    let target = RefactoringTarget::new(
+        configuration_id.clone(),
+        target_node.id().clone(),
+        target_node.kind(),
+        owner_module.id().clone(),
+        declaration,
+        request.desired_name(),
+    )?;
+    if query
+        .node_by_entity_id(target.expected_post_rename_node_id())
+        .is_some_and(|node| node.id() != target_node.id())
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IdentityCollision,
+        ));
+    }
+    Ok(target)
+}
+
+fn build_refactoring_plan(
+    input: RefactoringPlannerInput<'_>,
+    request: &RefactoringRequest,
+    target: RefactoringTarget,
+    occurrences: Vec<SourceOccurrence>,
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<RefactoringPlan, RefactoringError> {
+    let mut operations = Vec::with_capacity(occurrences.len());
+    let mut source_preconditions = BTreeMap::new();
+    for occurrence in occurrences {
+        observe_refactoring_cancellation(cancellation)?;
+        let kind = match occurrence.kind() {
+            SourceOccurrenceKind::Declaration => {
+                RefactoringOperationKind::ReplaceDeclarationIdentifier
+            }
+            SourceOccurrenceKind::LocalCall | SourceOccurrenceKind::QualifiedCall => {
+                RefactoringOperationKind::ReplaceDirectCallIdentifier
+            }
+        };
+        source_preconditions.insert(
+            occurrence.document_id().clone(),
+            RefactoringSourcePrecondition::new(
+                occurrence.document_id().clone(),
+                occurrence.content_version(),
+            ),
+        );
+        operations.push(RefactoringOperation::new(
+            kind,
+            occurrence.kind(),
+            occurrence.document_id().clone(),
+            occurrence.content_version(),
+            occurrence.range(),
+            occurrence.token(),
+            request.desired_name(),
+            &[],
+        )?);
+    }
+    let preconditions = RefactoringPreconditionSet::new(
+        input.publication_id(),
+        input.configuration_id().clone(),
+        target.target_node_id().clone(),
+        target.target_kind(),
+        target.owner_module_id().clone(),
+        source_preconditions.into_values().collect(),
+    )?;
+    RefactoringPlan::new(request.clone(), target, preconditions, operations)
+}
+
+fn build_refactoring_preview(
+    plan: &RefactoringPlan,
+    evidence: &SourceEvidenceSet,
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<RefactoringPreview, RefactoringError> {
+    let mut entries = Vec::with_capacity(plan.operations().len());
+    for operation in plan.operations() {
+        observe_refactoring_cancellation(cancellation)?;
+        let document = evidence
+            .documents()
+            .binary_search_by(|candidate| candidate.id().cmp(operation.document_id()))
+            .ok()
+            .map(|index| &evidence.documents()[index])
+            .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::SourceEvidenceMissing))?;
+        if document.content_version() != operation.content_version() {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::StaleSourceVersion,
+            ));
+        }
+        let range = operation.range();
+        let raw = document.raw_content();
+        if raw.get(range.start_byte()..range.end_byte()) != Some(operation.expected().as_bytes()) {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::InvalidOccurrence,
+            ));
+        }
+        let position = raw_range_to_source_span(raw, range)?;
+        entries.push(RefactoringPreviewEntry::new(
+            operation,
+            document.path().clone(),
+            position,
+        )?);
+    }
+    RefactoringPreview::new(plan, entries)
+}
+
+fn raw_range_to_source_span(
+    raw: &[u8],
+    range: SourceByteRange,
+) -> Result<SourceSpan, RefactoringError> {
+    let source = std::str::from_utf8(raw)
+        .map_err(|_| RefactoringError::closed(RefactoringErrorKind::InvalidOccurrence))?;
+    if range.end_byte() > raw.len()
+        || !source.is_char_boundary(range.start_byte())
+        || !source.is_char_boundary(range.end_byte())
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidOccurrence,
+        ));
+    }
+    let start = raw_offset_to_source_position(raw, range.start_byte())?;
+    let end = raw_offset_to_source_position(raw, range.end_byte())?;
+    SourceSpan::new(start, end)
+        .map_err(|_| RefactoringError::closed(RefactoringErrorKind::InvalidOccurrence))
+}
+
+fn raw_offset_to_source_position(
+    raw: &[u8],
+    offset: usize,
+) -> Result<SourcePosition, RefactoringError> {
+    let mut cursor = usize::from(raw.starts_with(UTF8_BOM)) * UTF8_BOM.len();
+    if offset < cursor || offset > raw.len() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidOccurrence,
+        ));
+    }
+    let mut line = 1_u32;
+    let mut column = 1_u32;
+    while cursor < offset {
+        match raw[cursor] {
+            b'\r' => {
+                cursor += 1;
+                if cursor < raw.len() && raw[cursor] == b'\n' {
+                    cursor += 1;
+                }
+                line = line.checked_add(1).ok_or_else(|| {
+                    RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow)
+                })?;
+                column = 1;
+            }
+            b'\n' => {
+                cursor += 1;
+                line = line.checked_add(1).ok_or_else(|| {
+                    RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow)
+                })?;
+                column = 1;
+            }
+            _ => {
+                let scalar = std::str::from_utf8(&raw[cursor..])
+                    .map_err(|_| RefactoringError::closed(RefactoringErrorKind::InvalidOccurrence))?
+                    .chars()
+                    .next()
+                    .ok_or_else(|| {
+                        RefactoringError::closed(RefactoringErrorKind::InvalidOccurrence)
+                    })?;
+                cursor = cursor.checked_add(scalar.len_utf8()).ok_or_else(|| {
+                    RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow)
+                })?;
+                column = column.checked_add(1).ok_or_else(|| {
+                    RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow)
+                })?;
+            }
+        }
+        if cursor > offset {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::InvalidOccurrence,
+            ));
+        }
+    }
+    SourcePosition::new(line, column)
+        .map_err(|_| RefactoringError::closed(RefactoringErrorKind::InvalidOccurrence))
+}
+
+fn observe_refactoring_cancellation(
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<(), RefactoringError> {
+    if cancellation.is_cancelled() {
+        Err(RefactoringError::closed(RefactoringErrorKind::Cancelled))
+    } else {
+        Ok(())
+    }
+}
+
+fn has_unique_configuration_owner_chain(
+    query: &SemanticGraphQuery<'_>,
+    child: &EntityId,
+    configuration: &EntityId,
+    cancellation: &dyn RefactoringCancellationSignal,
+) -> Result<bool, RefactoringError> {
+    let mut current = child.clone();
+    let mut visited = BTreeSet::from([current.clone()]);
+    loop {
+        observe_refactoring_cancellation(cancellation)?;
+        let owners = query.owners(&NodeId::new(current.as_str()));
+        if owners.len() != 1 {
+            return Ok(false);
+        }
+        let owner = owners[0];
+        validate_plan_identity(owner.id())?;
+        if owner.id() == configuration {
+            return Ok(true);
+        }
+        if !visited.insert(owner.id().clone()) {
+            return Ok(false);
+        }
+        current = owner.id().clone();
     }
 }
 

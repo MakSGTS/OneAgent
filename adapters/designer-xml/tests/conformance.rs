@@ -1,5 +1,8 @@
 use oneagent_analysis::refactoring::{
-    BslModuleRole, SourceFormat, SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
+    BslModuleRole, NeverCancelledRefactoring, RefactoringEvaluation, RefactoringFamily,
+    RefactoringPlanner, RefactoringPlannerInput, RefactoringRequest, SourceEvidenceSet,
+    SourceFormat, SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
+    WorkspacePublicationId,
 };
 use oneagent_common::{EntityId, EntityName, sha256_hex};
 use oneagent_designer_xml::{
@@ -245,6 +248,73 @@ fn canonical_source_projection(
         .collect()
 }
 
+fn production_planner_evaluation(
+    graph: &SemanticGraph,
+    evidence: &SourceEvidenceSet,
+) -> RefactoringEvaluation {
+    let target = evidence
+        .documents()
+        .iter()
+        .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+        .find(|occurrence| {
+            occurrence.kind() == SourceOccurrenceKind::Declaration
+                && occurrence.token() == "FillSecurityCollection"
+        })
+        .and_then(SourceOccurrence::mapped_target_id)
+        .expect("paired production declaration must map uniquely")
+        .clone();
+    let request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        WorkspacePublicationId::initial(),
+        evidence.configuration_id().clone(),
+        target,
+        "FillSecurityCollectionRenamed",
+    )
+    .expect("production planner request must be valid");
+    RefactoringPlanner
+        .evaluate(
+            RefactoringPlannerInput::new(
+                WorkspacePublicationId::initial(),
+                evidence.configuration_id(),
+                graph,
+                evidence,
+            ),
+            &request,
+            &NeverCancelledRefactoring,
+        )
+        .expect("paired production evidence must produce a complete plan and preview")
+}
+
+fn assert_paired_production_planner(
+    designer_graph: &SemanticGraph,
+    designer_evidence: &SourceEvidenceSet,
+    edt_graph: &SemanticGraph,
+    edt_evidence: &SourceEvidenceSet,
+) {
+    let retained_designer_evidence = designer_evidence.clone();
+    let retained_edt_evidence = edt_evidence.clone();
+    let designer_plan = production_planner_evaluation(designer_graph, designer_evidence);
+    let repeated_designer_plan = production_planner_evaluation(designer_graph, designer_evidence);
+    let edt_plan = production_planner_evaluation(edt_graph, edt_evidence);
+
+    assert_eq!(designer_plan, repeated_designer_plan);
+    for evaluation in [&designer_plan, &edt_plan] {
+        assert_eq!(evaluation.plan().operations().len(), 3);
+        assert_eq!(evaluation.plan().summary().declaration_operations(), 1);
+        assert_eq!(evaluation.plan().summary().local_call_operations(), 1);
+        assert_eq!(evaluation.plan().summary().qualified_call_operations(), 1);
+        assert_eq!(evaluation.plan().summary().omitted_operations(), 0);
+        assert_eq!(evaluation.preview().entries().len(), 3);
+    }
+    assert_ne!(
+        designer_plan.plan().id(),
+        edt_plan.plan().id(),
+        "different exact bytes, ranges, and content versions remain semantic preconditions"
+    );
+    assert_eq!(designer_evidence, &retained_designer_evidence);
+    assert_eq!(edt_evidence, &retained_edt_evidence);
+}
+
 #[test]
 fn paired_production_builders_publish_equal_canonical_occurrence_evidence() {
     let designer = FileSystemDesignerXmlSemanticGraphBuilder
@@ -326,6 +396,13 @@ fn paired_production_builders_publish_equal_canonical_occurrence_evidence() {
             .filter(|edge| edge.kind() == oneagent_graph::EdgeKind::Calls)
             .count(),
         1
+    );
+
+    assert_paired_production_planner(
+        designer.graph(),
+        designer.source_evidence(),
+        edt.graph(),
+        edt.source_evidence(),
     );
 }
 

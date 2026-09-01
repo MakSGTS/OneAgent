@@ -1,4 +1,7 @@
-use oneagent_common::{EntityId, EntityName};
+use oneagent_analysis::refactoring::{
+    BslModuleRole, SourceFormat, SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
+};
+use oneagent_common::{EntityId, EntityName, sha256_hex};
 use oneagent_designer_xml::{
     DesignerXmlBuildScope, DesignerXmlSemanticCoverageReport, DesignerXmlSemanticGraphBuilder,
     FileSystemDesignerXmlSemanticGraphBuilder,
@@ -204,6 +207,126 @@ fn paired_first_slice_is_non_empty_and_equal() {
     assert!(coverage.observed().total_edges() > 0);
     assert_eq!(coverage.graph_report(), &designer.report());
     assert!(coverage.validation().is_valid());
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CanonicalOccurrence {
+    configuration_id: String,
+    module_id: String,
+    module_role: BslModuleRole,
+    kind: SourceOccurrenceKind,
+    token: String,
+    mapped_target: Option<String>,
+    resolution: SourceOccurrenceResolution,
+}
+
+fn canonical_source_projection(
+    evidence: &oneagent_analysis::refactoring::SourceEvidenceSet,
+) -> Vec<CanonicalOccurrence> {
+    evidence
+        .documents()
+        .iter()
+        .flat_map(|document| {
+            document
+                .occurrences()
+                .iter()
+                .map(|occurrence| CanonicalOccurrence {
+                    configuration_id: document.id().configuration_id().as_str().to_owned(),
+                    module_id: document.id().module_id().as_str().to_owned(),
+                    module_role: document.module_role(),
+                    kind: occurrence.kind(),
+                    token: occurrence.token().to_owned(),
+                    mapped_target: occurrence
+                        .mapped_target_id()
+                        .map(|id| id.as_str().to_owned()),
+                    resolution: occurrence.resolution(),
+                })
+        })
+        .collect()
+}
+
+#[test]
+fn paired_production_builders_publish_equal_canonical_occurrence_evidence() {
+    let designer = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
+            &fixture_root(),
+            &designer_fixture(),
+            DesignerXmlBuildScope::Partial,
+        )
+        .expect("paired Designer evidence must build");
+    let edt = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_source_evidence(&fixture_root(), &edt_fixture())
+        .expect("paired EDT evidence must build");
+    let repeated = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
+            &fixture_root(),
+            &designer_fixture(),
+            DesignerXmlBuildScope::Partial,
+        )
+        .expect("repeated Designer evidence must build");
+
+    assert_eq!(designer.source_evidence(), repeated.source_evidence());
+    let designer_document = &designer.source_evidence().documents()[0];
+    let edt_document = &edt.source_evidence().documents()[0];
+    assert_eq!(designer_document.format(), SourceFormat::DesignerXml);
+    assert_eq!(edt_document.format(), SourceFormat::Edt);
+    assert_ne!(designer_document.path(), edt_document.path());
+    assert_ne!(designer_document.raw_content(), edt_document.raw_content());
+    assert_ne!(
+        designer_document.content_version(),
+        edt_document.content_version()
+    );
+    assert_ne!(
+        designer_document.occurrences()[0].range(),
+        edt_document.occurrences()[0].range()
+    );
+    let designer_module_source = designer
+        .graph()
+        .node(designer_document.id().module_id())
+        .expect("Designer module node must exist")
+        .provenance()[0]
+        .source()
+        .expect("Designer module provenance must retain a source identity");
+    assert!(
+        designer_module_source
+            .as_str()
+            .contains(&sha256_hex(designer_document.raw_content())),
+        "Designer Graph provenance digest must agree with retained exact bytes"
+    );
+    assert_eq!(
+        canonical_source_projection(designer.source_evidence()),
+        canonical_source_projection(edt.source_evidence())
+    );
+    assert_eq!(designer_document.occurrences().len(), 4);
+    assert_eq!(
+        designer_document
+            .occurrences()
+            .iter()
+            .map(SourceOccurrence::kind)
+            .collect::<Vec<_>>(),
+        [
+            SourceOccurrenceKind::Declaration,
+            SourceOccurrenceKind::Declaration,
+            SourceOccurrenceKind::LocalCall,
+            SourceOccurrenceKind::QualifiedCall,
+        ]
+    );
+    assert_eq!(
+        designer
+            .graph()
+            .edges()
+            .filter(|edge| edge.kind() == oneagent_graph::EdgeKind::Calls)
+            .count(),
+        0,
+        "Task 4 must not add new Designer Graph facts"
+    );
+    assert_eq!(
+        edt.graph()
+            .edges()
+            .filter(|edge| edge.kind() == oneagent_graph::EdgeKind::Calls)
+            .count(),
+        1
+    );
 }
 
 fn terminal_outcome<T, E>(result: &Result<T, E>) -> TerminalOutcome {

@@ -4,6 +4,7 @@ mod coverage;
 mod metadata_object;
 mod module_reader;
 mod semantic_graph;
+mod source_evidence;
 
 pub use coverage::{DesignerXmlSemanticCoverageRegistry, DesignerXmlSemanticCoverageReport};
 pub use metadata_object::{
@@ -16,9 +17,10 @@ pub use module_reader::{
     DesignerXmlModuleReader, DesignerXmlModuleSourceEvidence, FileSystemDesignerXmlModuleReader,
 };
 pub use semantic_graph::{
-    DesignerXmlGraphError, DesignerXmlSemanticGraphBuilder,
+    DesignerXmlGraphError, DesignerXmlSemanticGraphBuildResult, DesignerXmlSemanticGraphBuilder,
     FileSystemDesignerXmlSemanticGraphBuilder,
 };
+pub use source_evidence::DesignerXmlSourceEvidenceError;
 
 use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::{CommonMetadataPayload, MetadataPayload};

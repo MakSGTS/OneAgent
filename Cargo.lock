@@ -731,6 +731,7 @@ version = "0.1.0"
 name = "oneagent-designer-xml"
 version = "0.1.0"
 dependencies = [
+ "oneagent-analysis",
  "oneagent-bsl",
  "oneagent-common",
  "oneagent-edt",
@@ -745,6 +746,7 @@ dependencies = [
 name = "oneagent-edt"
 version = "0.1.0"
 dependencies = [
+ "oneagent-analysis",
  "oneagent-bsl",
  "oneagent-common",
  "oneagent-graph",

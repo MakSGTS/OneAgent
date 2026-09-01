@@ -22,6 +22,7 @@ mod report_data_composition;
 mod report_data_composition_emission;
 mod role_rights;
 mod service_descriptor;
+mod source_evidence;
 mod subsystem_content;
 mod subsystem_hierarchy;
 mod writes;
@@ -101,7 +102,9 @@ pub use bsl_graph::{
 };
 pub use coverage::{EdtSemanticCoverageRegistry, EdtSemanticCoverageReport};
 pub use form_navigation_emission::EdtFormNavigationEmissionError;
+pub use source_evidence::EdtSourceEvidenceError;
 
+use oneagent_analysis::refactoring::SourceEvidenceSet;
 use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
 use quick_xml::Reader;
@@ -592,6 +595,39 @@ impl EdtSemanticGraphBuildResult {
     }
 }
 
+/// One production EDT graph build paired with complete captured BSL source evidence.
+#[derive(Debug, Clone)]
+pub struct EdtSemanticGraphSourceBuildResult {
+    build: EdtSemanticGraphBuildResult,
+    source_evidence: SourceEvidenceSet,
+}
+
+impl EdtSemanticGraphSourceBuildResult {
+    /// Returns the existing graph build result without changing its semantics.
+    #[must_use]
+    pub const fn build(&self) -> &EdtSemanticGraphBuildResult {
+        &self.build
+    }
+
+    /// Returns the generated semantic graph.
+    #[must_use]
+    pub const fn graph(&self) -> &SemanticGraph {
+        self.build.graph()
+    }
+
+    /// Returns canonical immutable source evidence for the Configuration.
+    #[must_use]
+    pub const fn source_evidence(&self) -> &SourceEvidenceSet {
+        &self.source_evidence
+    }
+
+    /// Consumes the envelope and returns the compatible graph build result.
+    #[must_use]
+    pub fn into_build(self) -> EdtSemanticGraphBuildResult {
+        self.build
+    }
+}
+
 /// Builds an initial semantic graph from an EDT project.
 pub trait EdtSemanticGraphBuilder {
     /// Builds a semantic graph and ordered diagnostics rooted at the EDT configuration.
@@ -605,6 +641,21 @@ pub trait EdtSemanticGraphBuilder {
         &self,
         project_root: &Path,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError>;
+
+    /// Builds the graph and complete immutable BSL source evidence in one capture.
+    ///
+    /// `project_root` must be a strict descendant of `workspace_root` so every
+    /// retained path is Workspace-relative and Configuration-confined.
+    ///
+    /// # Errors
+    ///
+    /// Returns a fatal error without a result when graph construction or source
+    /// evidence capture is incomplete, escaping, conflicting, or over-bound.
+    fn build_graph_with_source_evidence(
+        &self,
+        workspace_root: &Path,
+        project_root: &Path,
+    ) -> Result<EdtSemanticGraphSourceBuildResult, EdtGraphError>;
 
     /// Builds a semantic graph rooted at the EDT configuration.
     ///
@@ -629,36 +680,70 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         &self,
         project_root: &Path,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
-        Self::build_graph_with_metadata_reference_scope(
+        Self::build_graph_artifacts_with_metadata_reference_scope(
             project_root,
             query_source_resolution::WorkspaceResolutionScope::Complete,
         )
+        .map(|artifacts| artifacts.build)
+    }
+
+    fn build_graph_with_source_evidence(
+        &self,
+        workspace_root: &Path,
+        project_root: &Path,
+    ) -> Result<EdtSemanticGraphSourceBuildResult, EdtGraphError> {
+        let artifacts = Self::build_graph_artifacts_with_metadata_reference_scope(
+            project_root,
+            query_source_resolution::WorkspaceResolutionScope::Complete,
+        )?;
+        let source_evidence = source_evidence::build_source_evidence(
+            workspace_root,
+            project_root,
+            &artifacts.configuration_id,
+            &artifacts.modules,
+        )?;
+        Ok(EdtSemanticGraphSourceBuildResult {
+            build: artifacts.build,
+            source_evidence,
+        })
     }
 }
 
+struct EdtGraphBuildArtifacts {
+    build: EdtSemanticGraphBuildResult,
+    configuration_id: EntityId,
+    modules: Vec<EdtModuleDescriptor>,
+}
+
 impl FileSystemEdtSemanticGraphBuilder {
+    #[cfg(test)]
     fn build_graph_with_metadata_reference_scope(
         project_root: &Path,
         metadata_reference_scope: query_source_resolution::WorkspaceResolutionScope,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
-        let (configuration, configuration_payload) =
-            FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
-        let mut graph = SemanticGraph::new();
+        Self::build_graph_artifacts_with_metadata_reference_scope(
+            project_root,
+            metadata_reference_scope,
+        )
+        .map(|artifacts| artifacts.build)
+    }
+
+    fn build_graph_artifacts_with_metadata_reference_scope(
+        project_root: &Path,
+        metadata_reference_scope: query_source_resolution::WorkspaceResolutionScope,
+    ) -> Result<EdtGraphBuildArtifacts, EdtGraphError> {
+        let (mut graph, configuration_id) = initialize_configuration_graph(project_root)?;
         let mut collected_metadata = CollectedTopLevelMetadata::default();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
 
-        let configuration_id = configuration.id().clone();
-        insert_configuration_node(
-            &mut graph,
-            project_root,
-            &configuration,
-            configuration_payload,
-        )?;
-
         let source_root = project_root.join("src");
         if !source_root.is_dir() {
-            return Ok(EdtSemanticGraphBuildResult::new(graph, Vec::new()));
+            return Ok(EdtGraphBuildArtifacts {
+                build: EdtSemanticGraphBuildResult::new(graph, Vec::new()),
+                configuration_id,
+                modules: Vec::new(),
+            });
         }
 
         let kind_by_directory = supported_metadata_directories();
@@ -748,15 +833,54 @@ impl FileSystemEdtSemanticGraphBuilder {
             &mut reference_requests,
         )?;
 
-        finish_configuration_graph_build(
+        finish_graph_artifacts(
             graph,
-            &collected_metadata.writes_sources,
-            &collected_metadata.event_subscriptions,
+            collected_metadata,
             diagnostics,
             reference_statistics,
             reference_requests,
+            configuration_id,
         )
     }
+}
+
+fn initialize_configuration_graph(
+    project_root: &Path,
+) -> Result<(SemanticGraph, EntityId), EdtGraphError> {
+    let (configuration, configuration_payload) =
+        FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
+    let configuration_id = configuration.id().clone();
+    let mut graph = SemanticGraph::new();
+    insert_configuration_node(
+        &mut graph,
+        project_root,
+        &configuration,
+        configuration_payload,
+    )?;
+    Ok((graph, configuration_id))
+}
+
+fn finish_graph_artifacts(
+    graph: SemanticGraph,
+    collected: CollectedTopLevelMetadata,
+    diagnostics: BTreeSet<SemanticDiagnostic>,
+    reference_statistics: SemanticReferenceStatistics,
+    reference_requests: SemanticReferenceRequestLedger,
+    configuration_id: EntityId,
+) -> Result<EdtGraphBuildArtifacts, EdtGraphError> {
+    let build = finish_configuration_graph_build(
+        graph,
+        &collected.writes_sources,
+        &collected.event_subscriptions,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+    )?;
+    Ok(EdtGraphBuildArtifacts {
+        build,
+        configuration_id,
+        modules: collected.modules,
+    })
 }
 
 fn add_module_and_xdto_semantics(
@@ -3260,6 +3384,9 @@ pub enum EdtGraphError {
     /// BSL symbols could not be added to the graph.
     Bsl(EdtBslGraphError),
 
+    /// Immutable BSL source evidence could not be published.
+    SourceEvidence(EdtSourceEvidenceError),
+
     /// Static Form navigation could not be collected or emitted.
     FormNavigation(form_navigation_emission::EdtFormNavigationEmissionError),
 }
@@ -3361,6 +3488,7 @@ impl Display for EdtGraphError {
             Self::Bsl(error) => {
                 write!(formatter, "failed to add BSL symbols to graph: {error}")
             }
+            Self::SourceEvidence(error) => write!(formatter, "EDT source evidence error: {error}"),
             Self::FormNavigation(error) => {
                 write!(formatter, "failed to emit EDT Form navigation: {error}")
             }
@@ -3496,6 +3624,7 @@ impl std::error::Error for EdtGraphError {
             | Self::InvalidReportDataCompositionOwner { .. }
             | Self::ReportDataCompositionArtifactOutsideProject { .. } => None,
             Self::Bsl(error) => Some(error),
+            Self::SourceEvidence(error) => Some(error),
             Self::FormNavigation(error) => Some(error),
         }
     }
@@ -3504,6 +3633,12 @@ impl std::error::Error for EdtGraphError {
 impl From<EdtLoadError> for EdtGraphError {
     fn from(error: EdtLoadError) -> Self {
         Self::Load(error)
+    }
+}
+
+impl From<EdtSourceEvidenceError> for EdtGraphError {
+    fn from(error: EdtSourceEvidenceError) -> Self {
+        Self::SourceEvidence(error)
     }
 }
 

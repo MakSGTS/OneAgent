@@ -1,5 +1,6 @@
 //! Production semantic graph emission for hierarchical Designer XML sources.
 
+use oneagent_analysis::refactoring::SourceEvidenceSet;
 use oneagent_bsl::{
     BslDeclarationExtractor, BslParseError, BslSymbolKind, LineBslDeclarationExtractor,
 };
@@ -18,8 +19,9 @@ use std::path::{Path, PathBuf};
 use crate::{
     DesignerXmlBuildScope, DesignerXmlLoadError, DesignerXmlMetadataObjectDescriptor,
     DesignerXmlMetadataObjectError, DesignerXmlMetadataObjectReader, DesignerXmlModuleDescriptor,
-    DesignerXmlModuleError, DesignerXmlModuleReader, FileSystemDesignerXmlConfigurationLoader,
-    FileSystemDesignerXmlMetadataObjectReader, FileSystemDesignerXmlModuleReader,
+    DesignerXmlModuleError, DesignerXmlModuleReader, DesignerXmlSourceEvidenceError,
+    FileSystemDesignerXmlConfigurationLoader, FileSystemDesignerXmlMetadataObjectReader,
+    FileSystemDesignerXmlModuleReader,
 };
 
 const CONFIGURATION_FILE: &str = "Configuration.xml";
@@ -38,6 +40,52 @@ pub trait DesignerXmlSemanticGraphBuilder {
         project_root: &Path,
         scope: DesignerXmlBuildScope,
     ) -> Result<SemanticGraph, DesignerXmlGraphError>;
+
+    /// Builds the graph and immutable BSL source evidence in one capture.
+    ///
+    /// # Errors
+    ///
+    /// Returns no result when graph construction or source evidence capture fails.
+    fn build_graph_with_source_evidence(
+        &self,
+        workspace_root: &Path,
+        project_root: &Path,
+        scope: DesignerXmlBuildScope,
+    ) -> Result<DesignerXmlSemanticGraphBuildResult, DesignerXmlGraphError>;
+}
+
+/// One Designer XML graph paired with captured BSL source evidence and input scope.
+#[derive(Debug, Clone)]
+pub struct DesignerXmlSemanticGraphBuildResult {
+    graph: SemanticGraph,
+    source_evidence: SourceEvidenceSet,
+    scope: DesignerXmlBuildScope,
+}
+
+impl DesignerXmlSemanticGraphBuildResult {
+    /// Returns the generated semantic graph.
+    #[must_use]
+    pub const fn graph(&self) -> &SemanticGraph {
+        &self.graph
+    }
+
+    /// Returns canonical immutable source evidence.
+    #[must_use]
+    pub const fn source_evidence(&self) -> &SourceEvidenceSet {
+        &self.source_evidence
+    }
+
+    /// Returns the caller-declared complete or partial build scope.
+    #[must_use]
+    pub const fn scope(&self) -> DesignerXmlBuildScope {
+        self.scope
+    }
+
+    /// Consumes the envelope and returns the compatible graph.
+    #[must_use]
+    pub fn into_graph(self) -> SemanticGraph {
+        self.graph
+    }
 }
 
 /// Filesystem implementation of [`DesignerXmlSemanticGraphBuilder`].
@@ -50,36 +98,72 @@ impl DesignerXmlSemanticGraphBuilder for FileSystemDesignerXmlSemanticGraphBuild
         project_root: &Path,
         scope: DesignerXmlBuildScope,
     ) -> Result<SemanticGraph, DesignerXmlGraphError> {
-        let (configuration, configuration_payload) =
-            FileSystemDesignerXmlConfigurationLoader::load_with_payload(project_root, scope)?;
-        let metadata = FileSystemDesignerXmlMetadataObjectReader.read_all(project_root, scope)?;
-        let modules =
-            FileSystemDesignerXmlModuleReader.read_modules(project_root, scope, &metadata)?;
-
-        let mut graph = SemanticGraph::new();
-        let configuration_path = project_root.join(CONFIGURATION_FILE);
-        let configuration_provenance = provenance_from_file(
-            &configuration_path,
-            &format!("configuration={}", configuration.id().as_str()),
-            GRAPH_PRODUCER,
-        )?;
-        insert_metadata_node(
-            &mut graph,
-            configuration.id().clone(),
-            configuration.name().clone(),
-            MetadataKind::Configuration,
-            configuration_payload,
-            configuration_provenance,
-        )?;
-
-        for descriptor in &metadata {
-            emit_metadata(&mut graph, configuration.id(), descriptor)?;
-        }
-        for module in &modules {
-            emit_module_and_declarations(&mut graph, module)?;
-        }
-        Ok(graph)
+        build_graph_artifacts(project_root, scope).map(|artifacts| artifacts.graph)
     }
+
+    fn build_graph_with_source_evidence(
+        &self,
+        workspace_root: &Path,
+        project_root: &Path,
+        scope: DesignerXmlBuildScope,
+    ) -> Result<DesignerXmlSemanticGraphBuildResult, DesignerXmlGraphError> {
+        let artifacts = build_graph_artifacts(project_root, scope)?;
+        let source_evidence = crate::source_evidence::build_source_evidence(
+            workspace_root,
+            project_root,
+            &artifacts.configuration_id,
+            &artifacts.modules,
+        )?;
+        Ok(DesignerXmlSemanticGraphBuildResult {
+            graph: artifacts.graph,
+            source_evidence,
+            scope,
+        })
+    }
+}
+
+struct DesignerXmlGraphBuildArtifacts {
+    graph: SemanticGraph,
+    configuration_id: EntityId,
+    modules: Vec<DesignerXmlModuleDescriptor>,
+}
+
+fn build_graph_artifacts(
+    project_root: &Path,
+    scope: DesignerXmlBuildScope,
+) -> Result<DesignerXmlGraphBuildArtifacts, DesignerXmlGraphError> {
+    let (configuration, configuration_payload) =
+        FileSystemDesignerXmlConfigurationLoader::load_with_payload(project_root, scope)?;
+    let metadata = FileSystemDesignerXmlMetadataObjectReader.read_all(project_root, scope)?;
+    let modules = FileSystemDesignerXmlModuleReader.read_modules(project_root, scope, &metadata)?;
+
+    let mut graph = SemanticGraph::new();
+    let configuration_path = project_root.join(CONFIGURATION_FILE);
+    let configuration_provenance = provenance_from_file(
+        &configuration_path,
+        &format!("configuration={}", configuration.id().as_str()),
+        GRAPH_PRODUCER,
+    )?;
+    insert_metadata_node(
+        &mut graph,
+        configuration.id().clone(),
+        configuration.name().clone(),
+        MetadataKind::Configuration,
+        configuration_payload,
+        configuration_provenance,
+    )?;
+
+    for descriptor in &metadata {
+        emit_metadata(&mut graph, configuration.id(), descriptor)?;
+    }
+    for module in &modules {
+        emit_module_and_declarations(&mut graph, module)?;
+    }
+    Ok(DesignerXmlGraphBuildArtifacts {
+        graph,
+        configuration_id: configuration.id().clone(),
+        modules,
+    })
 }
 
 fn emit_metadata(
@@ -297,6 +381,8 @@ pub enum DesignerXmlGraphError {
     Graph(GraphError),
     /// BSL declaration extraction failed.
     Bsl(BslParseError),
+    /// Immutable source evidence construction failed.
+    SourceEvidence(DesignerXmlSourceEvidenceError),
     /// Two accepted facts produced one node identity.
     DuplicateNode(EntityId),
     /// One ownership edge was emitted more than once.
@@ -338,6 +424,12 @@ impl From<GraphError> for DesignerXmlGraphError {
     }
 }
 
+impl From<DesignerXmlSourceEvidenceError> for DesignerXmlGraphError {
+    fn from(value: DesignerXmlSourceEvidenceError) -> Self {
+        Self::SourceEvidence(value)
+    }
+}
+
 impl From<BslParseError> for DesignerXmlGraphError {
     fn from(value: BslParseError) -> Self {
         Self::Bsl(value)
@@ -366,6 +458,9 @@ impl Display for DesignerXmlGraphError {
             Self::NodePayload(source) => write!(formatter, "invalid graph payload: {source}"),
             Self::Graph(source) => write!(formatter, "Designer XML graph failed: {source}"),
             Self::Bsl(source) => write!(formatter, "Designer XML BSL failed: {source}"),
+            Self::SourceEvidence(source) => {
+                write!(formatter, "Designer XML source evidence failed: {source}")
+            }
             Self::DuplicateNode(id) => write!(formatter, "duplicate Designer XML node {id}"),
             Self::DuplicateContains { owner, child } => {
                 write!(
@@ -387,6 +482,7 @@ impl std::error::Error for DesignerXmlGraphError {
             Self::NodePayload(source) => Some(source),
             Self::Graph(source) => Some(source),
             Self::Bsl(source) => Some(source),
+            Self::SourceEvidence(source) => Some(source),
             Self::InvalidSourceIdentifier
             | Self::InvalidSourceLocation
             | Self::DuplicateNode(_)

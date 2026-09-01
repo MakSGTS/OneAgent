@@ -180,22 +180,32 @@ impl AnalyzedBslModule {
 ///
 /// Returns an error when the module cannot be read or parsed.
 pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule, EdtBslGraphError> {
-    let source =
-        fs::read_to_string(module.path()).map_err(|source| EdtBslGraphError::ReadModule {
+    let fallback;
+    let raw_source = if let Some(raw_source) = module.raw_source() {
+        raw_source
+    } else {
+        fallback = fs::read(module.path()).map_err(|source| EdtBslGraphError::ReadModule {
             path: module.path().to_path_buf(),
             source,
         })?;
+        &fallback
+    };
+    let source =
+        std::str::from_utf8(raw_source).map_err(|source| EdtBslGraphError::ReadModule {
+            path: module.path().to_path_buf(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
+        })?;
 
     let symbols = LineBslDeclarationExtractor
-        .extract(module.id(), &source)
+        .extract(module.id(), source)
         .map_err(EdtBslGraphError::ParseDeclarations)?;
 
     let calls = LineBslCallExtractor
-        .extract_calls(module.id(), &source)
+        .extract_calls(module.id(), source)
         .map_err(EdtBslGraphError::ParseCalls)?;
 
     let queries = LineBslQueryExtractor
-        .extract_queries(module.id(), &source)
+        .extract_queries(module.id(), source)
         .map_err(EdtBslGraphError::ParseQueries)?;
 
     let source_path = SourcePath::new(

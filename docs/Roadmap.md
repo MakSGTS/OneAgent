@@ -9871,6 +9871,69 @@ and are reported separately rather than counted. Sprint 40 is now `active`;
 Task 2 owns architecture acceptance, and no edit or mutation capability is
 claimed.
 
+###### Sprint 40 architecture decision
+
+[ADR-0063](adr/0063-refactoring-planner.md) is `Accepted`. The only first
+family is `bsl_callable_rename_v1`: rename one top-level BSL Procedure or
+Function declaration and every supported local or exported qualified direct
+call occurrence that resolves uniquely to it in one complete Configuration
+publication. EDT and Designer XML are paired source formats; unsupported,
+unresolved, ambiguous, incomplete, stale, conflicting, or over-bound target
+evidence rejects the whole request. Graph remains semantic identity, ownership,
+call, and query authority, while `oneagent-analysis::refactoring` owns the
+source-independent immutable document, occurrence, request, precondition,
+target, operation, plan, preview, summary, bound, and failure contracts.
+
+One source document is identified by Configuration and Module IDs and retains
+a confined Workspace-relative path, exact raw UTF-8 bytes, raw length plus
+SHA-256 content version, exact non-empty half-open raw-byte occurrence ranges,
+and one complete family-specific occurrence ledger. A planner borrows one
+immutable Workspace Arc and may not read source after publication. The
+ADR-0061 process-local sequence is generalized to one
+`WorkspacePublicationId`; Change Impact and planning use the same non-zero
+counter, lifetime, and failed-attempt behavior. Target identity retains the
+pre-rename Node ID and one owner Module while recording the BSL-owned expected
+post-rename ID separately.
+
+The desired identifier is bounded to 256 UTF-8 bytes, uses the accepted BSL
+Unicode identifier grammar and lowercase equivalence, rejects the closed v1
+keyword set, case-only no-ops, sibling callable collisions, and Graph identity
+collisions. Declaration and direct-call replacements are the only operations;
+exact duplicates collapse, dependencies are forbidden, and any unequal same
+range, overlap, version conflict, or identity collision fails atomically.
+Operations are ordered by document ID, descending raw range, kind, and ID.
+Plan and operation IDs use canonical length-prefixed encoding and SHA-256;
+successful plans are complete, checked, and contain no omitted operation.
+
+Preview is a deterministic structured no-snippet projection with confined
+relative paths and exact ranges. It never creates patched text, performs a
+write, changes Workspace/cache/editor/protocol state, or grants authorization.
+The internal contract admits at most 4,096 documents, 1 MiB per document,
+64 MiB total source, 4,096 occurrences per document, and 65,536 candidate or
+planned operations; exact identity/path/name, public preview, Tool Policy,
+diagnostic, and MCP frame bounds are fixed by ADR-0063 with exact/one-over
+evidence and deterministic closed failure precedence.
+
+Workspace publications must contain complete paired source evidence or fail
+before replacement. Cache schema remains `1`, semantic compatibility advances
+from `5` to `6`, and warm decode reconstructs exact documents from the private
+source-state bytes while validating a persisted canonical occurrence manifest;
+publication IDs and plans are not persisted. Task 8 adds the eighth
+lexicographically ordered read-only tool `oneagent.refactor.plan` for all three
+supported MCP revisions, preserves every legacy tool, and synchronizes only
+the VS Code catalog assertion without adding an edit command or UI.
+
+Tasks 3–4 are the hard implementation gate: they must prove immutable raw
+documents, content versions, exact ranges, mapping, completeness, confinement,
+and equal paired EDT/Designer evidence before planner evaluation. Tasks 5–9
+then own the domain, deterministic planner, Workspace/cache composition,
+read-only product projection, and complete evidence. Task 2 changes no Rust,
+Cargo, adapter, Runtime, cache, protocol, policy, client, fixture, or product
+behavior. Source mutation, apply authorization, editor edits, transaction
+staging, pre-write recheck, atomicity, rollback, reversibility, recovery,
+post-edit rebuild, and semantic validation remain explicitly owned by Sprint
+41.
+
 ###### State, failure, and validation gates
 
 Sprint 40 remains `next` during planning, becomes `active` only from Task 1,

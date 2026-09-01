@@ -8518,7 +8518,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
-| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | next |
+| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | active |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
 
 ##### Sprint 36 Diagnostics Engine execution plan
@@ -9832,6 +9832,44 @@ supplies the exact immutable range to one fresh-context read-only reviewer on
 reruns the matrix. The same reviewer must pass the drafted review artifact
 before state transition or prompt retirement. Successful review is merged back
 into `codex/v0.7` with `--no-ff` under the repository workflow.
+
+###### Sprint 40 investigation evidence
+
+Task 1 starts from amended planning baseline `1319674f`. The
+[Refactoring Planner investigation](architecture/refactoring-planner-investigation.md)
+inventories Common source path/position/span/location contracts; Graph target,
+provenance, query, and impact ownership; BSL declaration and call extraction;
+EDT and Designer source-evidence asymmetry; immutable Workspace publications;
+cache, Runtime, Tool Policy, MCP, VS Code, compatibility, sensitive-data, and
+Cargo boundaries; paired fixtures; controlled changes; and exact future
+oracles.
+
+No current refactoring family has complete immutable content, deterministic
+content-version, exact declaration/reference range, conflict, and paired-format
+evidence. The smallest coherent candidate for ADR-0063 is one top-level BSL
+Procedure/Function rename plus every supported direct call occurrence that
+resolves uniquely to it in one complete Configuration publication. Tasks 3–4
+own the repository-implementable immutable source-document, version, exact
+occurrence, mapping, and cross-format conformance prerequisite. The repository
+contains the required corpus and oracles, so `SPRINT_BLOCKED_MISSING_DATA` does
+not apply; planner evaluation remains fail-closed until that prerequisite
+passes.
+
+ADR-0063 must select the exact family and source forms, source-independent
+owner, target/publication/document/plan/operation identities, preconditions,
+BSL name equivalence, duplicates, conflicts, total order, completeness,
+summaries, preview and redaction, bounds, closed failures, Workspace/cache
+lifecycle, and compatible read-only MCP migration. Graph remains semantic
+authority; impact, diagnostics, Git paths/status, model output, and point-only
+locations are evidence only and never edit authorization.
+
+The focused Task 1 matrix passes 3 Common source, 34 Graph provenance, 1 EDT
+callable-emission, 3 paired-adapter conformance, 2 Workspace, and 2 MCP tests:
+45 meaningful tests with zero failures, ignored, or measured tests. Six Graph
+test binaries selected by the package-wide name filter contained zero matches
+and are reported separately rather than counted. Sprint 40 is now `active`;
+Task 2 owns architecture acceptance, and no edit or mutation capability is
+claimed.
 
 ###### State, failure, and validation gates
 

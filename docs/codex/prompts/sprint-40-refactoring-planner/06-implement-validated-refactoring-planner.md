@@ -27,12 +27,12 @@ context_reserve_min_percent: 15
 - `docs/adr/0063-refactoring-planner.md` — sections: canonical inputs, first
   refactoring family, planner evaluation, conflicts, completeness, bounds,
   failures, preview, and evidence matrix.
-- `docs/Roadmap.md` — sections: Sprint 40 exclusions and Task 4.
+- `docs/Roadmap.md` — sections: Sprint 40 exclusions and Task 6.
 - `docs/codex/profiles/refactoring-safe-edits-implementation.md`,
   `docs/codex/templates/refactoring-safe-edits-task.md`, and
   `docs/codex/workflows/refactoring-safe-edits.md` — complete selected contract.
 - `crates/analysis/src/refactoring.rs` and
-  `crates/analysis/tests/refactoring_plan.rs` — complete committed Task 3 domain
+  `crates/analysis/tests/refactoring_plan.rs` — complete committed Task 5 domain
   and focused evidence.
 - `crates/graph/src/{query,node,provenance,kind}.rs` — symbols cited by ADR-0063
   plus direct consumers found by bounded query.
@@ -63,7 +63,7 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is exactly the committed Task 3 result with subject
+- `HEAD` is exactly the committed Task 5 result with subject
   `Implement Sprint 40 refactoring plan domain`.
 - The accepted domain passes its unfiltered focused target and the worktree is
   clean.

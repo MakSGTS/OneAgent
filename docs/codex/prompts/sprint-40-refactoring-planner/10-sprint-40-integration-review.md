@@ -25,7 +25,7 @@ context_reserve_min_percent: 15
 - `AGENTS.md` — sections: repository scope, validation, Git branch/release
   workflow, review/remediation branches, and GUI validation.
 - `docs/adr/0063-refactoring-planner.md` — complete accepted Sprint 40 contract.
-- `docs/architecture/refactoring-planner-evidence.md` — complete Task 7 evidence
+- `docs/architecture/refactoring-planner-evidence.md` — complete Task 9 evidence
   and validation hand-off.
 - `docs/Roadmap.md` — sections: Sprint 40 objective, manifest, exclusions, state
   gates, and proposed Sprint 41 hand-off.
@@ -36,7 +36,7 @@ context_reserve_min_percent: 15
   `8d28ba8a` through the Sprint 40 implementation merge on `codex/v0.7`;
   inspect path inventory before changed files.
 - `docs/codex/core/validation.md` and the focused validation matrix named by
-  ADR-0063/Task 7.
+  ADR-0063/Task 9.
 
 ### Lookup on demand
 
@@ -46,7 +46,7 @@ context_reserve_min_percent: 15
   disputed by the implementation; matching decision section only.
 - client/host code and validation — trigger: the immutable range changes the
   corresponding source, schema, manifest, package, or workflow.
-- retained logs — trigger: a required command fails or Task 7 reports a durable
+- retained logs — trigger: a required command fails or Task 9 reports a durable
   artifact necessary to reproduce evidence.
 
 ### Excluded from initial context
@@ -64,7 +64,7 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- Tasks 1–7 and their pushes completed in dependency order.
+- Tasks 1–9 and their pushes completed in dependency order.
 - The sprint branch was merged with `git merge --no-ff` into `codex/v0.7`, the
   merge was pushed, and this task runs on
   `codex/v0.7-sprint-40-review` created from that version head.
@@ -115,7 +115,7 @@ same reviewer passes artifact consistency.
   under `docs/codex/workflows/review.md` with only the repository root, immutable
   range, authorities, criteria/exclusions, validation matrix, and required
   output contract.
-- Do not send the primary's rationale, expected decision, findings, or Task 7
+- Do not send the primary's rationale, expected decision, findings, or Task 9
   conclusions.
 
 ## Automatic independent-reviewer authorization
@@ -165,7 +165,7 @@ same reviewer passes artifact consistency.
 ## Task-specific validation
 
 - Reviewer and primary each run the complete non-zero focused, compatibility,
-  public-process, and canonical matrix from Task 7 and ADR-0063.
+  public-process, and canonical matrix from Task 9 and ADR-0063.
 - Run range diff checks, test enumeration, API/dependency/scope/sensitive-data
   audits, Markdown links, prompt inventories, and final cleanliness checks.
 

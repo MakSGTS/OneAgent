@@ -33,7 +33,7 @@ context_reserve_min_percent: 15
   `docs/codex/workflows/refactoring-safe-edits.md`, and
   `docs/codex/core/validation.md` — complete evidence contract and canonical
   validation source.
-- committed Task 2 through Task 6 diff — diff: ADR commit through current
+- committed Task 2 through Task 8 diff — diff: ADR commit through current
   `HEAD`, with path inventory first and only changed symbols/tests loaded.
 - exact focused targets, compatibility consumers, fixtures, schemas, public
   exports, manifests, lockfile, Coverage, and current-state sections cited by
@@ -43,7 +43,7 @@ context_reserve_min_percent: 15
 
 - full source file — trigger: a changed hunk cannot establish its surrounding
   invariant; load only that file and matching direct consumer.
-- client or GUI validation — trigger: the Task 2–6 range changes its source,
+- client or GUI validation — trigger: the Task 2–8 range changes its source,
   manifest, schema, package, or workflow; run only the affected documented host
   gate under `AGENTS.md`.
 - retained command log — trigger: a required command fails or a complete audit
@@ -65,9 +65,9 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is exactly the committed Task 6 result with subject
+- `HEAD` is exactly the committed Task 8 result with subject
   `Integrate Sprint 40 product refactoring planning`.
-- Tasks 1–6 are committed and pushed in order with no task-owned uncommitted
+- Tasks 1–8 are committed and pushed in order with no task-owned uncommitted
   change.
 
 ## Task
@@ -102,7 +102,7 @@ complete accepted validation and audit matrix. Do not mark Sprint 40 completed.
 - The range contains no source mutation, edit transaction, authority
   duplication, sensitive leak, unrelated dependency/API change, or deferred
   scope.
-- Review hand-off names the exact planning-through-Task-7 range and complete
+- Review hand-off names the exact planning-through-Task-9 range and complete
   validation matrix.
 
 ## Task-specific validation

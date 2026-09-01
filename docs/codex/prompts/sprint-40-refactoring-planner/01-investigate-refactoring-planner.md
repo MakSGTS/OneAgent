@@ -77,8 +77,9 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is the committed Sprint 40 planning baseline on
-  `codex/v0.7-sprint-40`, descending from framework commit `5c273da1`.
+- `HEAD` is the committed amended Sprint 40 planning baseline on
+  `codex/v0.7-sprint-40`, descending from planning commit `2bc6afb7` and
+  framework commit `5c273da1`.
 - The worktree has no conflicting change and Sprint 40 is the unique `next`
   target.
 
@@ -88,7 +89,7 @@ Investigate the smallest repository-evidenced read-only Refactoring Planner
 slice and create
 `docs/architecture/refactoring-planner-investigation.md`. Record the confirmed
 evidence and decision-ready questions; update only the Sprint 40 investigation
-evidence subsection in `docs/Roadmap.md`.
+evidence subsection and its `next` to `active` state in `docs/Roadmap.md`.
 
 ## Investigation objective
 
@@ -140,14 +141,20 @@ the accepted immutable input is captured.
 
 - The artifact inventories live owners, definitions, consumers, fixtures,
   tests, compatibility, data gaps, and exact oracles.
-- It identifies a smallest coherent first slice or reports
-  `SPRINT_BLOCKED_MISSING_DATA` with the exact missing artifact and consequence.
+- It identifies a smallest coherent first slice and classifies any missing
+  repository-implementable immutable source/version/range evidence as the
+  internal prerequisite owned by Tasks 3–4, not as external missing data.
+- It reports `SPRINT_BLOCKED_MISSING_DATA` only when the required source corpus
+  or oracle is unavailable outside the repository, or no implementable
+  repository-owned contract can close the evidence gap; the exact missing
+  artifact and consequence are recorded.
 - Every ADR-0063 question is decision-ready and no edit capability is claimed.
 
 ## Completion Criteria
 
 - Evidence is reproducible from named paths, symbols, queries, and commands.
-- Roadmap records only investigation evidence; Sprint 40 remains `next`.
+- Roadmap records only investigation evidence and the authorized Sprint 40
+  transition from `next` to `active`; no later sprint state changes.
 
 ## Task-specific validation
 

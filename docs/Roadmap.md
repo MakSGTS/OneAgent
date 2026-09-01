@@ -9688,16 +9688,20 @@ completes Sprint 39, and makes Sprint 40 Refactoring Planner the unique `next`
 target. Sprint 40 remains `next` during planning and becomes `active` only when
 Task 1 starts from the committed planning baseline.
 
-The data and testability gate passes. The repository owns stable semantic
-identities, typed `SourcePath`, `SourcePosition`, `SourceSpan`, and
-`SourceLocation`, Graph provenance and queries, complete immutable Workspace
-publications, adjacent-publication Change Impact evidence, paired EDT/Designer
-fixtures, controlled source-change tests, and Runtime/MCP public-process
-oracles. EDT and Designer BSL declarations currently expose file paths and
-one-based declaration points, while resolved call edges do not prove complete
-edit ranges. This is sufficient to investigate, define, implement, and expose
-one bounded read-only semantic plan and preview, but not to claim source
-mutation, atomicity, rollback, or reversibility.
+The data and testability gate passes with one repository-implementable
+prerequisite. The repository owns stable semantic identities, typed
+`SourcePath`, `SourcePosition`, `SourceSpan`, and `SourceLocation`, Graph
+provenance and queries, complete immutable Workspace publications,
+adjacent-publication Change Impact evidence, paired EDT/Designer fixtures,
+controlled source-change tests, and Runtime/MCP public-process oracles. EDT and
+Designer BSL declarations currently expose file paths and one-based declaration
+points, resolved call edges do not prove complete edit ranges, and Workspace
+publications do not retain exact captured source content with its deterministic
+content version. Tasks 3–4 therefore implement and prove immutable
+source-document evidence and exact occurrence ranges before planner evaluation.
+This is sufficient to investigate, define, implement, and expose one bounded
+read-only semantic plan and preview, but not to claim source mutation,
+atomicity, rollback, or reversibility.
 
 The concrete first refactoring family, owner, target and plan identity,
 preconditions, supported node/source kinds, source-version evidence, operation
@@ -9726,6 +9730,15 @@ characters per token. The decision is `warning`: whole Roadmap, Architecture,
 semantic-model, fixture corpora, generated outputs, and successful command logs
 remain excluded; every child repeats a fresh bounded preflight.
 
+The initial Task 1 attempt from planning commit `2bc6afb7` stopped without file
+changes or a commit because live evidence showed no single immutable contract
+binding a confined source path, exact captured content, deterministic content
+version, and exact declaration/reference ranges across EDT and Designer. The
+missing evidence is internal repository work rather than an unavailable
+external corpus or oracle. The continuation instruction authorizes this plan
+amendment: Tasks 3–4 own the prerequisite, and Task 1 must record it as an
+implementable gate for ADR-0063 instead of reporting external missing data.
+
 The complete Sprint 40 suite is owned by
 `docs/codex/prompts/sprint-40-refactoring-planner/`. The verified immediately
 preceding suite is exactly
@@ -9741,7 +9754,7 @@ tracked files at planning time:
 - `06-complete-change-impact-evidence.md`
 - `07-sprint-39-integration-review.md`
 
-Only Task 8 may retire those exact files after a non-blocking independent and
+Only Task 10 may retire those exact files after a non-blocking independent and
 primary review, complete validation, and a passing same-reviewer artifact-
 consistency check.
 
@@ -9764,6 +9777,11 @@ Included scope is:
   target and plan identity, preconditions, operations, ordering, duplicates,
   conflicts, completeness, bounds, failures, preview, snapshot lifecycle,
   product projection, compatibility, evidence, and deferrals;
+- one source-independent immutable source-document contract that binds a
+  confined path, exact captured content, deterministic content version, and
+  validated exact BSL declaration/reference occurrence ranges;
+- paired EDT/Designer production-adapter capture and conformance evidence for
+  that source contract before planner evaluation;
 - one source-independent immutable typed plan domain with closed validation and
   explicit read-only completeness;
 - deterministic Graph-backed planner evaluation and preview for only the
@@ -9794,19 +9812,21 @@ security, or interoperability claims; and Sprint 41 implementation.
 |---:|---|---|---|---|---|
 | 1 | Investigate Refactoring Planner. | Investigation / investigation | Decision-ready semantic, source, snapshot, precondition, conflict, consumer, compatibility, sensitive-data, and oracle evidence. | Sprint 40 planning baseline. | `Investigate Sprint 40 Refactoring Planner` |
 | 2 | Define Refactoring Planner. | Architecture / architecture | Accepted ADR-0063 for the bounded read-only planner. | Task 1. | `Define Sprint 40 Refactoring Planner` |
-| 3 | Implement the refactoring plan domain. | Refactoring and Safe Edits / Refactoring and Safe Edits | Immutable typed request, target, precondition, operation, preview, summary, completeness, and closed failure contracts. | Accepted ADR-0063. | `Implement Sprint 40 refactoring plan domain` |
-| 4 | Implement validated planner evaluation. | Refactoring and Safe Edits / Refactoring and Safe Edits | Deterministic Graph-backed validation, conflicts, operations, preview, bounds, and repetition behavior. | Task 3. | `Implement Sprint 40 validated refactoring planner` |
-| 5 | Integrate Workspace refactoring plans. | Refactoring and Safe Edits + Runtime Service / Refactoring and Safe Edits | Accepted immutable publication binding, configuration matching, source evidence, lifecycle, and failure behavior. | Task 4. | `Integrate Sprint 40 Workspace refactoring plans` |
-| 6 | Integrate product refactoring planning. | Refactoring and Safe Edits + MCP Protocol + AI Tool Policy / Refactoring and Safe Edits | Accepted read-only schema, policy, projection, bounds, errors, and public-process workflow. | Task 5. | `Integrate Sprint 40 product refactoring planning` |
-| 7 | Complete Refactoring Planner evidence. | Refactoring and Safe Edits / Refactoring and Safe Edits | Complete validation, compatibility/dependency/API/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 40 Refactoring Planner evidence` |
-| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 41 hand-off, and conditional Sprint 39 suite retirement. | Task 7, all validation, no-ff implementation merge into `codex/v0.7`, and the review branch. | `Complete Sprint 40 Refactoring Planner review` |
+| 3 | Implement immutable source evidence. | Refactoring and Safe Edits / Refactoring and Safe Edits | Immutable source-document, deterministic content-version, and exact BSL occurrence contracts. | Accepted ADR-0063. | `Implement Sprint 40 immutable source evidence` |
+| 4 | Integrate adapter source evidence. | Source Adapter / Source Adapter | Paired EDT/Designer capture, canonical mapping, completeness, and conformance evidence. | Task 3. | `Integrate Sprint 40 adapter source evidence` |
+| 5 | Implement the refactoring plan domain. | Refactoring and Safe Edits / Refactoring and Safe Edits | Immutable typed request, target, precondition, operation, preview, summary, completeness, and closed failure contracts. | Task 4. | `Implement Sprint 40 refactoring plan domain` |
+| 6 | Implement validated planner evaluation. | Refactoring and Safe Edits / Refactoring and Safe Edits | Deterministic Graph-backed validation, conflicts, operations, preview, bounds, and repetition behavior. | Task 5. | `Implement Sprint 40 validated refactoring planner` |
+| 7 | Integrate Workspace refactoring plans. | Refactoring and Safe Edits + Runtime Service / Refactoring and Safe Edits | Accepted immutable publication binding, configuration matching, source evidence, lifecycle, and failure behavior. | Task 6. | `Integrate Sprint 40 Workspace refactoring plans` |
+| 8 | Integrate product refactoring planning. | Refactoring and Safe Edits + MCP Protocol + AI Tool Policy / Refactoring and Safe Edits | Accepted read-only schema, policy, projection, bounds, errors, and public-process workflow. | Task 7. | `Integrate Sprint 40 product refactoring planning` |
+| 9 | Complete Refactoring Planner evidence. | Refactoring and Safe Edits / Refactoring and Safe Edits | Complete validation, compatibility/dependency/API/scope audits, and synchronized current-state documentation. | Task 8. | `Complete Sprint 40 Refactoring Planner evidence` |
+| 10 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 41 hand-off, and conditional Sprint 39 suite retirement. | Task 9, all validation, no-ff implementation merge into `codex/v0.7`, and the review branch. | `Complete Sprint 40 Refactoring Planner review` |
 
 Tasks execute strictly in order through
 `docs/codex/prompts/sprint-40-refactoring-planner/00-sprint-40-execution-loop.md`.
 Every child uses Prompt Contract v2 and a guaranteed fresh context. Tasks 1–2
-run documentation-appropriate evidence and link gates. Tasks 3–6 run non-zero
-focused tests plus the canonical Rust workspace gate. Task 7 reruns the complete
-accepted matrix. After the no-ff implementation merge into `codex/v0.7`, Task 8
+run documentation-appropriate evidence and link gates. Tasks 3–8 run non-zero
+focused tests plus the canonical Rust workspace gate. Task 9 reruns the complete
+accepted matrix. After the no-ff implementation merge into `codex/v0.7`, Task 10
 supplies the exact immutable range to one fresh-context read-only reviewer on
 `codex/v0.7-sprint-40-review`, then the primary independently inspects and
 reruns the matrix. The same reviewer must pass the drafted review artifact
@@ -9816,7 +9836,7 @@ into `codex/v0.7` with `--no-ff` under the repository workflow.
 ###### State, failure, and validation gates
 
 Sprint 40 remains `next` during planning, becomes `active` only from Task 1,
-and may become `completed` only after Task 8. A task may be `already_complete`
+and may become `completed` only after Task 10. A task may be `already_complete`
 only when committed evidence and successful required validation prove every
 criterion; no empty commit is created.
 
@@ -9842,6 +9862,12 @@ Suggested planning commit message:
 
 ```text
 Plan Sprint 40 Refactoring Planner
+```
+
+Suggested planning-amendment commit message:
+
+```text
+Amend Sprint 40 plan for immutable source evidence
 ```
 
 The v0.7 release integration review follows Sprint 41.

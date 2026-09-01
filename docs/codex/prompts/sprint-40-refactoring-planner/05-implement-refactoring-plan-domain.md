@@ -26,7 +26,7 @@ context_reserve_min_percent: 15
   Git branch/release workflow.
 - `docs/adr/0063-refactoring-planner.md` — sections: accepted decision, domain
   contract, bounds/failures, compatibility, and first implementation slice.
-- `docs/Roadmap.md` — sections: Sprint 40 objective, exclusions, and Task 3.
+- `docs/Roadmap.md` — sections: Sprint 40 objective, exclusions, and Task 5.
 - `docs/codex/profiles/refactoring-safe-edits-implementation.md`,
   `docs/codex/templates/refactoring-safe-edits-task.md`, and
   `docs/codex/workflows/refactoring-safe-edits.md` — complete selected contract.
@@ -59,8 +59,8 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is exactly the committed Task 2 result with subject
-  `Define Sprint 40 Refactoring Planner`.
+- `HEAD` is exactly the committed Task 4 result with subject
+  `Integrate Sprint 40 adapter source evidence`.
 - ADR-0063 is accepted and the task-owned worktree is clean.
 
 ## Task

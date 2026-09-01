@@ -27,14 +27,14 @@ context_reserve_min_percent: 15
 - `docs/adr/0063-refactoring-planner.md` — sections: Workspace owner,
   publication/configuration/source preconditions, lifecycle, failures,
   compatibility, and first Runtime slice.
-- `docs/Roadmap.md` — sections: Sprint 40 exclusions and Task 5.
+- `docs/Roadmap.md` — sections: Sprint 40 exclusions and Task 7.
 - `docs/codex/profiles/refactoring-safe-edits-implementation.md`,
   `docs/codex/templates/refactoring-safe-edits-task.md`,
   `docs/codex/workflows/refactoring-safe-edits.md`, and
   `docs/codex/workflows/runtime-service.md` — selected and conditional Runtime
   contracts.
 - `crates/analysis/src/refactoring.rs` and focused tests — complete committed
-  Task 4 planner API and evidence.
+  Task 6 planner API and evidence.
 - `apps/runtime/src/workspace/mod.rs` — symbols:
   `WorkspaceConfigurationSnapshot`, `WorkspaceSnapshot`, publication identity,
   configuration lookup, service snapshot observation, and direct tests.
@@ -66,7 +66,7 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is exactly the committed Task 4 result with subject
+- `HEAD` is exactly the committed Task 6 result with subject
   `Implement Sprint 40 validated refactoring planner`.
 - The planner and production adapter oracle targets pass unfiltered and the
   task-owned worktree is clean.

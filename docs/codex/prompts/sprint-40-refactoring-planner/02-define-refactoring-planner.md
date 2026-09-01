@@ -77,7 +77,8 @@ subsection in `docs/Roadmap.md`.
 
 ### Included
 
-- Canonical owners and immutable inputs.
+- Canonical owners and immutable inputs, including repository-owned immutable
+  source documents, deterministic content versions, and exact occurrence ranges.
 - First refactoring family and supported target/source matrix.
 - Target, publication, source/version precondition, request, plan, operation,
   preview, summary, and completeness contracts.
@@ -99,7 +100,9 @@ subsection in `docs/Roadmap.md`.
 - Planning and preview are explicitly read-only and cannot be interpreted as
   edit authorization.
 - Bounds, completeness, failures, compatibility, and a deterministic production
-  oracle are exact enough for Tasks 3–7.
+  oracle are exact enough for Tasks 3–9.
+- Tasks 3–4 receive an implementable source-document, range, adapter-capture,
+  and paired EDT/Designer prerequisite contract before planner evaluation.
 - Deferred scope preserves Sprint 41 transaction ownership.
 
 ## Task-specific validation

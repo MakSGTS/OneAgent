@@ -28,12 +28,12 @@ context_reserve_min_percent: 15
 - `docs/adr/0063-refactoring-planner.md` — sections: product surface, Tool
   Policy, schema/projection, bounds, errors, lifecycle, compatibility, and
   public-process evidence.
-- `docs/Roadmap.md` — sections: Sprint 40 exclusions and Task 6.
+- `docs/Roadmap.md` — sections: Sprint 40 exclusions and Task 8.
 - `docs/codex/profiles/refactoring-safe-edits-implementation.md`,
   `docs/codex/templates/refactoring-safe-edits-task.md`, and workflows:
   `refactoring-safe-edits.md`, `runtime-service.md`, `mcp-protocol.md`, and
   `ai-tool-policy.md` — selected and conditional public-boundary contracts.
-- committed Task 5 public Workspace planning API and focused tests — exact
+- committed Task 7 public Workspace planning API and focused tests — exact
   symbols found by bounded `rg`.
 - `apps/runtime/src/mcp_tools.rs` — symbols: tool catalog/schema, dispatch,
   immutable snapshot capture, policy evaluation, bounds/errors, and existing
@@ -66,7 +66,7 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is exactly the committed Task 5 result with subject
+- `HEAD` is exactly the committed Task 7 result with subject
   `Integrate Sprint 40 Workspace refactoring plans`.
 - Workspace focused and compatibility tests pass and the task-owned worktree is
   clean.

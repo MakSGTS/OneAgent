@@ -111,6 +111,7 @@ Use the narrowest matching pair:
 | Diagnostics Engine | `diagnostics-engine-implementation.md` | `diagnostics-engine-task.md` |
 | Rules Engine | `rules-engine-implementation.md` | `rules-engine-task.md` |
 | Git Change Adapter | `git-change-adapter-implementation.md` | `git-change-adapter-task.md` |
+| Refactoring and Safe Edits | `refactoring-safe-edits-implementation.md` | `refactoring-safe-edits-task.md` |
 | Sprint planning | `architecture.md` | `sprint-planning-task.md` |
 | Sprint dispatch | child-selected | `sprint-execution-loop.md` |
 

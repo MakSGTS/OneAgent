@@ -9,17 +9,17 @@ fixture, source-format, or compatibility investigations.
 
 - `docs/codex/profiles/investigation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents, if any
-- Prerequisites / required gate, if any
 - Investigation objective
 - Questions to answer
 - Evidence scope
 - Evidence sources / fixtures
-- Excluded
 - Completion Criteria
-- Task-specific Validation, if any
 
 ## Additional acceptance requirements
 

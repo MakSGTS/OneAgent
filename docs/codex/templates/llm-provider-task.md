@@ -9,11 +9,12 @@ discovery, provider adapters, or provider contract evidence.
 
 - `docs/codex/profiles/llm-provider-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Provider-neutral ownership and API boundary
 - Model identity, discovery, and capability contract
 - Request, response, usage, finish, and compatibility contract
@@ -22,12 +23,6 @@ discovery, provider adapters, or provider contract evidence.
 - Error taxonomy and provider mapping
 - Contract corpus, fake, fixture, or controlled-endpoint oracle
 - Consumer and provider-adapter compatibility
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

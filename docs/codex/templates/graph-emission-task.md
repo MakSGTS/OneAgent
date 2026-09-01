@@ -10,18 +10,13 @@ evidence.
 
 - `docs/codex/profiles/graph-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Source contract / production source
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

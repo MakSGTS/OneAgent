@@ -9,11 +9,13 @@ transport, method-dispatch, or conformance implementation slice.
 
 - `docs/codex/profiles/mcp-protocol-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
 - Authoritative MCP specification, schema, ADRs, and architecture documents
-- Prerequisites / required gate
-- Task
 - Protocol revision and compatibility boundary
 - Message, identifier, parameter, result, and error contract
 - Capability and method-dispatch contract
@@ -22,12 +24,6 @@ transport, method-dispatch, or conformance implementation slice.
 - Resource bounds and sensitive-data handling
 - Domain, Runtime, and tool-policy ownership
 - Conformance fixtures and public integration oracle
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

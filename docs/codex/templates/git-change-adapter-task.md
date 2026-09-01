@@ -10,11 +10,12 @@ production-integration slice.
 
 - `docs/codex/profiles/git-change-adapter-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Repository and Workspace authority boundary
 - Repository-owned evidence and production entry point
 - Baseline and current endpoint contract
@@ -24,12 +25,6 @@ production-integration slice.
 - Ordering, duplicate, bound, and failure contract
 - Workspace change-input mapping and equivalence oracle
 - Process, dependency, platform, lifecycle, and consumer impact
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

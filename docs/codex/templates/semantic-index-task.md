@@ -9,21 +9,16 @@ the canonical source-independent semantic graph.
 
 - `docs/codex/profiles/semantic-index-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Canonical source snapshot / semantic authority
 - Index dimensions and lookup contracts
 - Lifecycle and staleness contract
 - Compatibility and consumer impact
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

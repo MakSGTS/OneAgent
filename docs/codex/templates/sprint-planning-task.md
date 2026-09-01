@@ -10,11 +10,13 @@ without implementing production behavior.
 
 - `docs/codex/profiles/architecture.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
 - Sprint objective and current Roadmap state
-- Prerequisites / required gate
 - Readiness-audit scope
 - Source and repository evidence
 - Template readiness decision
@@ -22,8 +24,6 @@ without implementing production behavior.
 - Task-owned outcomes and exclusions
 - Sprint state gates
 - Completion Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 
@@ -34,17 +34,18 @@ without implementing production behavior.
 - Audit the smallest sufficient Profile, Workflow, and Template set before
   writing child prompts. Record evidence instead of creating speculative
   framework modules when existing contracts are sufficient.
+- Generate only Prompt Contract v2 child prompts. Give large authorities exact
+  section, symbol, range, diff, or query selectors and put optional evidence
+  behind an explicit `Lookup on demand` trigger.
 - Give every task one coherent owned outcome, explicit prerequisite, scope
   boundary, acceptance evidence, validation additions, and commit boundary.
 - Order tasks so that every implementation prompt begins from a committed or
   explicitly proven prerequisite.
 - Define `already_complete`, blocked-review, sprint-completion, and next-sprint
   hand-off gates.
-- When the sprint requires an independent integration reviewer, require both
-  the generated final review prompt and master execution prompt to state that
-  their current user invocation authorizes exactly one fresh-context read-only
-  reviewer. Require automatic launch at the review gate without a separate
-  confirmation request, while leaving all other delegation unauthorized.
+- Require one fresh-context runner per sequential child and one separate
+  fresh-context read-only reviewer when the Review workflow applies. Keep the
+  master prompt as dispatcher and ledger rather than an implementation context.
 - Keep production implementation, unsupported source forms, and later-sprint
   concerns out of the planning change.
 - Do not mark the sprint `completed` during planning.
@@ -63,4 +64,5 @@ without implementing production behavior.
 
 - Validate Markdown consistency, internal links, task numbering, dependency
   order, and Roadmap status.
+- Run `scripts/validate-codex-prompts.sh` against every generated child prompt.
 - Do not run production tests unless implementation files are changed.

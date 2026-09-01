@@ -10,17 +10,13 @@ prerequisites.
 
 - `docs/codex/profiles/architecture.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
+- None beyond the base task contract.
 
 ## Additional acceptance requirements
 

@@ -10,11 +10,12 @@ projection slice.
 
 - `docs/codex/profiles/rules-engine-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Canonical inputs and ownership
 - Rule identity and registration contract
 - Dependency and deterministic execution-order contract
@@ -23,12 +24,6 @@ projection slice.
 - Result, diagnostic integration, bounds, and sensitive-data policy
 - Snapshot, persistence, protocol, and consumer impact, when applicable
 - Evidence corpus and deterministic oracle
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

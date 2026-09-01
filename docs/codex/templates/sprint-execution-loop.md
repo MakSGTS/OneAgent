@@ -17,6 +17,7 @@ plan strictly in dependency order.
 - Starting-state requirements
 - Ordered task manifest
 - Commit authorization mode
+- Fresh-context child-runner authorization and unavailable-runtime fallback
 - Initial audit additions
 - Task-loop additions, if any
 - Already-complete policy additions, if any
@@ -31,6 +32,7 @@ The ordered manifest must identify, for every task:
 - required committed prerequisite;
 - task-owned outcome;
 - task-specific validation additions;
+- Prompt Contract v2 and Context Manifest validation state;
 - suggested commit message.
 
 ## Additional acceptance requirements
@@ -39,13 +41,16 @@ The ordered manifest must identify, for every task:
   state.
 - Resolve every mutable baseline from the live repository before execution.
 - Do not reorder, skip, combine, or partially commit dependent tasks.
+- Dispatch every child in a guaranteed fresh context and retain only its compact
+  verified ledger row. Never execute two children in the master context.
 - Do not permanently encode commit authorization in a stored prompt. Determine
   commit mode from the current user instruction that launches the execution.
-- Treat the current user's launch of the master prompt as authorization for
-  exactly one mandatory fresh-context read-only reviewer named by the manifest.
-  Launch that reviewer automatically at the integration-review gate without a
-  separate confirmation request. This does not authorize other subagents or
-  change commit authorization.
+- Treat the current user's launch of the master prompt as authorization for one
+  sequential fresh-context runner per manifest child and one mandatory
+  fresh-context read-only reviewer when required. Neither runner nor reviewer
+  may delegate further. This does not change commit authorization.
+- Stop at the child boundary and emit the exact continuation prompt when the
+  runtime cannot guarantee fresh context.
 - Preserve prompt-suite files unless their modification is explicitly part of
   the current task scope.
 - Stop after the first blocking failure.
@@ -64,5 +69,7 @@ The ordered manifest must identify, for every task:
 
 - Validate that every manifest prompt and authoritative document exists before
   starting the first task.
+- Validate every Prompt Contract v2 child with
+  `scripts/validate-codex-prompts.sh`.
 - Validate that prerequisite and commit-message metadata agree with the accepted
   Roadmap execution plan.

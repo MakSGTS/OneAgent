@@ -33,7 +33,7 @@ The committed implementation chain is:
 | ADR-0061 requirement | Repository-owned evidence | Result |
 | --- | --- | --- |
 | Graph remains the only fact, diff, impact, seed, reason, status, availability, and traversal authority | No Graph production file changed in the Task 3–5 range; 18 Graph Impact tests and 86 Graph validation/report/build-diff/reference/Coverage tests | pass |
-| Analysis accepts only non-zero adjacent publication IDs, canonical Configuration IDs, complete borrowed graphs, and cancellation | `crates/analysis/src/change_impact.rs` API/source audit, 2 internal bound/overflow tests, and 9 public Change Impact tests | pass |
+| Analysis accepts only non-zero adjacent publication IDs, canonical Configuration IDs, complete borrowed graphs, and cancellation | `crates/analysis/src/change_impact.rs` API/source audit, 2 internal bound/overflow tests, and 10 public Change Impact tests | pass |
 | Fixed policy is depth 4, all default dependency kinds, ownership disabled, and provenance direct-only | Analysis source audit plus direct/transitive/reason and Graph Impact policy tests | pass |
 | Publication identity is process-local checked non-zero `u64`; report identity is the ordered adjacent pair | Analysis publication overflow test; Runtime initial, replacement, failure/recovery, cache, and fresh-service tests | pass |
 | Configuration identity uses only canonical `EntityId`; names, roots, formats, paths, order, and Git evidence do not match transitions | Analysis reorder/duplicate tests; Workspace name/format transition unit test; Git/filesystem end-state equivalence test | pass |
@@ -43,7 +43,7 @@ The committed implementation chain is:
 | Every Graph status, availability, direct/transitive/removed case, and typed reason remains owned and ordered | Public Analysis positive report test and 18 Graph Impact tests | pass |
 | Configuration, node, and reason order is canonical and independent from insertion, discovery, trigger, and operation order | Analysis reorder/repetition, Graph insertion-order, Runtime fresh-run, and Git opposite-order tests | pass |
 | Report and transition summaries reconcile checked Configuration, seed, status, availability, affected-node, and depth counts | Analysis positive/empty/equal/bound tests and MCP depth/truncation projection test | pass |
-| Complete in-memory admission is exact at 4,096 Configurations, 4,096 identifier bytes, 65,536 affected nodes, 256 reasons per node, 262,144 reasons total, and depth 4 | Analysis exact/one-over public and internal tests; no partial result is returned | pass |
+| Complete in-memory admission is exact at 4,096 Configurations, 4,096 identifier bytes, 65,536 affected nodes, 256 reasons per node, 262,144 reasons total, and depth 4 | Analysis exact/one-over public and internal tests, including Graph-owned canonical `EdgeId` values at 4,096 and 4,097 bytes on equal graphs with no reasons; no partial result is returned | pass |
 | Closed failures cover conflicts, identifier/count bounds, inconsistent Graph evidence, summary/publication overflow, and cancellation without rejected values | Analysis error-kind/display tests and Runtime error mapping tests | pass |
 | Cancellation is checked around normalization and every Graph call; no partial report or detached task survives | Analysis cancellation test and Runtime active-build cancellation/shutdown unit tests | pass |
 | A snapshot atomically embeds either initial no-predecessor availability or one complete adjacent report | Runtime unit tests plus File Watching, Git-input, cache, and MCP observer tests | pass |
@@ -153,6 +153,41 @@ cross-platform Extension Host and Eclipse/Tycho evidence. Task 6 did not run a
 live Codex or Cursor executable and does not claim a new external-client
 matrix. The repository-owned exact initialize/catalog fixtures and current
 public-process compatibility test preserve the accepted Sprint 35 evidence.
+
+## Post-review remediation evidence
+
+The first fresh-context Task 7 review blocked completion because Analysis
+validated edge endpoints but did not validate the byte length of Graph's
+composite canonical `EdgeId` on equal graphs where no impact reason retained
+that identity. Remediation commit
+`eee6b615571f18beb61811ea2752119b93949e9c` closes that gap without adding a
+second identity authority: Analysis calls the existing Graph-owned
+`SemanticGraphQuery::edge_id` constructor for every input edge before report
+admission.
+
+The public Change Impact boundary test now proves both inclusive cases on equal
+graphs with an empty diff and no reasons: a canonical edge identifier of
+exactly 4,096 bytes is accepted, while 4,097 bytes fails closed with
+`IdentifierTooLarge`, `actual=4097`, and `maximum=4096`. The focused remediation
+matrix passed 10 public Change Impact tests, 129 total Analysis tests, 18 Graph
+Impact tests, 86 Graph compatibility tests, 123 Runtime unit tests, and the
+unchanged Workspace, watching, Git-input, cache, query, protocol, Tool Policy,
+MCP, HTTP, LSP, CLI, and Rust EDT suites with zero failures, ignored tests, or
+filtered tests.
+
+The complete remediation inventory contains 81 all-target executables, 77
+non-zero targets, the same four expected zero-test binaries, and 1,287 tests.
+`cargo fmt --all -- --check`, `cargo check --workspace --all-targets`,
+`cargo test --workspace --all-targets`, strict all-feature Clippy,
+warning-denied workspace Rustdoc, and `git diff --check` all exited zero.
+
+Exact-code-head [CI run 33457248893](https://github.com/MakSGTS/OneAgent/actions/runs/33457248893)
+completed successfully at the remediation commit. All six Rust, VS Code, and
+EDT jobs passed on `macos-14` and `windows-latest`, including the public Runtime
+processes, Extension Host and real Runtime integration, package and dependency
+audits, Clippy, and Rustdoc. No live Codex or Cursor executable run is newly
+claimed; the unchanged repository-owned client lifecycle fixture remains the
+accepted compatibility evidence.
 
 ## Canonical gate
 

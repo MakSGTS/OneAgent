@@ -9,8 +9,8 @@ use std::fmt::{Display, Formatter};
 
 use oneagent_common::EntityId;
 use oneagent_graph::{
-    ImpactCompleteness, ImpactNodeAvailability, ImpactNodeStatus, SemanticGraph,
-    SemanticImpactAnalyzer, SemanticImpactOptions, SemanticImpactResult,
+    ImpactCompleteness, ImpactNodeAvailability, ImpactNodeStatus, NodeId, SemanticGraph,
+    SemanticGraphQuery, SemanticImpactAnalyzer, SemanticImpactOptions, SemanticImpactResult,
 };
 
 /// Maximum number of unique Configurations admitted in either endpoint.
@@ -744,6 +744,10 @@ fn validate_graph_identifiers(graph: &SemanticGraph) -> Result<(), ChangeImpactE
     for edge in graph.edges() {
         validate_identifier(edge.source().as_str())?;
         validate_identifier(edge.target().as_str())?;
+        let source = NodeId::new(edge.source().as_str());
+        let target = NodeId::new(edge.target().as_str());
+        let edge_id = SemanticGraphQuery::edge_id(&source, &target, edge.kind());
+        validate_identifier(edge_id.as_str())?;
     }
     Ok(())
 }

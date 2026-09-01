@@ -9,7 +9,7 @@ use oneagent_analysis::change_impact::{
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
     EdgeKind, GraphEdge, GraphNode, ImpactNodeAvailability, ImpactNodeStatus, ImpactReasonKind,
-    NodeKind, SemanticGraph,
+    NodeId, NodeKind, SemanticGraph, SemanticGraphQuery,
 };
 
 fn id(value: impl Into<String>) -> EntityId {
@@ -359,6 +359,75 @@ fn identifier_bound_accepts_exact_and_rejects_one_over_before_report_cloning() {
         )
         .expect_err("one-over node identifier must fail");
     assert_eq!(node_error.kind(), ChangeImpactErrorKind::IdentifierTooLarge);
+}
+
+#[test]
+fn canonical_edge_identifier_bound_applies_to_equal_graphs_without_reasons() {
+    let configuration_id = id("configuration.main");
+    let build = |target_bytes: usize| {
+        let source = id("s".repeat(2_027));
+        let target = id("t".repeat(target_bytes));
+        let edge_id = SemanticGraphQuery::edge_id(
+            &NodeId::new(source.as_str()),
+            &NodeId::new(target.as_str()),
+            EdgeKind::Calls,
+        );
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            source.clone(),
+            name("BoundedSource"),
+            NodeKind::Procedure,
+        ));
+        graph.insert_node(GraphNode::new(
+            target.clone(),
+            name("BoundedTarget"),
+            NodeKind::Function,
+        ));
+        graph
+            .insert_edge(GraphEdge::new(source, target, EdgeKind::Calls))
+            .expect("bounded edge endpoints must exist");
+        (graph, edge_id)
+    };
+
+    let (exact_graph, exact_edge_id) = build(2_028);
+    assert_eq!(
+        exact_edge_id.as_str().len(),
+        MAX_CHANGE_IMPACT_IDENTIFIER_BYTES
+    );
+    let exact = [ChangeImpactConfiguration::new(
+        &configuration_id,
+        &exact_graph,
+    )];
+    let report = ChangeImpactEvaluator
+        .evaluate(
+            ChangeImpactPublicationId::initial(),
+            &exact,
+            &exact,
+            &NeverCancelledChangeImpact,
+        )
+        .expect("exact canonical edge identifier bound must be admitted");
+    assert_eq!(report.summary().total_affected_nodes(), 0);
+
+    let (over_graph, over_edge_id) = build(2_029);
+    assert_eq!(
+        over_edge_id.as_str().len(),
+        MAX_CHANGE_IMPACT_IDENTIFIER_BYTES + 1
+    );
+    let over = [ChangeImpactConfiguration::new(
+        &configuration_id,
+        &over_graph,
+    )];
+    let error = ChangeImpactEvaluator
+        .evaluate(
+            ChangeImpactPublicationId::initial(),
+            &over,
+            &over,
+            &NeverCancelledChangeImpact,
+        )
+        .expect_err("one-over canonical edge identifier must fail without report reasons");
+    assert_eq!(error.kind(), ChangeImpactErrorKind::IdentifierTooLarge);
+    assert_eq!(error.actual(), Some(MAX_CHANGE_IMPACT_IDENTIFIER_BYTES + 1));
+    assert_eq!(error.maximum(), Some(MAX_CHANGE_IMPACT_IDENTIFIER_BYTES));
 }
 
 #[test]

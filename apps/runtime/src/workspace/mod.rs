@@ -32,6 +32,10 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use oneagent_analysis::change_impact::{
+    ChangeImpactCancellationSignal, ChangeImpactConfiguration, ChangeImpactError,
+    ChangeImpactEvaluator, ChangeImpactPublicationId, ChangeImpactReport,
+};
 use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy, DiagnosticReport};
 use oneagent_analysis::rules::{
     NeverCancelled as NeverRuleCancelled, Rule, RuleCancellationSignal, RuleConfiguration,
@@ -60,6 +64,12 @@ use change::{
     RunningWorkspaceChangeSource, WorkspaceChangeOutcome, WorkspaceChangeSource,
     WorkspaceChangeSourceError, WorkspaceFileState,
 };
+
+impl ChangeImpactCancellationSignal for crate::Cancellation {
+    fn is_cancelled(&self) -> bool {
+        self.is_requested()
+    }
+}
 
 /// Stable source-neutral category for an initial Workspace build failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -863,6 +873,7 @@ enum WorkspaceUpdateRuntimeError {
     ChangeSource(WorkspaceChangeSourceError),
     ChangeSourceTask(JoinError),
     StatusCounterOverflow,
+    SnapshotUnavailable,
 }
 
 impl Display for WorkspaceUpdateRuntimeError {
@@ -880,6 +891,9 @@ impl Display for WorkspaceUpdateRuntimeError {
             Self::StatusCounterOverflow => {
                 formatter.write_str("Workspace update status counter overflowed")
             }
+            Self::SnapshotUnavailable => {
+                formatter.write_str("Workspace update has no current published snapshot")
+            }
         }
     }
 }
@@ -889,7 +903,9 @@ impl Error for WorkspaceUpdateRuntimeError {
         match self {
             Self::ChangeSource(error) => Some(error),
             Self::ChangeSourceTask(error) => Some(error),
-            Self::ChangeSourceStopped | Self::StatusCounterOverflow => None,
+            Self::ChangeSourceStopped | Self::StatusCounterOverflow | Self::SnapshotUnavailable => {
+                None
+            }
         }
     }
 }
@@ -951,8 +967,20 @@ where
             let build_root = root_path.clone();
             let build_builder = builder.clone();
             let build_cache = Arc::clone(&cache);
+            let previous = snapshot
+                .borrow()
+                .clone()
+                .ok_or(WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
+            let build_previous = Arc::clone(&previous);
+            let build_cancellation = cancellation.clone();
             let mut build = tokio::task::spawn_blocking(move || {
-                rebuild_workspace(&build_builder, &build_root, build_cache.as_ref())
+                rebuild_workspace(
+                    &build_builder,
+                    &build_root,
+                    build_cache.as_ref(),
+                    &build_previous,
+                    &build_cancellation,
+                )
             });
             let build_result = tokio::select! {
                 biased;
@@ -982,18 +1010,30 @@ where
 
             match build_result {
                 Ok(Ok(rebuilt)) => {
-                    publish_cache_write(&cache_status, rebuilt.write);
-                    snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
-                    status.published = status
+                    let predecessor_is_current = snapshot
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|current| Arc::ptr_eq(current, &previous));
+                    let next_published = status
                         .published
                         .checked_add(1)
                         .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
-                    status.phase = WorkspaceUpdatePhase::Watching;
-                    status.failure = None;
+                    if predecessor_is_current
+                        && rebuilt.snapshot.publication_id().get() == next_published
+                    {
+                        publish_cache_write(&cache_status, rebuilt.write);
+                        snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
+                        status.published = next_published;
+                        status.phase = WorkspaceUpdatePhase::Watching;
+                        status.failure = None;
+                    } else {
+                        status.phase = WorkspaceUpdatePhase::Failed;
+                        status.failure = Some(WorkspaceUpdateFailureKind::SemanticBuild);
+                    }
                 }
                 Ok(Err(error)) => {
                     status.phase = WorkspaceUpdatePhase::Failed;
-                    status.failure = Some(error.kind().into());
+                    status.failure = Some(error.failure_kind());
                 }
                 Err(_) => {
                     status.phase = WorkspaceUpdatePhase::Failed;
@@ -1049,23 +1089,82 @@ struct WorkspaceRebuild {
     write: WorkspaceCacheWriteOutcome,
 }
 
+#[derive(Debug)]
+enum WorkspaceRebuildError {
+    Build(WorkspaceBuildError),
+    ChangeImpact,
+}
+
+impl WorkspaceRebuildError {
+    fn failure_kind(&self) -> WorkspaceUpdateFailureKind {
+        match self {
+            Self::Build(error) => error.kind().into(),
+            Self::ChangeImpact => WorkspaceUpdateFailureKind::SemanticBuild,
+        }
+    }
+}
+
+impl From<WorkspaceBuildError> for WorkspaceRebuildError {
+    fn from(error: WorkspaceBuildError) -> Self {
+        Self::Build(error)
+    }
+}
+
+impl From<ChangeImpactError> for WorkspaceRebuildError {
+    fn from(_error: ChangeImpactError) -> Self {
+        Self::ChangeImpact
+    }
+}
+
 fn rebuild_workspace<D>(
     builder: &WorkspaceSnapshotBuilder<D>,
     root_path: &Path,
     cache: &dyn WorkspaceCacheStorage,
-) -> Result<WorkspaceRebuild, WorkspaceBuildError>
+    previous: &WorkspaceSnapshot,
+    cancellation: &dyn ChangeImpactCancellationSignal,
+) -> Result<WorkspaceRebuild, WorkspaceRebuildError>
 where
     D: WorkspaceDetector,
 {
     let initial_state = observe_workspace(root_path)?;
-    let snapshot = builder.build(root_path)?;
+    let mut snapshot = builder.build(root_path)?;
     let final_state = observe_workspace(root_path)?;
+    compose_change_impact(previous, &mut snapshot, cancellation)?;
     let write = if initial_state == final_state {
         cache.write(&final_state, &snapshot)
     } else {
         WorkspaceCacheWriteOutcome::SkippedUnstableSource
     };
     Ok(WorkspaceRebuild { snapshot, write })
+}
+
+fn compose_change_impact(
+    previous: &WorkspaceSnapshot,
+    current: &mut WorkspaceSnapshot,
+    cancellation: &dyn ChangeImpactCancellationSignal,
+) -> Result<(), ChangeImpactError> {
+    let previous_configurations = previous
+        .configurations()
+        .iter()
+        .map(|configuration| {
+            ChangeImpactConfiguration::new(configuration.configuration_id(), configuration.graph())
+        })
+        .collect::<Vec<_>>();
+    let current_configurations = current
+        .configurations()
+        .iter()
+        .map(|configuration| {
+            ChangeImpactConfiguration::new(configuration.configuration_id(), configuration.graph())
+        })
+        .collect::<Vec<_>>();
+    let report = ChangeImpactEvaluator.evaluate(
+        previous.publication_id(),
+        &previous_configurations,
+        &current_configurations,
+        cancellation,
+    )?;
+    current.change_impact = WorkspaceChangeImpact::Available(report);
+    Ok(())
 }
 
 fn finish_workspace_updates(
@@ -1181,14 +1280,59 @@ impl WorkspaceConfigurationSnapshot {
     }
 }
 
+/// Change-impact availability embedded atomically in one Workspace publication.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceChangeImpact {
+    /// This is the first complete publication of a fresh Workspace service.
+    NoPreviousPublication {
+        /// Process-local identity of the current publication.
+        current_publication_id: ChangeImpactPublicationId,
+    },
+    /// Complete bounded impact from the immediately preceding publication.
+    Available(ChangeImpactReport),
+}
+
+impl WorkspaceChangeImpact {
+    /// Returns the process-local identity of the snapshot containing this value.
+    #[must_use]
+    pub const fn current_publication_id(&self) -> ChangeImpactPublicationId {
+        match self {
+            Self::NoPreviousPublication {
+                current_publication_id,
+            } => *current_publication_id,
+            Self::Available(report) => report.current_publication_id(),
+        }
+    }
+
+    /// Returns the complete adjacent-publication report when a predecessor exists.
+    #[must_use]
+    pub const fn report(&self) -> Option<&ChangeImpactReport> {
+        match self {
+            Self::NoPreviousPublication { .. } => None,
+            Self::Available(report) => Some(report),
+        }
+    }
+}
+
 /// Complete immutable semantic state for one configured Workspace root.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceSnapshot {
     root_path: PathBuf,
     configurations: Vec<WorkspaceConfigurationSnapshot>,
+    change_impact: WorkspaceChangeImpact,
 }
 
 impl WorkspaceSnapshot {
+    fn initial(root_path: PathBuf, configurations: Vec<WorkspaceConfigurationSnapshot>) -> Self {
+        Self {
+            root_path,
+            configurations,
+            change_impact: WorkspaceChangeImpact::NoPreviousPublication {
+                current_publication_id: ChangeImpactPublicationId::initial(),
+            },
+        }
+    }
+
     /// Returns the startup Workspace root retained by this immutable snapshot.
     #[must_use]
     pub fn root_path(&self) -> &Path {
@@ -1199,6 +1343,18 @@ impl WorkspaceSnapshot {
     #[must_use]
     pub fn configurations(&self) -> &[WorkspaceConfigurationSnapshot] {
         &self.configurations
+    }
+
+    /// Returns the process-local identity of this complete publication.
+    #[must_use]
+    pub const fn publication_id(&self) -> ChangeImpactPublicationId {
+        self.change_impact.current_publication_id()
+    }
+
+    /// Returns change-impact availability paired atomically with this snapshot.
+    #[must_use]
+    pub const fn change_impact(&self) -> &WorkspaceChangeImpact {
+        &self.change_impact
     }
 
     /// Finds a configuration snapshot by canonical identity.
@@ -1220,6 +1376,12 @@ impl WorkspaceSnapshot {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.configurations.is_empty()
+    }
+}
+
+impl Default for WorkspaceSnapshot {
+    fn default() -> Self {
+        Self::initial(PathBuf::new(), Vec::new())
     }
 }
 
@@ -1282,10 +1444,10 @@ where
             configurations.insert(configuration_id, snapshot);
         }
 
-        Ok(WorkspaceSnapshot {
-            root_path: root.to_path_buf(),
-            configurations: configurations.into_values().collect(),
-        })
+        Ok(WorkspaceSnapshot::initial(
+            root.to_path_buf(),
+            configurations.into_values().collect(),
+        ))
     }
 }
 
@@ -1509,6 +1671,10 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use oneagent_analysis::change_impact::{
+        ChangeImpactCancellationSignal, ChangeImpactErrorKind, ChangeImpactPublicationId,
+        NeverCancelledChangeImpact,
+    };
     use oneagent_analysis::diagnostics::{
         DiagnosticCategory, DiagnosticFamily, DiagnosticSeverity, MAX_SEMANTIC_DIAGNOSTICS,
     };
@@ -1536,11 +1702,11 @@ mod tests {
     use super::{
         DiscoveredConfiguration, GitChangeSet, GitCommitId, RepositoryChange, RepositoryChangeKind,
         RepositoryChangePath, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
-        WorkspaceCacheWriteOutcome, WorkspaceChangeSubmissionOutcome, WorkspaceDetector,
-        WorkspaceFileState, WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder,
-        WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
-        compose_rule_evidence, initialize_workspace, rebuild_workspace, snapshot_from_parts,
-        validate_complete_build,
+        WorkspaceCacheWriteOutcome, WorkspaceChangeImpact, WorkspaceChangeSubmissionOutcome,
+        WorkspaceDetector, WorkspaceFileState, WorkspaceRebuildError, WorkspaceService,
+        WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
+        WorkspaceUpdatePhase, WorkspaceUpdateStatus, compose_change_impact, compose_rule_evidence,
+        initialize_workspace, rebuild_workspace, snapshot_from_parts, validate_complete_build,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
@@ -1635,6 +1801,12 @@ mod tests {
     struct AlwaysCancelled;
 
     impl RuleCancellationSignal for AlwaysCancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+    }
+
+    impl ChangeImpactCancellationSignal for AlwaysCancelled {
         fn is_cancelled(&self) -> bool {
             true
         }
@@ -1900,6 +2072,60 @@ mod tests {
         assert_eq!(snapshot.len(), 0);
         assert!(snapshot.configurations().is_empty());
         assert_eq!(snapshot.root_path(), root.path());
+        assert_eq!(
+            snapshot.publication_id(),
+            ChangeImpactPublicationId::initial()
+        );
+        assert!(matches!(
+            snapshot.change_impact(),
+            WorkspaceChangeImpact::NoPreviousPublication { .. }
+        ));
+    }
+
+    #[test]
+    fn workspace_impact_composition_uses_only_identity_and_graph_and_fails_atomically() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let edt = root.path().join("edt");
+        write_edt(&edt, "configuration:impact", "ImpactBefore");
+        let previous = WorkspaceSnapshotBuilder::new()
+            .build(root.path())
+            .expect("previous Workspace snapshot must build");
+        let mut current = previous.clone();
+        current.configurations[0].format = WorkspaceFormat::DesignerXml;
+        current.configurations[0].configuration_name =
+            EntityName::new("ImpactAfter").expect("changed test name must be valid");
+
+        compose_change_impact(&previous, &mut current, &NeverCancelledChangeImpact)
+            .expect("source-format and name transitions must compare by identity and graph");
+        let report = current
+            .change_impact()
+            .report()
+            .expect("successful composition must embed a report");
+        assert_eq!(report.previous_publication_id(), previous.publication_id());
+        assert_eq!(report.current_publication_id(), current.publication_id());
+        assert_eq!(report.summary().compared_configurations(), 1);
+        assert_eq!(report.summary().total_affected_nodes(), 0);
+
+        let mut cancelled = WorkspaceSnapshot::default();
+        let cancelled_before = cancelled.change_impact().clone();
+        let error = compose_change_impact(&previous, &mut cancelled, &AlwaysCancelled)
+            .expect_err("cancelled composition must fail without mutation");
+        assert_eq!(error.kind(), ChangeImpactErrorKind::Cancelled);
+        assert_eq!(cancelled.change_impact(), &cancelled_before);
+
+        let exhausted = WorkspaceSnapshot {
+            change_impact: WorkspaceChangeImpact::NoPreviousPublication {
+                current_publication_id: ChangeImpactPublicationId::new(u64::MAX)
+                    .expect("maximum publication identity is non-zero"),
+            },
+            ..WorkspaceSnapshot::default()
+        };
+        let mut candidate = WorkspaceSnapshot::default();
+        let candidate_before = candidate.change_impact().clone();
+        let error = compose_change_impact(&exhausted, &mut candidate, &NeverCancelledChangeImpact)
+            .expect_err("publication overflow must fail without mutation");
+        assert_eq!(error.kind(), ChangeImpactErrorKind::SummaryOverflow);
+        assert_eq!(candidate.change_impact(), &candidate_before);
     }
 
     #[test]
@@ -2481,6 +2707,7 @@ mod tests {
 
     #[test]
     fn workspace_cache_builds_write_only_complete_stable_results() {
+        let previous = WorkspaceSnapshot::default();
         let stable_root = tempdir().expect("stable Workspace root must be created");
         let stable_storage = ControlledCacheStorage::new(
             WorkspaceCacheLoadOutcome::NotAttempted,
@@ -2493,6 +2720,8 @@ mod tests {
             }),
             stable_root.path(),
             &stable_storage,
+            &previous,
+            &NeverCancelledChangeImpact,
         )
         .expect("stable rebuild must succeed");
         assert_eq!(stable.write, WorkspaceCacheWriteOutcome::Succeeded);
@@ -2510,6 +2739,8 @@ mod tests {
             }),
             unstable_root.path(),
             &unstable_storage,
+            &previous,
+            &NeverCancelledChangeImpact,
         )
         .expect("unstable semantic rebuild remains valid");
         assert_eq!(
@@ -2531,9 +2762,15 @@ mod tests {
             }),
             failed_root.path(),
             &failed_storage,
+            &previous,
+            &NeverCancelledChangeImpact,
         )
         .expect_err("failed semantic build must retain the prior publication");
-        assert_eq!(error.kind(), WorkspaceBuildErrorKind::DiscoveryFailed);
+        assert!(matches!(
+            error,
+            WorkspaceRebuildError::Build(error)
+                if error.kind() == WorkspaceBuildErrorKind::DiscoveryFailed
+        ));
         assert_eq!(failed_calls.load(Ordering::SeqCst), 1);
         assert_eq!(failed_storage.writes(), 0);
     }

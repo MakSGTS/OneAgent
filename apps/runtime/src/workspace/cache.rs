@@ -37,7 +37,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 4;
+const SEMANTIC_VERSION: u32 = 5;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -2158,10 +2158,7 @@ impl WorkspaceDto {
             previous_id = Some(configuration.configuration_id().clone());
             configurations.push(configuration);
         }
-        let snapshot = WorkspaceSnapshot {
-            root_path: workspace_root.to_path_buf(),
-            configurations,
-        };
+        let snapshot = WorkspaceSnapshot::initial(workspace_root.to_path_buf(), configurations);
         let reconstructed = Self::from_snapshot(workspace_root, &snapshot)?;
         if reconstructed != expected {
             return Err(inconsistent(
@@ -2445,10 +2442,7 @@ mod tests {
             validation,
         )
         .expect("diagnostic-rich snapshot must be valid");
-        WorkspaceSnapshot {
-            root_path: root.to_path_buf(),
-            configurations: vec![configuration],
-        }
+        WorkspaceSnapshot::initial(root.to_path_buf(), vec![configuration])
     }
 
     fn canonical_bytes(envelope: &mut EnvelopeDto) -> Vec<u8> {
@@ -2481,7 +2475,7 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 4);
+        assert_eq!(envelope.semantic_version, 5);
         assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
@@ -2535,10 +2529,7 @@ mod tests {
         let source = source();
 
         for configuration in clean.configurations() {
-            let single = WorkspaceSnapshot {
-                root_path: root.clone(),
-                configurations: vec![configuration.clone()],
-            };
+            let single = WorkspaceSnapshot::initial(root.clone(), vec![configuration.clone()]);
             let bytes = WorkspaceCacheCodec::encode(&source, &root, &single)
                 .expect("single-format snapshot must encode");
             let decoded = WorkspaceCacheCodec::decode(&bytes, &source, &root)
@@ -2563,10 +2554,7 @@ mod tests {
         let error = WorkspaceCacheCodec::encode(
             &source,
             &root,
-            &WorkspaceSnapshot {
-                root_path: root.clone(),
-                configurations: reordered,
-            },
+            &WorkspaceSnapshot::initial(root.clone(), reordered),
         )
         .expect_err("configuration reorder must violate canonical order");
         assert_eq!(error.kind(), WorkspaceCacheCodecErrorKind::Inconsistent);

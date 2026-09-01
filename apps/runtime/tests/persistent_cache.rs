@@ -8,8 +8,9 @@ use std::time::Duration;
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GraphQueryConfigurationList, GraphQueryLimit,
     GraphQueryNodeResult, GraphQueryService, HttpService, LifecycleState, RuntimeConfig,
-    WorkspaceCacheLoadOutcome, WorkspaceCacheStatus, WorkspaceCacheWriteOutcome, WorkspaceService,
-    WorkspaceSnapshot, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
+    WorkspaceCacheLoadOutcome, WorkspaceCacheStatus, WorkspaceCacheWriteOutcome,
+    WorkspaceChangeImpact, WorkspaceService, WorkspaceSnapshot, WorkspaceUpdatePhase,
+    WorkspaceUpdateStatus,
 };
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -300,6 +301,11 @@ async fn run_once(root: &Path) -> RunObservation {
     assert_eq!(update.phase(), WorkspaceUpdatePhase::Watching);
     assert_eq!(update.attempt(), 1);
     assert_eq!(update.published(), 1);
+    assert_eq!(snapshot.publication_id().get(), 1);
+    assert!(matches!(
+        snapshot.change_impact(),
+        WorkspaceChangeImpact::NoPreviousPublication { .. }
+    ));
 
     shutdown_sender.send(()).expect("shutdown must be observed");
     timeout(TEST_TIMEOUT, run)
@@ -439,6 +445,15 @@ async fn public_persistent_cache_cold_and_warm_runs_are_complete_and_equivalent(
     assert_eq!(cold.query.configurations.configurations().len(), 2);
     assert!(root.path().join(CACHE_RELATIVE_PATH).is_file());
     assert!(!root.path().join(CACHE_TEMPORARY_RELATIVE_PATH).exists());
+    let envelope: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.path().join(CACHE_RELATIVE_PATH))
+            .expect("cold cache entry must be readable"),
+    )
+    .expect("cold cache entry must be JSON");
+    assert_eq!(envelope["schema_version"], 1);
+    assert_eq!(envelope["semantic_version"], 5);
+    assert!(envelope.get("publication_id").is_none());
+    assert!(envelope.get("change_impact").is_none());
 
     let warm = run_once(root.path()).await;
     assert_eq!(warm.cache.load(), WorkspaceCacheLoadOutcome::Hit);
@@ -446,6 +461,11 @@ async fn public_persistent_cache_cold_and_warm_runs_are_complete_and_equivalent(
     assert_eq!(warm.updates.attempt(), 1);
     assert_eq!(warm.updates.published(), 1);
     assert_snapshot_equivalent(&cold.snapshot, &warm.snapshot);
+    assert_eq!(
+        cold.snapshot.publication_id(),
+        warm.snapshot.publication_id()
+    );
+    assert_eq!(cold.snapshot.change_impact(), warm.snapshot.change_impact());
     assert_eq!(cold.query, warm.query);
 }
 
@@ -491,7 +511,8 @@ async fn public_persistent_cache_invalidates_rejects_and_cleanly_recovers() {
         ("schema_version", 2),
         ("semantic_version", 0),
         ("semantic_version", 3),
-        ("semantic_version", 5),
+        ("semantic_version", 4),
+        ("semantic_version", 6),
     ] {
         set_cache_version(root.path(), field, version);
         let recovered = run_once(root.path()).await;
@@ -612,6 +633,15 @@ async fn public_persistent_cache_watched_replacements_are_atomic_and_warm_reusab
         snapshot.configurations()[0].configuration_name().as_str() == "DNSWorldCached"
     })
     .await;
+    assert_eq!(first_replacement.publication_id().get(), 2);
+    assert_eq!(
+        first_replacement
+            .change_impact()
+            .report()
+            .expect("first replacement must contain impact")
+            .previous_publication_id(),
+        initial.publication_id()
+    );
     assert_eq!(
         initial.configurations()[0].configuration_name().as_str(),
         "DNSWorldEdition"
@@ -648,6 +678,15 @@ async fn public_persistent_cache_watched_replacements_are_atomic_and_warm_reusab
         snapshot.configurations()[1].configuration_name().as_str() == "WritesCached"
     })
     .await;
+    assert_eq!(second_replacement.publication_id().get(), 3);
+    assert_eq!(
+        second_replacement
+            .change_impact()
+            .report()
+            .expect("second replacement must contain impact")
+            .previous_publication_id(),
+        first_replacement.publication_id()
+    );
     assert_eq!(
         first_replacement.configurations()[1]
             .configuration_name()

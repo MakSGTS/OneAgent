@@ -2,9 +2,9 @@ use oneagent_graph::SemanticGraphDiff;
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GitRepositoryReader, GraphQueryLimit,
     GraphQueryService, RepositoryChange, RepositoryChangeKind, RuntimeConfig,
-    WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome, WorkspaceChangeInputHandle,
-    WorkspaceChangeSubmissionOutcome, WorkspaceService, WorkspaceSnapshot,
-    WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
+    WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome, WorkspaceChangeImpact,
+    WorkspaceChangeInputHandle, WorkspaceChangeSubmissionOutcome, WorkspaceService,
+    WorkspaceSnapshot, WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
 };
 use std::ffi::OsStr;
 use std::fs;
@@ -222,10 +222,15 @@ async fn build_equivalent_ordered_end_state(
         status.phase() == WorkspaceUpdatePhase::Watching
     })
     .await;
-    wait_for_snapshot(&mut snapshots, |snapshot| {
+    let initial = wait_for_snapshot(&mut snapshots, |snapshot| {
         configuration_names(snapshot) == ["DNSWorldEdition", "WritesFixture"]
     })
     .await;
+    assert_eq!(initial.publication_id().get(), 1);
+    assert!(matches!(
+        initial.change_impact(),
+        WorkspaceChangeImpact::NoPreviousPublication { .. }
+    ));
 
     let edt_configuration = repository
         .root
@@ -278,6 +283,60 @@ async fn build_equivalent_ordered_end_state(
     (snapshot, normalized_changes)
 }
 
+async fn build_equivalent_filesystem_end_state(
+    repository: &GitWorkspace,
+) -> Arc<WorkspaceSnapshot> {
+    let workspace = WorkspaceService::new();
+    let observer = workspace.snapshot_observer();
+    let mut snapshots = observer.subscribe();
+    let updates = workspace.update_observer();
+    let mut update_changes = updates.subscribe();
+    let app = configured_builder(&repository.root)
+        .register_service("workspace", workspace)
+        .expect("filesystem Workspace service must register")
+        .build()
+        .expect("filesystem application must build");
+    let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+    let run = tokio::spawn(app.run(shutdown));
+
+    wait_for_update(&mut update_changes, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+    })
+    .await;
+    wait_for_snapshot(&mut snapshots, |snapshot| {
+        configuration_names(snapshot) == ["DNSWorldEdition", "WritesFixture"]
+    })
+    .await;
+    replace_exact(
+        &repository
+            .root
+            .join("edt/src/Configuration/Configuration.mdo"),
+        "<name>WritesFixture</name>",
+        "<name>WritesOrderEquivalent</name>",
+    );
+    let semantic_snapshot = wait_for_snapshot(&mut snapshots, |snapshot| {
+        configuration_names(snapshot) == ["DNSWorldEdition", "WritesOrderEquivalent"]
+    })
+    .await;
+    fs::write(repository.root.join("filesystem-trigger.txt"), "trigger\n")
+        .expect("filesystem equal-rebuild trigger must be written");
+    let snapshot = wait_for_snapshot(&mut snapshots, |snapshot| {
+        snapshot.publication_id() > semantic_snapshot.publication_id()
+            && configuration_names(snapshot) == ["DNSWorldEdition", "WritesOrderEquivalent"]
+    })
+    .await;
+
+    shutdown_sender
+        .send(())
+        .expect("filesystem Workspace shutdown must be observed");
+    timeout(TEST_TIMEOUT, run)
+        .await
+        .expect("filesystem Workspace shutdown must not hang")
+        .expect("filesystem Workspace task must join")
+        .expect("filesystem requested shutdown must succeed");
+    snapshot
+}
+
 #[tokio::test]
 async fn public_git_input_publishes_equal_complete_end_states_across_operation_orders() {
     let repository = GitWorkspace::new();
@@ -289,8 +348,26 @@ async fn public_git_input_publishes_equal_complete_end_states_across_operation_o
         fs::remove_dir_all(cache_root).expect("ordered test cache must reset with its fixture");
     }
     let (reverse, reverse_changes) = build_equivalent_ordered_end_state(&repository, true).await;
+    let filesystem_repository = GitWorkspace::new();
+    let filesystem = build_equivalent_filesystem_end_state(&filesystem_repository).await;
 
     assert_eq!(forward_changes, reverse_changes);
+    assert_eq!(forward.publication_id(), reverse.publication_id());
+    assert_eq!(forward.change_impact(), reverse.change_impact());
+    let git_report = forward
+        .change_impact()
+        .report()
+        .expect("Git-triggered endpoint must contain impact");
+    let filesystem_report = filesystem
+        .change_impact()
+        .report()
+        .expect("filesystem-triggered endpoint must contain impact");
+    assert_eq!(git_report.summary(), filesystem_report.summary());
+    assert_eq!(
+        git_report.configurations(),
+        filesystem_report.configurations()
+    );
+    assert_eq!(git_report.completeness(), filesystem_report.completeness());
     assert_eq!(configuration_names(&forward), configuration_names(&reverse));
     assert_eq!(forward.len(), reverse.len());
     for (forward_configuration, reverse_configuration) in forward
@@ -390,6 +467,8 @@ async fn public_git_input_drives_complete_atomic_rebuild_failure_recovery_and_gr
     })
     .await;
     let initial = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    assert_eq!(initial.publication_id().get(), 1);
+    assert!(initial.change_impact().report().is_none());
     assert_eq!(
         configuration_names(&initial),
         ["DNSWorldEdition", "WritesFixture"]
@@ -421,6 +500,15 @@ async fn public_git_input_drives_complete_atomic_rebuild_failure_recovery_and_gr
         configuration_names(snapshot) == ["DNSWorldEdition", "WritesGitInput"]
     })
     .await;
+    let modified_report = modified_snapshot
+        .change_impact()
+        .report()
+        .expect("Git-triggered replacement must contain impact");
+    assert_eq!(
+        modified_report.current_publication_id().get(),
+        modified_report.previous_publication_id().get() + 1
+    );
+    assert_eq!(modified_report.summary().compared_configurations(), 2);
     assert_eq!(
         configuration_names(&initial),
         ["DNSWorldEdition", "WritesFixture"]
@@ -453,6 +541,16 @@ async fn public_git_input_drives_complete_atomic_rebuild_failure_recovery_and_gr
     let equal_snapshot = observer
         .snapshot()
         .expect("complete snapshot must remain published");
+    let equal_report = equal_snapshot
+        .change_impact()
+        .report()
+        .expect("equal rebuild must publish a distinct complete report");
+    assert_eq!(
+        equal_report.current_publication_id().get(),
+        equal_report.previous_publication_id().get() + 1
+    );
+    assert_eq!(equal_report.summary().total_affected_nodes(), 0);
+    assert_eq!(equal_report.summary().compared_configurations(), 2);
     assert_eq!(
         configuration_names(&equal_snapshot),
         ["DNSWorldEdition", "WritesGitInput"]
@@ -470,6 +568,13 @@ async fn public_git_input_drives_complete_atomic_rebuild_failure_recovery_and_gr
     })
     .await;
     assert_eq!(failed.published(), matrix_status.published());
+    assert_eq!(
+        observer
+            .snapshot()
+            .expect("failed rebuild must retain publication")
+            .publication_id(),
+        equal_snapshot.publication_id()
+    );
     assert_eq!(
         configuration_names(
             &observer
@@ -493,6 +598,16 @@ async fn public_git_input_drives_complete_atomic_rebuild_failure_recovery_and_gr
         configuration_names(snapshot) == ["DNSWorldEdition", "WritesRecovered"]
     })
     .await;
+    assert_eq!(
+        recovered.publication_id().get(),
+        recovered
+            .change_impact()
+            .report()
+            .expect("recovery must compare against the last valid publication")
+            .previous_publication_id()
+            .get()
+            + 1
+    );
     assert_eq!(
         graph_query
             .configurations(GraphQueryLimit::default())

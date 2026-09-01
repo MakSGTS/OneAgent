@@ -10,7 +10,7 @@ use oneagent_protocol::{
 use oneagent_runtime::WorkspaceSnapshotBuilder;
 use serde_json::{Value, json};
 use tempfile::tempdir;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -129,6 +129,28 @@ async fn run_process_in(root: &Path, input: &[u8]) -> std::process::Output {
         .await
         .expect("MCP process must not hang")
         .expect("MCP process must be waitable")
+}
+
+async fn exchange_process_frame(
+    stdin: &mut tokio::process::ChildStdin,
+    lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    frame: &str,
+) -> Value {
+    stdin
+        .write_all(frame.as_bytes())
+        .await
+        .expect("MCP request frame must write");
+    stdin
+        .write_all(b"\n")
+        .await
+        .expect("MCP request delimiter must write");
+    stdin.flush().await.expect("MCP request must flush");
+    let line = timeout(PROCESS_TIMEOUT, lines.next_line())
+        .await
+        .expect("MCP response must not hang")
+        .expect("MCP response stream must remain readable")
+        .expect("MCP request must produce one response");
+    serde_json::from_str(&line).expect("MCP response line must be pure JSON")
 }
 
 fn fixture_root() -> PathBuf {
@@ -619,9 +641,10 @@ async fn public_mcp_process_keeps_two_client_sessions_isolated() {
 
 #[tokio::test]
 async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
-    let root = fixture_root();
+    let root = tempdir().expect("temporary semantic Workspace must be created");
+    copy_tree(&fixture_root(), root.path());
     let snapshot = WorkspaceSnapshotBuilder::new()
-        .build(&root)
+        .build(root.path())
         .expect("mixed fixture must build");
     let configuration_id = snapshot.configurations()[0]
         .configuration_id()
@@ -699,8 +722,8 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
     ));
     let input = format!("{}\n", frames.join("\n"));
 
-    let first = run_process_in(&root, input.as_bytes()).await;
-    let repeated = run_process_in(&root, input.as_bytes()).await;
+    let first = run_process_in(root.path(), input.as_bytes()).await;
+    let repeated = run_process_in(root.path(), input.as_bytes()).await;
     assert!(first.status.success());
     assert!(first.stderr.is_empty());
     assert_eq!(first.stdout, repeated.stdout);
@@ -711,10 +734,119 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).expect("tool response JSON"))
         .collect::<Vec<_>>();
-    assert_semantic_responses(&responses);
+    assert_semantic_responses(&responses, root.path());
 }
 
-fn assert_semantic_responses(responses: &[Value]) {
+#[tokio::test]
+#[allow(clippy::too_many_lines)] // One process lifetime proves live replacement and EOF cleanup.
+async fn public_mcp_process_observes_live_atomic_impact_publications_between_calls() {
+    let root = tempdir().expect("temporary live MCP Workspace must be created");
+    copy_tree(&fixture_root(), root.path());
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(root.path())
+        .expect("live MCP fixture must build");
+    let configuration_id = snapshot.configurations()[1]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oneagent-mcp"))
+        .current_dir(root.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("live MCP process must spawn");
+    let mut stdin = child.stdin.take().expect("piped stdin must exist");
+    let stdout = child.stdout.take().expect("piped stdout must exist");
+    let mut stderr = child.stderr.take().expect("piped stderr must exist");
+    let mut lines = BufReader::new(stdout).lines();
+
+    let initial = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(
+            100,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": configuration_id
+            }}),
+        ),
+    )
+    .await;
+    let initial = &initial["result"]["structuredContent"];
+    assert_eq!(initial["currentPublicationId"], 1);
+    assert_eq!(initial["availability"], "no_previous_publication");
+
+    let source = root.path().join("edt/src/Configuration/Configuration.mdo");
+    let changed = fs::read_to_string(&source)
+        .expect("live EDT source must be readable")
+        .replace("WritesFixture", "WritesLiveMcp");
+    fs::write(&source, changed).expect("live EDT source must be changed");
+    let updated = timeout(PROCESS_TIMEOUT, async {
+        let mut request_id = 101_u64;
+        loop {
+            let response = exchange_process_frame(
+                &mut stdin,
+                &mut lines,
+                &request_with_fields(
+                    request_id,
+                    "tools/call",
+                    &json!({"name": "oneagent.impact", "arguments": {
+                        "configurationId": configuration_id,
+                        "maxDepth": 4,
+                        "limit": 100,
+                        "reasonLimit": 100
+                    }}),
+                ),
+            )
+            .await;
+            let content = response["result"]["structuredContent"].clone();
+            if content["currentPublicationId"]
+                .as_u64()
+                .is_some_and(|publication| publication > 1)
+            {
+                break content;
+            }
+            request_id = request_id.checked_add(1).expect("small request counter");
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("live Workspace publication must become observable");
+    assert_eq!(updated["mode"], "publication");
+    assert_eq!(updated["availability"], "available");
+    assert_eq!(updated["transition"], "compared");
+    assert_eq!(updated["previousPublicationId"], 1);
+    assert_eq!(updated["currentPublicationId"], 2);
+    assert_eq!(updated["completeness"], "complete_within_requested_depth");
+    assert!(updated["total"].as_u64().is_some_and(|total| total > 0));
+    let encoded = updated.to_string();
+    assert!(!encoded.contains("Configuration.mdo"));
+    assert!(!encoded.contains(root.path().to_str().expect("UTF-8 root")));
+
+    drop(stdin);
+    let status = timeout(PROCESS_TIMEOUT, child.wait())
+        .await
+        .expect("live MCP process EOF shutdown must not hang")
+        .expect("live MCP process must wait");
+    assert!(status.success());
+    let mut trailing_stdout = Vec::new();
+    lines
+        .into_inner()
+        .read_to_end(&mut trailing_stdout)
+        .await
+        .expect("remaining stdout must read");
+    assert!(trailing_stdout.is_empty());
+    let mut stderr_bytes = Vec::new();
+    stderr
+        .read_to_end(&mut stderr_bytes)
+        .await
+        .expect("stderr must read");
+    assert!(stderr_bytes.is_empty());
+}
+
+fn assert_semantic_responses(responses: &[Value], workspace_root: &Path) {
     assert_eq!(responses.len(), 12);
     for response in &responses[..7] {
         assert!(response["result"].get("isError").is_none(), "{response}");
@@ -746,7 +878,7 @@ fn assert_semantic_responses(responses: &[Value]) {
     assert!(
         !symbols
             .to_string()
-            .contains(fixture_root().to_str().expect("UTF-8 fixture path"))
+            .contains(workspace_root.to_str().expect("UTF-8 Workspace path"))
     );
     assert_eq!(responses[7]["result"]["isError"], true);
     assert_eq!(
@@ -768,9 +900,10 @@ fn assert_semantic_responses(responses: &[Value]) {
 
 #[tokio::test]
 async fn public_mcp_process_keeps_modern_and_legacy_diagnostic_payloads_equal() {
-    let root = fixture_root();
+    let root = tempdir().expect("temporary diagnostic Workspace must be created");
+    copy_tree(&fixture_root(), root.path());
     let snapshot = WorkspaceSnapshotBuilder::new()
-        .build(&root)
+        .build(root.path())
         .expect("mixed fixture must build");
     let configuration_id = snapshot
         .configurations()
@@ -803,7 +936,7 @@ async fn public_mcp_process_keeps_modern_and_legacy_diagnostic_payloads_equal() 
         ]
         .join("\n")
             + "\n";
-        let output = run_process_in(&root, input.as_bytes()).await;
+        let output = run_process_in(root.path(), input.as_bytes()).await;
         assert!(output.status.success());
         assert!(output.stderr.is_empty());
         let responses = String::from_utf8(output.stdout)

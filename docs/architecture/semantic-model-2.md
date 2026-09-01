@@ -118,12 +118,14 @@ It must not parse BSL, read EDT files, or discover the filesystem.
 
 ### `oneagent-analysis`
 
-Owns source-independent BSL declaration/call analysis and the additive Context
-Engine derived view. The Context Engine borrows one immutable `SemanticGraph`,
-uses only canonical query facts and provenance, and returns an owned
-deterministic semantic bundle. It does not mutate graph facts, read source
-files, call providers/models, or own Runtime, persistence, protocol, MCP, or IDE
-state.
+Owns source-independent BSL declaration/call analysis and the additive Context,
+Diagnostics, Rules, and Change Impact derived views. Change Impact accepts only
+canonical Configuration identity plus complete borrowed graphs and invokes the
+Graph-owned diff and impact APIs; it owns publication-pair reporting,
+Configuration transitions, complete admission, ordering, and checked summaries
+without becoming a second semantic or traversal authority. These views do not
+mutate graph facts, read source files, call providers/models, or own Runtime,
+persistence, protocol, MCP, or IDE state.
 
 ### `oneagent-llm`
 
@@ -376,8 +378,9 @@ records `pass` and completes Sprint 36. The
 [Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
 `pass with non-blocking follow-ups` and completes Sprint 37. The
 [Sprint 38 Git Change Adapter review](../reviews/sprint-38-git-change-adapter.md)
-records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is the
-unique `next` target.
+records `pass` and completes Sprint 38. Sprint 39 Change Impact Analysis is
+active through complete Task 6 evidence; Task 7 review remains its completion
+gate.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -407,10 +410,11 @@ notification silence, per-response flush, cooperative cancellation, successful
 EOF completion, and stable controlled transport failures. It composes
 `oneagent.context`, `oneagent.diagnostics`, `oneagent.graph`,
 `oneagent.impact`, `oneagent.query`, `oneagent.symbols`, and
-`oneagent.validation` over one immutable Workspace startup snapshot. Every
-known call traverses the fail-closed Tool Policy gate; results are bounded
-deterministic JSON with equivalent compact text and structured content. The
-original six tools remain path-free. The symbol tool projects only unique,
+`oneagent.validation` over one live Runtime-owned Workspace service while
+cloning exactly one immutable current snapshot per call. Every known call
+traverses the fail-closed Tool Policy gate; results are bounded deterministic
+JSON with equivalent compact text and structured content. The original six
+tools remain path-free. The symbol tool projects only unique,
 lexically confined Workspace-relative forward-slash locations for Module,
 Procedure, Function, and EDT Query nodes and never exposes opaque provenance or
 an absolute source path. The tools perform no real side effect.
@@ -424,11 +428,13 @@ exposes no path, source content, raw reference, or provenance. The existing
 Graph summary and validation tool reuse the validation result already published
 in the same Configuration snapshot.
 
-The separate `oneagent-mcp` process constructs no Runtime `App`, watcher,
-cache, listener, or background task, preserves protocol-only stdout, exits
-successfully at EOF, and reports stable startup or terminal failure categories
-on stderr. Public domain, semantic-library, fixture, dispatch, adapter, and
-real-process evidence covers catalog order, annotations and schemas, all seven
+The separate `oneagent-mcp` process constructs one Runtime `App`, Workspace
+watcher, and cache owner but no HTTP listener or remote client. It waits for one
+complete initial publication before reading frames, preserves protocol-only
+stdout, joins Runtime cleanup at EOF, and reports stable startup or terminal
+failure categories on stderr. Public domain, semantic-library, fixture,
+dispatch, adapter, and real-process evidence covers catalog order, annotations
+and schemas, all seven
 tool families, bounds, policy gating, path redaction and confinement, malformed
 and oversized input, unknown methods/tools, LF/CRLF
 framing, notifications, cancellation, transport failures, stdout purity, exit
@@ -439,7 +445,7 @@ Codex directly exercises all seven tools, while Cursor proves the seven-tool
 catalog through its available public list command. The desktop VS Code adapter
 owns explicit-demand Quick Pick navigation and Context selection without
 semantic matching. Additional revisions and clients, remote transports,
-authentication, snapshot refresh, Runtime packaging, references, diagnostics
+authentication, publication history, Runtime packaging, references, diagnostics
 UI, and broader IDE integration remain deferred. The additive LSP process does
 not migrate or alter this MCP boundary.
 
@@ -1481,11 +1487,54 @@ graph validation still precedes publication. Failure retains the last valid
 snapshot and later filesystem or explicit input may recover.
 
 This boundary does not alter the incremental-index contract below. Repository
-paths and statuses are not index operations or impact seeds. Sprint 39 must
-derive product-facing change impact from complete previous/current
-`SemanticGraph` snapshots and their canonical `SemanticGraphDiff`. The complete
-evidence and limitations are recorded in the
+paths and statuses are not index operations or impact seeds. Sprint 39 derives
+product-facing change impact only from complete previous/current
+`SemanticGraph` snapshots and the Graph-owned canonical diff/impact APIs. The
+repository-evidence limitations are recorded in the
 [Sprint 38 evidence](git-change-adapter-evidence.md).
+
+## Change Impact Analysis
+
+[ADR-0061](../adr/0061-change-impact-analysis.md) defines the implemented
+source-independent product report. One Analysis evaluation accepts two checked
+adjacent process-local publication IDs, complete endpoint sets of canonical
+Configuration IDs and borrowed validated graphs, and cooperative cancellation.
+It computes the canonical diff and calls `SemanticImpactAnalyzer` with fixed
+maximum depth four, default dependency kinds, ownership disabled, and
+provenance direct-only. Graph retains every node/edge, seed, reason, status,
+availability, and traversal-completeness decision.
+
+Configurations match only by `EntityId`. Exact duplicate endpoint evidence
+collapses; same-ID different-graph evidence fails closed. A previous-only ID is
+Removed, a current-only ID is Added, and an ID change never infers a rename
+from name, source format, path, or Git status. Equal graphs produce a complete
+empty Compared transition. Report order is Configuration ID, then Graph-owned
+node and reason order. Checked summaries reconcile all transition, seed,
+status, availability, affected-node, and depth counts.
+
+The in-memory report is complete through configured depth four or is rejected
+as a whole. It accepts at most 4,096 Configurations per endpoint, 4,096 bytes
+per Configuration/node/edge identifier, 65,536 affected nodes, 256 reasons per
+node, and 262,144 reasons in the report. Cancellation, conflicts,
+inconsistency, bounds, and overflow return closed redacted errors without a
+partial report. Diagnostic suppression does not apply.
+
+Each `WorkspaceSnapshot` embeds a checked process-local publication ID and
+either explicit no-predecessor availability or the complete report from its
+immediately preceding successful publication. Initial cold, warm, standalone,
+and fresh-service snapshots use ID 1 with no invented history. Failed,
+cancelled, stale, invalid, or over-bound rebuilds retain the last valid snapshot
+and consume no ID. Cache schema remains `1`; semantic compatibility is `5`;
+publication IDs and reports are not serialized.
+
+`oneagent.impact` keeps its legacy two-Configuration same-snapshot mode and adds
+one exclusive publication mode. Publication projection can select Compared,
+Added, Removed, or equal transitions, filters the complete owned result to
+requested depth `0..=4`, then applies independent `1..=100` item and reason
+limits. Complete requested-depth summaries are not reconstructed from the
+bounded prefix. Availability, completeness, truncation, and omitted reasons
+remain distinct. The full executable matrix and limitations are recorded in
+the [Sprint 39 evidence](change-impact-analysis-evidence.md).
 
 ## Incremental indexing
 
@@ -1709,7 +1758,8 @@ SM-6 UI and entry points
 
 SM-7 Derived semantic analysis
     dependencies
-    impact analysis
+    implemented: canonical graph diff and bounded impact analysis
+    implemented: complete adjacent-publication Change Impact report
     reachability
     dead declarations
     cycles
@@ -1727,9 +1777,10 @@ SM-8 AI Context Engine
 
 SM-9 MCP and IDE integration
     implemented: MCP 2025-06-18 and 2025-11-25 negotiated compatibility plus preserved stateless 2026-07-28
-    implemented: one fresh connection session per bounded newline-framed stdio run and EOF lifecycle
+    implemented: one fresh connection session and live Runtime-owned Workspace per bounded newline-framed stdio run and joined EOF lifecycle
     implemented: seven read-only graph, diagnostics, impact, query, validation, context, and symbol tools
-    implemented: immutable startup snapshot and Tool Policy execution gate
+    implemented: one immutable atomic snapshot per MCP call and Tool Policy execution gate
+    implemented: legacy and adjacent-publication impact request modes with explicit bounds and completeness
     implemented: exact Codex CLI and Cursor Agent public-client evidence
     implemented: typed Module, Procedure, Function, and EDT Query source locations
     implemented: explicit VS Code Quick Pick symbol search and safe source navigation

@@ -3,11 +3,16 @@
 //! This module owns source-independent retained documents and occurrences. It
 //! performs no filesystem access, semantic resolution, planning, or mutation.
 
-use std::collections::BTreeSet;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
-use oneagent_common::{EntityId, SourcePath, sha256};
+use oneagent_bsl::{BslSymbolKind, bsl_callable_id, bsl_name_key, bsl_names_equal};
+use oneagent_common::{EntityId, SourcePath, SourceSpan, sha256, sha256_hex};
+use oneagent_graph::NodeKind;
+
+pub use crate::change_impact::ChangeImpactPublicationId as WorkspacePublicationId;
 
 /// Maximum raw bytes retained by one source document.
 pub const MAX_SOURCE_DOCUMENT_BYTES: usize = 1_048_576;
@@ -693,5 +698,1400 @@ fn validate_occurrence(
             SourceEvidenceErrorKind::InvalidOccurrence,
         ));
     }
+    Ok(())
+}
+
+/// Maximum Configurations selected by one refactoring request.
+pub const MAX_REFACTORING_CONFIGURATIONS: usize = 1;
+/// Maximum targets selected by one refactoring request.
+pub const MAX_REFACTORING_TARGETS: usize = 1;
+/// Maximum candidate occurrences admitted by one plan construction.
+pub const MAX_REFACTORING_CANDIDATES: usize = 65_536;
+/// Maximum operations retained by one complete refactoring plan.
+pub const MAX_REFACTORING_OPERATIONS: usize = 65_536;
+/// Maximum dependency edges admitted by the first refactoring family.
+pub const MAX_REFACTORING_DEPENDENCIES: usize = 0;
+/// Maximum public preview entries requested by one product projection.
+pub const MAX_REFACTORING_PREVIEW_ENTRIES: usize = 100;
+/// Default public preview entry limit.
+pub const DEFAULT_REFACTORING_PREVIEW_ENTRIES: usize = 50;
+/// Fixed lowercase hexadecimal length of a SHA-256 plan or operation identity.
+pub const REFACTORING_IDENTITY_RENDERING_BYTES: usize = 64;
+
+/// Closed first-slice refactoring family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefactoringFamily {
+    /// Rename one top-level BSL Procedure or Function and all accepted direct calls.
+    BslCallableRenameV1,
+}
+
+impl RefactoringFamily {
+    /// Returns the stable family tag used by canonical identities and projections.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::BslCallableRenameV1 => "bsl_callable_rename_v1",
+        }
+    }
+}
+
+/// Closed inclusive admission-bound vocabulary for the plan domain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefactoringBound {
+    /// UTF-8 bytes in one semantic or document identity component.
+    IdentityBytes,
+    /// UTF-8 bytes in one desired, expected, or replacement identifier.
+    IdentifierBytes,
+    /// Source documents named by one precondition set.
+    DocumentsPerConfiguration,
+    /// Candidate operations presented to one plan construction.
+    CandidateOccurrences,
+    /// Unique operations retained by one complete plan.
+    PlannedOperations,
+    /// Dependency edges presented to one operation.
+    DependencyEdges,
+    /// Entries requested by a public preview projection.
+    PreviewEntries,
+}
+
+impl RefactoringBound {
+    /// Returns the inclusive maximum for this bound.
+    #[must_use]
+    pub const fn maximum(self) -> usize {
+        match self {
+            Self::IdentityBytes => MAX_SOURCE_IDENTITY_BYTES,
+            Self::IdentifierBytes => MAX_SOURCE_IDENTIFIER_BYTES,
+            Self::DocumentsPerConfiguration => MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+            Self::CandidateOccurrences | Self::PlannedOperations => MAX_REFACTORING_OPERATIONS,
+            Self::DependencyEdges => MAX_REFACTORING_DEPENDENCIES,
+            Self::PreviewEntries => MAX_REFACTORING_PREVIEW_ENTRIES,
+        }
+    }
+}
+
+/// Closed refactoring plan-domain failure kind in deterministic precedence order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefactoringErrorKind {
+    /// Cooperative cancellation was observed by an evaluator.
+    Cancelled,
+    /// A request has an invalid shape or unsupported family value.
+    InvalidRequest,
+    /// An inclusive scalar or collection bound was exceeded.
+    BoundExceeded,
+    /// The requested publication is not the selected immutable publication.
+    PublicationMismatch,
+    /// The selected Configuration does not exist.
+    ConfigurationNotFound,
+    /// The selected target does not exist.
+    TargetNotFound,
+    /// The target kind is outside the first family.
+    UnsupportedTarget,
+    /// The target does not have exactly one accepted owner Module.
+    AmbiguousOwner,
+    /// The selected source format or module role is unsupported.
+    UnsupportedSourceFormat,
+    /// Required immutable source evidence is absent.
+    SourceEvidenceMissing,
+    /// Source evidence is not complete for the selected family.
+    SourceEvidenceIncomplete,
+    /// Structured evidence values disagree or forbidden dependencies were supplied.
+    IncompatibleEvidence,
+    /// An operation names a stale content version.
+    StaleSourceVersion,
+    /// A declaration or operation occurrence is invalid.
+    InvalidOccurrence,
+    /// A target-related occurrence cannot be resolved uniquely.
+    AmbiguousOccurrence,
+    /// The desired BSL identifier is invalid or reserved.
+    InvalidDesiredName,
+    /// The desired name is BSL-equivalent to the current name.
+    NoChange,
+    /// Another callable in the owner Module has the desired name.
+    NameCollision,
+    /// Equal identities carry unequal complete structured values.
+    IdentityCollision,
+    /// Unequal operations occupy the same exact source range.
+    DuplicateConflict,
+    /// Unequal operation ranges intersect in one document.
+    OverlappingOperations,
+    /// Checked counter or canonical-encoding arithmetic overflowed.
+    ArithmeticOverflow,
+}
+
+impl RefactoringErrorKind {
+    const fn message(self) -> &'static str {
+        match self {
+            Self::Cancelled => "refactoring planning was cancelled",
+            Self::InvalidRequest => "refactoring request is invalid",
+            Self::BoundExceeded => "refactoring input exceeds an accepted bound",
+            Self::PublicationMismatch => "refactoring publication does not match",
+            Self::ConfigurationNotFound => "refactoring Configuration was not found",
+            Self::TargetNotFound => "refactoring target was not found",
+            Self::UnsupportedTarget => "refactoring target is unsupported",
+            Self::AmbiguousOwner => "refactoring target owner is ambiguous",
+            Self::UnsupportedSourceFormat => "refactoring source format is unsupported",
+            Self::SourceEvidenceMissing => "refactoring source evidence is missing",
+            Self::SourceEvidenceIncomplete => "refactoring source evidence is incomplete",
+            Self::IncompatibleEvidence => "refactoring evidence is incompatible",
+            Self::StaleSourceVersion => "refactoring source version is stale",
+            Self::InvalidOccurrence => "refactoring occurrence is invalid",
+            Self::AmbiguousOccurrence => "refactoring occurrence is ambiguous",
+            Self::InvalidDesiredName => "refactoring desired name is invalid",
+            Self::NoChange => "refactoring request would make no change",
+            Self::NameCollision => "refactoring desired name collides with another callable",
+            Self::IdentityCollision => "refactoring identity collides with unequal evidence",
+            Self::DuplicateConflict => "refactoring operations conflict at one range",
+            Self::OverlappingOperations => "refactoring operations overlap",
+            Self::ArithmeticOverflow => "refactoring checked arithmetic overflowed",
+        }
+    }
+}
+
+/// Redacted refactoring domain error with optional non-sensitive bound counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RefactoringError {
+    kind: RefactoringErrorKind,
+    bound: Option<RefactoringBound>,
+    actual: Option<usize>,
+    maximum: Option<usize>,
+}
+
+impl RefactoringError {
+    const fn closed(kind: RefactoringErrorKind) -> Self {
+        Self {
+            kind,
+            bound: None,
+            actual: None,
+            maximum: None,
+        }
+    }
+
+    const fn bounded(bound: RefactoringBound, actual: usize) -> Self {
+        Self {
+            kind: RefactoringErrorKind::BoundExceeded,
+            bound: Some(bound),
+            actual: Some(actual),
+            maximum: Some(bound.maximum()),
+        }
+    }
+
+    /// Returns the closed failure kind.
+    #[must_use]
+    pub const fn kind(self) -> RefactoringErrorKind {
+        self.kind
+    }
+
+    /// Returns the violated bound category, when applicable.
+    #[must_use]
+    pub const fn bound(self) -> Option<RefactoringBound> {
+        self.bound
+    }
+
+    /// Returns the rejected non-sensitive count, when applicable.
+    #[must_use]
+    pub const fn actual(self) -> Option<usize> {
+        self.actual
+    }
+
+    /// Returns the accepted inclusive maximum, when applicable.
+    #[must_use]
+    pub const fn maximum(self) -> Option<usize> {
+        self.maximum
+    }
+}
+
+impl Display for RefactoringError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.kind.message())
+    }
+}
+
+impl std::error::Error for RefactoringError {}
+
+fn validate_plan_identity(value: &EntityId) -> Result<(), RefactoringError> {
+    if value.as_str().len() > MAX_SOURCE_IDENTITY_BYTES {
+        return Err(RefactoringError::bounded(
+            RefactoringBound::IdentityBytes,
+            value.as_str().len(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_desired_name(value: &str) -> Result<(), RefactoringError> {
+    if value.len() > MAX_SOURCE_IDENTIFIER_BYTES {
+        return Err(RefactoringError::bounded(
+            RefactoringBound::IdentifierBytes,
+            value.len(),
+        ));
+    }
+    let mut scalars = value.chars();
+    let Some(first) = scalars.next() else {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidDesiredName,
+        ));
+    };
+    if !(first == '_' || first.is_alphabetic())
+        || !scalars.all(|scalar| scalar == '_' || scalar.is_alphanumeric())
+        || RESERVED_BSL_NAMES.contains(&bsl_name_key(value).as_str())
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidDesiredName,
+        ));
+    }
+    Ok(())
+}
+
+const RESERVED_BSL_NAMES: &[&str] = &[
+    "if",
+    "если",
+    "elsif",
+    "иначеесли",
+    "while",
+    "пока",
+    "for",
+    "для",
+    "foreach",
+    "длякаждого",
+    "return",
+    "возврат",
+    "procedure",
+    "процедура",
+    "function",
+    "функция",
+    "endprocedure",
+    "конецпроцедуры",
+    "endfunction",
+    "конецфункции",
+    "export",
+    "экспорт",
+];
+
+/// Immutable validated request for one supported refactoring family and target.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RefactoringRequest {
+    family: RefactoringFamily,
+    expected_publication_id: WorkspacePublicationId,
+    configuration_id: EntityId,
+    target_node_id: EntityId,
+    desired_name: Box<str>,
+}
+
+impl RefactoringRequest {
+    /// Creates one bounded request without paths, source text, or caller operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error for an over-bound identity or an invalid,
+    /// reserved, empty, or over-bound desired BSL name.
+    pub fn new(
+        family: RefactoringFamily,
+        expected_publication_id: WorkspacePublicationId,
+        configuration_id: EntityId,
+        target_node_id: EntityId,
+        desired_name: impl Into<String>,
+    ) -> Result<Self, RefactoringError> {
+        validate_plan_identity(&configuration_id)?;
+        validate_plan_identity(&target_node_id)?;
+        let desired_name = desired_name.into();
+        validate_desired_name(&desired_name)?;
+        Ok(Self {
+            family,
+            expected_publication_id,
+            configuration_id,
+            target_node_id,
+            desired_name: desired_name.into_boxed_str(),
+        })
+    }
+
+    /// Returns the closed first-slice family.
+    #[must_use]
+    pub const fn family(&self) -> RefactoringFamily {
+        self.family
+    }
+
+    /// Returns the expected immutable Workspace publication.
+    #[must_use]
+    pub const fn expected_publication_id(&self) -> WorkspacePublicationId {
+        self.expected_publication_id
+    }
+
+    /// Returns the selected Graph Configuration identity.
+    #[must_use]
+    pub const fn configuration_id(&self) -> &EntityId {
+        &self.configuration_id
+    }
+
+    /// Returns the exact pre-rename Graph target identity.
+    #[must_use]
+    pub const fn target_node_id(&self) -> &EntityId {
+        &self.target_node_id
+    }
+
+    /// Returns the validated desired identifier separately from target identity.
+    #[must_use]
+    pub fn desired_name(&self) -> &str {
+        &self.desired_name
+    }
+}
+
+/// Immutable validated target identity and its exact declaration evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefactoringTarget {
+    configuration_id: EntityId,
+    target_node_id: EntityId,
+    target_kind: NodeKind,
+    owner_module_id: EntityId,
+    declaration: SourceOccurrence,
+    expected_post_rename_node_id: EntityId,
+}
+
+impl RefactoringTarget {
+    /// Creates a target bound to one Procedure or Function declaration.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error unless the declaration is unique, belongs to
+    /// the owner Module and Configuration, and maps to the pre-rename target.
+    pub fn new(
+        configuration_id: EntityId,
+        target_node_id: EntityId,
+        target_kind: NodeKind,
+        owner_module_id: EntityId,
+        declaration: SourceOccurrence,
+        desired_name: &str,
+    ) -> Result<Self, RefactoringError> {
+        for identity in [&configuration_id, &target_node_id, &owner_module_id] {
+            validate_plan_identity(identity)?;
+        }
+        validate_desired_name(desired_name)?;
+        if !matches!(target_kind, NodeKind::Procedure | NodeKind::Function) {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::UnsupportedTarget,
+            ));
+        }
+        if declaration.kind() != SourceOccurrenceKind::Declaration
+            || declaration.resolution() != SourceOccurrenceResolution::Unique
+            || declaration.mapped_target_id() != Some(&target_node_id)
+            || declaration.document_id().configuration_id() != &configuration_id
+            || declaration.document_id().module_id() != &owner_module_id
+        {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::InvalidOccurrence,
+            ));
+        }
+        let symbol_kind = match target_kind {
+            NodeKind::Procedure => BslSymbolKind::Procedure,
+            NodeKind::Function => BslSymbolKind::Function,
+            _ => unreachable!("unsupported kinds were rejected above"),
+        };
+        let expected_post_rename_node_id =
+            bsl_callable_id(&owner_module_id, symbol_kind, desired_name)
+                .map_err(|_| RefactoringError::closed(RefactoringErrorKind::IdentityCollision))?;
+        validate_plan_identity(&expected_post_rename_node_id)?;
+        Ok(Self {
+            configuration_id,
+            target_node_id,
+            target_kind,
+            owner_module_id,
+            declaration,
+            expected_post_rename_node_id,
+        })
+    }
+
+    /// Returns the selected Configuration identity.
+    #[must_use]
+    pub const fn configuration_id(&self) -> &EntityId {
+        &self.configuration_id
+    }
+
+    /// Returns the stable pre-rename target identity.
+    #[must_use]
+    pub const fn target_node_id(&self) -> &EntityId {
+        &self.target_node_id
+    }
+
+    /// Returns the Graph-owned target kind.
+    #[must_use]
+    pub const fn target_kind(&self) -> NodeKind {
+        self.target_kind
+    }
+
+    /// Returns the single owning Module identity.
+    #[must_use]
+    pub const fn owner_module_id(&self) -> &EntityId {
+        &self.owner_module_id
+    }
+
+    /// Returns the exact uniquely mapped declaration occurrence.
+    #[must_use]
+    pub const fn declaration(&self) -> &SourceOccurrence {
+        &self.declaration
+    }
+
+    /// Returns the separately derived expected post-rename identity.
+    #[must_use]
+    pub const fn expected_post_rename_node_id(&self) -> &EntityId {
+        &self.expected_post_rename_node_id
+    }
+}
+
+/// One immutable document/version pair required by every operation in a plan.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RefactoringSourcePrecondition {
+    document_id: SourceDocumentId,
+    content_version: SourceContentVersion,
+}
+
+impl RefactoringSourcePrecondition {
+    /// Creates one exact immutable source precondition.
+    #[must_use]
+    pub const fn new(document_id: SourceDocumentId, content_version: SourceContentVersion) -> Self {
+        Self {
+            document_id,
+            content_version,
+        }
+    }
+
+    /// Returns the structured source-document identity.
+    #[must_use]
+    pub const fn document_id(&self) -> &SourceDocumentId {
+        &self.document_id
+    }
+
+    /// Returns the exact retained source content version.
+    #[must_use]
+    pub const fn content_version(&self) -> SourceContentVersion {
+        self.content_version
+    }
+}
+
+/// Canonical immutable publication, target, owner, and source preconditions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefactoringPreconditionSet {
+    publication_id: WorkspacePublicationId,
+    configuration_id: EntityId,
+    target_node_id: EntityId,
+    target_kind: NodeKind,
+    owner_module_id: EntityId,
+    documents: Arc<[RefactoringSourcePrecondition]>,
+}
+
+impl RefactoringPreconditionSet {
+    /// Validates and canonically orders one complete source precondition set.
+    ///
+    /// Exact duplicate pairs collapse. Two versions for one document fail
+    /// closed independently of input order.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error for empty, over-bound, incompatible, or
+    /// conflicting source preconditions.
+    pub fn new(
+        publication_id: WorkspacePublicationId,
+        configuration_id: EntityId,
+        target_node_id: EntityId,
+        target_kind: NodeKind,
+        owner_module_id: EntityId,
+        documents: Vec<RefactoringSourcePrecondition>,
+    ) -> Result<Self, RefactoringError> {
+        for identity in [&configuration_id, &target_node_id, &owner_module_id] {
+            validate_plan_identity(identity)?;
+        }
+        if !matches!(target_kind, NodeKind::Procedure | NodeKind::Function) {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::UnsupportedTarget,
+            ));
+        }
+        if documents.is_empty() {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::SourceEvidenceMissing,
+            ));
+        }
+        if documents.len() > MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION {
+            return Err(RefactoringError::bounded(
+                RefactoringBound::DocumentsPerConfiguration,
+                documents.len(),
+            ));
+        }
+        let mut canonical = BTreeMap::new();
+        for document in documents {
+            if document.document_id().configuration_id() != &configuration_id {
+                return Err(RefactoringError::closed(
+                    RefactoringErrorKind::IncompatibleEvidence,
+                ));
+            }
+            match canonical.entry(document.document_id().clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(document);
+                }
+                std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &document => {
+                }
+                std::collections::btree_map::Entry::Occupied(_) => {
+                    return Err(RefactoringError::closed(
+                        RefactoringErrorKind::IncompatibleEvidence,
+                    ));
+                }
+            }
+        }
+        Ok(Self {
+            publication_id,
+            configuration_id,
+            target_node_id,
+            target_kind,
+            owner_module_id,
+            documents: Arc::from(canonical.into_values().collect::<Vec<_>>()),
+        })
+    }
+
+    /// Returns the process-local Workspace publication identity.
+    #[must_use]
+    pub const fn publication_id(&self) -> WorkspacePublicationId {
+        self.publication_id
+    }
+
+    /// Returns the selected Configuration identity.
+    #[must_use]
+    pub const fn configuration_id(&self) -> &EntityId {
+        &self.configuration_id
+    }
+
+    /// Returns the exact pre-rename target identity.
+    #[must_use]
+    pub const fn target_node_id(&self) -> &EntityId {
+        &self.target_node_id
+    }
+
+    /// Returns the Graph-owned target kind.
+    #[must_use]
+    pub const fn target_kind(&self) -> NodeKind {
+        self.target_kind
+    }
+
+    /// Returns the single owner Module identity.
+    #[must_use]
+    pub const fn owner_module_id(&self) -> &EntityId {
+        &self.owner_module_id
+    }
+
+    /// Returns document/version pairs in canonical document-identity order.
+    #[must_use]
+    pub fn documents(&self) -> &[RefactoringSourcePrecondition] {
+        &self.documents
+    }
+}
+
+/// Stable SHA-256 identity of one complete structured operation.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OperationId(Box<str>);
+
+impl OperationId {
+    /// Returns the 64-byte lowercase hexadecimal rendering.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Display for OperationId {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// Closed operation vocabulary for `bsl_callable_rename_v1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefactoringOperationKind {
+    /// Replace the selected declaration identifier.
+    ReplaceDeclarationIdentifier,
+    /// Replace one accepted local or qualified direct-call identifier.
+    ReplaceDirectCallIdentifier,
+}
+
+impl RefactoringOperationKind {
+    /// Returns the stable operation tag.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ReplaceDeclarationIdentifier => "replace_declaration_identifier",
+            Self::ReplaceDirectCallIdentifier => "replace_direct_call_identifier",
+        }
+    }
+}
+
+/// One immutable bounded identifier replacement operation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RefactoringOperation {
+    id: OperationId,
+    kind: RefactoringOperationKind,
+    occurrence_kind: SourceOccurrenceKind,
+    document_id: SourceDocumentId,
+    content_version: SourceContentVersion,
+    range: SourceByteRange,
+    expected: Box<str>,
+    replacement: Box<str>,
+}
+
+impl RefactoringOperation {
+    /// Creates one operation and its canonical identity.
+    ///
+    /// The first family accepts no dependency edge. Expected and replacement
+    /// identifiers are non-empty and bounded before retention.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error for an identifier bound, empty token, or any
+    /// supplied dependency.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        kind: RefactoringOperationKind,
+        occurrence_kind: SourceOccurrenceKind,
+        document_id: SourceDocumentId,
+        content_version: SourceContentVersion,
+        range: SourceByteRange,
+        expected: impl Into<String>,
+        replacement: impl Into<String>,
+        dependencies: &[OperationId],
+    ) -> Result<Self, RefactoringError> {
+        if !matches!(
+            (kind, occurrence_kind),
+            (
+                RefactoringOperationKind::ReplaceDeclarationIdentifier,
+                SourceOccurrenceKind::Declaration
+            ) | (
+                RefactoringOperationKind::ReplaceDirectCallIdentifier,
+                SourceOccurrenceKind::LocalCall | SourceOccurrenceKind::QualifiedCall
+            )
+        ) {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::IncompatibleEvidence,
+            ));
+        }
+        if !dependencies.is_empty() {
+            return Err(RefactoringError::bounded(
+                RefactoringBound::DependencyEdges,
+                dependencies.len(),
+            ));
+        }
+        let expected = expected.into();
+        let replacement = replacement.into();
+        for value in [&expected, &replacement] {
+            if value.is_empty() {
+                return Err(RefactoringError::closed(
+                    RefactoringErrorKind::InvalidOccurrence,
+                ));
+            }
+            if value.len() > MAX_SOURCE_IDENTIFIER_BYTES {
+                return Err(RefactoringError::bounded(
+                    RefactoringBound::IdentifierBytes,
+                    value.len(),
+                ));
+            }
+        }
+        validate_desired_name(&replacement)?;
+        let mut encoding = Vec::new();
+        encode_string(&mut encoding, kind.as_str())?;
+        encode_document_id(&mut encoding, &document_id)?;
+        encode_content_version(&mut encoding, content_version)?;
+        encode_usize(&mut encoding, range.start_byte())?;
+        encode_usize(&mut encoding, range.end_byte())?;
+        encode_string(&mut encoding, &expected)?;
+        encode_string(&mut encoding, &replacement)?;
+        let id = OperationId(sha256_hex(&encoding).into_boxed_str());
+        Ok(Self {
+            id,
+            kind,
+            occurrence_kind,
+            document_id,
+            content_version,
+            range,
+            expected: expected.into_boxed_str(),
+            replacement: replacement.into_boxed_str(),
+        })
+    }
+
+    /// Returns the stable complete-structure operation identity.
+    #[must_use]
+    pub const fn id(&self) -> &OperationId {
+        &self.id
+    }
+
+    /// Returns the closed operation kind.
+    #[must_use]
+    pub const fn kind(&self) -> RefactoringOperationKind {
+        self.kind
+    }
+
+    /// Returns the declaration, local-call, or qualified-call source category.
+    #[must_use]
+    pub const fn occurrence_kind(&self) -> SourceOccurrenceKind {
+        self.occurrence_kind
+    }
+
+    /// Returns the containing document identity.
+    #[must_use]
+    pub const fn document_id(&self) -> &SourceDocumentId {
+        &self.document_id
+    }
+
+    /// Returns the exact retained content version required by this operation.
+    #[must_use]
+    pub const fn content_version(&self) -> SourceContentVersion {
+        self.content_version
+    }
+
+    /// Returns the exact raw-byte identifier range.
+    #[must_use]
+    pub const fn range(&self) -> SourceByteRange {
+        self.range
+    }
+
+    /// Returns the exact expected captured identifier token.
+    #[must_use]
+    pub fn expected(&self) -> &str {
+        &self.expected
+    }
+
+    /// Returns the desired replacement identifier.
+    #[must_use]
+    pub fn replacement(&self) -> &str {
+        &self.replacement
+    }
+
+    /// Returns the only accepted dependency set, which is empty in v1.
+    #[must_use]
+    pub const fn dependencies(&self) -> &[OperationId] {
+        &[]
+    }
+}
+
+impl PartialOrd for RefactoringOperation {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RefactoringOperation {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.document_id
+            .cmp(&other.document_id)
+            .then_with(|| other.range.start_byte().cmp(&self.range.start_byte()))
+            .then_with(|| other.range.end_byte().cmp(&self.range.end_byte()))
+            .then_with(|| self.kind.cmp(&other.kind))
+            .then_with(|| self.id.cmp(&other.id))
+            .then_with(|| self.occurrence_kind.cmp(&other.occurrence_kind))
+    }
+}
+
+/// The only successful completeness value for a first-family plan or preview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefactoringCompleteness {
+    /// Every admitted target-related operation is present and none was omitted.
+    Complete,
+}
+
+impl RefactoringCompleteness {
+    /// Returns the stable public completeness rendering.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Complete => "complete",
+        }
+    }
+}
+
+/// Reconciled checked counters for one complete refactoring plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RefactoringPlanSummary {
+    requested_targets: usize,
+    planned_targets: usize,
+    conflicted_targets: usize,
+    rejected_targets: usize,
+    documents: usize,
+    candidate_occurrences: usize,
+    exact_duplicates_collapsed: usize,
+    declaration_operations: usize,
+    local_call_operations: usize,
+    qualified_call_operations: usize,
+    planned_operations: usize,
+    omitted_operations: usize,
+    returned_operations: usize,
+}
+
+macro_rules! summary_accessors {
+    ($($(#[$meta:meta])* $name:ident),+ $(,)?) => {
+        $(
+            $(#[$meta])*
+            #[must_use]
+            pub const fn $name(self) -> usize {
+                self.$name
+            }
+        )+
+    };
+}
+
+impl RefactoringPlanSummary {
+    summary_accessors!(
+        /// Returns requested target count, fixed at one.
+        requested_targets,
+        /// Returns planned target count, fixed at one.
+        planned_targets,
+        /// Returns conflicted target count, fixed at zero on success.
+        conflicted_targets,
+        /// Returns rejected target count, fixed at zero on success.
+        rejected_targets,
+        /// Returns distinct documents used by operations.
+        documents,
+        /// Returns candidate operations before exact duplicate collapse.
+        candidate_occurrences,
+        /// Returns exact duplicate operations collapsed during normalization.
+        exact_duplicates_collapsed,
+        /// Returns retained declaration operations, fixed at one.
+        declaration_operations,
+        /// Returns retained local direct-call operations.
+        local_call_operations,
+        /// Returns retained qualified direct-call operations.
+        qualified_call_operations,
+        /// Returns total retained operations.
+        planned_operations,
+        /// Returns omitted internal operations, fixed at zero.
+        omitted_operations,
+        /// Returns complete internal operations, equal to planned operations.
+        returned_operations,
+    );
+}
+
+/// Stable SHA-256 identity of one complete structured plan.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlanId(Box<str>);
+
+impl PlanId {
+    /// Returns the 64-byte lowercase hexadecimal rendering.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Display for PlanId {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// Complete immutable source-independent first-family refactoring plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefactoringPlan {
+    id: PlanId,
+    request: RefactoringRequest,
+    target: RefactoringTarget,
+    preconditions: RefactoringPreconditionSet,
+    operations: Arc<[RefactoringOperation]>,
+    summary: RefactoringPlanSummary,
+    completeness: RefactoringCompleteness,
+}
+
+impl RefactoringPlan {
+    /// Validates, normalizes, reconciles, and identifies one complete plan.
+    ///
+    /// Exact duplicates collapse. Version conflicts, same-range conflicts,
+    /// overlaps, or missing declaration operations reject the whole construction.
+    ///
+    /// # Errors
+    ///
+    /// Returns one closed redacted failure and no partial plan.
+    pub fn new(
+        request: RefactoringRequest,
+        target: RefactoringTarget,
+        preconditions: RefactoringPreconditionSet,
+        operations: Vec<RefactoringOperation>,
+    ) -> Result<Self, RefactoringError> {
+        validate_plan_relationships(&request, &target, &preconditions)?;
+        if operations.is_empty() {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::SourceEvidenceMissing,
+            ));
+        }
+        if operations.len() > MAX_REFACTORING_CANDIDATES {
+            return Err(RefactoringError::bounded(
+                RefactoringBound::CandidateOccurrences,
+                operations.len(),
+            ));
+        }
+        let candidate_occurrences = operations.len();
+        let mut by_id = BTreeMap::<OperationId, RefactoringOperation>::new();
+        for operation in operations {
+            validate_operation_relationship(&request, &target, &preconditions, &operation)?;
+            match by_id.entry(operation.id().clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(operation);
+                }
+                std::collections::btree_map::Entry::Occupied(entry)
+                    if entry.get() == &operation => {}
+                std::collections::btree_map::Entry::Occupied(_) => {
+                    return Err(RefactoringError::closed(
+                        RefactoringErrorKind::IdentityCollision,
+                    ));
+                }
+            }
+        }
+        let mut operations = by_id.into_values().collect::<Vec<_>>();
+        if operations.len() > MAX_REFACTORING_OPERATIONS {
+            return Err(RefactoringError::bounded(
+                RefactoringBound::PlannedOperations,
+                operations.len(),
+            ));
+        }
+        operations.sort_unstable();
+        validate_operation_conflicts(&operations)?;
+        let summary = summarize_operations(candidate_occurrences, &operations, &preconditions)?;
+        let id = plan_id(&request, &target, &preconditions, &operations)?;
+        Ok(Self {
+            id,
+            request,
+            target,
+            preconditions,
+            operations: Arc::from(operations),
+            summary,
+            completeness: RefactoringCompleteness::Complete,
+        })
+    }
+
+    /// Returns the stable complete-structure plan identity.
+    #[must_use]
+    pub const fn id(&self) -> &PlanId {
+        &self.id
+    }
+
+    /// Returns the validated request.
+    #[must_use]
+    pub const fn request(&self) -> &RefactoringRequest {
+        &self.request
+    }
+
+    /// Returns the validated target and exact declaration evidence.
+    #[must_use]
+    pub const fn target(&self) -> &RefactoringTarget {
+        &self.target
+    }
+
+    /// Returns all immutable source preconditions.
+    #[must_use]
+    pub const fn preconditions(&self) -> &RefactoringPreconditionSet {
+        &self.preconditions
+    }
+
+    /// Returns operations in canonical future safe-application order.
+    #[must_use]
+    pub fn operations(&self) -> &[RefactoringOperation] {
+        &self.operations
+    }
+
+    /// Returns reconciled checked counters.
+    #[must_use]
+    pub const fn summary(&self) -> RefactoringPlanSummary {
+        self.summary
+    }
+
+    /// Returns complete plan status.
+    #[must_use]
+    pub const fn completeness(&self) -> RefactoringCompleteness {
+        self.completeness
+    }
+}
+
+/// One structured no-snippet preview entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefactoringPreviewEntry {
+    operation_id: OperationId,
+    kind: RefactoringOperationKind,
+    path: ConfinedSourcePath,
+    range: SourceByteRange,
+    position: SourceSpan,
+    replacement: Box<str>,
+}
+
+impl RefactoringPreviewEntry {
+    /// Projects one operation with a confined path and derived one-based span.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error when the derived span is empty.
+    pub fn new(
+        operation: &RefactoringOperation,
+        path: ConfinedSourcePath,
+        position: SourceSpan,
+    ) -> Result<Self, RefactoringError> {
+        if position.start() == position.end() {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::InvalidOccurrence,
+            ));
+        }
+        Ok(Self {
+            operation_id: operation.id().clone(),
+            kind: operation.kind(),
+            path,
+            range: operation.range(),
+            position,
+            replacement: operation.replacement().into(),
+        })
+    }
+
+    /// Returns the projected operation identity.
+    #[must_use]
+    pub const fn operation_id(&self) -> &OperationId {
+        &self.operation_id
+    }
+
+    /// Returns the projected operation kind.
+    #[must_use]
+    pub const fn kind(&self) -> RefactoringOperationKind {
+        self.kind
+    }
+
+    /// Returns the confined Workspace-relative path.
+    #[must_use]
+    pub const fn path(&self) -> &ConfinedSourcePath {
+        &self.path
+    }
+
+    /// Returns the exact raw-byte range without source content.
+    #[must_use]
+    pub const fn range(&self) -> SourceByteRange {
+        self.range
+    }
+
+    /// Returns the derived one-based exclusive-end line/column span.
+    #[must_use]
+    pub const fn position(&self) -> SourceSpan {
+        self.position
+    }
+
+    /// Returns the bounded replacement identifier.
+    #[must_use]
+    pub fn replacement(&self) -> &str {
+        &self.replacement
+    }
+}
+
+/// Complete deterministic read-only structured preview of one immutable plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefactoringPreview {
+    plan_id: PlanId,
+    entries: Arc<[RefactoringPreviewEntry]>,
+    completeness: RefactoringCompleteness,
+}
+
+impl RefactoringPreview {
+    /// Validates a complete entry-for-operation projection in plan order.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error when any operation is missing, reordered, or
+    /// projected with incompatible kind, range, or replacement evidence.
+    pub fn new(
+        plan: &RefactoringPlan,
+        entries: Vec<RefactoringPreviewEntry>,
+    ) -> Result<Self, RefactoringError> {
+        if entries.len() != plan.operations().len()
+            || entries
+                .iter()
+                .zip(plan.operations())
+                .any(|(entry, operation)| {
+                    entry.operation_id() != operation.id()
+                        || entry.kind() != operation.kind()
+                        || entry.range() != operation.range()
+                        || entry.replacement() != operation.replacement()
+                })
+        {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::IncompatibleEvidence,
+            ));
+        }
+        Ok(Self {
+            plan_id: plan.id().clone(),
+            entries: Arc::from(entries),
+            completeness: RefactoringCompleteness::Complete,
+        })
+    }
+
+    /// Returns the identity of the complete plan being projected.
+    #[must_use]
+    pub const fn plan_id(&self) -> &PlanId {
+        &self.plan_id
+    }
+
+    /// Returns all structured entries in canonical plan order.
+    #[must_use]
+    pub fn entries(&self) -> &[RefactoringPreviewEntry] {
+        &self.entries
+    }
+
+    /// Returns complete preview status.
+    #[must_use]
+    pub const fn completeness(&self) -> RefactoringCompleteness {
+        self.completeness
+    }
+}
+
+fn validate_plan_relationships(
+    request: &RefactoringRequest,
+    target: &RefactoringTarget,
+    preconditions: &RefactoringPreconditionSet,
+) -> Result<(), RefactoringError> {
+    if request.configuration_id() != target.configuration_id()
+        || request.target_node_id() != target.target_node_id()
+        || request.expected_publication_id() != preconditions.publication_id()
+        || request.configuration_id() != preconditions.configuration_id()
+        || request.target_node_id() != preconditions.target_node_id()
+        || target.target_kind() != preconditions.target_kind()
+        || target.owner_module_id() != preconditions.owner_module_id()
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IncompatibleEvidence,
+        ));
+    }
+    if bsl_names_equal(request.desired_name(), target.declaration().token()) {
+        return Err(RefactoringError::closed(RefactoringErrorKind::NoChange));
+    }
+    let symbol_kind = match target.target_kind() {
+        NodeKind::Procedure => BslSymbolKind::Procedure,
+        NodeKind::Function => BslSymbolKind::Function,
+        _ => {
+            return Err(RefactoringError::closed(
+                RefactoringErrorKind::UnsupportedTarget,
+            ));
+        }
+    };
+    let expected = bsl_callable_id(
+        target.owner_module_id(),
+        symbol_kind,
+        request.desired_name(),
+    )
+    .map_err(|_| RefactoringError::closed(RefactoringErrorKind::IdentityCollision))?;
+    if &expected != target.expected_post_rename_node_id() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IncompatibleEvidence,
+        ));
+    }
+    Ok(())
+}
+
+fn validate_operation_relationship(
+    request: &RefactoringRequest,
+    target: &RefactoringTarget,
+    preconditions: &RefactoringPreconditionSet,
+    operation: &RefactoringOperation,
+) -> Result<(), RefactoringError> {
+    if operation.document_id().configuration_id() != request.configuration_id()
+        || operation.replacement() != request.desired_name()
+        || !bsl_names_equal(operation.expected(), target.declaration().token())
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IncompatibleEvidence,
+        ));
+    }
+    let source = preconditions
+        .documents()
+        .binary_search_by(|candidate| candidate.document_id().cmp(operation.document_id()))
+        .ok()
+        .map(|index| &preconditions.documents()[index])
+        .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::SourceEvidenceMissing))?;
+    if source.content_version() != operation.content_version() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::StaleSourceVersion,
+        ));
+    }
+    if operation.kind() == RefactoringOperationKind::ReplaceDeclarationIdentifier
+        && (operation.document_id() != target.declaration().document_id()
+            || operation.content_version() != target.declaration().content_version()
+            || operation.range() != target.declaration().range()
+            || operation.expected() != target.declaration().token())
+    {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidOccurrence,
+        ));
+    }
+    Ok(())
+}
+
+fn summarize_operations(
+    candidate_occurrences: usize,
+    operations: &[RefactoringOperation],
+    preconditions: &RefactoringPreconditionSet,
+) -> Result<RefactoringPlanSummary, RefactoringError> {
+    let count = |kind| {
+        operations
+            .iter()
+            .filter(|operation| operation.occurrence_kind() == kind)
+            .count()
+    };
+    let declaration_operations = count(SourceOccurrenceKind::Declaration);
+    if declaration_operations != 1 {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::InvalidOccurrence,
+        ));
+    }
+    let local_call_operations = count(SourceOccurrenceKind::LocalCall);
+    let qualified_call_operations = count(SourceOccurrenceKind::QualifiedCall);
+    let classified_operations = declaration_operations
+        .checked_add(local_call_operations)
+        .and_then(|count| count.checked_add(qualified_call_operations))
+        .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow))?;
+    if classified_operations != operations.len() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IncompatibleEvidence,
+        ));
+    }
+    let exact_duplicates_collapsed = candidate_occurrences
+        .checked_sub(operations.len())
+        .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow))?;
+    let documents = operations
+        .iter()
+        .map(RefactoringOperation::document_id)
+        .collect::<BTreeSet<_>>()
+        .len();
+    if documents != preconditions.documents().len() {
+        return Err(RefactoringError::closed(
+            RefactoringErrorKind::IncompatibleEvidence,
+        ));
+    }
+    Ok(RefactoringPlanSummary {
+        requested_targets: MAX_REFACTORING_TARGETS,
+        planned_targets: MAX_REFACTORING_TARGETS,
+        conflicted_targets: 0,
+        rejected_targets: 0,
+        documents,
+        candidate_occurrences,
+        exact_duplicates_collapsed,
+        declaration_operations,
+        local_call_operations,
+        qualified_call_operations,
+        planned_operations: operations.len(),
+        omitted_operations: 0,
+        returned_operations: operations.len(),
+    })
+}
+
+fn validate_operation_conflicts(
+    operations: &[RefactoringOperation],
+) -> Result<(), RefactoringError> {
+    let mut versions = BTreeMap::new();
+    for operation in operations {
+        match versions.entry(operation.document_id()) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(operation.content_version());
+            }
+            std::collections::btree_map::Entry::Occupied(entry)
+                if *entry.get() == operation.content_version() => {}
+            std::collections::btree_map::Entry::Occupied(_) => {
+                return Err(RefactoringError::closed(
+                    RefactoringErrorKind::StaleSourceVersion,
+                ));
+            }
+        }
+    }
+    for (index, left) in operations.iter().enumerate() {
+        for right in operations.iter().skip(index + 1) {
+            if left.document_id() != right.document_id() {
+                break;
+            }
+            if left.range() == right.range() {
+                return Err(RefactoringError::closed(
+                    RefactoringErrorKind::DuplicateConflict,
+                ));
+            }
+            if ranges_intersect(left.range(), right.range()) {
+                return Err(RefactoringError::closed(
+                    RefactoringErrorKind::OverlappingOperations,
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+const fn ranges_intersect(left: SourceByteRange, right: SourceByteRange) -> bool {
+    left.start_byte() < right.end_byte() && right.start_byte() < left.end_byte()
+}
+
+fn plan_id(
+    request: &RefactoringRequest,
+    target: &RefactoringTarget,
+    preconditions: &RefactoringPreconditionSet,
+    operations: &[RefactoringOperation],
+) -> Result<PlanId, RefactoringError> {
+    let mut encoding = Vec::new();
+    encode_string(&mut encoding, request.family().as_str())?;
+    encoding.extend_from_slice(&request.expected_publication_id().get().to_be_bytes());
+    encode_entity_id(&mut encoding, request.configuration_id())?;
+    encode_entity_id(&mut encoding, request.target_node_id())?;
+    encode_string(&mut encoding, request.desired_name())?;
+    encode_entity_id(&mut encoding, target.configuration_id())?;
+    encode_entity_id(&mut encoding, target.target_node_id())?;
+    encode_string(&mut encoding, node_kind_tag(target.target_kind()))?;
+    encode_entity_id(&mut encoding, target.owner_module_id())?;
+    encode_document_id(&mut encoding, target.declaration().document_id())?;
+    encode_content_version(&mut encoding, target.declaration().content_version())?;
+    encode_usize(&mut encoding, target.declaration().range().start_byte())?;
+    encode_usize(&mut encoding, target.declaration().range().end_byte())?;
+    encode_string(&mut encoding, target.declaration().token())?;
+    encode_entity_id(&mut encoding, target.expected_post_rename_node_id())?;
+    encoding.extend_from_slice(&preconditions.publication_id().get().to_be_bytes());
+    encode_entity_id(&mut encoding, preconditions.configuration_id())?;
+    encode_entity_id(&mut encoding, preconditions.target_node_id())?;
+    encode_string(&mut encoding, node_kind_tag(preconditions.target_kind()))?;
+    encode_entity_id(&mut encoding, preconditions.owner_module_id())?;
+    encode_usize(&mut encoding, preconditions.documents().len())?;
+    for document in preconditions.documents() {
+        encode_document_id(&mut encoding, document.document_id())?;
+        encode_content_version(&mut encoding, document.content_version())?;
+    }
+    encode_usize(&mut encoding, operations.len())?;
+    for operation in operations {
+        encode_string(&mut encoding, operation.id().as_str())?;
+    }
+    Ok(PlanId(sha256_hex(&encoding).into_boxed_str()))
+}
+
+const fn node_kind_tag(kind: NodeKind) -> &'static str {
+    match kind {
+        NodeKind::Procedure => "procedure",
+        NodeKind::Function => "function",
+        _ => "unsupported",
+    }
+}
+
+fn encode_entity_id(output: &mut Vec<u8>, value: &EntityId) -> Result<(), RefactoringError> {
+    encode_string(output, value.as_str())
+}
+
+fn encode_document_id(
+    output: &mut Vec<u8>,
+    value: &SourceDocumentId,
+) -> Result<(), RefactoringError> {
+    encode_entity_id(output, value.configuration_id())?;
+    encode_entity_id(output, value.module_id())
+}
+
+fn encode_content_version(
+    output: &mut Vec<u8>,
+    value: SourceContentVersion,
+) -> Result<(), RefactoringError> {
+    encode_usize(output, value.raw_byte_len())?;
+    output.extend_from_slice(&value.digest());
+    Ok(())
+}
+
+fn encode_string(output: &mut Vec<u8>, value: &str) -> Result<(), RefactoringError> {
+    encode_usize(output, value.len())?;
+    output.extend_from_slice(value.as_bytes());
+    Ok(())
+}
+
+fn encode_usize(output: &mut Vec<u8>, value: usize) -> Result<(), RefactoringError> {
+    let value = u64::try_from(value)
+        .map_err(|_| RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow))?;
+    output.extend_from_slice(&value.to_be_bytes());
     Ok(())
 }

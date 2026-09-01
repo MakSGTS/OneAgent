@@ -13,6 +13,10 @@ use oneagent_analysis::diagnostics::{
     DiagnosticCategory, DiagnosticDisposition, DiagnosticFamily, DiagnosticFilter,
     DiagnosticFinding, DiagnosticIdentity, DiagnosticReport, DiagnosticSeverity, DiagnosticSummary,
 };
+use oneagent_analysis::refactoring::{
+    RefactoringCancellationSignal, RefactoringErrorKind, RefactoringEvaluation, RefactoringFamily,
+    RefactoringRequest, WorkspacePublicationId,
+};
 use oneagent_common::{EntityId, SourceLocation};
 use oneagent_graph::{
     EdgeKind, GraphEdge, GraphNode, ImpactNodeAvailability, ImpactNodeStatus,
@@ -39,6 +43,7 @@ use crate::{
 
 const GRAPH: &str = "oneagent.graph";
 const QUERY: &str = "oneagent.query";
+const REFACTOR_PLAN: &str = "oneagent.refactor.plan";
 const VALIDATION: &str = "oneagent.validation";
 const DIAGNOSTICS: &str = "oneagent.diagnostics";
 const IMPACT: &str = "oneagent.impact";
@@ -71,7 +76,7 @@ const EDGE_KIND_NAMES: [&str; 11] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct McpSemanticServerError;
 
-/// Builds the complete immutable Sprint 31 semantic MCP server.
+/// Builds the complete semantic MCP server over one fixed immutable Workspace snapshot.
 ///
 /// # Errors
 ///
@@ -83,6 +88,7 @@ pub fn semantic_server(snapshot: WorkspaceSnapshot) -> Result<McpServer, McpSema
         GRAPH,
         IMPACT,
         QUERY,
+        REFACTOR_PLAN,
         SYMBOLS,
         VALIDATION,
     ];
@@ -108,6 +114,7 @@ pub fn semantic_server_observer(
         GRAPH,
         IMPACT,
         QUERY,
+        REFACTOR_PLAN,
         SYMBOLS,
         VALIDATION,
     ];
@@ -178,6 +185,24 @@ fn impact_context_definitions() -> Result<Vec<McpToolDefinition>, McpSemanticSer
                     "budgetBytes": {"type": "integer", "minimum": 1, "maximum": 32768}
                 },
                 "required": ["configurationId", "nodeId"],
+                "additionalProperties": false
+            }),
+        ),
+        (
+            REFACTOR_PLAN,
+            "Build a bounded read-only semantic refactoring plan and preview.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "publicationId": {"type": "integer", "minimum": 1},
+                    "configurationId": {"type": "string", "minLength": 1},
+                    "targetNodeId": {"type": "string", "minLength": 1},
+                    "desiredName": {"type": "string", "minLength": 1},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+                },
+                "required": [
+                    "publicationId", "configurationId", "targetNodeId", "desiredName"
+                ],
                 "additionalProperties": false
             }),
         ),
@@ -356,7 +381,9 @@ impl McpToolCallHandler for Handler {
             let Some(snapshot) = self.snapshots.snapshot() else {
                 return tool_error("execution_failed");
             };
-            if name == SYMBOLS && symbol_arguments(arguments).is_err() {
+            if (name == SYMBOLS && symbol_arguments(arguments).is_err())
+                || (name == REFACTOR_PLAN && refactoring_arguments(arguments).is_err())
+            {
                 return tool_error("invalid_arguments");
             }
             let Ok(encoded) = serde_json::to_string(arguments) else {
@@ -407,7 +434,7 @@ impl ToolExecutor for Executor {
     fn execute<'a>(
         &'a self,
         request: &'a ToolRequest,
-        _cancellation: &'a dyn oneagent_tool_policy::ToolCancellationSignal,
+        cancellation: &'a dyn oneagent_tool_policy::ToolCancellationSignal,
     ) -> ToolFuture<'a, ToolExecutorOutcome> {
         Box::pin(async move {
             let Ok(arguments) =
@@ -415,7 +442,12 @@ impl ToolExecutor for Executor {
             else {
                 return ToolExecutorOutcome::Failed(None);
             };
-            let envelope = match project(&self.snapshot, request.tool().as_str(), &arguments) {
+            let envelope = match project(
+                &self.snapshot,
+                request.tool().as_str(),
+                &arguments,
+                cancellation,
+            ) {
                 Ok(value) => json!({"ok": true, "value": value}),
                 Err(error) => json!({
                     "ok": false,
@@ -504,6 +536,7 @@ fn project(
     snapshot: &WorkspaceSnapshot,
     name: &str,
     arguments: &Map<String, Value>,
+    cancellation: &dyn oneagent_tool_policy::ToolCancellationSignal,
 ) -> Result<Value, SemanticError> {
     match name {
         GRAPH => graph(snapshot, arguments),
@@ -512,9 +545,187 @@ fn project(
         DIAGNOSTICS => diagnostics(snapshot, arguments),
         IMPACT => impact(snapshot, arguments),
         CONTEXT => context(snapshot, arguments),
+        REFACTOR_PLAN => refactoring(snapshot, arguments, cancellation),
         SYMBOLS => symbols(snapshot, arguments),
         _ => Err(INVALID),
     }
+}
+
+struct RefactoringArguments {
+    request: RefactoringRequest,
+    limit: usize,
+}
+
+fn refactoring_arguments(
+    arguments: &Map<String, Value>,
+) -> Result<RefactoringArguments, SemanticError> {
+    fields(
+        arguments,
+        &[
+            "publicationId",
+            "configurationId",
+            "targetNodeId",
+            "desiredName",
+            "limit",
+        ],
+    )?;
+    let publication_id = arguments
+        .get("publicationId")
+        .and_then(Value::as_u64)
+        .and_then(WorkspacePublicationId::new)
+        .ok_or(INVALID)?;
+    let configuration_id =
+        EntityId::new(string(arguments, "configurationId")?.to_owned()).map_err(|_| INVALID)?;
+    let target_node_id =
+        EntityId::new(string(arguments, "targetNodeId")?.to_owned()).map_err(|_| INVALID)?;
+    let desired_name = string(arguments, "desiredName")?;
+    let request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        publication_id,
+        configuration_id,
+        target_node_id,
+        desired_name,
+    )
+    .map_err(|_| INVALID)?;
+    Ok(RefactoringArguments {
+        request,
+        limit: limit(arguments)?,
+    })
+}
+
+struct ToolRefactoringCancellation<'signal>(
+    &'signal dyn oneagent_tool_policy::ToolCancellationSignal,
+);
+
+impl RefactoringCancellationSignal for ToolRefactoringCancellation<'_> {
+    fn is_cancelled(&self) -> bool {
+        self.0.is_cancelled()
+    }
+}
+
+fn refactoring(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+    cancellation: &dyn oneagent_tool_policy::ToolCancellationSignal,
+) -> Result<Value, SemanticError> {
+    let arguments = refactoring_arguments(arguments)?;
+    let evaluation = snapshot
+        .plan_refactoring(
+            &arguments.request,
+            &ToolRefactoringCancellation(cancellation),
+        )
+        .map_err(refactoring_error)?;
+    project_refactoring(&evaluation, arguments.limit)
+}
+
+fn refactoring_error(error: oneagent_analysis::refactoring::RefactoringError) -> SemanticError {
+    match error.kind() {
+        RefactoringErrorKind::InvalidRequest | RefactoringErrorKind::BoundExceeded => INVALID,
+        RefactoringErrorKind::ConfigurationNotFound | RefactoringErrorKind::TargetNotFound => {
+            NOT_FOUND
+        }
+        RefactoringErrorKind::Cancelled
+        | RefactoringErrorKind::PublicationMismatch
+        | RefactoringErrorKind::UnsupportedTarget
+        | RefactoringErrorKind::AmbiguousOwner
+        | RefactoringErrorKind::UnsupportedSourceFormat
+        | RefactoringErrorKind::SourceEvidenceMissing
+        | RefactoringErrorKind::SourceEvidenceIncomplete
+        | RefactoringErrorKind::IncompatibleEvidence
+        | RefactoringErrorKind::StaleSourceVersion
+        | RefactoringErrorKind::InvalidOccurrence
+        | RefactoringErrorKind::AmbiguousOccurrence
+        | RefactoringErrorKind::InvalidDesiredName
+        | RefactoringErrorKind::NoChange
+        | RefactoringErrorKind::NameCollision
+        | RefactoringErrorKind::IdentityCollision
+        | RefactoringErrorKind::DuplicateConflict
+        | RefactoringErrorKind::OverlappingOperations
+        | RefactoringErrorKind::ArithmeticOverflow => EXECUTION_FAILED,
+    }
+}
+
+fn project_refactoring(
+    evaluation: &RefactoringEvaluation,
+    limit: usize,
+) -> Result<Value, SemanticError> {
+    let plan = evaluation.plan();
+    let request = plan.request();
+    let target = plan.target();
+    let summary = plan.summary();
+    let total = evaluation.preview().entries().len();
+    let returned = total.min(limit);
+    let omitted = total.checked_sub(returned).ok_or(EXECUTION_FAILED)?;
+    let preview = evaluation
+        .preview()
+        .entries()
+        .iter()
+        .take(returned)
+        .map(|entry| {
+            let range = entry.range();
+            let position = entry.position();
+            json!({
+                "operationId": entry.operation_id().as_str(),
+                "kind": entry.kind().as_str(),
+                "path": entry.path().path().as_str(),
+                "range": {
+                    "startByte": range.start_byte(),
+                    "endByte": range.end_byte()
+                },
+                "position": {
+                    "start": {
+                        "line": position.start().line(),
+                        "column": position.start().column()
+                    },
+                    "end": {
+                        "line": position.end().line(),
+                        "column": position.end().column()
+                    }
+                },
+                "replacement": entry.replacement()
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "family": request.family().as_str(),
+        "publicationId": request.expected_publication_id().get(),
+        "configurationId": request.configuration_id().as_str(),
+        "planId": plan.id().as_str(),
+        "target": {
+            "nodeId": target.target_node_id().as_str(),
+            "kind": GraphQueryNodeKind::from(target.target_kind()).as_str(),
+            "ownerModuleId": target.owner_module_id().as_str(),
+            "expectedPostRenameNodeId": target.expected_post_rename_node_id().as_str()
+        },
+        "desiredName": request.desired_name(),
+        "completeness": plan.completeness().as_str(),
+        "summary": {
+            "targets": {
+                "requested": summary.requested_targets(),
+                "planned": summary.planned_targets(),
+                "conflicted": summary.conflicted_targets(),
+                "rejected": summary.rejected_targets()
+            },
+            "documents": summary.documents(),
+            "candidateOccurrences": summary.candidate_occurrences(),
+            "exactDuplicatesCollapsed": summary.exact_duplicates_collapsed(),
+            "declarationOperations": summary.declaration_operations(),
+            "localCallOperations": summary.local_call_operations(),
+            "qualifiedCallOperations": summary.qualified_call_operations(),
+            "plannedOperations": summary.planned_operations(),
+            "internalOperations": {
+                "omitted": summary.omitted_operations(),
+                "returned": summary.returned_operations()
+            }
+        },
+        "preview": preview,
+        "totalOperations": total,
+        "returnedOperations": returned,
+        "omittedOperations": omitted,
+        "truncated": omitted > 0,
+        "readOnly": true,
+        "editAuthorization": "none"
+    }))
 }
 
 struct SymbolResult<'a> {
@@ -1781,14 +1992,17 @@ mod tests {
         SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
     };
     use oneagent_protocol::{McpToolCallHandler, McpToolCallOutcome};
-    use oneagent_tool_policy::{PolicyRevision, ToolPolicy};
+    use oneagent_tool_policy::{
+        PolicyRevision, ToolCancellationSignal, ToolEffect, ToolFuture, ToolPolicy,
+    };
     use serde_json::{Map, json};
     use tempfile::tempdir;
 
     use super::{
-        DIAGNOSTICS, GRAPH, Handler, IMPACT, SYMBOLS, SnapshotSource, diagnostic_arguments, output,
-        project_diagnostic_finding, project_diagnostic_report, project_publication_impact,
-        project_symbol_location, unique_symbol_location,
+        DIAGNOSTICS, GRAPH, Handler, IMPACT, REFACTOR_PLAN, SYMBOLS, SnapshotSource,
+        diagnostic_arguments, output, project, project_diagnostic_finding,
+        project_diagnostic_report, project_publication_impact, project_symbol_location,
+        unique_symbol_location,
     };
     use crate::WorkspaceSnapshotBuilder;
 
@@ -1796,6 +2010,18 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/workspace_service")
             .leak()
+    }
+
+    struct AlwaysCancelled;
+
+    impl ToolCancellationSignal for AlwaysCancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+
+        fn cancelled(&self) -> ToolFuture<'_, ()> {
+            Box::pin(async {})
+        }
     }
 
     fn provenance(location: SourceLocation, producer: &str) -> Provenance {
@@ -2104,6 +2330,33 @@ mod tests {
                 if code == "policy_denied" && message == "The semantic tool request was denied."
         ));
 
+        let valid_refactoring = json!({
+            "publicationId": 1,
+            "configurationId": "configuration.test",
+            "targetNodeId": "procedure.test",
+            "desiredName": "Renamed"
+        })
+        .as_object()
+        .expect("refactoring arguments must be an object")
+        .clone();
+        let denied_refactoring = handler.call(REFACTOR_PLAN, &valid_refactoring).await;
+        assert!(matches!(
+            denied_refactoring,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
+        let invalid_refactoring = handler.call(REFACTOR_PLAN, &Map::new()).await;
+        assert!(matches!(
+            invalid_refactoring,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "invalid_arguments"
+                    && message == "The semantic tool arguments are invalid."
+        ));
+
+        let request = super::request(REFACTOR_PLAN, "{}".to_owned())
+            .unwrap_or_else(|()| panic!("refactoring policy request must build"));
+        assert_eq!(request.effects(), &BTreeSet::from([ToolEffect::ReadOnly]));
+
         let invalid_symbols = handler.call(SYMBOLS, &Map::new()).await;
         assert!(matches!(
             invalid_symbols,
@@ -2122,6 +2375,46 @@ mod tests {
             McpToolCallOutcome::Error { ref code, ref message }
                 if code == "policy_denied" && message == "The semantic tool request was denied."
         ));
+    }
+
+    #[test]
+    fn refactoring_projection_maps_product_cancellation_to_one_closed_error() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let (configuration, target) = snapshot
+            .configurations()
+            .iter()
+            .find_map(|configuration| {
+                configuration
+                    .source_evidence()
+                    .documents()
+                    .iter()
+                    .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+                    .find(|occurrence| {
+                        occurrence.kind()
+                            == oneagent_analysis::refactoring::SourceOccurrenceKind::Declaration
+                            && occurrence.token() == "Posting"
+                    })
+                    .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+                    .map(|target| (configuration, target))
+            })
+            .expect("fixture target must map uniquely");
+        let arguments = json!({
+            "publicationId": snapshot.publication_id().get(),
+            "configurationId": configuration.configuration_id().as_str(),
+            "targetNodeId": target.as_str(),
+            "desiredName": "PostingRenamed"
+        });
+        let error = project(
+            &snapshot,
+            REFACTOR_PLAN,
+            arguments.as_object().expect("refactoring arguments object"),
+            &AlwaysCancelled,
+        )
+        .expect_err("cancelled refactoring projection must fail closed");
+        assert_eq!(error.code, "execution_failed");
+        assert_eq!(error.message, "The semantic tool request failed.");
     }
 
     #[test]

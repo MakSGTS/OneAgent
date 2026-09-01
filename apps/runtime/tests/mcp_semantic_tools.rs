@@ -158,6 +158,7 @@ fn assert_catalog(listed: &Value) {
             "oneagent.graph",
             "oneagent.impact",
             "oneagent.query",
+            "oneagent.refactor.plan",
             "oneagent.symbols",
             "oneagent.validation"
         ]
@@ -175,6 +176,12 @@ fn assert_catalog(listed: &Value) {
                     "openWorldHint": false
                 }))
     );
+    assert_query_and_impact_schema(listed);
+    assert_symbol_and_refactoring_schema(listed);
+    assert_diagnostic_schema(listed);
+}
+
+fn assert_query_and_impact_schema(listed: &Value) {
     let query = listed["result"]["tools"]
         .as_array()
         .expect("tools")
@@ -216,6 +223,9 @@ fn assert_catalog(listed: &Value) {
         alternatives[1]["properties"]["reasonLimit"],
         json!({"type": "integer", "minimum": 1, "maximum": 100})
     );
+}
+
+fn assert_symbol_and_refactoring_schema(listed: &Value) {
     let symbols = listed["result"]["tools"]
         .as_array()
         .expect("tools")
@@ -227,7 +237,26 @@ fn assert_catalog(listed: &Value) {
         symbols["inputSchema"]["properties"]["kinds"]["items"]["enum"],
         json!(["module", "procedure", "function", "query"])
     );
-    assert_diagnostic_schema(listed);
+    let refactoring = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.refactor.plan")
+        .expect("refactoring definition");
+    assert_eq!(
+        refactoring["inputSchema"]["required"],
+        json!([
+            "publicationId",
+            "configurationId",
+            "targetNodeId",
+            "desiredName"
+        ])
+    );
+    assert_eq!(
+        refactoring["inputSchema"]["properties"]["limit"],
+        json!({"type": "integer", "minimum": 1, "maximum": 100})
+    );
+    assert_eq!(refactoring["inputSchema"]["additionalProperties"], false);
 }
 
 fn assert_diagnostic_schema(listed: &Value) {
@@ -275,6 +304,7 @@ fn tool_cases(
     node_id: &str,
     diagnostic_configuration: &str,
     current_configuration: &str,
+    refactoring: Value,
 ) -> Vec<Value> {
     vec![
         json!({"name": "oneagent.graph", "arguments": {"limit": 1}}),
@@ -317,7 +347,41 @@ fn tool_cases(
         json!({"name": "oneagent.symbols", "arguments": {
             "query": "e", "limit": 2
         }}),
+        refactoring,
     ]
+}
+
+fn refactoring_call(
+    snapshot: &WorkspaceSnapshot,
+    current_name: &str,
+    desired_name: &str,
+    limit: usize,
+) -> Value {
+    let (configuration, target) = snapshot
+        .configurations()
+        .iter()
+        .find_map(|configuration| {
+            configuration
+                .source_evidence()
+                .documents()
+                .iter()
+                .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+                .find(|occurrence| {
+                    occurrence.kind()
+                        == oneagent_analysis::refactoring::SourceOccurrenceKind::Declaration
+                        && occurrence.token() == current_name
+                })
+                .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+                .map(|target| (configuration, target))
+        })
+        .expect("fixture refactoring target must map uniquely");
+    json!({"name": "oneagent.refactor.plan", "arguments": {
+        "publicationId": snapshot.publication_id().get(),
+        "configurationId": configuration.configuration_id().as_str(),
+        "targetNodeId": target.as_str(),
+        "desiredName": desired_name,
+        "limit": limit
+    }})
 }
 
 #[tokio::test]
@@ -349,6 +413,7 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         .configuration_id()
         .as_str()
         .to_owned();
+    let refactoring = refactoring_call(&snapshot, "Posting", "PostingRenamed", 100);
     let server = semantic_server(snapshot).expect("fixed semantic server must build");
 
     let discovery = dispatch(&server, &request(1, "server/discover", &json!({}))).await;
@@ -361,6 +426,7 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         &node_id,
         &diagnostic_configuration,
         &current_configuration,
+        refactoring,
     );
     for (offset, fields) in cases.iter().enumerate() {
         let first = dispatch(
@@ -432,35 +498,7 @@ fn assert_projection(offset: usize, content: &Value) {
                     .all(|node| node["viaEdgeId"].is_string())
             );
         }
-        5 => {
-            let diagnostics = content["diagnostics"]
-                .as_array()
-                .expect("diagnostic findings");
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(content["total"], 3);
-            assert_eq!(content["truncated"], true);
-            assert_eq!(content["summary"]["total"], 3);
-            assert_eq!(content["summary"]["active"], 3);
-            assert_eq!(content["summary"]["suppressed"], 0);
-            assert_eq!(content["summary"]["byFamily"]["semantic"], 3);
-            assert_eq!(content["summary"]["byFamily"]["validation"], 0);
-            assert_eq!(content["summary"]["byFamily"]["rule"], 0);
-            assert!(diagnostics.iter().all(|finding| {
-                finding["family"] == "semantic"
-                    && finding["severity"] == "error"
-                    && finding["category"] == "semantic"
-                    && finding["disposition"] == "active"
-                    && finding["sourceNodeId"].is_string()
-                    && finding["candidateNodeIds"].is_array()
-                    && finding["nodeIds"].is_array()
-                    && finding["edgeId"].is_null()
-                    && finding["referenceRequestId"].is_null()
-            }));
-            let serialized = content.to_string();
-            assert!(!serialized.contains("reference\""));
-            assert!(!serialized.contains("producer"));
-            assert!(!serialized.contains("rootPath"));
-        }
+        5 => assert_diagnostic_projection(content),
         6 => {
             let affected = content["affectedNodes"].as_array().expect("affected nodes");
             assert!(!affected.is_empty());
@@ -489,7 +527,165 @@ fn assert_projection(offset: usize, content: &Value) {
                     && result["location"]["path"].is_string()
             }));
         }
+        9 => assert_refactoring_projection(content),
         _ => {}
+    }
+}
+
+fn assert_diagnostic_projection(content: &Value) {
+    let diagnostics = content["diagnostics"]
+        .as_array()
+        .expect("diagnostic findings");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(content["total"], 3);
+    assert_eq!(content["truncated"], true);
+    assert_eq!(content["summary"]["total"], 3);
+    assert_eq!(content["summary"]["active"], 3);
+    assert_eq!(content["summary"]["suppressed"], 0);
+    assert_eq!(content["summary"]["byFamily"]["semantic"], 3);
+    assert_eq!(content["summary"]["byFamily"]["validation"], 0);
+    assert_eq!(content["summary"]["byFamily"]["rule"], 0);
+    assert!(diagnostics.iter().all(|finding| {
+        finding["family"] == "semantic"
+            && finding["severity"] == "error"
+            && finding["category"] == "semantic"
+            && finding["disposition"] == "active"
+            && finding["sourceNodeId"].is_string()
+            && finding["candidateNodeIds"].is_array()
+            && finding["nodeIds"].is_array()
+            && finding["edgeId"].is_null()
+            && finding["referenceRequestId"].is_null()
+    }));
+    let serialized = content.to_string();
+    assert!(!serialized.contains("reference\""));
+    assert!(!serialized.contains("producer"));
+    assert!(!serialized.contains("rootPath"));
+}
+
+fn assert_refactoring_projection(content: &Value) {
+    assert_eq!(content["family"], "bsl_callable_rename_v1");
+    assert_eq!(content["completeness"], "complete");
+    assert_eq!(content["readOnly"], true);
+    assert_eq!(content["editAuthorization"], "none");
+    assert_eq!(content["summary"]["targets"]["requested"], 1);
+    assert_eq!(content["summary"]["targets"]["planned"], 1);
+    assert_eq!(content["summary"]["targets"]["conflicted"], 0);
+    assert_eq!(content["summary"]["targets"]["rejected"], 0);
+    assert_eq!(
+        content["totalOperations"],
+        content["summary"]["plannedOperations"]
+    );
+    assert_eq!(content["totalOperations"], content["returnedOperations"]);
+    assert_eq!(content["omittedOperations"], 0);
+    assert_eq!(content["truncated"], false);
+    let preview = content["preview"].as_array().expect("refactoring preview");
+    assert!(!preview.is_empty());
+    assert!(preview.iter().all(|entry| {
+        entry["operationId"].is_string()
+            && entry["path"].is_string()
+            && entry["range"]["startByte"].is_u64()
+            && entry["range"]["endByte"].is_u64()
+            && entry["position"]["start"]["line"].is_u64()
+            && entry["replacement"] == "PostingRenamed"
+    }));
+    let serialized = content.to_string();
+    for forbidden in [
+        "rawContent",
+        "contentVersion",
+        "digest",
+        "expectedToken",
+        "provenance",
+    ] {
+        assert!(!serialized.contains(forbidden));
+    }
+}
+
+#[tokio::test]
+async fn public_refactoring_plan_is_bounded_redacted_and_uses_retained_source() {
+    let root = copy_fixture();
+    let source_path = root
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let source = fs::read_to_string(&source_path)
+        .expect("EDT refactoring fixture source must be readable")
+        .replace(
+            "Procedure ReadMissingCatalog()",
+            "Procedure ReadMissingCatalog()\n\tPosting();\n\tPosting();",
+        );
+    fs::write(&source_path, source).expect("bounded call fixture must be written");
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(root.path())
+        .expect("refactoring Workspace must build");
+    let call = refactoring_call(&snapshot, "Posting", "PostingRenamed", 1);
+    let mut stale = call.clone();
+    stale["arguments"]["publicationId"] = json!(snapshot.publication_id().get() + 1);
+    let mut missing = call.clone();
+    missing["arguments"]["targetNodeId"] = json!("target.missing");
+    let mut no_change = call.clone();
+    no_change["arguments"]["desiredName"] = json!("posting");
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    fs::remove_file(&source_path).expect("published source must become unreadable");
+    let first = dispatch(&server, &request(45, "tools/call", &call)).await;
+    let repeated = dispatch(&server, &request(46, "tools/call", &call)).await;
+    let content = &first["result"]["structuredContent"];
+    assert_eq!(content, &repeated["result"]["structuredContent"]);
+    assert_eq!(content["totalOperations"], 3);
+    assert_eq!(content["returnedOperations"], 1);
+    assert_eq!(content["omittedOperations"], 2);
+    assert_eq!(content["truncated"], true);
+    assert_eq!(content["summary"]["internalOperations"]["omitted"], 0);
+    assert_eq!(content["summary"]["internalOperations"]["returned"], 3);
+    assert!(
+        !content
+            .to_string()
+            .contains(root.path().to_str().expect("UTF-8 root"))
+    );
+
+    for (fields, code) in [
+        (stale, "execution_failed"),
+        (missing, "not_found"),
+        (no_change, "execution_failed"),
+        (
+            json!({"name": "oneagent.refactor.plan", "arguments": {
+                "publicationId": 1,
+                "configurationId": "configuration.test",
+                "targetNodeId": "target.test",
+                "desiredName": "Renamed",
+                "limit": 101
+            }}),
+            "invalid_arguments",
+        ),
+        (
+            json!({"name": "oneagent.refactor.plan", "arguments": {
+                "publicationId": 1,
+                "configurationId": "configuration.test",
+                "targetNodeId": "target.test",
+                "desiredName": "x".repeat(257)
+            }}),
+            "invalid_arguments",
+        ),
+        (
+            json!({"name": "oneagent.refactor.plan", "arguments": {
+                "publicationId": 1,
+                "configurationId": "configuration.test",
+                "targetNodeId": "target.test",
+                "desiredName": "Renamed",
+                "extra": true
+            }}),
+            "invalid_arguments",
+        ),
+    ] {
+        let response = dispatch(&server, &request(47, "tools/call", &fields)).await;
+        assert_eq!(response["result"]["isError"], true, "{response}");
+        assert_eq!(
+            response["result"]["structuredContent"]["code"], code,
+            "{response}"
+        );
+        let error = response["result"]["structuredContent"].to_string();
+        assert!(!error.contains("PostingRenamed"));
+        assert!(!error.contains("target.missing"));
+        assert!(!error.contains(root.path().to_str().expect("UTF-8 root")));
     }
 }
 

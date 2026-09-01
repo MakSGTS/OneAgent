@@ -1,6 +1,9 @@
 //! Shared domain primitives for `OneAgent`.
 
+mod hash;
 mod source;
+
+pub use hash::{sha256, sha256_hex};
 
 pub use source::{
     MAX_SOURCE_PATH_BYTES, SourceLocation, SourcePath, SourcePathError, SourcePathErrorKind,

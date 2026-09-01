@@ -3,7 +3,9 @@
 use oneagent_bsl::{
     BslDeclarationExtractor, BslParseError, BslSymbolKind, LineBslDeclarationExtractor,
 };
-use oneagent_common::{EntityId, SourceLocation, SourcePath, SourcePosition, SourceSpan};
+use oneagent_common::{
+    EntityId, SourceLocation, SourcePath, SourcePosition, SourceSpan, sha256_hex,
+};
 use oneagent_graph::{
     Confidence, EdgeKind, FactOrigin, GraphError, GraphNode, GraphNodePayload,
     GraphNodePayloadError, NodeKind, ProducerId, Provenance, ResolutionState, SemanticGraph,
@@ -13,7 +15,6 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::source_hash::sha256_hex;
 use crate::{
     DesignerXmlBuildScope, DesignerXmlLoadError, DesignerXmlMetadataObjectDescriptor,
     DesignerXmlMetadataObjectError, DesignerXmlMetadataObjectReader, DesignerXmlModuleDescriptor,

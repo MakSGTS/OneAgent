@@ -1,4 +1,4 @@
-//! Dependency-free SHA-256 for exact adapter-local source provenance.
+//! Dependency-free deterministic hashing shared by source-evidence owners.
 
 use std::fmt::Write;
 
@@ -80,7 +80,9 @@ const ROUND_CONSTANTS: [u32; 64] = [
     0xc671_78f2,
 ];
 
-pub(crate) fn sha256_hex(input: &[u8]) -> String {
+/// Computes the standard SHA-256 digest of `input`.
+#[must_use]
+pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut padded = input.to_vec();
     let bit_length = (input.len() as u64).wrapping_mul(8);
     padded.push(0x80);
@@ -93,11 +95,22 @@ pub(crate) fn sha256_hex(input: &[u8]) -> String {
     for block_start in (0..padded.len()).step_by(64) {
         compress(&mut state, &padded[block_start..block_start + 64]);
     }
-    let mut digest = String::with_capacity(64);
-    for word in state {
-        write!(&mut digest, "{word:08x}").expect("writing to a String must succeed");
+
+    let mut digest = [0_u8; 32];
+    for (chunk, word) in digest.chunks_exact_mut(4).zip(state) {
+        chunk.copy_from_slice(&word.to_be_bytes());
     }
     digest
+}
+
+/// Renders the standard SHA-256 digest as lowercase hexadecimal.
+#[must_use]
+pub fn sha256_hex(input: &[u8]) -> String {
+    let mut rendered = String::with_capacity(64);
+    for byte in sha256(input) {
+        write!(&mut rendered, "{byte:02x}").expect("writing to a String must succeed");
+    }
+    rendered
 }
 
 #[allow(clippy::many_single_char_names)]
@@ -126,14 +139,14 @@ fn compress(state: &mut [u32; 8], block: &[u8]) {
     }
 
     let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *state;
-    for index in 0..64 {
+    for (round, constant) in ROUND_CONSTANTS.iter().enumerate() {
         let sum_one = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
         let choose = (e & f) ^ ((!e) & g);
         let temporary_one = h
             .wrapping_add(sum_one)
             .wrapping_add(choose)
-            .wrapping_add(ROUND_CONSTANTS[index])
-            .wrapping_add(schedule[index]);
+            .wrapping_add(*constant)
+            .wrapping_add(schedule[round]);
         let sum_zero = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
         let majority = (a & b) ^ (a & c) ^ (b & c);
         let temporary_two = sum_zero.wrapping_add(majority);
@@ -155,10 +168,10 @@ fn compress(state: &mut [u32; 8], block: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use super::sha256_hex;
+    use super::{sha256, sha256_hex};
 
     #[test]
-    fn matches_standard_vectors() {
+    fn sha256_matches_standard_vectors() {
         assert_eq!(
             sha256_hex(b""),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -167,5 +180,6 @@ mod tests {
             sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+        assert_eq!(sha256(b"abc").len(), 32);
     }
 }

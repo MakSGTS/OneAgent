@@ -3,6 +3,19 @@
 use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
 
+use crate::{BslIdentifierRange, source_lines};
+
+/// Lexical form of one extracted direct BSL call target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BslCallKind {
+    /// An unqualified `CallableName(...)` target.
+    Local,
+    /// A `ModuleName.CallableName(...)` target.
+    Qualified,
+    /// A call-shaped token retained only for legacy semantic compatibility.
+    Unsupported,
+}
+
 /// A call expression found in a BSL module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BslCall {
@@ -10,6 +23,8 @@ pub struct BslCall {
     source_symbol: Option<EntityName>,
     target_symbol: EntityName,
     line: usize,
+    kind: Option<BslCallKind>,
+    identifier_range: Option<BslIdentifierRange>,
 }
 
 impl BslCall {
@@ -24,8 +39,30 @@ impl BslCall {
         Self {
             id,
             source_symbol,
+            kind: None,
             target_symbol,
             line,
+            identifier_range: None,
+        }
+    }
+
+    /// Creates an extracted BSL call with its exact final identifier range.
+    #[must_use]
+    pub fn new_with_identifier_range(
+        id: EntityId,
+        source_symbol: Option<EntityName>,
+        target_symbol: EntityName,
+        line: usize,
+        kind: BslCallKind,
+        identifier_range: BslIdentifierRange,
+    ) -> Self {
+        Self {
+            id,
+            source_symbol,
+            target_symbol,
+            line,
+            kind: Some(kind),
+            identifier_range: Some(identifier_range),
         }
     }
 
@@ -51,6 +88,18 @@ impl BslCall {
     #[must_use]
     pub const fn line(&self) -> usize {
         self.line
+    }
+
+    /// Returns the local or qualified lexical target form.
+    #[must_use]
+    pub const fn kind(&self) -> Option<BslCallKind> {
+        self.kind
+    }
+
+    /// Returns the exact final identifier range when produced by an extractor.
+    #[must_use]
+    pub const fn identifier_range(&self) -> Option<BslIdentifierRange> {
+        self.identifier_range
     }
 }
 
@@ -83,44 +132,60 @@ impl BslCallExtractor for LineBslCallExtractor {
         let mut calls = Vec::new();
         let mut ordinal = 0_usize;
         let mut current_scope: Option<EntityName> = None;
+        let mut in_string = false;
 
-        for (index, line) in source.lines().enumerate() {
-            let line_number = index + 1;
+        for source_line in source_lines(source) {
+            let (line, bom_bytes) = if source_line.number == 1 {
+                source_line
+                    .text
+                    .strip_prefix('\u{feff}')
+                    .map_or((source_line.text, 0), |line| (line, 3))
+            } else {
+                (source_line.text, 0)
+            };
             let trimmed = line.trim_start();
+            let trimmed_start =
+                source_line.start_byte + bom_bytes + line.len().saturating_sub(trimmed.len());
 
-            if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#') {
+            if !in_string
+                && (trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#'))
+            {
                 continue;
             }
 
-            if let Some(scope_name) = parse_scope_start(trimmed, line_number)? {
-                current_scope = Some(scope_name);
-                continue;
+            if !in_string {
+                if let Some(scope_name) = parse_scope_start(trimmed, source_line.number)? {
+                    current_scope = Some(scope_name);
+                    continue;
+                }
+
+                if is_scope_end(trimmed) {
+                    current_scope = None;
+                    continue;
+                }
             }
 
-            if is_scope_end(trimmed) {
-                current_scope = None;
-                continue;
-            }
-
-            for callee in extract_call_names(trimmed) {
+            for callee in extract_calls(trimmed, trimmed_start, &mut in_string) {
                 ordinal += 1;
 
                 let id = EntityId::new(format!(
                     "{}:call:{}:{}",
                     module_id.as_str(),
-                    line_number,
+                    source_line.number,
                     ordinal
                 ))
-                .map_err(|_| BslCallError::InvalidIdentifier(line_number))?;
+                .map_err(|_| BslCallError::InvalidIdentifier(source_line.number))?;
 
-                let target_symbol =
-                    EntityName::new(callee).map_err(|_| BslCallError::InvalidName(line_number))?;
+                let target_symbol = EntityName::new(callee.target)
+                    .map_err(|_| BslCallError::InvalidName(source_line.number))?;
 
-                calls.push(BslCall::new(
+                calls.push(BslCall::new_with_identifier_range(
                     id,
                     current_scope.clone(),
                     target_symbol,
-                    line_number,
+                    source_line.number,
+                    callee.kind,
+                    callee.identifier_range,
                 ));
             }
         }
@@ -170,13 +235,46 @@ fn is_scope_end(line: &str) -> bool {
     )
 }
 
-fn extract_call_names(line: &str) -> Vec<String> {
-    let mut names = Vec::new();
+#[derive(Debug)]
+struct ExtractedCall {
+    target: String,
+    kind: BslCallKind,
+    identifier_range: BslIdentifierRange,
+}
+
+fn extract_calls(line: &str, line_start: usize, in_string: &mut bool) -> Vec<ExtractedCall> {
+    let mut calls = Vec::new();
     let characters = line.char_indices().collect::<Vec<_>>();
     let mut index = 0_usize;
+    let mut in_comment = false;
 
     while index < characters.len() {
         let (_, character) = characters[index];
+
+        if !in_comment && character == '"' {
+            if characters
+                .get(index + 1)
+                .is_some_and(|(_, next)| *next == '"' && *in_string)
+            {
+                index += 2;
+                continue;
+            }
+            *in_string = !*in_string;
+            index += 1;
+            continue;
+        }
+
+        if !*in_string
+            && !in_comment
+            && character == '/'
+            && characters
+                .get(index + 1)
+                .is_some_and(|(_, next)| *next == '/')
+        {
+            in_comment = true;
+            index += 2;
+            continue;
+        }
 
         if !is_identifier_start(character) {
             index += 1;
@@ -204,12 +302,27 @@ fn extract_call_names(line: &str) -> Vec<String> {
             let candidate = &line[start..end];
 
             if !is_excluded_keyword(candidate) {
-                names.push(candidate.to_owned());
+                let final_start = candidate.rfind('.').map_or(start, |dot| start + dot + 1);
+                if let Some(identifier_range) =
+                    BslIdentifierRange::new(line_start + final_start, line_start + end)
+                {
+                    calls.push(ExtractedCall {
+                        target: candidate.to_owned(),
+                        kind: if *in_string || in_comment {
+                            BslCallKind::Unsupported
+                        } else if final_start == start {
+                            BslCallKind::Local
+                        } else {
+                            BslCallKind::Qualified
+                        },
+                        identifier_range,
+                    });
+                }
             }
         }
     }
 
-    names
+    calls
 }
 
 fn is_identifier_start(character: char) -> bool {
@@ -287,7 +400,7 @@ impl std::error::Error for BslCallError {}
 mod tests {
     use oneagent_common::EntityId;
 
-    use super::{BslCallExtractor, LineBslCallExtractor};
+    use super::{BslCall, BslCallExtractor, BslCallKind, LineBslCallExtractor};
 
     fn module_id() -> EntityId {
         EntityId::new("module.sales.object").expect("identifier must be valid")
@@ -389,5 +502,79 @@ EndProcedure
 
         assert_eq!(calls[0].line(), 3);
         assert!(calls[0].source_symbol().is_none());
+    }
+
+    #[test]
+    fn call_ranges_preserve_raw_unicode_line_endings_repeats_and_final_identifier() {
+        let source = concat!(
+            "\u{feff}Процедура Тест()\r\n",
+            "  Проверить(); Проверить ();\r",
+            "  ОбщийМодуль.Проверить(1);\n",
+            "КонецПроцедуры\n",
+        );
+        let first = LineBslCallExtractor
+            .extract_calls(&module_id(), source)
+            .expect("calls must parse");
+        let repeated = LineBslCallExtractor
+            .extract_calls(&module_id(), source)
+            .expect("repeated calls must parse");
+
+        assert_eq!(first, repeated);
+        assert_eq!(first.len(), 3);
+        assert_eq!(first[0].kind(), Some(BslCallKind::Local));
+        assert_eq!(first[1].kind(), Some(BslCallKind::Local));
+        assert_eq!(first[2].kind(), Some(BslCallKind::Qualified));
+        assert_eq!(first[0].line(), 2);
+        assert_eq!(first[2].line(), 3);
+        for call in &first {
+            let range = call
+                .identifier_range()
+                .expect("extracted call must have an exact range");
+            assert_eq!(&source[range.start_byte()..range.end_byte()], "Проверить");
+        }
+    }
+
+    #[test]
+    fn call_extraction_marks_legacy_string_and_inline_comment_candidates_unsupported() {
+        let source = concat!(
+            "Procedure Test()\n",
+            "  Text = \"HiddenCall() and \"\"QuotedCall()\"\"\"; RealCall(); // CommentedCall()\n",
+            "  Text = \"MultilineCall()\n",
+            "  | StillHiddenCall()\";\n",
+            "  VisibleCall();\n",
+            "EndProcedure\n",
+        );
+        let calls = LineBslCallExtractor
+            .extract_calls(&module_id(), source)
+            .expect("calls must parse");
+
+        assert_eq!(calls.len(), 7);
+        assert_eq!(calls[0].target_symbol().as_str(), "HiddenCall");
+        assert_eq!(calls[1].target_symbol().as_str(), "QuotedCall");
+        assert_eq!(calls[2].target_symbol().as_str(), "RealCall");
+        assert_eq!(calls[3].target_symbol().as_str(), "CommentedCall");
+        assert_eq!(calls[4].target_symbol().as_str(), "MultilineCall");
+        assert_eq!(calls[5].target_symbol().as_str(), "StillHiddenCall");
+        assert_eq!(calls[6].target_symbol().as_str(), "VisibleCall");
+        assert_eq!(calls[0].kind(), Some(BslCallKind::Unsupported));
+        assert_eq!(calls[1].kind(), Some(BslCallKind::Unsupported));
+        assert_eq!(calls[2].kind(), Some(BslCallKind::Local));
+        assert_eq!(calls[3].kind(), Some(BslCallKind::Unsupported));
+        assert_eq!(calls[4].kind(), Some(BslCallKind::Unsupported));
+        assert_eq!(calls[5].kind(), Some(BslCallKind::Unsupported));
+        assert_eq!(calls[6].kind(), Some(BslCallKind::Local));
+    }
+
+    #[test]
+    fn legacy_call_constructor_preserves_target_kind_without_claiming_a_range() {
+        let call = BslCall::new(
+            EntityId::new("module:call:1:1").expect("identifier must be valid"),
+            None,
+            oneagent_common::EntityName::new("Module.Call").expect("name must be valid"),
+            1,
+        );
+
+        assert!(call.kind().is_none());
+        assert!(call.identifier_range().is_none());
     }
 }

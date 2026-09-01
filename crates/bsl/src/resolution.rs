@@ -1,6 +1,6 @@
 //! Local resolution of BSL calls to declarations.
 
-use crate::{BslCall, BslSymbol};
+use crate::{BslCall, BslSymbol, bsl_name_key};
 use oneagent_common::{EntityId, EntityName};
 use std::collections::BTreeMap;
 
@@ -153,7 +153,7 @@ impl BslCallResolver for LocalBslCallResolver {
     fn resolve(&self, symbols: &[BslSymbol], calls: &[BslCall]) -> BslCallResolution {
         let symbol_index = symbols
             .iter()
-            .map(|symbol| (normalize_name(symbol.name().as_str()), symbol.id().clone()))
+            .map(|symbol| (bsl_name_key(symbol.name().as_str()), symbol.id().clone()))
             .collect::<BTreeMap<_, _>>();
 
         let mut resolved = Vec::new();
@@ -170,7 +170,7 @@ impl BslCallResolver for LocalBslCallResolver {
                 continue;
             };
 
-            let Some(origin_id) = symbol_index.get(&normalize_name(source_name.as_str())) else {
+            let Some(origin_id) = symbol_index.get(&bsl_name_key(source_name.as_str())) else {
                 unresolved.push(UnresolvedBslCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -191,7 +191,7 @@ impl BslCallResolver for LocalBslCallResolver {
             }
 
             let Some(destination_id) =
-                symbol_index.get(&normalize_name(call.target_symbol().as_str()))
+                symbol_index.get(&bsl_name_key(call.target_symbol().as_str()))
             else {
                 unresolved.push(UnresolvedBslCall::new(
                     Some(source_name.clone()),
@@ -211,10 +211,6 @@ impl BslCallResolver for LocalBslCallResolver {
 
         BslCallResolution::new(resolved, unresolved)
     }
-}
-
-fn normalize_name(value: &str) -> String {
-    value.to_lowercase()
 }
 
 #[cfg(test)]

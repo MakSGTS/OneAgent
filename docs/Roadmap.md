@@ -9678,6 +9678,172 @@ Suggested planning commit message:
 Plan Sprint 39 Change Impact Analysis
 ```
 
+##### Sprint 40 Refactoring Planner execution plan
+
+Sprint 40 is planned from completed Sprint 39 version integration `8d28ba8a`,
+the committed Prompt Contract v2 framework baseline `5210f8ee`, and the
+Refactoring and Safe Edits readiness prerequisite `5c273da1`. The
+[Sprint 39 review](reviews/sprint-39-change-impact-analysis.md) records `pass`,
+completes Sprint 39, and makes Sprint 40 Refactoring Planner the unique `next`
+target. Sprint 40 remains `next` during planning and becomes `active` only when
+Task 1 starts from the committed planning baseline.
+
+The data and testability gate passes. The repository owns stable semantic
+identities, typed `SourcePath`, `SourcePosition`, `SourceSpan`, and
+`SourceLocation`, Graph provenance and queries, complete immutable Workspace
+publications, adjacent-publication Change Impact evidence, paired EDT/Designer
+fixtures, controlled source-change tests, and Runtime/MCP public-process
+oracles. EDT and Designer BSL declarations currently expose file paths and
+one-based declaration points, while resolved call edges do not prove complete
+edit ranges. This is sufficient to investigate, define, implement, and expose
+one bounded read-only semantic plan and preview, but not to claim source
+mutation, atomicity, rollback, or reversibility.
+
+The concrete first refactoring family, owner, target and plan identity,
+preconditions, supported node/source kinds, source-version evidence, operation
+vocabulary, conflict rules, completeness, bounds, preview, Workspace binding,
+public projection, compatibility, and failure policy remain decision-ready
+questions for Task 1 and ADR-0063. Task 2 must accept those decisions before
+production implementation. Impact, diagnostics, Git status, paths, or model
+output never become edit authorization or a competing semantic authority.
+
+The framework readiness audit found a reusable gap before planning. Generic
+Implementation, Diagnostics Engine, and Git Change Adapter modules did not
+jointly require plan/snapshot preconditions, deterministic operations and
+preview, or the later transaction atomicity, rollback, reversibility,
+filesystem-confinement, and post-edit semantic-validation evidence forecast for
+Sprints 40–41. Commit `5c273da1` closes only that reusable gap through the
+[Refactoring and Safe Edits profile](codex/profiles/refactoring-safe-edits-implementation.md),
+[workflow](codex/workflows/refactoring-safe-edits.md), and
+[template](codex/templates/refactoring-safe-edits-task.md). It does not select
+Sprint 40 product architecture.
+
+Planning context preflight records an `unknown` effective context window and
+unavailable runtime token telemetry. Static-instruction allocation is
+unavailable. Bounded admitted repository authorities and selectors were
+128,765 UTF-8 bytes, conservatively estimated at about 32,200 tokens using four
+characters per token. The decision is `warning`: whole Roadmap, Architecture,
+semantic-model, fixture corpora, generated outputs, and successful command logs
+remain excluded; every child repeats a fresh bounded preflight.
+
+The complete Sprint 40 suite is owned by
+`docs/codex/prompts/sprint-40-refactoring-planner/`. The verified immediately
+preceding suite is exactly
+`docs/codex/prompts/sprint-39-change-impact-analysis/`, containing these eight
+tracked files at planning time:
+
+- `00-sprint-39-execution-loop.md`
+- `01-investigate-change-impact-analysis.md`
+- `02-define-change-impact-analysis.md`
+- `03-implement-change-impact-report.md`
+- `04-integrate-workspace-impact-snapshots.md`
+- `05-integrate-product-impact-reporting.md`
+- `06-complete-change-impact-evidence.md`
+- `07-sprint-39-integration-review.md`
+
+Only Task 8 may retire those exact files after a non-blocking independent and
+primary review, complete validation, and a passing same-reviewer artifact-
+consistency check.
+
+###### Sprint 40 objective
+
+Define and implement one bounded deterministic read-only semantic refactoring
+plan and preview over an immutable complete Workspace publication, expose the
+accepted projection through existing Runtime, Tool Policy, and MCP boundaries,
+and preserve semantic/source authority, complete rebuild behavior, compatible
+clients, source confinement, and an explicit no-mutation boundary for Sprint
+41.
+
+Included scope is:
+
+- repository and architecture investigation of semantic identity, Graph
+  ownership/query/provenance, source locations, adapter source evidence,
+  Workspace publications, impact and diagnostic evidence, Runtime/MCP
+  consumers, compatibility, bounds, sensitive data, fixtures, and oracles;
+- accepted ADR-0063 for the first refactoring family, owners, canonical inputs,
+  target and plan identity, preconditions, operations, ordering, duplicates,
+  conflicts, completeness, bounds, failures, preview, snapshot lifecycle,
+  product projection, compatibility, evidence, and deferrals;
+- one source-independent immutable typed plan domain with closed validation and
+  explicit read-only completeness;
+- deterministic Graph-backed planner evaluation and preview for only the
+  accepted first slice;
+- immutable Workspace publication composition and the accepted EDT/Designer
+  source-evidence boundary without reading or changing source after snapshot
+  publication;
+- an accepted read-only Tool Policy and MCP projection with truthful schema,
+  bounds, redaction, deterministic output, and public-process evidence;
+- complete focused, workspace, public-process, compatibility, dependency, API,
+  scope, sensitive-data, and current-state documentation evidence; and
+- one mandatory fresh-context read-only integration reviewer, primary
+  reconciliation, artifact consistency, Sprint 41 hand-off, and conditional
+  Sprint 39 prompt-suite retirement.
+
+Excluded scope is source or repository mutation; concrete text edits; editor
+workspace edits or code actions; transaction staging, commit, atomicity,
+rollback, reversibility, backups, crash recovery, or post-edit rebuild;
+path/status-derived semantic identity; Git mutation or remote access; Graph or
+source-adapter authority duplication; automatic model-generated edits; new
+diagnostics or rules; scoring, probability, or risk prediction; persistence or
+history; new HTTP/CLI/LSP/IDE UI; telemetry, benchmarks, and broad performance,
+security, or interoperability claims; and Sprint 41 implementation.
+
+###### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate Refactoring Planner. | Investigation / investigation | Decision-ready semantic, source, snapshot, precondition, conflict, consumer, compatibility, sensitive-data, and oracle evidence. | Sprint 40 planning baseline. | `Investigate Sprint 40 Refactoring Planner` |
+| 2 | Define Refactoring Planner. | Architecture / architecture | Accepted ADR-0063 for the bounded read-only planner. | Task 1. | `Define Sprint 40 Refactoring Planner` |
+| 3 | Implement the refactoring plan domain. | Refactoring and Safe Edits / Refactoring and Safe Edits | Immutable typed request, target, precondition, operation, preview, summary, completeness, and closed failure contracts. | Accepted ADR-0063. | `Implement Sprint 40 refactoring plan domain` |
+| 4 | Implement validated planner evaluation. | Refactoring and Safe Edits / Refactoring and Safe Edits | Deterministic Graph-backed validation, conflicts, operations, preview, bounds, and repetition behavior. | Task 3. | `Implement Sprint 40 validated refactoring planner` |
+| 5 | Integrate Workspace refactoring plans. | Refactoring and Safe Edits + Runtime Service / Refactoring and Safe Edits | Accepted immutable publication binding, configuration matching, source evidence, lifecycle, and failure behavior. | Task 4. | `Integrate Sprint 40 Workspace refactoring plans` |
+| 6 | Integrate product refactoring planning. | Refactoring and Safe Edits + MCP Protocol + AI Tool Policy / Refactoring and Safe Edits | Accepted read-only schema, policy, projection, bounds, errors, and public-process workflow. | Task 5. | `Integrate Sprint 40 product refactoring planning` |
+| 7 | Complete Refactoring Planner evidence. | Refactoring and Safe Edits / Refactoring and Safe Edits | Complete validation, compatibility/dependency/API/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 40 Refactoring Planner evidence` |
+| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 41 hand-off, and conditional Sprint 39 suite retirement. | Task 7, all validation, no-ff implementation merge into `codex/v0.7`, and the review branch. | `Complete Sprint 40 Refactoring Planner review` |
+
+Tasks execute strictly in order through
+`docs/codex/prompts/sprint-40-refactoring-planner/00-sprint-40-execution-loop.md`.
+Every child uses Prompt Contract v2 and a guaranteed fresh context. Tasks 1–2
+run documentation-appropriate evidence and link gates. Tasks 3–6 run non-zero
+focused tests plus the canonical Rust workspace gate. Task 7 reruns the complete
+accepted matrix. After the no-ff implementation merge into `codex/v0.7`, Task 8
+supplies the exact immutable range to one fresh-context read-only reviewer on
+`codex/v0.7-sprint-40-review`, then the primary independently inspects and
+reruns the matrix. The same reviewer must pass the drafted review artifact
+before state transition or prompt retirement. Successful review is merged back
+into `codex/v0.7` with `--no-ff` under the repository workflow.
+
+###### State, failure, and validation gates
+
+Sprint 40 remains `next` during planning, becomes `active` only from Task 1,
+and may become `completed` only after Task 8. A task may be `already_complete`
+only when committed evidence and successful required validation prove every
+criterion; no empty commit is created.
+
+Missing or contradictory source/precondition evidence, absence of a
+deterministic oracle, unimplementable ADR, source or Graph authority
+duplication, edit authorization inferred from impact/path/status/model output,
+ambiguous target or source evidence, order-dependent identity, unreconciled
+summary, implicit partial result, unbounded or sensitive output, hidden source
+read or mutation, protocol/schema/Tool Policy mismatch, zero matched tests,
+failed validation, staging/commit/push failure, reviewer mutation or
+incompleteness, unresolved evidence disagreement, failed artifact consistency,
+or retirement inventory drift stops the sprint immediately.
+
+Canonical validation is owned only by
+`docs/codex/core/validation.md`. Planning validation covers all child prompts,
+Markdown links and structure, contiguous numbering, manifest/prerequisite and
+commit-message agreement, Context Manifest selectors and preflights, accepted
+versus deferred scope, unchanged `next` state, exact Sprint 39 retirement
+inventory, mandatory reviewer handoff and consistency, `git diff --check`, and
+unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 40 Refactoring Planner
+```
+
 The v0.7 release integration review follows Sprint 41.
 
 #### v1.0 — Stable Platform

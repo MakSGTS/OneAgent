@@ -154,6 +154,41 @@ live Codex or Cursor executable and does not claim a new external-client
 matrix. The repository-owned exact initialize/catalog fixtures and current
 public-process compatibility test preserve the accepted Sprint 35 evidence.
 
+## Post-review remediation evidence
+
+The first fresh-context Task 7 review blocked completion because Analysis
+validated edge endpoints but did not validate the byte length of Graph's
+composite canonical `EdgeId` on equal graphs where no impact reason retained
+that identity. Remediation commit
+`eee6b615571f18beb61811ea2752119b93949e9c` closes that gap without adding a
+second identity authority: Analysis calls the existing Graph-owned
+`SemanticGraphQuery::edge_id` constructor for every input edge before report
+admission.
+
+The public Change Impact boundary test now proves both inclusive cases on equal
+graphs with an empty diff and no reasons: a canonical edge identifier of
+exactly 4,096 bytes is accepted, while 4,097 bytes fails closed with
+`IdentifierTooLarge`, `actual=4097`, and `maximum=4096`. The focused remediation
+matrix passed 10 public Change Impact tests, 129 total Analysis tests, 18 Graph
+Impact tests, 86 Graph compatibility tests, 123 Runtime unit tests, and the
+unchanged Workspace, watching, Git-input, cache, query, protocol, Tool Policy,
+MCP, HTTP, LSP, CLI, and Rust EDT suites with zero failures, ignored tests, or
+filtered tests.
+
+The complete remediation inventory contains 81 all-target executables, 77
+non-zero targets, the same four expected zero-test binaries, and 1,287 tests.
+`cargo fmt --all -- --check`, `cargo check --workspace --all-targets`,
+`cargo test --workspace --all-targets`, strict all-feature Clippy,
+warning-denied workspace Rustdoc, and `git diff --check` all exited zero.
+
+Exact-code-head [CI run 33457248893](https://github.com/MakSGTS/OneAgent/actions/runs/33457248893)
+completed successfully at the remediation commit. All six Rust, VS Code, and
+EDT jobs passed on `macos-14` and `windows-latest`, including the public Runtime
+processes, Extension Host and real Runtime integration, package and dependency
+audits, Clippy, and Rustdoc. No live Codex or Cursor executable run is newly
+claimed; the unchanged repository-owned client lifecycle fixture remains the
+accepted compatibility evidence.
+
 ## Canonical gate
 
 The Task 6 final validation cycle is:

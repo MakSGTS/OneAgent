@@ -94,6 +94,8 @@ Owns BSL syntax and semantic extraction:
 * parameters;
 * variables;
 * call expressions;
+* exact raw-byte declaration and call identifier ranges;
+* canonical BSL name equivalence and callable identity;
 * references;
 * scopes;
 * future type information.
@@ -119,12 +121,14 @@ It must not parse BSL, read EDT files, or discover the filesystem.
 ### `oneagent-analysis`
 
 Owns source-independent BSL declaration/call analysis and the additive Context,
-Diagnostics, Rules, and Change Impact derived views. Change Impact accepts only
-canonical Configuration identity plus complete borrowed graphs and invokes the
-Graph-owned diff and impact APIs; it owns publication-pair reporting,
-Configuration transitions, complete admission, ordering, and checked summaries
-without becoming a second semantic or traversal authority. These views do not
-mutate graph facts, read source files, call providers/models, or own Runtime,
+Diagnostics, Rules, Change Impact, and Refactoring Planner derived views. Change
+Impact accepts only canonical Configuration identity plus complete borrowed
+graphs and invokes the Graph-owned diff and impact APIs. Refactoring owns
+immutable source documents and occurrences, requests, targets, preconditions,
+operations, plans, previews, bounds, summaries, and closed failures while using
+Graph queries and BSL-owned callable identity/name equivalence. Neither view
+becomes a second semantic or traversal authority. They do not mutate graph
+facts, read source during evaluation, call providers/models, or own Runtime,
 persistence, protocol, MCP, or IDE state.
 
 ### `oneagent-llm`
@@ -380,8 +384,8 @@ records `pass` and completes Sprint 36. The
 [Sprint 38 Git Change Adapter review](../reviews/sprint-38-git-change-adapter.md)
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](../reviews/sprint-39-change-impact-analysis.md)
-records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is the
-unique `next` target.
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is active
+through Task 9 and remains subject to the Task 10 integration-review gate.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -392,8 +396,9 @@ project graph facts, import the Rust EDT adapter, or create another Workspace,
 Graph, Analysis, Context, Tool Policy, MCP, LSP, or Coverage authority. Its
 macOS/Windows build matrix, real-process/PDE tests, exact p2 package audit, and
 authorized local EDT 2026.1 workflow therefore provide IDE compatibility
-evidence while preserving the exact seven-tool catalog and all graph-domain and
-EDT Coverage counts. Semantic EDT UI and broader IDE behavior remain deferred.
+evidence while remaining compatible with the current exact eight-tool catalog
+and all graph-domain and EDT Coverage counts. Semantic EDT UI and broader IDE
+behavior remain deferred.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service
@@ -1525,8 +1530,9 @@ either explicit no-predecessor availability or the complete report from its
 immediately preceding successful publication. Initial cold, warm, standalone,
 and fresh-service snapshots use ID 1 with no invented history. Failed,
 cancelled, stale, invalid, or over-bound rebuilds retain the last valid snapshot
-and consume no ID. Cache schema remains `1`; semantic compatibility is `5`;
-publication IDs and reports are not serialized.
+and consume no ID. Cache schema remains `1`; Sprint 40 source-evidence
+reconstruction advances current semantic compatibility to `6`, while
+publication IDs and Change Impact reports remain unserialized.
 
 `oneagent.impact` keeps its legacy two-Configuration same-snapshot mode and adds
 one exclusive publication mode. Publication projection can select Compared,
@@ -1538,6 +1544,65 @@ remain distinct. The full executable matrix and limitations are recorded in
 the [Sprint 39 evidence](change-impact-analysis-evidence.md). The
 [Sprint 39 review](../reviews/sprint-39-change-impact-analysis.md) records
 `pass`.
+
+## Refactoring Planner
+
+[ADR-0063](../adr/0063-refactoring-planner.md) defines the implemented
+source-independent read-only first slice. Graph remains authoritative for
+Configuration, Module, Procedure, and Function identities, ownership, `Calls`,
+and queries. BSL owns callable identity plus Unicode lowercase name
+equivalence. `oneagent-analysis::refactoring` owns the immutable source,
+request, target, precondition, operation, plan, preview, completeness, bound,
+summary, and failure contracts and evaluates them without filesystem or
+mutation access.
+
+The only family is `bsl_callable_rename_v1`: one top-level Procedure or
+Function declaration plus every supported unique local or exported qualified
+direct-call identifier in one complete Configuration. A document is identified
+by Configuration and Module IDs and retains one accepted format/role, confined
+Workspace-relative path, exact raw UTF-8 bytes, raw length plus SHA-256 content
+version, canonical exact half-open raw-byte occurrences, and one completeness
+marker. EDT and Designer capture paired canonical declarations and calls while
+preserving their deliberate path, format, encoding, line-ending, version, and
+range differences.
+
+One request binds the checked process-local Workspace publication,
+Configuration, pre-rename target Node ID, and bounded desired name. The planner
+borrows exactly one immutable snapshot, resolves the target through Graph, and
+uses only retained documents. Declaration and direct-call identifier
+replacement are the closed operation set. Dependencies are forbidden; exact
+duplicates collapse; unequal anchors, replacements, versions, identities, and
+overlaps fail atomically. Canonical length-prefixed SHA-256 identities,
+descending-range application order, checked summaries, inclusive bounds,
+closed error precedence, and cancellation are deterministic.
+
+Preview is a complete structured no-snippet projection containing only
+operation identity/kind, a confined relative path, exact byte and derived
+one-based scalar ranges, and the replacement. It does not contain raw content,
+the expected token, a content version or digest, absolute path, provenance, or
+mutable handle. Planning and preview do not change source, repository,
+Workspace, cache, editor, protocol, or plan state and grant no authorization.
+
+Each Workspace Configuration snapshot now retains one complete source-evidence
+set. Cache schema stays `1` and semantic compatibility is `6`; decode rebuilds
+documents from the private source-state bytes and validates the canonical
+manifest. Publication IDs and plans are not persisted. Failed, cancelled,
+stale, incomplete, incompatible, or over-bound attempts return no partial
+result and do not replace a valid publication.
+
+`oneagent.refactor.plan` is the eighth lexicographically ordered read-only MCP
+tool for all three supported revisions. Its exact bounded request and result
+schemas preserve Tool Policy, message/output limits, legacy tools, sequential
+framing, and process lifecycle. Results declare `readOnly=true` and
+`editAuthorization="none"`. VS Code synchronizes only the catalog assertion;
+there is no command, code action, edit request, preview UI, or automatic
+invocation. The complete executable matrix and limitations are recorded in the
+[Sprint 40 evidence](refactoring-planner-evidence.md).
+
+Sprint 40 remains active pending Task 10 review. Source mutation, apply
+authorization, transactions, atomicity, rollback, reversibility, recovery,
+post-edit semantic validation, other refactoring families, and new UI remain
+Sprint 41 or later scope.
 
 ## Incremental indexing
 

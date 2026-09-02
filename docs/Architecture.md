@@ -26,13 +26,18 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      source-independent Context Engine that derives deterministic budgeted
      semantic bundles from one borrowed immutable graph, the bounded
      Diagnostics and Rules reports, and the bounded Change Impact product
-     report over Graph-owned diff and impact results.
+     report over Graph-owned diff and impact results. Its Refactoring Planner
+     owns immutable source evidence, checked plan/precondition/operation/
+     preview contracts, and pure Graph-backed evaluation without edit
+     authorization.
 3. **Source adapters**
    - `oneagent-edt` reads supported EDT artifacts and contributes facts to the
-     canonical semantic graph.
+     canonical semantic graph. It also captures complete immutable exact BSL
+     source evidence for accepted modules before publication.
    - `oneagent-designer-xml` reads accepted hierarchical Designer XML artifacts
      and contributes the same source-independent graph kinds without replacing
-     EDT semantics.
+     EDT semantics. It captures the paired source-evidence contract without
+     adding Designer-only Graph facts.
    - `oneagent-workspace-fs` discovers supported workspaces through the
      filesystem boundary.
    - `oneagent-openai-compatible` implements the bounded concrete ADR-0046
@@ -67,7 +72,7 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      operations without becoming a background service. A separate bounded MCP
      stdio adapter and `oneagent-mcp` binary compose one live Runtime-owned
      `WorkspaceService`, wait for the initial complete publication, clone one
-     immutable current snapshot per call, and serve the seven read-only
+     immutable current snapshot per call, and serve the eight read-only
      semantic tools while later calls may observe accepted replacements. A separate
      bounded LSP stdio adapter and `oneagent-lsp` binary expose immutable
      workspace symbols and pull diagnostics through Content-Length framing and
@@ -164,21 +169,79 @@ its immediately preceding successful publication. Cold, warm-cache, standalone,
 and fresh-service starts use publication `1` without invented history. Failed,
 cancelled, stale, invalid, or over-bound rebuilds retain the last valid
 publication and consume no ID; later recovery compares against that last
-success. Cache schema remains `1`, semantic compatibility is `5`, and neither
-publication IDs nor reports are serialized.
+success. Cache schema remains `1`; Sprint 40 source-evidence reconstruction
+advances current semantic compatibility to `6`, while publication IDs and
+Change Impact reports remain unserialized.
 
-The MCP catalog remains seven tools at revision `2026-07-28` with the existing
-legacy negotiated revisions and Tool Policy gate. `oneagent.impact` retains the
-legacy same-snapshot two-Configuration mode and adds an exclusive publication
-selector with depth, item, and reason bounds plus explicit availability,
-completeness, truncation, and omission counts. The public MCP executable uses
-the live Workspace observer while each call remains internally immutable.
+The MCP catalog is now eight tools at revision `2026-07-28` with the existing
+legacy negotiated revisions and Tool Policy gate. The additive Sprint 40 tool
+does not change `oneagent.impact`: it retains the legacy same-snapshot two-
+Configuration mode and the exclusive publication selector with depth, item,
+and reason bounds plus explicit availability, completeness, truncation, and
+omission counts. The public MCP executable uses the live Workspace observer
+while each call remains internally immutable.
 Filesystem and Git input are equivalent only through complete semantic end
 states; repository evidence never enters report identity, seeds, reasons,
 summaries, cache, errors, or wire output. The complete executable matrix,
 compatibility audits, and limitations are recorded in the
 [Sprint 39 evidence](architecture/change-impact-analysis-evidence.md). The
 [Sprint 39 review](reviews/sprint-39-change-impact-analysis.md) records `pass`.
+
+## Implemented Refactoring Planner boundary
+
+[ADR-0063](adr/0063-refactoring-planner.md) governs the implemented Sprint 40
+first slice. `oneagent-analysis::refactoring` owns the source-independent
+immutable document, occurrence, request, target, precondition, operation, plan,
+preview, summary, bound, completeness, and closed failure contracts plus pure
+planner evaluation. Graph remains the only Configuration, Module, callable,
+ownership, `Calls`, and query authority. BSL owns callable identity and name
+equivalence. Adapters capture evidence, Runtime publishes it atomically, and
+MCP projects one result without redefining plan semantics.
+
+The only family is `bsl_callable_rename_v1`: one top-level Procedure or
+Function declaration and every supported unique local or exported qualified
+direct-call identifier inside one complete Configuration. One document binds
+Configuration and Module IDs, accepted source format and role, one confined
+Workspace-relative path, exact raw UTF-8 bytes, raw length plus SHA-256 content
+version, canonical exact half-open raw-byte occurrences, and one completeness
+marker. EDT and Designer production builders provide paired evidence while
+preserving deliberate format, path, encoding, line-ending, content-version,
+and range differences.
+
+One planner request borrows one immutable `WorkspaceSnapshot`, requires its
+checked process-local publication ID, resolves the target through Graph, and
+uses only retained source evidence. Declaration and direct-call identifier
+replacement are the complete operation vocabulary; dependencies are forbidden.
+Canonical identity, ordering, exact duplicate collapse, collision and overlap
+rejection, checked summaries, inclusive bounds, closed errors, cancellation,
+and a structured no-snippet preview are fail-closed and deterministic. Source
+is never reopened after publication and no planner or preview writes it.
+
+Workspace publications now retain a complete source-evidence set for every
+Configuration. Cache schema remains `1` and semantic compatibility is `6`;
+decode reconstructs documents from the private source-state bytes and validates
+the canonical manifest. Publication IDs and plans are not persisted. Failed,
+cancelled, stale, incomplete, or over-bound attempts publish no partial state,
+consume no publication ID, and do not replace the last valid snapshot.
+
+`oneagent.refactor.plan` is the eighth lexicographically ordered MCP tool for
+revisions `2025-06-18`, `2025-11-25`, and `2026-07-28`. It is Tool Policy
+`ReadOnly`, accepts the exact bounded request schema, and returns a reconciled
+bounded preview with `readOnly=true` and `editAuthorization="none"`. It exposes
+no raw source, expected token, content version or digest, absolute path,
+provenance, or mutable handle. The VS Code client synchronizes only its catalog
+assertion; no command, code action, edit request, preview UI, or automatic call
+is added.
+
+The complete acceptance matrix, focused and canonical counts, compatibility,
+API/dependency/cache/Coverage/sensitive-data/scope audits, and exact Task 10
+hand-off are recorded in the
+[Sprint 40 evidence](architecture/refactoring-planner-evidence.md). Sprint 40
+remains active: Task 10 still owns the mandatory fresh-context integration
+review, primary reconciliation, artifact consistency, state transition, Sprint
+41 hand-off, and conditional prompt retirement. Source mutation, apply
+authorization, transaction staging, atomicity, rollback, reversibility,
+recovery, and post-edit validation remain Sprint 41 scope.
 
 ## Planned boundaries
 
@@ -214,8 +277,9 @@ The roadmap assigns future boundaries explicitly:
   [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
   records `pass` and completes Sprint 38. The
   [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
-  records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is the
-  unique `next` target.
+  records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
+  active through Task 9 and remains subject to the Task 10 integration-review
+  gate before completion.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The

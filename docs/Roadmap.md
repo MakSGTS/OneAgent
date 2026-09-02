@@ -42,8 +42,9 @@ records `pass` and completes Sprint 36. The
 [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
-records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is the
-unique `next` target. The
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
+`active` through Task 9 and remains subject to the Task 10 integration-review
+gate. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -9933,6 +9934,58 @@ behavior. Source mutation, apply authorization, editor edits, transaction
 staging, pre-write recheck, atomicity, rollback, reversibility, recovery,
 post-edit rebuild, and semantic validation remain explicitly owned by Sprint
 41.
+
+###### Sprint 40 implementation and Task 9 evidence
+
+Tasks 3–8 implement ADR-0063 in dependency order. Common and BSL own one
+canonical SHA-256 implementation, callable identity/name equivalence, and exact
+raw identifier ranges. Analysis owns complete immutable source evidence and the
+typed deterministic planner domain/evaluation. EDT and Designer capture paired
+documents and canonical declaration/local/qualified-call outcomes before
+publication. Workspace publishes the evidence atomically, reconstructs it from
+cache semantic compatibility `6`, and plans only from one retained immutable
+snapshot. Runtime, Tool Policy, and MCP expose the eighth read-only tool
+`oneagent.refactor.plan`; VS Code changes only its catalog assertion.
+
+The [Sprint 40 evidence](architecture/refactoring-planner-evidence.md) maps
+every ADR-0063 criterion to executable or audit evidence. The paired production
+oracle proves equal canonical declaration, local-call, and exported qualified-
+call mapping across EDT LF and Designer BOM+CRLF sources while preserving their
+different paths, formats, raw bytes, content versions, ranges, and therefore
+plan identities. Each paired plan is complete with one declaration, one local
+call, one qualified call, and no omitted internal operation. Workspace and MCP
+tests make the original source unreadable after publication and still produce
+equal repeated plans from retained bytes; successor publications reject stale
+requests and produce fresh identities.
+
+Focused unfiltered evidence passes 6 Common, 42 BSL, 298 Graph, 154 Analysis,
+344 EDT, 39 Designer, 124 Runtime unit, 8 Workspace, 2 File Watching, 3 Git-
+input, 4 cache, 53 Protocol, 33 Tool Policy, 10 semantic MCP, 8 MCP stdio, and
+18 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
+62-test VS Code unit matrix also pass. The executable inventory contains 85
+all-target entries: 81 non-zero targets, four expected zero-test public binary
+entry points reported only as inventory, and 1,332 tests. The canonical
+workspace run passes all 1,332 with zero failed, ignored, measured, or filtered
+tests; format, all-target check, strict Clippy, warning-denied Rustdoc, and diff
+checks also pass.
+
+Task-range audits find only accepted internal Cargo dependency edges, no third-
+party package/feature/license change, no removed public API, no Graph or
+Coverage transition, no unsafe or production source-write/edit/process
+primitive, no sensitive output, no generated/tracked artifact, and no deferred
+Sprint 41 behavior. Cache schema remains `1`; publication IDs and plans are not
+persisted. Public results remain bounded and redacted with `readOnly=true` and
+`editAuthorization="none"`.
+
+The planning-through-Task-9 branch range starts after exact completed Sprint 39
+version head `8d28ba8acacd00efd902eb2aa4ab3194f1636c05` and ends at the unique
+Task 9 commit whose first parent is exact recovery head
+`3924acb37af4528f18dcaa0ee93c4358dae1730f` and whose subject is
+`Complete Sprint 40 Refactoring Planner evidence`. After the required push and
+no-ff implementation merge into `codex/v0.7`, Task 10 must review
+`8d28ba8acacd00efd902eb2aa4ab3194f1636c05..<Sprint 40 implementation merge>`
+with the complete Task 9 matrix. Task 9 changes documentation only. Sprint 40
+remains `active`; it is not completed and no Sprint 39 prompt is retired here.
 
 ###### State, failure, and validation gates
 

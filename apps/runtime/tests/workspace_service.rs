@@ -419,6 +419,27 @@ async fn public_workspace_builds_both_production_formats_deterministically() {
 }
 
 #[test]
+fn public_workspace_builds_each_configuration_at_the_workspace_root() {
+    for directory in ["edt", "designer"] {
+        let root = tempdir().expect("temporary direct-root Workspace must be created");
+        copy_tree(&fixture_root().join(directory), root.path());
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(root.path())
+            .expect("Configuration at the Workspace root must build");
+        assert_eq!(snapshot.len(), 1);
+        let configuration = &snapshot.configurations()[0];
+        assert_eq!(configuration.root_path(), root.path());
+        assert!(
+            configuration
+                .source_evidence()
+                .documents()
+                .iter()
+                .all(|document| !document.path().path().as_str().starts_with(directory))
+        );
+    }
+}
+
+#[test]
 fn public_workspace_plans_repeatedly_from_retained_edt_and_designer_publications() {
     let root = copy_fixture();
     let snapshot = Arc::new(

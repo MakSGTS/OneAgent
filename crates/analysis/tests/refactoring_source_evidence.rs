@@ -176,6 +176,24 @@ fn confinement_encoding_bom_identity_and_mapping_fail_closed() {
         assert!(!error.to_string().contains(path));
     }
 
+    let direct_root = ConfinedSourcePath::new_at_workspace_root(
+        SourcePath::new("src/CommonModules/Sales/Module.bsl")
+            .expect("direct-root source path shape must be valid"),
+    )
+    .expect("Workspace-root Configuration source must remain confined");
+    assert_eq!(
+        direct_root.path().as_str(),
+        "src/CommonModules/Sales/Module.bsl"
+    );
+    let absolute_error = ConfinedSourcePath::new_at_workspace_root(
+        SourcePath::new("/workspace/Module.bsl").expect("absolute source path shape must be valid"),
+    )
+    .expect_err("absolute direct-root source path must fail");
+    assert_eq!(
+        absolute_error.kind(),
+        SourceEvidenceErrorKind::InvalidConfinedPath
+    );
+
     let over_identity =
         SourceDocumentId::new(id("a".repeat(MAX_SOURCE_IDENTITY_BYTES + 1)), id("module"))
             .expect_err("one-over identity must fail");

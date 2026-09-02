@@ -22,16 +22,20 @@ fn project_root() -> PathBuf {
 
 #[test]
 fn production_builder_captures_raw_bom_crlf_and_exact_deterministic_occurrences() {
-    assert!(matches!(
-        FileSystemDesignerXmlSemanticGraphBuilder.build_graph_with_source_evidence(
+    let direct_root = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
             &project_root(),
             &project_root(),
             DesignerXmlBuildScope::Partial,
-        ),
-        Err(DesignerXmlGraphError::SourceEvidence(
-            DesignerXmlSourceEvidenceError::EscapingPath(_)
-        ))
-    ));
+        )
+        .expect("Designer Configuration at the Workspace root must build");
+    assert_eq!(
+        direct_root.source_evidence().documents()[0]
+            .path()
+            .path()
+            .as_str(),
+        "CommonModules/DynamicSecurityOverridable/Ext/Module.bsl"
+    );
     let first = FileSystemDesignerXmlSemanticGraphBuilder
         .build_graph_with_source_evidence(
             &paired_root(),

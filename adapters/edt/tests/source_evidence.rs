@@ -24,13 +24,16 @@ fn project_root() -> PathBuf {
 
 #[test]
 fn production_builder_captures_exact_complete_deterministic_occurrences() {
-    assert!(matches!(
-        FileSystemEdtSemanticGraphBuilder
-            .build_graph_with_source_evidence(&project_root(), &project_root()),
-        Err(EdtGraphError::SourceEvidence(
-            EdtSourceEvidenceError::EscapingPath(_)
-        ))
-    ));
+    let direct_root = FileSystemEdtSemanticGraphBuilder
+        .build_graph_with_source_evidence(&project_root(), &project_root())
+        .expect("EDT Configuration at the Workspace root must build");
+    assert_eq!(
+        direct_root.source_evidence().documents()[0]
+            .path()
+            .path()
+            .as_str(),
+        "src/CommonModules/DynamicSecurityOverridable/Module.bsl"
+    );
     let first = FileSystemEdtSemanticGraphBuilder
         .build_graph_with_source_evidence(&paired_root(), &project_root())
         .expect("paired EDT source evidence must build");

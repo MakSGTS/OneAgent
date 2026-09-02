@@ -2274,7 +2274,7 @@ impl SourceEvidenceDto {
     fn into_evidence(
         self,
         source: &WorkspaceCacheSource,
-        configuration_root: &SourcePath,
+        configuration_root: Option<&SourcePath>,
         workspace_format: WorkspaceFormat,
     ) -> Result<SourceEvidenceSet, WorkspaceCacheCodecError> {
         let expected = self.clone();
@@ -2336,7 +2336,7 @@ impl SourceDocumentDto {
     fn into_document(
         self,
         source: &WorkspaceCacheSource,
-        configuration_root: &SourcePath,
+        configuration_root: Option<&SourcePath>,
         workspace_format: WorkspaceFormat,
         expected_configuration_id: &EntityId,
     ) -> Result<SourceDocument, WorkspaceCacheCodecError> {
@@ -2358,12 +2358,15 @@ impl SourceDocumentDto {
         }
         let path = SourcePath::new(self.path)
             .map_err(|_| invalid("workspace cache source document path is invalid"))?;
-        let confined =
-            ConfinedSourcePath::new(path.clone(), configuration_root).map_err(|error| {
-                invalid(format!(
-                    "workspace cache confined source path is invalid: {error}"
-                ))
-            })?;
+        let confined = match configuration_root {
+            Some(configuration_root) => ConfinedSourcePath::new(path.clone(), configuration_root),
+            None => ConfinedSourcePath::new_at_workspace_root(path.clone()),
+        }
+        .map_err(|error| {
+            invalid(format!(
+                "workspace cache confined source path is invalid: {error}"
+            ))
+        })?;
         let raw = cached_source_bytes(source, path.as_str())?.to_vec();
         let actual_version = SourceContentVersion::from_bytes(&raw);
         if self.content_version != SourceContentVersionDto::from(actual_version) {
@@ -2613,7 +2616,9 @@ impl ConfigurationDto {
         workspace_root: &Path,
     ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceCacheCodecError> {
         let root_path = joined_path(workspace_root, &self.root)?;
-        let configuration_root = SourcePath::new(self.root.join("/"))
+        let configuration_root = (!self.root.is_empty())
+            .then(|| SourcePath::new(self.root.join("/")))
+            .transpose()
             .map_err(|_| invalid("workspace cache Configuration source root is invalid"))?;
         let format = match self.format {
             FormatDto::Edt => WorkspaceFormat::Edt,
@@ -2621,7 +2626,7 @@ impl ConfigurationDto {
         };
         let source_evidence =
             self.source_evidence
-                .into_evidence(source, &configuration_root, format)?;
+                .into_evidence(source, configuration_root.as_ref(), format)?;
 
         let mut graph = SemanticGraph::new();
         let mut previous_node: Option<EntityId> = None;
@@ -2995,6 +3000,23 @@ mod tests {
                 .expect("single-format snapshot must decode");
             assert_eq!(decoded.len(), 1);
             assert_eq!(decoded.configurations()[0].format(), configuration.format());
+        }
+
+        for directory in ["edt", "designer"] {
+            let direct_root = root.join(directory);
+            let direct = fixture_snapshot(&direct_root);
+            let direct_source = fixture_source(&direct_root);
+            let bytes = WorkspaceCacheCodec::encode(&direct_source, &direct_root, &direct)
+                .expect("Configuration at the Workspace root must encode");
+            let decoded = WorkspaceCacheCodec::decode(&bytes, &direct_source, &direct_root)
+                .expect("Configuration at the Workspace root must decode");
+            assert_eq!(
+                WorkspaceDto::from_snapshot(&direct_source, &direct_root, &decoded)
+                    .expect("decoded direct-root DTO must build"),
+                WorkspaceDto::from_snapshot(&direct_source, &direct_root, &direct)
+                    .expect("clean direct-root DTO must build")
+            );
+            assert_eq!(decoded.configurations()[0].root_path(), direct_root);
         }
 
         let mut reordered = clean.configurations().to_vec();

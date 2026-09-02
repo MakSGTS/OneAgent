@@ -197,7 +197,7 @@ const fn module_role(kind: EdtModuleKind) -> BslModuleRole {
 struct ConfinedRoots {
     workspace: PathBuf,
     configuration: PathBuf,
-    configuration_relative: SourcePath,
+    configuration_relative: Option<SourcePath>,
 }
 
 impl ConfinedRoots {
@@ -211,10 +211,12 @@ impl ConfinedRoots {
         let relative = configuration
             .strip_prefix(&workspace)
             .map_err(|_| EdtSourceEvidenceError::EscapingPath(configuration.clone()))?;
-        if relative.as_os_str().is_empty() || !safe_relative(relative) {
+        if !safe_relative(relative) {
             return Err(EdtSourceEvidenceError::EscapingPath(configuration));
         }
-        let configuration_relative = source_path(relative)?;
+        let configuration_relative = (!relative.as_os_str().is_empty())
+            .then(|| source_path(relative))
+            .transpose()?;
         Ok(Self {
             workspace,
             configuration,
@@ -232,8 +234,12 @@ impl ConfinedRoots {
         let relative = canonical
             .strip_prefix(&self.workspace)
             .map_err(|_| EdtSourceEvidenceError::EscapingPath(canonical.clone()))?;
-        ConfinedSourcePath::new(source_path(relative)?, &self.configuration_relative)
-            .map_err(Into::into)
+        let relative = source_path(relative)?;
+        match &self.configuration_relative {
+            Some(configuration_root) => ConfinedSourcePath::new(relative, configuration_root),
+            None => ConfinedSourcePath::new_at_workspace_root(relative),
+        }
+        .map_err(Into::into)
     }
 }
 

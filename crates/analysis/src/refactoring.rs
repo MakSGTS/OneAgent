@@ -222,6 +222,24 @@ impl ConfinedSourcePath {
         Ok(Self(workspace_relative_path))
     }
 
+    /// Validates confinement when the Configuration root is the Workspace root.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error when the source path is absolute. A validated
+    /// non-empty relative [`SourcePath`] is necessarily a strict descendant of
+    /// the Workspace root.
+    pub fn new_at_workspace_root(
+        workspace_relative_path: SourcePath,
+    ) -> Result<Self, SourceEvidenceError> {
+        if !is_relative(workspace_relative_path.as_str()) {
+            return Err(SourceEvidenceError::new(
+                SourceEvidenceErrorKind::InvalidConfinedPath,
+            ));
+        }
+        Ok(Self(workspace_relative_path))
+    }
+
     /// Returns the normalized Workspace-relative path.
     #[must_use]
     pub const fn path(&self) -> &SourcePath {

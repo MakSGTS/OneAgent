@@ -328,6 +328,28 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
 }
 
 #[tokio::test]
+async fn public_mcp_process_starts_from_each_configuration_root() {
+    for directory in ["edt", "designer"] {
+        let root = tempdir().expect("temporary direct-root Workspace must be created");
+        copy_tree(&fixture_root().join(directory), root.path());
+        let input = format!("{}\n", cursor_initialize());
+        let output = run_process_in(root.path(), input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("direct-root MCP stdout must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("MCP response must be JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 1);
+        assert_eq!(
+            responses[0]["result"]["protocolVersion"],
+            MCP_PROTOCOL_VERSION_2025_11_25
+        );
+    }
+}
+
+#[tokio::test]
 async fn public_mcp_process_runs_exact_codex_and_cursor_lifecycles_repeatably() {
     for (initialize, version, separator) in [
         (codex_initialize(), MCP_PROTOCOL_VERSION_2025_06_18, "\n"),

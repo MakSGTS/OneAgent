@@ -9,11 +9,12 @@ orchestration, suppression, reporting, snapshot, or public-projection slice.
 
 - `docs/codex/profiles/diagnostics-engine-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Canonical diagnostic inputs and authority
 - Identity, vocabulary, ordering, and collision contract
 - Suppression and disposition contract
@@ -21,12 +22,6 @@ orchestration, suppression, reporting, snapshot, or public-projection slice.
 - Location, provenance, and sensitive-data policy
 - Snapshot, persistence, protocol, and consumer impact, when applicable
 - Evidence corpus and deterministic oracle
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

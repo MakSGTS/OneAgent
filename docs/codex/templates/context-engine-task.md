@@ -9,11 +9,12 @@ assembly, explanation, rendering, or evaluation work.
 
 - `docs/codex/profiles/context-engine-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Canonical snapshot and data boundary
 - Request, seed, and policy contract
 - Selection, relevance, and ordering contract
@@ -21,12 +22,6 @@ assembly, explanation, rendering, or evaluation work.
 - Provenance, explanation, and rendering contract
 - Evaluation corpus and oracle
 - Compatibility and consumer impact
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

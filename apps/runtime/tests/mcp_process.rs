@@ -7,7 +7,7 @@ use oneagent_protocol::{
     MAX_MESSAGE_BYTES, MCP_PROTOCOL_VERSION_2025_06_18, MCP_PROTOCOL_VERSION_2025_11_25,
     PROTOCOL_VERSION,
 };
-use oneagent_runtime::WorkspaceSnapshotBuilder;
+use oneagent_runtime::{WorkspaceSnapshot, WorkspaceSnapshotBuilder};
 use serde_json::{Value, json};
 use tempfile::tempdir;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -184,7 +184,8 @@ fn semantic_calls(
     node_id: &str,
     diagnostic_configuration: &str,
     current_configuration: &str,
-) -> [Value; 7] {
+    refactoring: Value,
+) -> [Value; 8] {
     [
         json!({"name": "oneagent.graph", "arguments": {"limit": 1}}),
         json!({"name": "oneagent.query", "arguments": {
@@ -218,7 +219,41 @@ fn semantic_calls(
         json!({"name": "oneagent.symbols", "arguments": {
             "query": "e", "kinds": ["module", "procedure", "function", "query"], "limit": 2
         }}),
+        refactoring,
     ]
+}
+
+fn refactoring_call(
+    snapshot: &WorkspaceSnapshot,
+    current_name: &str,
+    desired_name: &str,
+    publication_id: u64,
+) -> Value {
+    let (configuration, target) = snapshot
+        .configurations()
+        .iter()
+        .find_map(|configuration| {
+            configuration
+                .source_evidence()
+                .documents()
+                .iter()
+                .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+                .find(|occurrence| {
+                    occurrence.kind()
+                        == oneagent_analysis::refactoring::SourceOccurrenceKind::Declaration
+                        && occurrence.token() == current_name
+                })
+                .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+                .map(|target| (configuration, target))
+        })
+        .expect("fixture refactoring target must map uniquely");
+    json!({"name": "oneagent.refactor.plan", "arguments": {
+        "publicationId": publication_id,
+        "configurationId": configuration.configuration_id().as_str(),
+        "targetNodeId": target.as_str(),
+        "desiredName": desired_name,
+        "limit": 100
+    }})
 }
 
 #[tokio::test]
@@ -276,6 +311,7 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
                 "oneagent.graph",
                 "oneagent.impact",
                 "oneagent.query",
+                "oneagent.refactor.plan",
                 "oneagent.symbols",
                 "oneagent.validation"
             ]
@@ -338,6 +374,7 @@ async fn public_mcp_process_runs_exact_codex_and_cursor_lifecycles_repeatably() 
                 "oneagent.graph",
                 "oneagent.impact",
                 "oneagent.query",
+                "oneagent.refactor.plan",
                 "oneagent.symbols",
                 "oneagent.validation"
             ]
@@ -670,11 +707,13 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
         .configuration_id()
         .as_str()
         .to_owned();
+    let refactoring = refactoring_call(&snapshot, "Posting", "PostingRenamed", 1);
     let calls = semantic_calls(
         &configuration_id,
         &node_id,
         &diagnostic_configuration,
         &current_configuration,
+        refactoring,
     );
     let mut frames = calls
         .iter()
@@ -749,6 +788,7 @@ async fn public_mcp_process_observes_live_atomic_impact_publications_between_cal
         .configuration_id()
         .as_str()
         .to_owned();
+    let initial_refactoring = refactoring_call(&snapshot, "Posting", "PostingRenamed", 1);
     let mut child = Command::new(env!("CARGO_BIN_EXE_oneagent-mcp"))
         .current_dir(root.path())
         .stdin(Stdio::piped())
@@ -777,6 +817,29 @@ async fn public_mcp_process_observes_live_atomic_impact_publications_between_cal
     let initial = &initial["result"]["structuredContent"];
     assert_eq!(initial["currentPublicationId"], 1);
     assert_eq!(initial["availability"], "no_previous_publication");
+
+    let first_plan = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(110, "tools/call", &initial_refactoring),
+    )
+    .await;
+    let repeated_plan = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(111, "tools/call", &initial_refactoring),
+    )
+    .await;
+    let first_plan = &first_plan["result"]["structuredContent"];
+    assert_eq!(first_plan, &repeated_plan["result"]["structuredContent"]);
+    assert_eq!(first_plan["publicationId"], 1);
+    assert_eq!(first_plan["completeness"], "complete");
+    assert_eq!(first_plan["readOnly"], true);
+    assert_eq!(first_plan["editAuthorization"], "none");
+    let first_plan_id = first_plan["planId"]
+        .as_str()
+        .expect("initial plan identity")
+        .to_owned();
 
     let source = root.path().join("edt/src/Configuration/Configuration.mdo");
     let changed = fs::read_to_string(&source)
@@ -825,6 +888,41 @@ async fn public_mcp_process_observes_live_atomic_impact_publications_between_cal
     assert!(!encoded.contains("Configuration.mdo"));
     assert!(!encoded.contains(root.path().to_str().expect("UTF-8 root")));
 
+    let stale = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(112, "tools/call", &initial_refactoring),
+    )
+    .await;
+    assert_eq!(stale["result"]["isError"], true);
+    assert_eq!(
+        stale["result"]["structuredContent"],
+        json!({
+            "code": "execution_failed",
+            "message": "The semantic tool request failed."
+        })
+    );
+
+    let successor_refactoring = refactoring_call(
+        &snapshot,
+        "Posting",
+        "PostingRenamed",
+        updated["currentPublicationId"]
+            .as_u64()
+            .expect("successor publication ID"),
+    );
+    let successor = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(113, "tools/call", &successor_refactoring),
+    )
+    .await;
+    let successor = &successor["result"]["structuredContent"];
+    assert_eq!(successor["publicationId"], 2);
+    assert_ne!(successor["planId"], first_plan_id);
+    assert_eq!(successor["readOnly"], true);
+    assert_eq!(successor["editAuthorization"], "none");
+
     drop(stdin);
     let status = timeout(PROCESS_TIMEOUT, child.wait())
         .await
@@ -847,8 +945,8 @@ async fn public_mcp_process_observes_live_atomic_impact_publications_between_cal
 }
 
 fn assert_semantic_responses(responses: &[Value], workspace_root: &Path) {
-    assert_eq!(responses.len(), 12);
-    for response in &responses[..7] {
+    assert_eq!(responses.len(), 13);
+    for response in &responses[..8] {
         assert!(response["result"].get("isError").is_none(), "{response}");
         assert!(response["result"].get("structuredContent").is_some());
     }
@@ -880,16 +978,22 @@ fn assert_semantic_responses(responses: &[Value], workspace_root: &Path) {
             .to_string()
             .contains(workspace_root.to_str().expect("UTF-8 Workspace path"))
     );
-    assert_eq!(responses[7]["result"]["isError"], true);
+    let refactoring = &responses[7]["result"]["structuredContent"];
+    assert_eq!(refactoring["family"], "bsl_callable_rename_v1");
+    assert_eq!(refactoring["publicationId"], 1);
+    assert_eq!(refactoring["readOnly"], true);
+    assert_eq!(refactoring["editAuthorization"], "none");
+    assert!(refactoring["preview"].is_array());
+    assert_eq!(responses[8]["result"]["isError"], true);
     assert_eq!(
-        responses[8],
+        responses[9],
         json!({
             "jsonrpc": "2.0",
             "id": 21,
             "error": {"code": -32602, "message": "Invalid params"}
         })
     );
-    for response in &responses[9..] {
+    for response in &responses[10..] {
         assert_eq!(response["result"]["isError"], true);
         assert_eq!(
             response["result"]["structuredContent"]["code"],

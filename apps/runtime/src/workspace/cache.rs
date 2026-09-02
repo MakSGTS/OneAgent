@@ -5,6 +5,11 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
+use oneagent_analysis::refactoring::{
+    BslModuleRole, ConfinedSourcePath, SourceByteRange, SourceContentVersion, SourceDocument,
+    SourceDocumentId, SourceEvidenceCompleteness, SourceEvidenceSet, SourceFormat,
+    SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
+};
 use oneagent_common::{
     EntityId, EntityName, SourceLocation, SourcePath, SourcePosition, SourceSpan,
 };
@@ -37,7 +42,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 5;
+const SEMANTIC_VERSION: u32 = 6;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -156,7 +161,7 @@ impl WorkspaceCacheCodec {
         snapshot: &WorkspaceSnapshot,
     ) -> Result<Vec<u8>, WorkspaceCacheCodecError> {
         validate_source(source)?;
-        let workspace = WorkspaceDto::from_snapshot(workspace_root, snapshot)?;
+        let workspace = WorkspaceDto::from_snapshot(source, workspace_root, snapshot)?;
         let checksum = content_checksum(source, &workspace)?;
         let envelope = EnvelopeDto {
             format: CACHE_FORMAT.to_owned(),
@@ -206,7 +211,9 @@ impl WorkspaceCacheCodec {
                 "workspace cache source state does not match",
             ));
         }
-        envelope.workspace.into_snapshot(workspace_root)
+        envelope
+            .workspace
+            .into_snapshot(&envelope.source, workspace_root)
     }
 }
 
@@ -595,11 +602,86 @@ struct WorkspaceDto {
 struct ConfigurationDto {
     root: Vec<String>,
     format: FormatDto,
+    source_evidence: SourceEvidenceDto,
     nodes: Vec<NodeDto>,
     edges: Vec<EdgeDto>,
     diagnostics: Vec<DiagnosticDto>,
     reference_requests: Vec<ReferenceRequestDto>,
     reference_statistics: ReferenceStatisticsDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceEvidenceDto {
+    configuration_id: String,
+    documents: Vec<SourceDocumentDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceDocumentDto {
+    configuration_id: String,
+    module_id: String,
+    format: FormatDto,
+    module_role: BslModuleRoleDto,
+    path: String,
+    content_version: SourceContentVersionDto,
+    occurrences: Vec<SourceOccurrenceDto>,
+    completeness: SourceEvidenceCompletenessDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceOccurrenceDto {
+    configuration_id: String,
+    module_id: String,
+    content_version: SourceContentVersionDto,
+    start_byte: usize,
+    end_byte: usize,
+    kind: SourceOccurrenceKindDto,
+    token: String,
+    mapped_target_id: Option<String>,
+    resolution: SourceOccurrenceResolutionDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceContentVersionDto {
+    raw_byte_len: usize,
+    digest: [u8; 32],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum BslModuleRoleDto {
+    Object,
+    Manager,
+    Common,
+    Form,
+    Command,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SourceOccurrenceKindDto {
+    Declaration,
+    LocalCall,
+    QualifiedCall,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SourceOccurrenceResolutionDto {
+    Unique,
+    Unresolved,
+    Ambiguous,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SourceEvidenceCompletenessDto {
+    BslCallableRenameV1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2117,13 +2199,16 @@ impl ReferenceStatisticsDto {
 
 impl WorkspaceDto {
     fn from_snapshot(
+        source: &WorkspaceCacheSource,
         workspace_root: &Path,
         snapshot: &WorkspaceSnapshot,
     ) -> Result<Self, WorkspaceCacheCodecError> {
         let configurations = snapshot
             .configurations()
             .iter()
-            .map(|configuration| ConfigurationDto::from_snapshot(workspace_root, configuration))
+            .map(|configuration| {
+                ConfigurationDto::from_snapshot(source, workspace_root, configuration)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         if snapshot
             .configurations()
@@ -2139,13 +2224,14 @@ impl WorkspaceDto {
 
     fn into_snapshot(
         self,
+        source: &WorkspaceCacheSource,
         workspace_root: &Path,
     ) -> Result<WorkspaceSnapshot, WorkspaceCacheCodecError> {
         let expected = self.clone();
         let mut configurations = Vec::with_capacity(self.configurations.len());
         let mut previous_id: Option<EntityId> = None;
         for configuration in self.configurations {
-            let configuration = configuration.into_snapshot(workspace_root)?;
+            let configuration = configuration.into_snapshot(source, workspace_root)?;
             if previous_id
                 .as_ref()
                 .is_some_and(|id| id >= configuration.configuration_id())
@@ -2159,7 +2245,7 @@ impl WorkspaceDto {
             configurations.push(configuration);
         }
         let snapshot = WorkspaceSnapshot::initial(workspace_root.to_path_buf(), configurations);
-        let reconstructed = Self::from_snapshot(workspace_root, &snapshot)?;
+        let reconstructed = Self::from_snapshot(source, workspace_root, &snapshot)?;
         if reconstructed != expected {
             return Err(inconsistent(
                 "workspace cache semantic content is not canonically normalized",
@@ -2169,8 +2255,323 @@ impl WorkspaceDto {
     }
 }
 
+impl SourceEvidenceDto {
+    fn from_evidence(
+        source: &WorkspaceCacheSource,
+        evidence: &SourceEvidenceSet,
+    ) -> Result<Self, WorkspaceCacheCodecError> {
+        let documents = evidence
+            .documents()
+            .iter()
+            .map(|document| SourceDocumentDto::from_document(source, document))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            configuration_id: evidence.configuration_id().as_str().to_owned(),
+            documents,
+        })
+    }
+
+    fn into_evidence(
+        self,
+        source: &WorkspaceCacheSource,
+        configuration_root: &SourcePath,
+        workspace_format: WorkspaceFormat,
+    ) -> Result<SourceEvidenceSet, WorkspaceCacheCodecError> {
+        let expected = self.clone();
+        let configuration_id = entity_id(self.configuration_id)?;
+        let documents = self
+            .documents
+            .into_iter()
+            .map(|document| {
+                document.into_document(
+                    source,
+                    configuration_root,
+                    workspace_format,
+                    &configuration_id,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let evidence = SourceEvidenceSet::new(configuration_id, documents).map_err(|error| {
+            invalid(format!(
+                "workspace cache source evidence is invalid: {error}"
+            ))
+        })?;
+        if Self::from_evidence(source, &evidence)? != expected {
+            return Err(inconsistent(
+                "workspace cache source evidence is not canonically normalized",
+            ));
+        }
+        Ok(evidence)
+    }
+}
+
+impl SourceDocumentDto {
+    fn from_document(
+        source: &WorkspaceCacheSource,
+        document: &SourceDocument,
+    ) -> Result<Self, WorkspaceCacheCodecError> {
+        let path = document.path().path().as_str();
+        let raw = cached_source_bytes(source, path)?;
+        if raw != document.raw_content() {
+            return Err(inconsistent(
+                "workspace cache source document bytes contradict the source envelope",
+            ));
+        }
+        Ok(Self {
+            configuration_id: document.id().configuration_id().as_str().to_owned(),
+            module_id: document.id().module_id().as_str().to_owned(),
+            format: source_format_dto(document.format()),
+            module_role: module_role_dto(document.module_role()),
+            path: path.to_owned(),
+            content_version: document.content_version().into(),
+            occurrences: document
+                .occurrences()
+                .iter()
+                .map(SourceOccurrenceDto::from)
+                .collect(),
+            completeness: SourceEvidenceCompletenessDto::BslCallableRenameV1,
+        })
+    }
+
+    fn into_document(
+        self,
+        source: &WorkspaceCacheSource,
+        configuration_root: &SourcePath,
+        workspace_format: WorkspaceFormat,
+        expected_configuration_id: &EntityId,
+    ) -> Result<SourceDocument, WorkspaceCacheCodecError> {
+        let document_id = SourceDocumentId::new(
+            entity_id(self.configuration_id)?,
+            entity_id(self.module_id)?,
+        )
+        .map_err(|error| invalid(format!("workspace cache document ID is invalid: {error}")))?;
+        if document_id.configuration_id() != expected_configuration_id {
+            return Err(inconsistent(
+                "workspace cache source document Configuration is inconsistent",
+            ));
+        }
+        let format = source_format(self.format);
+        if format != workspace_source_format(workspace_format) {
+            return Err(inconsistent(
+                "workspace cache source document format is inconsistent",
+            ));
+        }
+        let path = SourcePath::new(self.path)
+            .map_err(|_| invalid("workspace cache source document path is invalid"))?;
+        let confined =
+            ConfinedSourcePath::new(path.clone(), configuration_root).map_err(|error| {
+                invalid(format!(
+                    "workspace cache confined source path is invalid: {error}"
+                ))
+            })?;
+        let raw = cached_source_bytes(source, path.as_str())?.to_vec();
+        let actual_version = SourceContentVersion::from_bytes(&raw);
+        if self.content_version != SourceContentVersionDto::from(actual_version) {
+            return Err(inconsistent(
+                "workspace cache source document version is stale",
+            ));
+        }
+        let occurrences = self
+            .occurrences
+            .into_iter()
+            .map(|occurrence| occurrence.into_occurrence(&document_id, actual_version))
+            .collect::<Result<Vec<_>, _>>()?;
+        SourceDocument::new(
+            document_id,
+            format,
+            module_role(self.module_role),
+            confined,
+            raw,
+            occurrences,
+            match self.completeness {
+                SourceEvidenceCompletenessDto::BslCallableRenameV1 => {
+                    SourceEvidenceCompleteness::BslCallableRenameV1
+                }
+            },
+        )
+        .map_err(|error| {
+            invalid(format!(
+                "workspace cache source document is invalid: {error}"
+            ))
+        })
+    }
+}
+
+impl SourceOccurrenceDto {
+    fn into_occurrence(
+        self,
+        document_id: &SourceDocumentId,
+        actual_version: SourceContentVersion,
+    ) -> Result<SourceOccurrence, WorkspaceCacheCodecError> {
+        let occurrence_document_id = SourceDocumentId::new(
+            entity_id(self.configuration_id)?,
+            entity_id(self.module_id)?,
+        )
+        .map_err(|error| invalid(format!("workspace cache occurrence ID is invalid: {error}")))?;
+        if &occurrence_document_id != document_id
+            || self.content_version != SourceContentVersionDto::from(actual_version)
+        {
+            return Err(inconsistent(
+                "workspace cache occurrence source precondition is inconsistent",
+            ));
+        }
+        let range = SourceByteRange::new(self.start_byte, self.end_byte).map_err(|error| {
+            invalid(format!(
+                "workspace cache occurrence range is invalid: {error}"
+            ))
+        })?;
+        SourceOccurrence::new(
+            occurrence_document_id,
+            actual_version,
+            range,
+            occurrence_kind(self.kind),
+            self.token,
+            self.mapped_target_id.map(entity_id).transpose()?,
+            occurrence_resolution(self.resolution),
+        )
+        .map_err(|error| invalid(format!("workspace cache occurrence is invalid: {error}")))
+    }
+}
+
+impl From<&SourceOccurrence> for SourceOccurrenceDto {
+    fn from(value: &SourceOccurrence) -> Self {
+        Self {
+            configuration_id: value.document_id().configuration_id().as_str().to_owned(),
+            module_id: value.document_id().module_id().as_str().to_owned(),
+            content_version: value.content_version().into(),
+            start_byte: value.range().start_byte(),
+            end_byte: value.range().end_byte(),
+            kind: occurrence_kind_dto(value.kind()),
+            token: value.token().to_owned(),
+            mapped_target_id: value
+                .mapped_target_id()
+                .map(|identity| identity.as_str().to_owned()),
+            resolution: occurrence_resolution_dto(value.resolution()),
+        }
+    }
+}
+
+impl From<SourceContentVersion> for SourceContentVersionDto {
+    fn from(value: SourceContentVersion) -> Self {
+        Self {
+            raw_byte_len: value.raw_byte_len(),
+            digest: value.digest(),
+        }
+    }
+}
+
+fn cached_source_bytes<'source>(
+    source: &'source WorkspaceCacheSource,
+    path: &str,
+) -> Result<&'source [u8], WorkspaceCacheCodecError> {
+    let components = path.split('/').collect::<Vec<_>>();
+    let entry = source
+        .entries
+        .iter()
+        .find(|entry| {
+            entry.path.len() == components.len()
+                && entry
+                    .path
+                    .iter()
+                    .zip(&components)
+                    .all(|(actual, expected)| actual == expected)
+        })
+        .ok_or_else(|| invalid("workspace cache source document is missing from source state"))?;
+    if entry.kind != WorkspaceCacheSourceEntryKind::RegularFile {
+        return Err(invalid(
+            "workspace cache source document is not a regular file",
+        ));
+    }
+    entry
+        .bytes
+        .as_deref()
+        .ok_or_else(|| invalid("workspace cache regular source document has no bytes"))
+}
+
+const fn workspace_source_format(format: WorkspaceFormat) -> SourceFormat {
+    match format {
+        WorkspaceFormat::DesignerXml => SourceFormat::DesignerXml,
+        WorkspaceFormat::Edt | WorkspaceFormat::Extension | WorkspaceFormat::Unknown => {
+            SourceFormat::Edt
+        }
+    }
+}
+
+const fn source_format_dto(format: SourceFormat) -> FormatDto {
+    match format {
+        SourceFormat::Edt => FormatDto::Edt,
+        SourceFormat::DesignerXml => FormatDto::DesignerXml,
+    }
+}
+
+const fn source_format(format: FormatDto) -> SourceFormat {
+    match format {
+        FormatDto::Edt => SourceFormat::Edt,
+        FormatDto::DesignerXml => SourceFormat::DesignerXml,
+    }
+}
+
+const fn module_role_dto(role: BslModuleRole) -> BslModuleRoleDto {
+    match role {
+        BslModuleRole::Object => BslModuleRoleDto::Object,
+        BslModuleRole::Manager => BslModuleRoleDto::Manager,
+        BslModuleRole::Common => BslModuleRoleDto::Common,
+        BslModuleRole::Form => BslModuleRoleDto::Form,
+        BslModuleRole::Command => BslModuleRoleDto::Command,
+    }
+}
+
+const fn module_role(role: BslModuleRoleDto) -> BslModuleRole {
+    match role {
+        BslModuleRoleDto::Object => BslModuleRole::Object,
+        BslModuleRoleDto::Manager => BslModuleRole::Manager,
+        BslModuleRoleDto::Common => BslModuleRole::Common,
+        BslModuleRoleDto::Form => BslModuleRole::Form,
+        BslModuleRoleDto::Command => BslModuleRole::Command,
+    }
+}
+
+const fn occurrence_kind_dto(kind: SourceOccurrenceKind) -> SourceOccurrenceKindDto {
+    match kind {
+        SourceOccurrenceKind::Declaration => SourceOccurrenceKindDto::Declaration,
+        SourceOccurrenceKind::LocalCall => SourceOccurrenceKindDto::LocalCall,
+        SourceOccurrenceKind::QualifiedCall => SourceOccurrenceKindDto::QualifiedCall,
+    }
+}
+
+const fn occurrence_kind(kind: SourceOccurrenceKindDto) -> SourceOccurrenceKind {
+    match kind {
+        SourceOccurrenceKindDto::Declaration => SourceOccurrenceKind::Declaration,
+        SourceOccurrenceKindDto::LocalCall => SourceOccurrenceKind::LocalCall,
+        SourceOccurrenceKindDto::QualifiedCall => SourceOccurrenceKind::QualifiedCall,
+    }
+}
+
+const fn occurrence_resolution_dto(
+    resolution: SourceOccurrenceResolution,
+) -> SourceOccurrenceResolutionDto {
+    match resolution {
+        SourceOccurrenceResolution::Unique => SourceOccurrenceResolutionDto::Unique,
+        SourceOccurrenceResolution::Unresolved => SourceOccurrenceResolutionDto::Unresolved,
+        SourceOccurrenceResolution::Ambiguous => SourceOccurrenceResolutionDto::Ambiguous,
+        SourceOccurrenceResolution::Unsupported => SourceOccurrenceResolutionDto::Unsupported,
+    }
+}
+
+const fn occurrence_resolution(
+    resolution: SourceOccurrenceResolutionDto,
+) -> SourceOccurrenceResolution {
+    match resolution {
+        SourceOccurrenceResolutionDto::Unique => SourceOccurrenceResolution::Unique,
+        SourceOccurrenceResolutionDto::Unresolved => SourceOccurrenceResolution::Unresolved,
+        SourceOccurrenceResolutionDto::Ambiguous => SourceOccurrenceResolution::Ambiguous,
+        SourceOccurrenceResolutionDto::Unsupported => SourceOccurrenceResolution::Unsupported,
+    }
+}
+
 impl ConfigurationDto {
     fn from_snapshot(
+        source: &WorkspaceCacheSource,
         workspace_root: &Path,
         snapshot: &WorkspaceConfigurationSnapshot,
     ) -> Result<Self, WorkspaceCacheCodecError> {
@@ -2187,6 +2588,7 @@ impl ConfigurationDto {
         Ok(Self {
             root: relative_components(workspace_root, snapshot.root_path())?,
             format,
+            source_evidence: SourceEvidenceDto::from_evidence(source, snapshot.source_evidence())?,
             nodes: snapshot.graph().nodes().map(NodeDto::from).collect(),
             edges: snapshot.graph().edges().map(EdgeDto::from).collect(),
             diagnostics: snapshot
@@ -2207,13 +2609,19 @@ impl ConfigurationDto {
     #[allow(clippy::too_many_lines)] // Keeps the ordered ADR-0042 validation gates together.
     fn into_snapshot(
         self,
+        source: &WorkspaceCacheSource,
         workspace_root: &Path,
     ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceCacheCodecError> {
         let root_path = joined_path(workspace_root, &self.root)?;
+        let configuration_root = SourcePath::new(self.root.join("/"))
+            .map_err(|_| invalid("workspace cache Configuration source root is invalid"))?;
         let format = match self.format {
             FormatDto::Edt => WorkspaceFormat::Edt,
             FormatDto::DesignerXml => WorkspaceFormat::DesignerXml,
         };
+        let source_evidence =
+            self.source_evidence
+                .into_evidence(source, &configuration_root, format)?;
 
         let mut graph = SemanticGraph::new();
         let mut previous_node: Option<EntityId> = None;
@@ -2314,6 +2722,7 @@ impl ConfigurationDto {
             &root_path,
             format,
             graph,
+            source_evidence,
             diagnostics,
             ledger,
             total_statistics,
@@ -2329,6 +2738,10 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
+    use oneagent_analysis::refactoring::{
+        NeverCancelledRefactoring, RefactoringFamily, RefactoringRequest, SourceDocument,
+        SourceEvidenceSet, SourceOccurrence, SourceOccurrenceKind,
+    };
     use oneagent_common::EntityName;
     use oneagent_graph::{
         AccessRightPayload, AccessRightRowRestriction, Confidence, DataCompositionFieldPayload,
@@ -2347,6 +2760,7 @@ mod tests {
         MetadataRegisterRecord, MetadataSpecificPayload, WebServiceMetadataPayload,
         WebServiceXdtoPackage, XdtoPackageMetadataPayload,
     };
+    use oneagent_workspace::WorkspaceFormat;
     use tempfile::tempdir;
 
     use super::{
@@ -2400,6 +2814,11 @@ mod tests {
             .expect("tracked EDT and Designer XML fixtures must build")
     }
 
+    fn fixture_source(root: &Path) -> WorkspaceCacheSource {
+        let state = WorkspaceFileState::scan(root).expect("fixture source scan must succeed");
+        WorkspaceCacheSource::try_from(&state).expect("fixture cache source must be valid")
+    }
+
     fn diagnostic_snapshot(root: &Path) -> WorkspaceSnapshot {
         let configuration_root = root.join("configuration");
         let mut graph = SemanticGraph::new();
@@ -2435,6 +2854,12 @@ mod tests {
             &configuration_root,
             oneagent_workspace::WorkspaceFormat::Edt,
             graph,
+            SourceEvidenceSet::new(
+                oneagent_common::EntityId::new("configuration:test")
+                    .expect("configuration ID must be valid"),
+                Vec::new(),
+            )
+            .expect("empty source evidence must be valid"),
             vec![diagnostic],
             SemanticReferenceRequestLedger::new(),
             statistics,
@@ -2475,7 +2900,7 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 5);
+        assert_eq!(envelope.semantic_version, 6);
         assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
@@ -2484,7 +2909,7 @@ mod tests {
     #[test]
     fn mixed_clean_build_round_trip_is_complete_and_byte_deterministic() {
         let root = fixture_root();
-        let source = source();
+        let source = fixture_source(&root);
         let clean = fixture_snapshot(&root);
         assert_eq!(clean.len(), 2, "fixture must cover EDT and Designer XML");
         assert!(
@@ -2504,16 +2929,50 @@ mod tests {
         let reencoded = WorkspaceCacheCodec::encode(&source, &root, &decoded)
             .expect("decoded snapshot must re-encode");
 
+        let edt = clean
+            .configurations()
+            .iter()
+            .find(|configuration| configuration.format() == WorkspaceFormat::Edt)
+            .expect("tracked EDT Configuration must be present");
+        let target = edt
+            .source_evidence()
+            .documents()
+            .iter()
+            .flat_map(SourceDocument::occurrences)
+            .find(|occurrence| {
+                occurrence.kind() == SourceOccurrenceKind::Declaration
+                    && occurrence.token() == "Posting"
+            })
+            .and_then(SourceOccurrence::mapped_target_id)
+            .expect("tracked Posting declaration must map uniquely")
+            .clone();
+        let request = RefactoringRequest::new(
+            RefactoringFamily::BslCallableRenameV1,
+            clean.publication_id(),
+            edt.configuration_id().clone(),
+            target,
+            "PostingRenamed",
+        )
+        .expect("cache planner request must be valid");
+        let cold_plan = clean
+            .plan_refactoring(&request, &NeverCancelledRefactoring)
+            .expect("cold snapshot plan must succeed");
+        let warm_plan = decoded
+            .plan_refactoring(&request, &NeverCancelledRefactoring)
+            .expect("warm snapshot plan must succeed");
+
         assert_eq!(first, second);
         assert_eq!(first, reencoded);
+        assert_eq!(cold_plan, warm_plan);
         assert_eq!(
-            WorkspaceDto::from_snapshot(&root, &clean).expect("clean DTO must build"),
-            WorkspaceDto::from_snapshot(&root, &decoded).expect("decoded DTO must build")
+            WorkspaceDto::from_snapshot(&source, &root, &clean).expect("clean DTO must build"),
+            WorkspaceDto::from_snapshot(&source, &root, &decoded).expect("decoded DTO must build")
         );
         for (expected, actual) in clean.configurations().iter().zip(decoded.configurations()) {
             assert_eq!(expected.configuration_id(), actual.configuration_id());
             assert_eq!(expected.configuration_name(), actual.configuration_name());
             assert_eq!(expected.report(), actual.report());
+            assert_eq!(expected.source_evidence(), actual.source_evidence());
             assert_eq!(
                 expected.graph().nodes().collect::<Vec<_>>(),
                 actual.graph().nodes().collect::<Vec<_>>()
@@ -2526,7 +2985,7 @@ mod tests {
     fn edt_designer_and_mixed_snapshots_each_round_trip() {
         let root = fixture_root();
         let clean = fixture_snapshot(&root);
-        let source = source();
+        let source = fixture_source(&root);
 
         for configuration in clean.configurations() {
             let single = WorkspaceSnapshot::initial(root.clone(), vec![configuration.clone()]);
@@ -2536,17 +2995,6 @@ mod tests {
                 .expect("single-format snapshot must decode");
             assert_eq!(decoded.len(), 1);
             assert_eq!(decoded.configurations()[0].format(), configuration.format());
-
-            let direct_root_bytes =
-                WorkspaceCacheCodec::encode(&source, configuration.root_path(), &single)
-                    .expect("configuration at the Workspace root must encode");
-            let direct_root_decoded =
-                WorkspaceCacheCodec::decode(&direct_root_bytes, &source, configuration.root_path())
-                    .expect("configuration at the Workspace root must decode");
-            assert_eq!(
-                direct_root_decoded.configurations()[0].root_path(),
-                configuration.root_path()
-            );
         }
 
         let mut reordered = clean.configurations().to_vec();
@@ -2938,7 +3386,17 @@ mod tests {
         let mut envelope: EnvelopeDto =
             serde_json::from_slice(&bytes).expect("envelope must parse");
 
+        envelope.semantic_version = 5;
+        let incompatible = serde_json::to_vec(&envelope).expect("test envelope must encode");
+        assert_eq!(
+            WorkspaceCacheCodec::decode(&incompatible, &empty_source, root)
+                .expect_err("previous semantic evidence must be rejected")
+                .kind(),
+            WorkspaceCacheCodecErrorKind::Incompatible
+        );
+
         envelope.schema_version = 2;
+        envelope.semantic_version = 6;
         let incompatible = serde_json::to_vec(&envelope).expect("test envelope must encode");
         assert_eq!(
             WorkspaceCacheCodec::decode(&incompatible, &empty_source, root)
@@ -3067,7 +3525,7 @@ mod tests {
     #[test]
     fn reconstruction_rejects_duplicate_invalid_and_inconsistent_build_evidence() {
         let root = fixture_root();
-        let source = source();
+        let source = fixture_source(&root);
         let clean = fixture_snapshot(&root);
         let bytes = WorkspaceCacheCodec::encode(&source, &root, &clean)
             .expect("clean snapshot must encode");
@@ -3095,6 +3553,21 @@ mod tests {
                 .expect_err("missing edge endpoint must be rejected")
                 .kind(),
             WorkspaceCacheCodecErrorKind::Invalid
+        );
+
+        let mut stale_source: EnvelopeDto =
+            serde_json::from_slice(&bytes).expect("envelope must parse");
+        stale_source.workspace.configurations[0]
+            .source_evidence
+            .documents[0]
+            .content_version
+            .raw_byte_len += 1;
+        let stale_source = canonical_bytes(&mut stale_source);
+        assert_eq!(
+            WorkspaceCacheCodec::decode(&stale_source, &source, &root)
+                .expect_err("stale source manifest must be rejected")
+                .kind(),
+            WorkspaceCacheCodecErrorKind::Inconsistent
         );
 
         let mut invalid_payload: EnvelopeDto =
@@ -3171,10 +3644,12 @@ mod tests {
         let loaded = store.load(&state);
         assert_eq!(loaded.outcome(), WorkspaceCacheLoadOutcome::Hit);
         let loaded = loaded.into_snapshot().expect("hit must retain a snapshot");
+        let source = WorkspaceCacheSource::try_from(&state)
+            .expect("observed cache source must remain valid");
         assert_eq!(
-            WorkspaceDto::from_snapshot(root.path(), &snapshot)
+            WorkspaceDto::from_snapshot(&source, root.path(), &snapshot)
                 .expect("clean snapshot DTO must build"),
-            WorkspaceDto::from_snapshot(root.path(), &loaded)
+            WorkspaceDto::from_snapshot(&source, root.path(), &loaded)
                 .expect("loaded snapshot DTO must build")
         );
 

@@ -15,6 +15,7 @@ Use these sections when relevant:
 - Файлы изменены
 - Поведенческое влияние
 - Валидация
+- Контекст и бюджет
 - Риски и открытые вопросы
 - Suggested Commit Message
 - Repository Safety
@@ -32,3 +33,9 @@ Sections may be omitted only when clearly irrelevant for a small task.
 - State whether `.codex/` was untouched.
 - Distinguish pre-existing changes from task-created changes.
 - Include final `git status --short` output.
+- Report the Context Manifest preflight decision and measured token telemetry
+  when available; use `недоступно` otherwise and never present an estimate as
+  measured usage.
+- List retained large-log artifact paths without copying complete logs.
+- State each status, metric, and validation result once; reference the task
+  ledger instead of repeating it in several sections.

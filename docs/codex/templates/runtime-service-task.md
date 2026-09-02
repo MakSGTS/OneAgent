@@ -10,23 +10,18 @@ slice.
 
 - `docs/codex/profiles/runtime-service-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Runtime and service ownership
 - Lifecycle and state transitions
 - Concurrency and task ownership
 - Cancellation, failure, and shutdown policy
 - Health, readiness, and observability contract, when applicable
 - Transport and client compatibility, when applicable
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

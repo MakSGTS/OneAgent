@@ -10,11 +10,12 @@ or audit evidence.
 
 - `docs/codex/profiles/ai-tool-policy-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Tool identity, request, and argument boundary
 - Actor, scope, and policy input contract
 - Rule precedence and default-deny behavior
@@ -24,12 +25,6 @@ or audit evidence.
 - Audit evidence, ordering, retention, and redaction
 - Deterministic policy and fake-executor oracle
 - Consumer and concrete-tool compatibility
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

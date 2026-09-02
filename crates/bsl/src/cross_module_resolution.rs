@@ -1,6 +1,6 @@
 //! Cross-module resolution of qualified BSL calls.
 
-use crate::{BslCall, BslSymbol};
+use crate::{BslCall, BslSymbol, bsl_name_key};
 use oneagent_common::{EntityId, EntityName};
 use std::collections::BTreeMap;
 
@@ -216,7 +216,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
 
         let module_index = available_modules
             .iter()
-            .map(|module| (normalize(module.module_name().as_str()), module))
+            .map(|module| (bsl_name_key(module.module_name().as_str()), module))
             .collect::<BTreeMap<_, _>>();
 
         let mut resolved = Vec::new();
@@ -237,7 +237,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
                 continue;
             };
 
-            let Some(origin_symbol) = source_index.get(&normalize(source_name.as_str())) else {
+            let Some(origin_symbol) = source_index.get(&bsl_name_key(source_name.as_str())) else {
                 unresolved.push(UnresolvedCrossModuleCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -259,7 +259,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
                 continue;
             };
 
-            let Some(target_module) = module_index.get(&normalize(module_name)) else {
+            let Some(target_module) = module_index.get(&bsl_name_key(module_name)) else {
                 unresolved.push(UnresolvedCrossModuleCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -271,7 +271,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
 
             let destination_index = build_symbol_index(target_module.symbols());
 
-            let Some(destination_symbol) = destination_index.get(&normalize(symbol_name)) else {
+            let Some(destination_symbol) = destination_index.get(&bsl_name_key(symbol_name)) else {
                 unresolved.push(UnresolvedCrossModuleCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -305,7 +305,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
 fn build_symbol_index(symbols: &[BslSymbol]) -> BTreeMap<String, &BslSymbol> {
     symbols
         .iter()
-        .map(|symbol| (normalize(symbol.name().as_str()), symbol))
+        .map(|symbol| (bsl_name_key(symbol.name().as_str()), symbol))
         .collect()
 }
 
@@ -317,10 +317,6 @@ fn split_qualified_target(value: &str) -> Option<(&str, &str)> {
     }
 
     Some((module_name, symbol_name))
-}
-
-fn normalize(value: &str) -> String {
-    value.to_lowercase()
 }
 
 #[cfg(test)]

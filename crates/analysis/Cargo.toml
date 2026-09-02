@@ -9,5 +9,8 @@ oneagent-bsl = { path = "../bsl" }
 oneagent-common = { path = "../common" }
 oneagent-graph = { path = "../graph" }
 
+[dev-dependencies]
+oneagent-metadata = { path = "../metadata" }
+
 [lints]
 workspace = true

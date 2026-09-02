@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 oneagent-bsl = { path = "../../crates/bsl" }
+oneagent-analysis = { path = "../../crates/analysis" }
 oneagent-common = { path = "../../crates/common" }
 oneagent-graph = { path = "../../crates/graph" }
 oneagent-metadata = { path = "../../crates/metadata" }

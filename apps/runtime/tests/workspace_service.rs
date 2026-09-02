@@ -4,12 +4,18 @@ use std::future::pending;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use oneagent_analysis::refactoring::{
+    NeverCancelledRefactoring, RefactoringCancellationSignal, RefactoringErrorKind,
+    RefactoringFamily, RefactoringRequest, SourceOccurrenceKind, WorkspacePublicationId,
+};
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, HttpService, LifecycleState, RuntimeConfig,
     RuntimeError, RuntimeErrorKind, RuntimeService, ServiceContext, ServiceStartFuture,
     ServiceTask, WorkspaceBuildError, WorkspaceBuildErrorKind, WorkspaceService, WorkspaceSnapshot,
+    WorkspaceSnapshotBuilder,
 };
 use oneagent_workspace::WorkspaceFormat;
 use tempfile::tempdir;
@@ -20,6 +26,14 @@ use tokio::time::timeout;
 
 const DESIGNER_ID: &str = "408a41e7-907a-4fb3-8999-83d1e8b6e093";
 const EDT_ID: &str = "50000000-0000-0000-0000-000000000000";
+
+struct PlannerCancellation(AtomicBool);
+
+impl RefactoringCancellationSignal for PlannerCancellation {
+    fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct TestConfigurationProvider {
@@ -265,6 +279,40 @@ fn copy_fixture() -> tempfile::TempDir {
     temporary
 }
 
+fn refactoring_request(
+    snapshot: &WorkspaceSnapshot,
+    configuration_id: &str,
+    current_name: &str,
+    desired_name: &str,
+    publication_id: WorkspacePublicationId,
+) -> RefactoringRequest {
+    let configuration_id = oneagent_common::EntityId::new(configuration_id)
+        .expect("fixture Configuration ID must be valid");
+    let configuration = snapshot
+        .configuration(&configuration_id)
+        .expect("fixture Configuration must be published");
+    let target = configuration
+        .source_evidence()
+        .documents()
+        .iter()
+        .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+        .find(|occurrence| {
+            occurrence.kind() == SourceOccurrenceKind::Declaration
+                && occurrence.token() == current_name
+        })
+        .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+        .expect("fixture declaration must map uniquely")
+        .clone();
+    RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        publication_id,
+        configuration_id,
+        target,
+        desired_name,
+    )
+    .expect("fixture refactoring request must be valid")
+}
+
 fn workspace_source(error: &RuntimeError) -> &WorkspaceBuildError {
     std::error::Error::source(error)
         .and_then(|source| source.downcast_ref::<WorkspaceBuildError>())
@@ -368,6 +416,159 @@ async fn public_workspace_builds_both_production_formats_deterministically() {
     assert_eq!(first.configurations[1].reference_total, 5);
     assert_eq!(first.configurations[1].reference_resolved, 2);
     assert_eq!(first.configurations[1].reference_unresolved, 3);
+}
+
+#[test]
+fn public_workspace_plans_repeatedly_from_retained_edt_and_designer_publications() {
+    let root = copy_fixture();
+    let snapshot = Arc::new(
+        WorkspaceSnapshotBuilder::new()
+            .build(root.path())
+            .expect("tracked Workspace fixture must build with source evidence"),
+    );
+    assert_eq!(snapshot.len(), 2);
+    assert!(snapshot.configurations().iter().all(|configuration| {
+        configuration.source_evidence().configuration_id() == configuration.configuration_id()
+            && !configuration.source_evidence().documents().is_empty()
+    }));
+
+    let edt_request = refactoring_request(
+        &snapshot,
+        EDT_ID,
+        "Posting",
+        "PostingRenamed",
+        snapshot.publication_id(),
+    );
+    let designer_request = refactoring_request(
+        &snapshot,
+        DESIGNER_ID,
+        "FillSecurityCollection",
+        "FillSecurityCollectionRenamed",
+        snapshot.publication_id(),
+    );
+    let edt_plan = snapshot
+        .plan_refactoring(&edt_request, &NeverCancelledRefactoring)
+        .expect("EDT Workspace plan must succeed");
+    let designer_plan = snapshot
+        .plan_refactoring(&designer_request, &NeverCancelledRefactoring)
+        .expect("Designer Workspace plan must succeed");
+    assert_eq!(edt_plan.plan().operations().len(), 1);
+    assert_eq!(designer_plan.plan().operations().len(), 1);
+    assert_eq!(edt_plan.preview().entries().len(), 1);
+    assert_eq!(designer_plan.preview().entries().len(), 1);
+    assert_eq!(
+        snapshot
+            .plan_refactoring(&edt_request, &NeverCancelledRefactoring)
+            .expect("repeated EDT Workspace plan must succeed"),
+        edt_plan
+    );
+    assert_eq!(
+        snapshot
+            .plan_refactoring(&designer_request, &NeverCancelledRefactoring)
+            .expect("repeated Designer Workspace plan must succeed"),
+        designer_plan
+    );
+
+    let edt_path = root
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let designer_path = root
+        .path()
+        .join("designer/CommonModules/DynamicSecurityOverridable/Ext/Module.bsl");
+    let edt_source = fs::read(&edt_path).expect("EDT source must be readable before mutation");
+    fs::write(
+        &edt_path,
+        String::from_utf8(edt_source.clone())
+            .expect("EDT fixture must be UTF-8")
+            .replace(
+                "Procedure Posting()",
+                "Procedure Posting() // changed after publication",
+            ),
+    )
+    .expect("EDT source mutation must succeed");
+    fs::remove_file(&designer_path).expect("Designer source removal must succeed");
+    let renamed_edt_path = edt_path.with_extension("published-away");
+    fs::rename(&edt_path, &renamed_edt_path)
+        .expect("published EDT source must become unreadable at its original path");
+    assert!(fs::read(&edt_path).is_err());
+    assert!(fs::read(&designer_path).is_err());
+
+    assert_eq!(
+        snapshot
+            .plan_refactoring(&edt_request, &NeverCancelledRefactoring)
+            .expect("retained EDT publication must not reread source"),
+        edt_plan
+    );
+    assert_eq!(
+        snapshot
+            .plan_refactoring(&designer_request, &NeverCancelledRefactoring)
+            .expect("retained Designer publication must not reread source"),
+        designer_plan
+    );
+}
+
+#[test]
+fn public_workspace_refactoring_failures_are_atomic_and_preserve_the_snapshot() {
+    let root = copy_fixture();
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(root.path())
+        .expect("tracked Workspace fixture must build with source evidence");
+    let request = refactoring_request(
+        &snapshot,
+        EDT_ID,
+        "Posting",
+        "PostingRenamed",
+        snapshot.publication_id(),
+    );
+    let before = snapshot
+        .plan_refactoring(&request, &NeverCancelledRefactoring)
+        .expect("baseline plan must succeed");
+
+    let cancelled = PlannerCancellation(AtomicBool::new(true));
+    let cancelled_error = snapshot
+        .plan_refactoring(&request, &cancelled)
+        .expect_err("cancelled Workspace planning must expose no result");
+    assert_eq!(cancelled_error.kind(), RefactoringErrorKind::Cancelled);
+
+    let stale_request = refactoring_request(
+        &snapshot,
+        EDT_ID,
+        "Posting",
+        "PostingRenamed",
+        WorkspacePublicationId::new(snapshot.publication_id().get() + 1)
+            .expect("successor publication ID must be valid"),
+    );
+    let stale_error = snapshot
+        .plan_refactoring(&stale_request, &NeverCancelledRefactoring)
+        .expect_err("stale Workspace publication must expose no result");
+    assert_eq!(
+        stale_error.kind(),
+        RefactoringErrorKind::PublicationMismatch
+    );
+
+    let missing_request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        snapshot.publication_id(),
+        oneagent_common::EntityId::new("configuration.missing")
+            .expect("missing Configuration ID must be valid"),
+        oneagent_common::EntityId::new("target.missing").expect("missing target ID must be valid"),
+        "Renamed",
+    )
+    .expect("missing Configuration request shape must be valid");
+    let missing_error = snapshot
+        .plan_refactoring(&missing_request, &NeverCancelledRefactoring)
+        .expect_err("missing Workspace Configuration must expose no result");
+    assert_eq!(
+        missing_error.kind(),
+        RefactoringErrorKind::ConfigurationNotFound
+    );
+
+    assert_eq!(
+        snapshot
+            .plan_refactoring(&request, &NeverCancelledRefactoring)
+            .expect("valid Workspace state must survive failed requests"),
+        before
+    );
 }
 
 #[tokio::test]

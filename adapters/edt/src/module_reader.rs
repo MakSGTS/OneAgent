@@ -1,10 +1,12 @@
 //! Reader for module files inside EDT metadata objects.
 
+use oneagent_analysis::refactoring::MAX_SOURCE_DOCUMENT_BYTES;
 use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// Supported EDT module file kinds.
@@ -129,6 +131,7 @@ pub struct EdtModuleDescriptor {
     name: EntityName,
     kind: EdtModuleKind,
     path: PathBuf,
+    raw_source: Option<Vec<u8>>,
 }
 
 impl EdtModuleDescriptor {
@@ -140,6 +143,23 @@ impl EdtModuleDescriptor {
             name,
             kind,
             path,
+            raw_source: None,
+        }
+    }
+
+    pub(crate) const fn new_with_raw_source(
+        id: EntityId,
+        name: EntityName,
+        kind: EdtModuleKind,
+        path: PathBuf,
+        raw_source: Vec<u8>,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            kind,
+            path,
+            raw_source: Some(raw_source),
         }
     }
 
@@ -165,6 +185,12 @@ impl EdtModuleDescriptor {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Returns exact bytes retained by production discovery.
+    #[must_use]
+    pub fn raw_source(&self) -> Option<&[u8]> {
+        self.raw_source.as_deref()
     }
 }
 
@@ -219,15 +245,9 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
 
         for (file_name, kind) in candidates {
             let path = object_directory.join(file_name);
-
-            if !path.is_file() {
+            let Some(raw_source) = read_optional_module(&path)? else {
                 continue;
-            }
-
-            fs::read_to_string(&path).map_err(|source| EdtModuleError::ReadFile {
-                path: path.clone(),
-                source,
-            })?;
+            };
 
             let id = EntityId::new(format!("{}:{}", object_id.as_str(), kind.as_str()))
                 .map_err(|_| EdtModuleError::InvalidIdentifier)?;
@@ -245,7 +265,9 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
                 }
             };
 
-            modules.push(EdtModuleDescriptor::new(id, name, kind, path));
+            modules.push(EdtModuleDescriptor::new_with_raw_source(
+                id, name, kind, path, raw_source,
+            ));
         }
 
         Ok(modules)
@@ -448,15 +470,17 @@ fn classify_owned_layout(
     alternate_file_name: &str,
 ) -> Result<EdtModuleLayoutObservation, EdtModuleError> {
     let path = directory.join(expected_file_name);
-    if path.is_file() {
-        fs::read_to_string(&path).map_err(|source| EdtModuleError::ReadFile {
-            path: path.clone(),
-            source,
-        })?;
+    if let Some(raw_source) = read_optional_module(&path)? {
         let id = EntityId::new(format!("{}:{}", owner_id.as_str(), module_kind.as_str()))
             .map_err(|_| EdtModuleError::InvalidIdentifier)?;
         let name = EntityName::new(module_name).map_err(|_| EdtModuleError::InvalidName)?;
-        let module = EdtModuleDescriptor::new(id, name, module_kind, path.clone());
+        let module = EdtModuleDescriptor::new_with_raw_source(
+            id,
+            name,
+            module_kind,
+            path.clone(),
+            raw_source,
+        );
         return Ok(EdtModuleLayoutObservation {
             owner_id: Some(owner_id.clone()),
             owner_name: Some(owner_name.clone()),
@@ -562,6 +586,93 @@ fn sort_observations(observations: &mut [EdtModuleLayoutObservation]) {
     });
 }
 
+fn read_optional_module(path: &Path) -> Result<Option<Vec<u8>>, EdtModuleError> {
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(EdtModuleError::ReadFile {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+    };
+    if path_metadata.file_type().is_symlink() {
+        return Err(EdtModuleError::SymlinkArtifact(path.to_path_buf()));
+    }
+    if !path_metadata.file_type().is_file() {
+        return Err(EdtModuleError::ArtifactNotRegularFile(path.to_path_buf()));
+    }
+    if path_metadata.len() > MAX_SOURCE_DOCUMENT_BYTES as u64 {
+        return Err(EdtModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: path_metadata.len(),
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        });
+    }
+
+    let mut file = fs::File::open(path).map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let before = file.metadata().map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let capacity = usize::try_from(before.len())
+        .ok()
+        .filter(|capacity| *capacity <= MAX_SOURCE_DOCUMENT_BYTES)
+        .ok_or_else(|| EdtModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: before.len(),
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        })?;
+    let mut raw_source = Vec::with_capacity(capacity);
+    file.by_ref()
+        .take(MAX_SOURCE_DOCUMENT_BYTES as u64 + 1)
+        .read_to_end(&mut raw_source)
+        .map_err(|source| EdtModuleError::ReadFile {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    let captured_len = u64::try_from(raw_source.len()).unwrap_or(u64::MAX);
+    if raw_source.len() > MAX_SOURCE_DOCUMENT_BYTES {
+        return Err(EdtModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: captured_len,
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        });
+    }
+    let after = fs::symlink_metadata(path).map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if source_metadata_changed(&before, &after) || captured_len != after.len() {
+        return Err(EdtModuleError::ChangedDuringCapture(path.to_path_buf()));
+    }
+    std::str::from_utf8(&raw_source).map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
+    })?;
+    Ok(Some(raw_source))
+}
+
+fn source_metadata_changed(before: &fs::Metadata, after: &fs::Metadata) -> bool {
+    let changed = !after.file_type().is_file()
+        || after.file_type().is_symlink()
+        || before.len() != after.len()
+        || before.modified().ok() != after.modified().ok();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        changed || before.dev() != after.dev() || before.ino() != after.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        changed
+    }
+}
+
 /// Error produced while reading EDT modules.
 #[derive(Debug)]
 pub enum EdtModuleError {
@@ -579,6 +690,21 @@ pub enum EdtModuleError {
         /// Underlying I/O error.
         source: std::io::Error,
     },
+    /// A known module path is a symlink.
+    SymlinkArtifact(PathBuf),
+    /// A known module path is not a regular file.
+    ArtifactNotRegularFile(PathBuf),
+    /// A module exceeds the inclusive raw source bound.
+    SourceBoundExceeded {
+        /// Module path.
+        path: PathBuf,
+        /// Observed byte count.
+        actual: u64,
+        /// Accepted maximum.
+        maximum: usize,
+    },
+    /// A module changed while exact bytes were captured.
+    ChangedDuringCapture(PathBuf),
     /// A module identifier could not be created.
     InvalidIdentifier,
     /// A module name could not be created.
@@ -602,6 +728,28 @@ impl Display for EdtModuleError {
                     path.display()
                 )
             }
+            Self::SymlinkArtifact(path) => {
+                write!(formatter, "EDT module is a symlink: {}", path.display())
+            }
+            Self::ArtifactNotRegularFile(path) => write!(
+                formatter,
+                "EDT module is not a regular file: {}",
+                path.display()
+            ),
+            Self::SourceBoundExceeded {
+                path,
+                actual,
+                maximum,
+            } => write!(
+                formatter,
+                "EDT module {} exceeds source byte bound: actual={actual}, maximum={maximum}",
+                path.display()
+            ),
+            Self::ChangedDuringCapture(path) => write!(
+                formatter,
+                "EDT module changed during capture: {}",
+                path.display()
+            ),
             Self::InvalidIdentifier => formatter.write_str("EDT module identifier is invalid"),
             Self::InvalidName => formatter.write_str("EDT module name is invalid"),
         }
@@ -612,7 +760,12 @@ impl std::error::Error for EdtModuleError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::ReadDirectory { source, .. } | Self::ReadFile { source, .. } => Some(source),
-            Self::InvalidIdentifier | Self::InvalidName => None,
+            Self::SymlinkArtifact(_)
+            | Self::ArtifactNotRegularFile(_)
+            | Self::SourceBoundExceeded { .. }
+            | Self::ChangedDuringCapture(_)
+            | Self::InvalidIdentifier
+            | Self::InvalidName => None,
         }
     }
 }
@@ -623,7 +776,20 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
-    use super::{EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader};
+    use super::{
+        EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader, source_metadata_changed,
+    };
+
+    #[test]
+    fn changed_during_capture_metadata_is_rejected() {
+        let root = tempdir().expect("temporary directory must be created");
+        let path = root.path().join("Module.bsl");
+        fs::write(&path, "Procedure A()\nEndProcedure\n").expect("source must be written");
+        let before = fs::metadata(&path).expect("initial metadata must be readable");
+        fs::write(&path, "Procedure Changed()\nEndProcedure\n").expect("source must change");
+        let after = fs::metadata(&path).expect("changed metadata must be readable");
+        assert!(source_metadata_changed(&before, &after));
+    }
 
     #[test]
     fn reads_known_module_files() {

@@ -9,14 +9,14 @@ diff, architecture decision, or completed capability.
 
 - `docs/codex/profiles/review.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
 - Review target
 - Reviewed baseline / commit or diff range
-- Scope
-- Excluded
 - Review Criteria
 - Acceptance evidence matrix, when the review is a completion gate
 - Independent reviewer contract and output, for Sprint 27 or later integration
@@ -25,9 +25,6 @@ diff, architecture decision, or completed capability.
   applies
 - Primary/reviewer evidence reconciliation, when independent review applies
 - Authorized review outputs and state transition, when changes are requested
-- Task-specific Validation, if any
-- Suggested commit message, when review outputs are explicitly authorized
-  (recommendation only)
 
 ## Additional acceptance requirements
 
@@ -39,22 +36,9 @@ diff, architecture decision, or completed capability.
   reviewed change.
 - For a sprint, release, or capability completion gate, issue one explicit
   decision: `pass`, `pass with non-blocking follow-ups`, or `blocked`.
-- For a Sprint 27 or later integration review, complete the independent
-  fresh-context read-only reviewer procedure in
-  `docs/codex/workflows/review.md`. Treat reviewer unavailability, mutation,
-  incomplete output, missing consistency verification, or unresolved evidence
-  disagreement as blocking.
-- State that the current user's invocation of the review task explicitly
-  authorizes exactly one reviewer under that procedure. Launch it automatically
-  when the review gate is reached and do not request separate confirmation.
-  Keep every other subagent or side effect unauthorized unless the current user
-  instruction grants it separately.
-- Do not disclose an expected decision or the implementation agent's
-  conclusions to the independent reviewer. Give it the exact range,
-  authorities, criteria, exclusions, validation matrix, and output schema.
-- Do not create a review artifact or change sprint state before the independent
-  reviewer returns. The final decision must not be less severe than the
-  reviewer's recommendation.
+- When independent review applies, follow
+  `docs/codex/workflows/review.md` without copying its authorization, input,
+  output, reconciliation, or consistency rules into the child prompt.
 - Base a completion decision on executed evidence for every applicable
   acceptance criterion, not on implementation claims alone.
 - Keep review artifact creation and Roadmap state transitions explicit and

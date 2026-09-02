@@ -6,6 +6,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use oneagent_analysis::change_impact::ConfigurationImpactKind;
+use oneagent_analysis::refactoring::{
+    NeverCancelledRefactoring, RefactoringErrorKind, RefactoringFamily, RefactoringRequest,
+    SourceContentVersion, SourceOccurrenceKind, WorkspacePublicationId,
+};
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GraphQueryService, HttpService,
     LifecycleState, RuntimeConfig, WorkspaceChangeImpact, WorkspaceService, WorkspaceSnapshot,
@@ -72,6 +76,57 @@ fn copy_tree(source: &Path, destination: &Path) {
             fs::copy(&source_path, &destination_path).expect("fixture file must be copied");
         }
     }
+}
+
+fn posting_request(
+    snapshot: &WorkspaceSnapshot,
+    publication_id: WorkspacePublicationId,
+) -> RefactoringRequest {
+    let configuration_id =
+        oneagent_common::EntityId::new(EDT_ID).expect("EDT Configuration ID must be valid");
+    let configuration = snapshot
+        .configuration(&configuration_id)
+        .expect("EDT Configuration must be published");
+    let target = configuration
+        .source_evidence()
+        .documents()
+        .iter()
+        .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+        .find(|occurrence| {
+            occurrence.kind() == SourceOccurrenceKind::Declaration
+                && occurrence.token() == "Posting"
+        })
+        .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+        .expect("Posting declaration must map uniquely")
+        .clone();
+    RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        publication_id,
+        configuration_id,
+        target,
+        "PostingRenamed",
+    )
+    .expect("Posting refactoring request must be valid")
+}
+
+fn posting_source_version(snapshot: &WorkspaceSnapshot) -> SourceContentVersion {
+    let configuration_id =
+        oneagent_common::EntityId::new(EDT_ID).expect("EDT Configuration ID must be valid");
+    snapshot
+        .configuration(&configuration_id)
+        .expect("EDT Configuration must be published")
+        .source_evidence()
+        .documents()
+        .iter()
+        .find(|document| {
+            document
+                .path()
+                .path()
+                .as_str()
+                .ends_with("Documents/RefundOfPaymentByOrder/ObjectModule.bsl")
+        })
+        .expect("Posting source document must be retained")
+        .content_version()
 }
 
 fn replace_exact(path: &Path, before: &str, after: &str) {
@@ -310,6 +365,11 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         wire_configuration_names(&configuration_list(address).await),
         ["DNSWorldEdition", "WritesFixture"]
     );
+    let initial_refactoring_request = posting_request(&initial, initial.publication_id());
+    let initial_source_version = posting_source_version(&initial);
+    let initial_plan = initial
+        .plan_refactoring(&initial_refactoring_request, &NeverCancelledRefactoring)
+        .expect("initial published source evidence must produce a plan");
 
     replace_exact(
         &root.path().join("designer/Configuration.xml"),
@@ -326,8 +386,15 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         "<name>WritesFixture</name>",
         "<name>WritesWatched</name>",
     );
+    let edt_module = root
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let mut edt_source = fs::read_to_string(&edt_module).expect("EDT module must be readable");
+    edt_source.push('\n');
+    fs::write(&edt_module, edt_source).expect("EDT module source version must change");
     let modified_snapshot = wait_for_snapshot(&mut snapshots, |snapshot| {
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesWatched"]
+            && posting_source_version(snapshot) != initial_source_version
     })
     .await;
     let modified_impact = modified_snapshot
@@ -356,6 +423,28 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         wire_configuration_names(&configuration_list(address).await),
         ["DNSWorldWatched", "WritesWatched"]
     );
+    let stale_error = modified_snapshot
+        .plan_refactoring(&initial_refactoring_request, &NeverCancelledRefactoring)
+        .expect_err("successor publication must reject the old request");
+    assert_eq!(
+        stale_error.kind(),
+        RefactoringErrorKind::PublicationMismatch
+    );
+    assert_eq!(
+        initial
+            .plan_refactoring(&initial_refactoring_request, &NeverCancelledRefactoring)
+            .expect("retained predecessor Arc must remain independently plannable"),
+        initial_plan
+    );
+    let successor_request = posting_request(&modified_snapshot, modified_snapshot.publication_id());
+    let successor_plan = modified_snapshot
+        .plan_refactoring(&successor_request, &NeverCancelledRefactoring)
+        .expect("successor source evidence must produce a fresh plan");
+    assert_ne!(
+        posting_source_version(&modified_snapshot),
+        initial_source_version
+    );
+    assert_ne!(successor_plan.plan().id(), initial_plan.plan().id());
     let followed_up = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.attempt() == first_rebuild.attempt() + 1

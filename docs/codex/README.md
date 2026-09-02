@@ -1,548 +1,174 @@
 # Codex Framework
 
-The Codex Framework stores stable, reusable instructions for OneAgent Codex
-tasks inside the repository. It exists to keep future task prompts short and
-declarative without weakening repository safety, architecture discipline,
-validation quality, or reporting standards.
+The Codex Framework stores stable reusable instructions for OneAgent tasks.
+Its goal is to keep executable prompts small without weakening repository
+safety, accepted architecture, validation, or reporting.
 
-`.codex/` is not part of this framework. Ordinary repository tasks must not
-modify `.codex/`, global Codex configuration, or local Codex runtime state.
+`.codex/`, global Codex configuration, and local runtime state are outside this
+framework and must not be modified by ordinary repository tasks.
 
-## Why this framework exists
-
-OneAgent tasks repeatedly need the same safety rules, investigation steps,
-Change Contract, validation discipline, final reporting, and workflow-specific
-execution rules. Those permanent rules belong in version-controlled framework
-modules, not in every prompt.
-
-A normal task prompt should contain only task-specific information: selected
-profile, selected template, authoritative task documents, scope, exclusions,
-acceptance criteria, and task-specific validation additions.
-
-## Layer responsibilities
-
-### Core modules
-
-`docs/codex/core/` contains permanent rules shared by most tasks:
-
-- repository safety;
-- repository investigation;
-- Change Contract;
-- validation;
-- final report.
-
-Core modules must remain independent from profiles, templates, and individual
-task prompts.
-
-### Workflow modules
-
-`docs/codex/workflows/` defines reusable execution behavior for recurring
-technical workflows:
-
-- architecture;
-- implementation;
-- context engine;
-- diagnostics engine;
-- IDE and extension integration;
-- graph model;
-- graph emission;
-- semantic index;
-- parser;
-- persistent state;
-- runtime service;
-- source adapter;
-- review.
-
-Workflow modules describe how a task is executed. They must not depend on
-individual profiles or task prompts.
-
-### Profiles
-
-`docs/codex/profiles/` defines standard combinations of Core and Workflow
-modules for recurring task families. Profiles prevent ordinary prompts from
-listing the same framework modules repeatedly.
-
-A profile states its purpose, required Core modules, required Workflow modules,
-and task-family expectations that are not owned by Core or Workflow modules.
-
-### Templates
-
-`docs/codex/templates/` defines reusable task and output contracts. Templates
-specify recurring structure such as required task-specific sections, additional
-acceptance requirements, additional report sections, and additional validation.
-
-Templates must not duplicate repository safety, generic investigation, generic
-validation, generic final-report rules, or generic implementation workflow.
-
-### Task prompts
-
-Task prompts are the only layer that contains concrete task-specific scope and
-acceptance criteria. Future prompts should be concise and should reference the
-smallest sufficient profile and template combination.
-
-A stored task prompt is not a live repository baseline. After its task is
-completed, treat its `HEAD`, counts, status, and implementation inventory as
-historical execution context. Prepare new tasks from the current repository,
-accepted architecture, and reusable framework modules instead of cloning an old
-prompt unchanged.
-
-## Directory structure
+## Layer model
 
 ```text
-docs/codex/
-  README.md
-  core/
-    change-contract.md
-    final-report.md
-    repository-investigation.md
-    repository-safety.md
-    validation.md
-  workflows/
-    ai-tool-policy.md
-    architecture.md
-    context-engine.md
-    diagnostics-engine.md
-    git-change-adapter.md
-    ide-extension.md
-    graph-emission.md
-    graph-model.md
-    implementation.md
-    llm-provider.md
-    mcp-protocol.md
-    parser.md
-    persistent-state.md
-    review.md
-    rules-engine.md
-    runtime-service.md
-    semantic-index.md
-    sequential-sprint-execution.md
-    source-adapter.md
-  profiles/
-    ai-tool-policy-implementation.md
-    architecture.md
-    context-engine-implementation.md
-    diagnostics-engine-implementation.md
-    git-change-adapter-implementation.md
-    graph-implementation.md
-    ide-extension-implementation.md
-    implementation.md
-    investigation.md
-    llm-provider-implementation.md
-    mcp-protocol-implementation.md
-    parser-implementation.md
-    persistent-state-implementation.md
-    review.md
-    rules-engine-implementation.md
-    runtime-service-implementation.md
-    semantic-index-implementation.md
-    source-adapter-implementation.md
-  templates/
-    ai-tool-policy-task.md
-    architecture-task.md
-    context-engine-task.md
-    diagnostics-engine-task.md
-    git-change-adapter-task.md
-    graph-emission-task.md
-    graph-model-task.md
-    ide-extension-task.md
-    implementation-task.md
-    investigation-task.md
-    llm-provider-task.md
-    mcp-protocol-task.md
-    parser-task.md
-    persistent-state-task.md
-    review-task.md
-    rules-engine-task.md
-    runtime-service-task.md
-    semantic-index-task.md
-    sprint-execution-loop.md
-    sprint-planning-task.md
-    source-adapter-task.md
+Current user instruction
+    -> applicable AGENTS.md
+        -> accepted ADRs and architecture
+            -> Profile: composes Core + Workflows
+                -> Base Template + specialized Template
+                    -> child prompt: concrete task + Context Manifest
 ```
 
-## Dependency model
+| Layer | Owner |
+|---|---|
+| `core/` | Permanent safety, investigation, context, validation, and report rules |
+| `workflows/` | Reusable execution behavior |
+| `profiles/` | Standard Core and Workflow compositions plus family invariants |
+| `templates/task-prompt.md` | Common Prompt Contract v2 child structure |
+| specialized `templates/` | Task-family fields and evidence additions |
+| `prompts/` | Concrete scope, authorities, prerequisites, acceptance, and deltas |
 
-```text
-Task Prompt
-    |
-    +--> Profile
-    |      |
-    |      +--> Core modules
-    |      +--> Workflow modules
-    |
-    +--> Template
-    |
-    +--> Authoritative ADRs / task-specific docs
-```
+State each instruction once in its canonical owner. Profiles compose rather
+than copy modules. Specialized Templates add only family-specific requirements.
+Child prompts do not copy permanent safety, validation, reporting, review, or
+context rules.
 
-Lower-level framework modules must not depend on individual task prompts. Core
-modules must remain independent from Profiles and Templates. Workflows must not
-depend on individual Profiles. Profiles may compose Core and Workflow modules.
-Templates may reference Profiles, Core, and Workflows where useful, but must not
-duplicate their content.
-
-## Precedence model
+## Precedence
 
 From highest to lowest authority:
 
 1. explicit current user instruction;
 2. applicable `AGENTS.md`;
 3. accepted ADRs and authoritative architecture documents;
-4. selected Codex Framework Profile, Core, Workflow, and Template modules;
-5. current task prompt;
-6. local implementation conventions inferred from nearby code and tests.
-
-The task prompt selects framework modules and supplies task-specific scope,
-exclusions, acceptance criteria, and validation additions. The task prompt must
-not silently override repository safety rules. Task-specific acceptance criteria
-may refine the framework, but contradictions must be reported instead of guessed
-through.
-
-The Codex Framework does not override applicable `AGENTS.md` or accepted ADRs.
-
-## Canonical prompt rules
-
-1. Future prompts must be concise.
-2. Permanent rules belong in Core modules.
-3. Repeated execution behavior belongs in Workflow modules.
-4. Repeated module combinations belong in Profiles.
-5. Repeated task/output structure belongs in Templates.
-6. Concrete task details belong only in the Task Prompt.
-7. Accepted ADRs are referenced, not restated.
-8. Task prompts must not duplicate framework text merely to be self-contained.
-9. Prompts are written in English.
-10. All user-visible Codex reports are written in Russian.
-11. A task should reference the smallest sufficient profile/template combination.
-12. Task-specific validation supplements framework validation; it does not
-    restate it.
-13. Task-specific exclusions supplement repository safety rules; they do not
-    copy them.
-14. If a reusable rule appears repeatedly in task prompts, move it into the
-    appropriate framework layer instead of continuing duplication.
-15. A suggested commit message is planning metadata only. It does not authorize
-    staging or committing. Include a commit action only when the current user
-    instruction explicitly authorizes it consistently with Repository Safety.
-16. Historical `HEAD` values, coverage counts, and repository baselines are
-    context, not live evidence. Recheck every mutable fact before using it to
-    select or execute a new task.
-17. Every task prompt declares its prerequisites or explicitly states that it
-    has none. Enforce the required gate before implementation.
-18. Stored prompt text does not permanently authorize staging or committing.
-    Resolve commit authorization from the current user instruction that launches
-    execution.
-
-## Choosing a profile
-
-- Use `docs/codex/profiles/ai-tool-policy-implementation.md` for
-  source-independent tool authorization, side-effect classification,
-  confirmation, execution gating, failure containment, and audit evidence.
-- Use `docs/codex/profiles/implementation.md` for accepted implementation work
-  that does not need graph- or parser-specific behavior.
-- Use `docs/codex/profiles/graph-implementation.md` for graph model or graph
-  emission implementation tasks.
-- Use `docs/codex/profiles/semantic-index-implementation.md` for repeated
-  complete-snapshot or incremental Semantic Index implementation tasks.
-- Use `docs/codex/profiles/context-engine-implementation.md` for deterministic
-  semantic context selection, budgeting, assembly, explanation, rendering, and
-  reproducible evaluation tasks.
-- Use `docs/codex/profiles/diagnostics-engine-implementation.md` for
-  source-independent diagnostic identity, orchestration, suppression, bounded
-  reporting, immutable snapshot composition, and diagnostic projections.
-- Use `docs/codex/profiles/git-change-adapter-implementation.md` for bounded
-  Git repository change-set identity, endpoint and state-layer validation,
-  deterministic normalization, path confinement, and Workspace change-input
-  integration.
-- Use `docs/codex/profiles/rules-engine-implementation.md` for
-  source-independent rule identity, registration, dependency validation,
-  configuration, deterministic execution, result production, and diagnostic
-  integration.
-- Use `docs/codex/profiles/ide-extension-implementation.md` for editor extension
-  build, packaging, activation, configuration, Runtime connectivity, UI state,
-  extension-host lifecycle, and integration evidence.
-- Use `docs/codex/profiles/llm-provider-implementation.md` for provider-neutral
-  LLM contracts, capability discovery, provider adapters, secrets, execution
-  policy, error mapping, and provider conformance tasks.
-- Use `docs/codex/profiles/mcp-protocol-implementation.md` for MCP protocol,
-  server, capability, transport, compatibility, and conformance tasks.
-- Use `docs/codex/profiles/parser-implementation.md` for real source parser
-  tasks.
-- Use `docs/codex/profiles/source-adapter-implementation.md` for multi-artifact
-  discovery, assembly, mapping, or cross-adapter conformance implementation.
-- Use `docs/codex/profiles/persistent-state-implementation.md` for persisted
-  schemas, storage, invalidation, compatibility, migration, corruption, or
-  recovery implementation.
-- Use `docs/codex/profiles/runtime-service-implementation.md` for long-running
-  service lifecycle, Runtime-owned concurrency, transport adapters, health, or
-  supported client implementation.
-- Use `docs/codex/profiles/architecture.md` for architecture-only work and ADRs.
-- Use `docs/codex/profiles/investigation.md` for read-only evidence gathering.
-- Use `docs/codex/profiles/review.md` for review-only tasks.
-
-Do not create or select a broader profile when a narrower profile is sufficient.
-Do not introduce a new profile unless repeated tasks need a distinct reusable
-module composition.
-
-## Choosing a template
-
-- Use `docs/codex/templates/ai-tool-policy-task.md` for tool requests,
-  authorization, side-effect classification, confirmation, execution gating,
-  terminal outcomes, or audit evidence.
-- Use `docs/codex/templates/implementation-task.md` for general implementation
-  task contracts.
-- Use `docs/codex/templates/investigation-task.md` for read-only evidence
-  gathering.
-- Use `docs/codex/templates/graph-model-task.md` for public graph model changes.
-- Use `docs/codex/templates/graph-emission-task.md` for semantic graph producer
-  emission.
-- Use `docs/codex/templates/semantic-index-task.md` for complete-snapshot or
-  incremental Semantic Index work.
-- Use `docs/codex/templates/context-engine-task.md` for semantic context request,
-  selection, budget, truncation, provenance, rendering, or evaluation work.
-- Use `docs/codex/templates/diagnostics-engine-task.md` for diagnostic identity,
-  normalization, orchestration, suppression, reporting, snapshot, or
-  public-projection work.
-- Use `docs/codex/templates/git-change-adapter-task.md` for Git repository
-  boundaries, endpoints, state layers, normalized changes, path confinement,
-  or Workspace change-input integration.
-- Use `docs/codex/templates/rules-engine-task.md` for rule identity,
-  registration, dependencies, configuration, execution, results, or
-  diagnostic-integration work.
-- Use `docs/codex/templates/ide-extension-task.md` for editor extension build,
-  packaging, activation, configuration, Runtime connectivity, UI state, or
-  extension-host lifecycle work.
-- Use `docs/codex/templates/llm-provider-task.md` for provider-neutral LLM
-  contracts, model/capability discovery, provider adapters, or provider
-  conformance evidence.
-- Use `docs/codex/templates/mcp-protocol-task.md` for MCP messages, protocol
-  versions, capabilities, dispatch, transports, or conformance evidence.
-- Use `docs/codex/templates/parser-task.md` for parser implementation.
-- Use `docs/codex/templates/source-adapter-task.md` for multi-artifact source
-  adapter ingestion or cross-adapter conformance.
-- Use `docs/codex/templates/persistent-state-task.md` for persisted schema,
-  storage, invalidation, compatibility, migration, corruption-recovery, or
-  integration work.
-- Use `docs/codex/templates/runtime-service-task.md` for Runtime service,
-  lifecycle, health, transport-adapter, observability, or supported client work.
-- Use `docs/codex/templates/architecture-task.md` for architecture output.
-- Use `docs/codex/templates/review-task.md` for review output.
-- Use `docs/codex/templates/sprint-planning-task.md` for a sprint kickoff,
-  readiness audit, and ordered Roadmap execution plan.
-- Use `docs/codex/templates/sprint-execution-loop.md` for a master prompt that
-  executes an accepted sprint plan in dependency order.
-
-A template defines task structure. It is not a complete long-form prompt.
-
-## Task family differences
-
-Architecture tasks decide or document contracts and prerequisites. They do not
-implement production behavior unless explicitly scoped.
-
-Investigation tasks gather evidence and may stop with confirmed unknowns. They
-must not invent source formats or architecture.
-
-Implementation tasks apply accepted architecture in code or documentation. They
-must not reselect architecture during implementation.
-
-AI Tool Policy tasks define or implement fail-closed source-independent
-authorization, side-effect, confirmation, execution-gating, outcome, and audit
-contracts. They do not select a concrete tool schema, transport, executor,
-policy store, or user experience unless accepted architecture explicitly owns
-that scope.
-
-MCP Protocol tasks define or implement versioned JSON-RPC messages, capability
-and method dispatch, transport framing, lifecycle mapping, and conformance
-evidence. They do not select semantic tools, Runtime composition, external
-client support, authentication, or another transport unless accepted
-architecture explicitly owns that scope.
-
-Parser tasks require real source evidence and define source-format behavior.
-They do not emit graph facts unless graph emission is explicitly included.
-
-Source adapter tasks orchestrate deterministic project discovery, artifact
-assembly, parsing, source-independent mapping, and cross-adapter conformance.
-They preserve parser separation and do not create an adapter-specific semantic
-authority.
-
-Persistent state tasks implement accepted persisted representations, storage,
-invalidation, compatibility, migration, corruption handling, and recovery.
-They keep canonical semantic state authoritative and do not select unresolved
-formats, identities, filesystem behavior, or Runtime integration architecture.
-
-Runtime service tasks implement accepted long-running lifecycle, structured
-task ownership, cancellation, shutdown, health, transport, or supported client
-contracts. They keep composition, service execution, adapters, and clients in
-their accepted layers and do not select unresolved concurrency architecture.
-
-Graph model tasks change public graph representation or graph APIs. They must
-preserve deterministic identity and define validation/query impact.
-
-Graph emission tasks connect production source facts to semantic graph nodes or
-edges. They must preserve provenance, determinism, and Coverage evidence.
-
-Semantic Index tasks build deterministic derived views without creating a
-second semantic authority. They must define lifecycle, staleness, compatibility,
-ordering, and equivalence with canonical query or full-rebuild behavior.
-
-Context Engine tasks select and assemble deterministic, budget-bounded context
-without creating semantic facts. They must define seed resolution, relevance
-ordering, provenance, explanations, truncation, and reproducible evaluation.
-
-Diagnostics Engine tasks normalize and report accepted canonical diagnostic
-evidence without becoming semantic or validation authority. They must define
-typed identity, duplicate/conflict behavior, suppression, ordering, bounds,
-summaries, sensitive-data handling, and deterministic snapshot or projection
-evidence while keeping general rule execution separate.
-
-Git Change Adapter tasks convert bounded repository change evidence into
-accepted source-independent Workspace change inputs without becoming semantic,
-impact, or edit authority. They must define repository and endpoint identity,
-included state layers, normalized status and paths, rename/copy/delete/conflict
-behavior, deterministic ordering, bounds, failures, confinement, and Workspace
-equivalence while keeping remote access, impact analysis, refactoring, and
-source mutation separate.
-
-Rules Engine tasks register and execute accepted source-independent rules over
-canonical immutable evidence without becoming semantic, validation, or
-diagnostic authority. They must define typed identity, registration ownership,
-dependency validation and order, configuration, applicability, lifecycle,
-failure containment, bounds, result contracts, and deterministic diagnostic
-integration while keeping plugins, edits, and product UI separate.
-
-Review tasks inspect existing work. They may create explicitly authorized review
-artifacts and Roadmap state transitions, but they do not modify implementation
-files unless the user changes the task from review to implementation.
-
-Sprint planning tasks audit the live baseline, decide whether the reusable
-framework is ready, and record an ordered executable plan without implementing
-production behavior.
-
-Sprint execution-loop prompts orchestrate accepted child prompts. They do not
-replace the child task's selected Profile or Template, and they obtain commit
-authorization only from the current instruction that launches the loop.
-
-## Canonical short task prompt
-
-```text
-Continue OneAgent development.
-
-Reporting:
-- Prompt: English.
-- User-visible reports: Russian.
-
-Profile:
-docs/codex/profiles/graph-implementation.md
-
-Template:
-docs/codex/templates/graph-emission-task.md
-
-Authoritative ADRs:
-- docs/adr/NNNN-example-semantics.md
-
-Prerequisites / Required gate:
-- The accepted ADR is committed and the working tree contains no conflicting
-  task-created change.
-
-Task:
-Implement one accepted semantic edge production slice.
-
-Scope:
-Included:
-- EDT producer path for the confirmed source artifact.
-- Graph emission, provenance, tests, and Coverage evidence.
-
-Excluded:
-- New graph model concepts.
-- Unrelated parser families.
-
-Acceptance Criteria:
-- The edge is emitted deterministically.
-- Provenance is attached.
-- Repeated builds are identical.
-- Coverage transitions only after complete evidence.
-
-Task-specific Validation:
-- cargo test -p oneagent-edt <focused_filter>
-- cargo test -p oneagent-graph <focused_filter>
-```
-
-Permanent safety, investigation, Change Contract, validation, and final-report
-rules are inherited through the selected Profile and Template and must not be
-copied into the prompt.
-
-## Extending the framework
-
-### Adding a profile
-
-Add a profile only when repeated tasks need a distinct composition of Core and
-Workflow modules or task-family expectations. A profile must state:
-
-- purpose;
-- required Core modules;
-- required Workflow modules;
-- task-family expectations.
-
-Do not copy full Core or Workflow content into a profile.
-
-### Changing a template
-
-Templates should remain compact contracts. When changing a template:
-
-- keep normative task structure explicit;
-- reference profiles instead of listing all Core and Workflow modules;
-- avoid embedding complete example prompts unless the file is explicitly an
-  example;
-- move repeated execution rules into Workflows;
-- move repeated module combinations into Profiles;
-- move permanent safety and validation rules into Core modules.
-
-### Adding a workflow
-
-Add a workflow only when repeated tasks need a distinct reusable execution model.
-Keep workflow modules focused on how the task is executed, not the concrete task
-scope.
-
-## Task-size guidance
-
-A task should usually produce one coherent outcome such as:
-
-- one ADR for one unresolved architectural capability;
-- one graph-model prerequisite;
-- one snapshot-index or incremental-index implementation slice;
-- one parser for one source artifact family;
-- one source-adapter discovery, assembly, mapping, or conformance slice;
-- one resolver/emitter production slice;
-- one review of one completed implementation;
-- one documentation synchronization task.
-
-Tasks that are too large combine unrelated or sequentially dependent outcomes,
-such as architecture selection plus parser plus resolver plus graph emission plus
-Coverage transition when major prerequisites do not exist, multiple unrelated
-semantic capabilities, or broad refactoring plus a new feature.
-
-Tasks that are too small split work below a coherent review boundary, such as
-adding one enum variant without its identity/tests/integration when those belong
-to the same model task, adding one isolated test, modifying one file when the
-logical outcome requires several, or splitting resolver and edge insertion when
-they form one small production slice.
-
-Optimize task boundaries for coherent outcome, reviewability, bounded context,
-independent validation, and minimal cross-task temporary states.
-
-## Authoritative decisions
-
-Accepted ADRs and architecture documents define semantics, direction, identity,
-endpoint compatibility, and scope. Implementation tasks must treat those
-decisions as fixed.
-
-Reopen an accepted decision only when repository evidence proves the accepted
-contract is impossible, contradictory, or incompatible with the actual source
-format. In that case Codex must stop the affected implementation, describe the
-blocker, identify the authoritative decision that cannot be implemented, avoid
-inventing an alternative architecture, and leave unrelated work unchanged.
-
-## Maintenance
-
-Keep modules focused and reasonably small. Do not copy entire task prompts into
-framework files. Update validation commands when repository CI changes. Move
-repeated prompt text into the proper framework layer instead of duplicating it in
-future prompts.
+4. selected Core, Workflow, Profile, and Template modules;
+5. the current child prompt;
+6. local implementation conventions confirmed from code and tests.
+
+The child prompt narrows concrete scope and supplies task-specific evidence. It
+must not weaken a higher-priority rule. Report a real contradiction instead of
+guessing through it.
+
+## Prompt Contract v2
+
+Every newly generated executable child prompt must:
+
+- use the front matter and sections in
+  `docs/codex/templates/task-prompt.md`;
+- follow `docs/codex/core/context-management.md`;
+- select the smallest sufficient Profile and specialized Template;
+- start in a guaranteed fresh execution context;
+- contain an exact bounded Context Manifest;
+- reference accepted decisions instead of restating them;
+- state only task-specific validation additions; and
+- pass `scripts/validate-codex-prompts.sh`.
+
+Historical prompts are immutable execution evidence and remain legacy
+compatible. Do not rewrite them solely to adopt a later contract version.
+
+## Context policy
+
+Prompt Contract v2 uses these default context-window allocations:
+
+| Allocation | Contract |
+|---|---:|
+| Static instructions | maximum 15% |
+| Initial authorities | maximum 20% |
+| Normal pre-work target | maximum 35% |
+| Pre-work hard stop | 50% |
+| Source, diff, tool, and validation working set | minimum 35% |
+| Final response and safety reserve | minimum 15% |
+
+The Context Manifest separates `Must read`, `Lookup on demand`, and material
+excluded from initial context. Whole large Roadmap, Architecture,
+semantic-model, generated, fixture, or log inputs are forbidden when a section,
+symbol, diff, range, or bounded query is sufficient.
+
+Runtime telemetry is authoritative. A conservative estimate may be used only
+for preflight admission and must never be reported as actual usage. See
+`docs/adr/0062-codex-prompt-context-management.md` for the decision and
+`docs/codex/context-management-guide.md` for the portable pattern.
+
+## Routing
+
+Use the narrowest matching pair:
+
+| Task family | Profile | Specialized Template |
+|---|---|---|
+| General implementation | `implementation.md` | `implementation-task.md` |
+| Investigation | `investigation.md` | `investigation-task.md` |
+| Architecture | `architecture.md` | `architecture-task.md` |
+| Review | `review.md` | `review-task.md` |
+| Graph model or emission | `graph-implementation.md` | `graph-model-task.md` or `graph-emission-task.md` |
+| Parser | `parser-implementation.md` | `parser-task.md` |
+| Source adapter | `source-adapter-implementation.md` | `source-adapter-task.md` |
+| Semantic Index | `semantic-index-implementation.md` | `semantic-index-task.md` |
+| Context Engine | `context-engine-implementation.md` | `context-engine-task.md` |
+| Persistent State | `persistent-state-implementation.md` | `persistent-state-task.md` |
+| Runtime Service | `runtime-service-implementation.md` | `runtime-service-task.md` |
+| LLM Provider | `llm-provider-implementation.md` | `llm-provider-task.md` |
+| AI Tool Policy | `ai-tool-policy-implementation.md` | `ai-tool-policy-task.md` |
+| MCP Protocol | `mcp-protocol-implementation.md` | `mcp-protocol-task.md` |
+| IDE Extension | `ide-extension-implementation.md` | `ide-extension-task.md` |
+| Diagnostics Engine | `diagnostics-engine-implementation.md` | `diagnostics-engine-task.md` |
+| Rules Engine | `rules-engine-implementation.md` | `rules-engine-task.md` |
+| Git Change Adapter | `git-change-adapter-implementation.md` | `git-change-adapter-task.md` |
+| Refactoring and Safe Edits | `refactoring-safe-edits-implementation.md` | `refactoring-safe-edits-task.md` |
+| Sprint planning | `architecture.md` | `sprint-planning-task.md` |
+| Sprint dispatch | child-selected | `sprint-execution-loop.md` |
+
+All Profile paths are relative to `docs/codex/profiles/`; all specialized
+Template paths are relative to `docs/codex/templates/`.
+
+Do not add a Profile for one task. Add one only when repeated tasks need a
+distinct module composition. Do not add a Workflow for concrete scope; a
+Workflow must describe reusable execution behavior.
+
+## Canonical task rules
+
+1. Keep one coherent owned outcome per task.
+2. Declare every prerequisite or explicitly state that none exists.
+3. Recheck mutable `HEAD`, status, counts, and repository evidence live.
+4. Use real fixtures and source evidence; do not invent formats or APIs.
+5. Keep accepted architecture fixed during implementation.
+6. Task-specific exclusions and validation add deltas; they do not copy Core.
+7. Suggested commit messages are metadata, not authorization.
+8. Resolve staging, commit, branch, merge, review, and push behavior from the
+   current user instruction and applicable `AGENTS.md`.
+9. Treat zero matched tests as missing evidence.
+10. Preserve unsupported and deferred scope unless explicitly accepted.
+
+## Sprint lifecycle
+
+`docs/codex/prompts/run-next-sprint.md` plans a sprint and creates a Prompt
+Contract v2 suite. The suite master is a dispatcher and ledger. Planning, every
+child task, and independent review use separate fresh contexts. If fresh
+context is unavailable, stop at the boundary and emit the exact next prompt
+path and prerequisite.
+
+The sequential workflow owns task ordering and failure behavior. The Review
+workflow owns independent reviewer behavior. Repository `AGENTS.md` owns branch,
+merge, remediation, and push rules. Stored prompt text does not authorize a
+commit by itself.
+
+## Validation and logs
+
+`docs/codex/core/validation.md` is the single canonical validation matrix.
+Templates and child prompts state only additions.
+
+Keep conversation output bounded. Retain materially large complete logs under
+`local-artifacts/codex-runs/<run-id>/` and report only command, exit status,
+meaningful count, concise failure excerpt, and artifact path. Never persist
+secrets or unrelated source content.
+
+## Extending or adopting the framework
+
+Before changing the framework:
+
+1. identify the concrete repeated gap;
+2. update only its canonical layer;
+3. avoid adding another copy of an existing rule;
+4. validate routing, links, Prompt Contract v2, and representative prompts;
+5. compare correctness and token usage before and after the change.
+
+For another project, start with
+`docs/codex/context-management-guide.md`, then bind project-specific Profiles,
+Templates, validation, artifact paths, and Git workflow.

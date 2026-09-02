@@ -8,6 +8,7 @@
 pub mod change_impact;
 pub mod context;
 pub mod diagnostics;
+pub mod refactoring;
 pub mod rules;
 
 use oneagent_bsl::{

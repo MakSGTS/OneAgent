@@ -65,10 +65,15 @@ context_reserve_min_percent: 15
 
 ## Prerequisites / required gate
 
-- `HEAD` is exactly the committed Task 8 result with subject
-  `Integrate Sprint 40 product refactoring planning`.
-- Tasks 1–8 are committed and pushed in order with no task-owned uncommitted
-  change.
+- `HEAD` is exactly the committed recovery result with subject
+  `Remediate Sprint 40 diff hygiene`, and its parent is exactly the committed
+  Task 8 result with subject `Integrate Sprint 40 product refactoring planning`.
+- Tasks 1–8 and the recovery are committed and pushed in order.
+- The worktree is clean or contains only the preserved failed-attempt Task 9
+  changes in `docs/Architecture.md`, `docs/architecture/semantic-model-2.md`,
+  `docs/Roadmap.md`, and
+  `docs/architecture/refactoring-planner-evidence.md`. Audit those paths from
+  scratch before continuing and reject every other uncommitted path.
 
 ## Task
 

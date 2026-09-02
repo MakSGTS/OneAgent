@@ -92,4 +92,3 @@ Implement one bounded example behavior accepted by the ADR.
 
 - Report the admitted context sources and preflight decision.
 - Report any complete log retained under `local-artifacts/codex-runs/`.
-

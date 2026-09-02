@@ -70,4 +70,3 @@ State a permanent instruction once in its canonical Core or Workflow owner.
 Profiles compose modules, Templates add task-family fields, and child prompts
 add concrete task data. Do not copy permanent safety, validation, reporting,
 review, or context rules into child prompts.
-

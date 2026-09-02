@@ -52,11 +52,16 @@ starts from the committed planning baseline.
 | 6 | `06-implement-validated-refactoring-planner.md` | Task 5 commit | Deterministic Graph-backed plan evaluation and preview | Non-zero planner, precondition, conflict, completeness, and repetition tests | `Implement Sprint 40 validated refactoring planner` |
 | 7 | `07-integrate-workspace-refactoring-plans.md` | Task 6 commit | Immutable Workspace publication composition | Non-zero Workspace snapshot, lifecycle, failure, and source-format tests | `Integrate Sprint 40 Workspace refactoring plans` |
 | 8 | `08-integrate-product-refactoring-planning.md` | Task 7 commit | Accepted read-only product projection and process behavior | Non-zero protocol, Tool Policy, MCP, and public-process tests | `Integrate Sprint 40 product refactoring planning` |
-| 9 | `09-complete-refactoring-planner-evidence.md` | Task 8 commit | Complete validation and synchronized current-state evidence | Full focused, compatibility, API, dependency, scope, and canonical gates | `Complete Sprint 40 Refactoring Planner evidence` |
+| 9 | `09-complete-refactoring-planner-evidence.md` | Task 8 commit plus committed diff-hygiene recovery | Complete validation and synchronized current-state evidence | Full focused, compatibility, API, dependency, scope, and canonical gates | `Complete Sprint 40 Refactoring Planner evidence` |
 | 10 | `10-sprint-40-integration-review.md` | Task 9 commit, no-ff implementation merge into `codex/v0.7`, and review branch | Independent review, reconciliation, state transition, and conditional retirement | Exact immutable range, independent and primary matrices, artifact consistency | `Complete Sprint 40 Refactoring Planner review` |
 
 All child prompts use `prompt_contract: v2`, `fresh_context: required`, bounded
 Context Manifests, and validated framework selectors.
+
+Task 9 recovery follows the first preserved validation failure only through the
+committed `Remediate Sprint 40 diff hygiene` prerequisite. Its fresh runner may
+admit the four preserved Task 9 documentation paths named by its prompt, must
+audit them from scratch, and must reject every other uncommitted path.
 
 ## Previous-suite inventory
 

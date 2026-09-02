@@ -59,4 +59,3 @@ The child prompt references rather than copies permanent Repository Safety,
 Context Management, Validation, Final Report, and Workflow text. Concrete scope,
 acceptance, authorities, validation additions, and report additions remain in
 the child prompt.
-

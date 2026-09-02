@@ -10,6 +10,12 @@ active until the mandatory fresh-context Task 10 review, primary
 reconciliation, artifact-consistency check, Sprint 41 hand-off, and conditional
 Sprint 39 prompt-suite retirement.
 
+Post-review remediation commit `36c28e48` restores Configuration-at-Workspace-
+root support and adds one public Workspace regression plus one public MCP
+process regression. A fresh live inventory from remediation merge `5d16782a`
+updates the affected counts below to 9 Workspace tests, 19 MCP process tests,
+and 1,334 tests across the unchanged 85-target inventory.
+
 The accepted first slice is exactly `bsl_callable_rename_v1`: one top-level BSL
 Procedure or Function declaration and every supported unique local or exported
 qualified direct-call identifier in one complete Configuration publication.
@@ -67,7 +73,7 @@ The committed implementation and recovery chain before Task 9 is:
 | Failed/cancelled/stale/incomplete builds publish nothing, consume no ID, retain the last valid snapshot, and recover normally | Runtime unit, Workspace, File Watching, Git-input, cache, and live MCP successor evidence | pass |
 | Cache schema stays `1`, semantic compatibility is `6`, exact bytes stay in the private source envelope, and the semantic DTO stores only the canonical manifest | Cache source audit, exact envelope assertions, 124 Runtime unit tests, and 4 public persistent-cache tests | pass |
 | Cold and accepted warm snapshots expose equal source evidence and equal plans; plans and publication IDs are not persisted | Cache round-trip planner equality, public cold/warm/replacement tests, and serialized-envelope audit | pass |
-| The MCP catalog contains exactly eight lexicographically ordered read-only tools for all three accepted revisions | MCP catalog/schema tests, 53 Protocol tests, 10 semantic-tool tests, 8 stdio tests, 18 public-process tests, and 62 VS Code unit tests | pass |
+| The MCP catalog contains exactly eight lexicographically ordered read-only tools for all three accepted revisions | MCP catalog/schema tests, 53 Protocol tests, 10 semantic-tool tests, 8 stdio tests, 19 public-process tests, and 62 VS Code unit tests | pass |
 | `oneagent.refactor.plan` requires exact publication, Configuration, target, and desired-name fields, admits optional `1..=100` limit, and rejects unknown fields | Catalog schema assertions and positive/missing/extra/type/exact/one-over public tests | pass |
 | Public output is complete, reconciled, bounded, redacted, `readOnly=true`, and `editAuthorization="none"` | In-memory and public-process projection tests, retained-source test, output-size tests, and sensitive-data scans | pass |
 | The tool remains `ReadOnly`; deny, execution failure, and output overflow preserve existing Tool Policy behavior | 33 Tool Policy tests plus Runtime allow/deny/cancellation/output mapping tests | pass |
@@ -99,7 +105,7 @@ totals and explicit target reruns overlap and must not be added together.
 | `cargo test -p oneagent-edt --quiet` | 344 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --quiet` | 39 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --lib --quiet` | 124 | 0 / 0 / 0 |
-| `cargo test -p oneagent-runtime --test workspace_service --quiet` | 8 | 0 / 0 / 0 |
+| `cargo test -p oneagent-runtime --test workspace_service --quiet` | 9 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test file_watching --quiet` | 2 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test git_change_workspace --quiet` | 3 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test persistent_cache --quiet` | 4 | 0 / 0 / 0 |
@@ -107,7 +113,7 @@ totals and explicit target reruns overlap and must not be added together.
 | `cargo test -p oneagent-tool-policy --quiet` | 33 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test mcp_semantic_tools --quiet` | 10 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test mcp_stdio --quiet` | 8 | 0 / 0 / 0 |
-| `cargo test -p oneagent-runtime --test mcp_process --quiet` | 18 | 0 / 0 / 0 |
+| `cargo test -p oneagent-runtime --test mcp_process --quiet` | 19 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test graph_query_api --quiet` | 3 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test http_health --quiet` | 4 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test lsp_stdio --quiet` | 5 | 0 / 0 / 0 |
@@ -116,8 +122,8 @@ totals and explicit target reruns overlap and must not be added together.
 
 The executable inventory command
 `cargo test --workspace --all-targets -- --list --format terse` enumerated 85
-targets: 81 non-zero targets, the four expected zero-test binaries, and 1,332
-tests. The complete canonical test run reproduced exactly 1,332 passed tests
+targets: 81 non-zero targets, the four expected zero-test binaries, and 1,334
+tests. The complete canonical test run reproduced exactly 1,334 passed tests
 with zero failures, ignored, measured, or filtered tests.
 
 ## Paired source and planner oracle
@@ -172,10 +178,10 @@ bundled Node runtime and exited zero.
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,332 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,334 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
-| `git diff --check` | exit 0 for the final Task 9 documentation diff |
+| `git diff --check` | exit 0 for the final Task 9 and post-review remediation documentation diffs |
 
 ## API, dependency, cache, Coverage, and sensitive-data audits
 

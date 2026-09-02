@@ -644,8 +644,8 @@ pub trait EdtSemanticGraphBuilder {
 
     /// Builds the graph and complete immutable BSL source evidence in one capture.
     ///
-    /// `project_root` must be a strict descendant of `workspace_root` so every
-    /// retained path is Workspace-relative and Configuration-confined.
+    /// `project_root` must equal `workspace_root` or be its strict descendant
+    /// so every retained path is Workspace-relative and Configuration-confined.
     ///
     /// # Errors
     ///

@@ -9959,13 +9959,13 @@ equal repeated plans from retained bytes; successor publications reject stale
 requests and produce fresh identities.
 
 Focused unfiltered evidence passes 6 Common, 42 BSL, 298 Graph, 154 Analysis,
-344 EDT, 39 Designer, 124 Runtime unit, 8 Workspace, 2 File Watching, 3 Git-
+344 EDT, 39 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
 input, 4 cache, 53 Protocol, 33 Tool Policy, 10 semantic MCP, 8 MCP stdio, and
-18 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
+19 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
 62-test VS Code unit matrix also pass. The executable inventory contains 85
 all-target entries: 81 non-zero targets, four expected zero-test public binary
-entry points reported only as inventory, and 1,332 tests. The canonical
-workspace run passes all 1,332 with zero failed, ignored, measured, or filtered
+entry points reported only as inventory, and 1,334 tests. The canonical
+workspace run passes all 1,334 with zero failed, ignored, measured, or filtered
 tests; format, all-target check, strict Clippy, warning-denied Rustdoc, and diff
 checks also pass.
 

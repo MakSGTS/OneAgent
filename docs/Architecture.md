@@ -170,7 +170,7 @@ and fresh-service starts use publication `1` without invented history. Failed,
 cancelled, stale, invalid, or over-bound rebuilds retain the last valid
 publication and consume no ID; later recovery compares against that last
 success. Cache schema remains `1`; Sprint 40 source-evidence reconstruction
-advances current semantic compatibility to `6`, while publication IDs and
+advances current semantic compatibility to `7`, while publication IDs and
 Change Impact reports remain unserialized.
 
 The MCP catalog is now eight tools at revision `2026-07-28` with the existing
@@ -206,7 +206,11 @@ Workspace-relative path, exact raw UTF-8 bytes, raw length plus SHA-256 content
 version, canonical exact half-open raw-byte occurrences, and one completeness
 marker. EDT and Designer production builders provide paired evidence while
 preserving deliberate format, path, encoding, line-ending, content-version,
-and range differences.
+and range differences. Qualified-call evidence also retains the bounded
+immediate lexical owner token. Non-unique declarations and local calls are
+target-related only in the selected owner Module; non-unique qualified calls
+are target-related only when that token is BSL-equivalent to the selected
+owner Module name.
 
 One planner request borrows one immutable `WorkspaceSnapshot`, requires its
 checked process-local publication ID, resolves the target through Graph, and
@@ -218,7 +222,7 @@ and a structured no-snippet preview are fail-closed and deterministic. Source
 is never reopened after publication and no planner or preview writes it.
 
 Workspace publications now retain a complete source-evidence set for every
-Configuration. Cache schema remains `1` and semantic compatibility is `6`;
+Configuration. Cache schema remains `1` and semantic compatibility is `7`;
 decode reconstructs documents from the private source-state bytes and validates
 the canonical manifest. Publication IDs and plans are not persisted. Failed,
 cancelled, stale, incomplete, or over-bound attempts publish no partial state,

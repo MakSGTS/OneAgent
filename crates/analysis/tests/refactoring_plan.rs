@@ -736,12 +736,13 @@ fn planner_fixture_for(
     .into_iter()
     .map(|kind| {
         let (start, token) = matches.next().expect("fixture occurrence must exist");
-        SourceOccurrence::new(
+        SourceOccurrence::new_with_lexical_owner(
             document_id.clone(),
             version,
             SourceByteRange::new(start, start + token.len()).expect("range must be valid"),
             kind,
             token,
+            (kind == SourceOccurrenceKind::QualifiedCall).then(|| "Module".to_owned()),
             Some(callable_id.clone()),
             SourceOccurrenceResolution::Unique,
         )
@@ -1073,6 +1074,143 @@ fn planner_rejects_missing_ambiguous_and_incompatible_source_evidence() {
         incompatible_error.kind(),
         RefactoringErrorKind::IncompatibleEvidence
     );
+}
+
+#[test]
+fn planner_ignores_nonunique_same_name_evidence_outside_the_target_owner() {
+    let mut fixture = planner_fixture(false);
+    let unrelated_module = id("module.unrelated");
+    insert_node(
+        &mut fixture.graph,
+        &unrelated_module,
+        "Unrelated",
+        NodeKind::Module,
+    );
+    insert_contains(
+        &mut fixture.graph,
+        &fixture.configuration_id,
+        &unrelated_module,
+    );
+
+    let raw = b"OldName(); MissingModule.OldName();\n".to_vec();
+    let version = SourceContentVersion::from_bytes(&raw);
+    let document_id = document_id("module.unrelated");
+    let mut matches = std::str::from_utf8(&raw)
+        .expect("fixture must be UTF-8")
+        .match_indices(OLD_NAME);
+    let (local_start, local_token) = matches.next().expect("local call must exist");
+    let (qualified_start, qualified_token) = matches.next().expect("qualified call must exist");
+    let local = SourceOccurrence::new(
+        document_id.clone(),
+        version,
+        SourceByteRange::new(local_start, local_start + local_token.len())
+            .expect("local range must be valid"),
+        SourceOccurrenceKind::LocalCall,
+        local_token,
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect("unrelated local evidence must be valid");
+    let qualified = SourceOccurrence::new_with_lexical_owner(
+        document_id.clone(),
+        version,
+        SourceByteRange::new(qualified_start, qualified_start + qualified_token.len())
+            .expect("qualified range must be valid"),
+        SourceOccurrenceKind::QualifiedCall,
+        qualified_token,
+        Some("MissingModule".to_owned()),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect("unrelated qualified evidence must be valid");
+    let unrelated_document = SourceDocument::new(
+        document_id,
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        ConfinedSourcePath::new(
+            SourcePath::new("configuration/CommonModules/Unrelated/Module.bsl")
+                .expect("path must be valid"),
+            &SourcePath::new("configuration").expect("root must be valid"),
+        )
+        .expect("path must be confined"),
+        raw,
+        vec![local, qualified],
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect("unrelated document must be valid");
+    let mut documents = fixture.evidence.documents().to_vec();
+    documents.push(unrelated_document);
+    fixture.evidence = SourceEvidenceSet::new(fixture.configuration_id.clone(), documents)
+        .expect("complete source set must be valid");
+
+    let evaluation = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &fixture.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect("unrelated same-name evidence must not block the target plan");
+    assert_eq!(evaluation.plan().operations().len(), 3);
+}
+
+#[test]
+fn planner_rejects_nonunique_qualified_evidence_for_the_target_owner() {
+    let mut fixture = planner_fixture(false);
+    let unrelated_module = id("module.caller");
+    insert_node(
+        &mut fixture.graph,
+        &unrelated_module,
+        "Caller",
+        NodeKind::Module,
+    );
+    insert_contains(
+        &mut fixture.graph,
+        &fixture.configuration_id,
+        &unrelated_module,
+    );
+
+    let raw = b"Main.OldName();\n".to_vec();
+    let version = SourceContentVersion::from_bytes(&raw);
+    let document_id = document_id("module.caller");
+    let occurrence = SourceOccurrence::new_with_lexical_owner(
+        document_id.clone(),
+        version,
+        SourceByteRange::new(5, 12).expect("qualified range must be valid"),
+        SourceOccurrenceKind::QualifiedCall,
+        OLD_NAME,
+        Some("Main".to_owned()),
+        None,
+        SourceOccurrenceResolution::Ambiguous,
+    )
+    .expect("target-related qualified evidence must be valid");
+    let caller_document = SourceDocument::new(
+        document_id,
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        ConfinedSourcePath::new(
+            SourcePath::new("configuration/CommonModules/Caller/Module.bsl")
+                .expect("path must be valid"),
+            &SourcePath::new("configuration").expect("root must be valid"),
+        )
+        .expect("path must be confined"),
+        raw,
+        vec![occurrence],
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect("caller document must be valid");
+    let mut documents = fixture.evidence.documents().to_vec();
+    documents.push(caller_document);
+    fixture.evidence = SourceEvidenceSet::new(fixture.configuration_id.clone(), documents)
+        .expect("complete source set must be valid");
+
+    let error = RefactoringPlanner
+        .evaluate(
+            fixture.input(),
+            &fixture.request,
+            &NeverCancelledRefactoring,
+        )
+        .expect_err("target-owner qualified ambiguity must remain fail-closed");
+    assert_eq!(error.kind(), RefactoringErrorKind::AmbiguousOccurrence);
 }
 
 #[test]

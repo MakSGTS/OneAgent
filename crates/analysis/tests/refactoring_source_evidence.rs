@@ -292,6 +292,124 @@ fn identity_and_occurrence_token_byte_bounds_are_exact() {
 }
 
 #[test]
+fn qualified_occurrence_requires_exact_bounded_lexical_owner_context() {
+    let raw = b"Module.Call()".to_vec();
+    let version = SourceContentVersion::from_bytes(&raw);
+    let document_id = document_id();
+    let range = SourceByteRange::new(7, 11).expect("qualified range must be valid");
+
+    let missing_owner = SourceOccurrence::new(
+        document_id.clone(),
+        version,
+        range,
+        SourceOccurrenceKind::QualifiedCall,
+        "Call",
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect_err("qualified occurrence without an owner must fail");
+    assert_eq!(
+        missing_owner.kind(),
+        SourceEvidenceErrorKind::InvalidOccurrence
+    );
+
+    let unexpected_owner = SourceOccurrence::new_with_lexical_owner(
+        document_id.clone(),
+        version,
+        range,
+        SourceOccurrenceKind::LocalCall,
+        "Call",
+        Some("Module".to_owned()),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect_err("unqualified occurrence with an owner must fail");
+    assert_eq!(
+        unexpected_owner.kind(),
+        SourceEvidenceErrorKind::InvalidOccurrence
+    );
+
+    let occurrence = SourceOccurrence::new_with_lexical_owner(
+        document_id.clone(),
+        version,
+        range,
+        SourceOccurrenceKind::QualifiedCall,
+        "Call",
+        Some("Module".to_owned()),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect("exact qualified owner must be retained");
+    assert_eq!(occurrence.lexical_owner_token(), Some("Module"));
+
+    SourceDocument::new(
+        document_id.clone(),
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        confined_path("configuration/Module.bsl"),
+        raw.clone(),
+        vec![occurrence],
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect("qualified owner must match captured bytes");
+
+    let mismatched = SourceOccurrence::new_with_lexical_owner(
+        document_id.clone(),
+        version,
+        range,
+        SourceOccurrenceKind::QualifiedCall,
+        "Call",
+        Some("Other".to_owned()),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect("mismatched owner shape must remain constructible");
+    let mismatch_error = SourceDocument::new(
+        document_id,
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        confined_path("configuration/Module.bsl"),
+        raw,
+        vec![mismatched],
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect_err("mismatched owner bytes must fail document validation");
+    assert_eq!(
+        mismatch_error.kind(),
+        SourceEvidenceErrorKind::InvalidOccurrence
+    );
+}
+
+#[test]
+fn qualified_lexical_owner_byte_bound_is_exact() {
+    let version = SourceContentVersion::from_bytes(b"Call");
+    let range = SourceByteRange::new(0, 4).expect("range must be valid");
+    SourceOccurrence::new_with_lexical_owner(
+        document_id(),
+        version,
+        range,
+        SourceOccurrenceKind::QualifiedCall,
+        "Call",
+        Some("a".repeat(MAX_SOURCE_IDENTIFIER_BYTES)),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect("exact lexical-owner byte bound must pass");
+    let owner_error = SourceOccurrence::new_with_lexical_owner(
+        document_id(),
+        version,
+        range,
+        SourceOccurrenceKind::QualifiedCall,
+        "Call",
+        Some("a".repeat(MAX_SOURCE_IDENTIFIER_BYTES + 1)),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect_err("one-over lexical-owner byte bound must fail");
+    assert_eq!(owner_error.kind(), SourceEvidenceErrorKind::BoundExceeded);
+}
+
+#[test]
 fn ranges_versions_and_tokens_are_checked() {
     let raw = "Тестaaaa".as_bytes().to_vec();
     let source = std::str::from_utf8(&raw).expect("fixture must be UTF-8");
@@ -400,18 +518,21 @@ fn duplicate_and_overlapping_occurrences_are_rejected() {
         SourceEvidenceErrorKind::DuplicateConflict
     );
 
+    let overlapping_raw = b"Module.aaaaCall".to_vec();
+    let overlapping_version = SourceContentVersion::from_bytes(&overlapping_raw);
     let overlapping = [
-        ("aaa", 8, 11, SourceOccurrenceKind::LocalCall),
-        ("aaa", 9, 12, SourceOccurrenceKind::QualifiedCall),
+        ("aaaa", 7, 11, SourceOccurrenceKind::QualifiedCall),
+        ("aCal", 10, 14, SourceOccurrenceKind::LocalCall),
     ]
     .into_iter()
     .map(|(token, start, end, kind)| {
-        SourceOccurrence::new(
+        SourceOccurrence::new_with_lexical_owner(
             document_id.clone(),
-            version,
+            overlapping_version,
             SourceByteRange::new(start, end).expect("range must be valid"),
             kind,
             token,
+            (kind == SourceOccurrenceKind::QualifiedCall).then(|| "Module".to_owned()),
             None,
             SourceOccurrenceResolution::Unresolved,
         )
@@ -423,7 +544,7 @@ fn duplicate_and_overlapping_occurrences_are_rejected() {
         SourceFormat::Edt,
         BslModuleRole::Object,
         confined_path("configuration/Module.bsl"),
-        raw,
+        overlapping_raw,
         overlapping,
         SourceEvidenceCompleteness::BslCallableRenameV1,
     )

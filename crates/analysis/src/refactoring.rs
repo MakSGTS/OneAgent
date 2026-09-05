@@ -46,7 +46,7 @@ pub enum SourceEvidenceErrorKind {
     UnsupportedSourceFormat,
     /// Occurrence document or content-version evidence is incompatible.
     IncompatibleEvidence,
-    /// An occurrence range, token, or mapping invariant is invalid.
+    /// An occurrence range, token, lexical owner, or mapping invariant is invalid.
     InvalidOccurrence,
     /// Unequal occurrence evidence occupies the same exact range.
     DuplicateConflict,
@@ -351,23 +351,61 @@ pub struct SourceOccurrence {
     range: SourceByteRange,
     kind: SourceOccurrenceKind,
     token: Box<str>,
+    lexical_owner_token: Option<Box<str>>,
     mapped_target_id: Option<EntityId>,
     resolution: SourceOccurrenceResolution,
 }
 
 impl SourceOccurrence {
-    /// Creates a bounded occurrence with a checked resolution/target invariant.
+    /// Creates a bounded declaration or local-call occurrence.
+    ///
+    /// Qualified calls require [`Self::new_with_lexical_owner`] so their
+    /// target-relevance context cannot be omitted.
     ///
     /// # Errors
     ///
-    /// Returns a redacted error for an empty or over-bound token, over-bound
-    /// target identity, or a target inconsistent with the resolution.
+    /// Returns a redacted error for a qualified kind, empty or over-bound
+    /// token, over-bound target identity, or a target inconsistent with the
+    /// resolution.
     pub fn new(
         document_id: SourceDocumentId,
         content_version: SourceContentVersion,
         range: SourceByteRange,
         kind: SourceOccurrenceKind,
         token: impl Into<String>,
+        mapped_target_id: Option<EntityId>,
+        resolution: SourceOccurrenceResolution,
+    ) -> Result<Self, SourceEvidenceError> {
+        Self::new_with_lexical_owner(
+            document_id,
+            content_version,
+            range,
+            kind,
+            token,
+            None,
+            mapped_target_id,
+            resolution,
+        )
+    }
+
+    /// Creates a bounded occurrence with explicit qualified-call owner context.
+    ///
+    /// The lexical owner is the identifier immediately before the final
+    /// callable token. It is required only for qualified calls and is retained
+    /// independently from mapping so planners can scope non-unique evidence.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error for an invalid owner context or any invariant
+    /// rejected by [`Self::new`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_lexical_owner(
+        document_id: SourceDocumentId,
+        content_version: SourceContentVersion,
+        range: SourceByteRange,
+        kind: SourceOccurrenceKind,
+        token: impl Into<String>,
+        lexical_owner_token: Option<String>,
         mapped_target_id: Option<EntityId>,
         resolution: SourceOccurrenceResolution,
     ) -> Result<Self, SourceEvidenceError> {
@@ -383,6 +421,24 @@ impl SourceOccurrence {
                 MAX_SOURCE_IDENTIFIER_BYTES,
             ));
         }
+        if (kind == SourceOccurrenceKind::QualifiedCall) != lexical_owner_token.is_some() {
+            return Err(SourceEvidenceError::new(
+                SourceEvidenceErrorKind::InvalidOccurrence,
+            ));
+        }
+        if let Some(owner) = lexical_owner_token.as_deref() {
+            if owner.len() > MAX_SOURCE_IDENTIFIER_BYTES {
+                return Err(SourceEvidenceError::bounded(
+                    owner.len(),
+                    MAX_SOURCE_IDENTIFIER_BYTES,
+                ));
+            }
+            if !is_bsl_identifier(owner) {
+                return Err(SourceEvidenceError::new(
+                    SourceEvidenceErrorKind::InvalidOccurrence,
+                ));
+            }
+        }
         if let Some(target) = mapped_target_id.as_ref() {
             validate_identity_component(target)?;
         }
@@ -397,6 +453,7 @@ impl SourceOccurrence {
             range,
             kind,
             token: token.into_boxed_str(),
+            lexical_owner_token: lexical_owner_token.map(String::into_boxed_str),
             mapped_target_id,
             resolution,
         })
@@ -432,6 +489,12 @@ impl SourceOccurrence {
         &self.token
     }
 
+    /// Returns the immediate lexical owner of a qualified call.
+    #[must_use]
+    pub fn lexical_owner_token(&self) -> Option<&str> {
+        self.lexical_owner_token.as_deref()
+    }
+
     /// Returns the uniquely mapped target, when present.
     #[must_use]
     pub const fn mapped_target_id(&self) -> Option<&EntityId> {
@@ -443,6 +506,14 @@ impl SourceOccurrence {
     pub const fn resolution(&self) -> SourceOccurrenceResolution {
         self.resolution
     }
+}
+
+fn is_bsl_identifier(value: &str) -> bool {
+    let mut scalars = value.chars();
+    scalars.next().is_some_and(|first| {
+        (first == '_' || first.is_alphabetic())
+            && scalars.all(|scalar| scalar == '_' || scalar.is_alphanumeric())
+    })
 }
 
 /// Family-specific proof that every relevant candidate was retained.
@@ -711,12 +782,31 @@ fn validate_occurrence(
         || !source.is_char_boundary(range.start_byte())
         || !source.is_char_boundary(range.end_byte())
         || source.get(range.start_byte()..range.end_byte()) != Some(occurrence.token())
+        || match occurrence.kind() {
+            SourceOccurrenceKind::QualifiedCall => {
+                lexical_owner_before(source, range.start_byte()) != occurrence.lexical_owner_token()
+            }
+            SourceOccurrenceKind::Declaration | SourceOccurrenceKind::LocalCall => {
+                lexical_owner_before(source, range.start_byte()).is_some()
+            }
+        }
     {
         return Err(SourceEvidenceError::new(
             SourceEvidenceErrorKind::InvalidOccurrence,
         ));
     }
     Ok(())
+}
+
+fn lexical_owner_before(source: &str, token_start: usize) -> Option<&str> {
+    let qualifier = source.get(..token_start)?.strip_suffix('.')?;
+    let owner_start = qualifier
+        .char_indices()
+        .rev()
+        .find(|(_, scalar)| *scalar != '_' && !scalar.is_alphanumeric())
+        .map_or(0, |(index, scalar)| index + scalar.len_utf8());
+    let owner = qualifier.get(owner_start..)?;
+    is_bsl_identifier(owner).then_some(owner)
 }
 
 /// Maximum Configurations selected by one refactoring request.
@@ -2008,7 +2098,8 @@ impl RefactoringPlanner {
             request.target_node_id(),
             cancellation,
         )?;
-        let admitted = admit_planner_source_evidence(input, target_node, cancellation)?;
+        let admitted =
+            admit_planner_source_evidence(input, target_node, owner_module, cancellation)?;
         let target = validate_planner_collisions(
             input.configuration_id(),
             request,
@@ -2107,6 +2198,7 @@ struct AdmittedPlannerSourceEvidence {
 fn admit_planner_source_evidence(
     input: RefactoringPlannerInput<'_>,
     target: &GraphNode,
+    owner_module: &GraphNode,
     cancellation: &dyn RefactoringCancellationSignal,
 ) -> Result<AdmittedPlannerSourceEvidence, RefactoringError> {
     observe_refactoring_cancellation(cancellation)?;
@@ -2134,7 +2226,7 @@ fn admit_planner_source_evidence(
             .checked_add(document.occurrences().len())
             .ok_or_else(|| RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow))?;
         for occurrence in document.occurrences() {
-            if let Some(kind) = planner_occurrence_failure(target, occurrence) {
+            if let Some(kind) = planner_occurrence_failure(target, owner_module, occurrence) {
                 let candidate = (kind, document.id().clone(), occurrence.range());
                 if failure.as_ref().is_none_or(|current| &candidate < current) {
                     failure = Some(candidate);
@@ -2196,10 +2288,12 @@ fn validate_planner_document(document: &SourceDocument) -> Result<(), Refactorin
 
 fn planner_occurrence_failure(
     target: &GraphNode,
+    owner_module: &GraphNode,
     occurrence: &SourceOccurrence,
 ) -> Option<RefactoringErrorKind> {
     if occurrence.resolution() != SourceOccurrenceResolution::Unique
         && bsl_names_equal(occurrence.token(), target.name().as_str())
+        && occurrence_is_target_related(owner_module, occurrence)
     {
         Some(RefactoringErrorKind::AmbiguousOccurrence)
     } else if occurrence.mapped_target_id() == Some(target.id())
@@ -2208,6 +2302,17 @@ fn planner_occurrence_failure(
         Some(RefactoringErrorKind::InvalidOccurrence)
     } else {
         None
+    }
+}
+
+fn occurrence_is_target_related(owner_module: &GraphNode, occurrence: &SourceOccurrence) -> bool {
+    match occurrence.kind() {
+        SourceOccurrenceKind::Declaration | SourceOccurrenceKind::LocalCall => {
+            occurrence.document_id().module_id() == owner_module.id()
+        }
+        SourceOccurrenceKind::QualifiedCall => occurrence
+            .lexical_owner_token()
+            .is_some_and(|owner| bsl_names_equal(owner, owner_module.name().as_str())),
     }
 }
 

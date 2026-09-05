@@ -82,12 +82,13 @@ fn build_document(
             analysis,
             available,
         );
-        occurrences.push(SourceOccurrence::new(
+        occurrences.push(SourceOccurrence::new_with_lexical_owner(
             document_id.clone(),
             version,
             SourceByteRange::new(range.start_byte(), range.end_byte())?,
             kind,
             source_token(source, range.start_byte(), range.end_byte())?,
+            lexical_owner_token(call.target_symbol().as_str()).map(str::to_owned),
             mapped_target_id,
             resolution,
         )?);
@@ -175,6 +176,14 @@ fn mapped(
 fn split_qualified(value: &str) -> Option<(&str, &str)> {
     let (module, symbol) = value.split_once('.')?;
     (!module.is_empty() && !symbol.is_empty() && !symbol.contains('.')).then_some((module, symbol))
+}
+
+fn lexical_owner_token(value: &str) -> Option<&str> {
+    let (qualifier, _) = value.rsplit_once('.')?;
+    qualifier
+        .rsplit('.')
+        .next()
+        .filter(|owner| !owner.is_empty())
 }
 
 fn source_token(source: &str, start: usize, end: usize) -> Result<String, EdtSourceEvidenceError> {

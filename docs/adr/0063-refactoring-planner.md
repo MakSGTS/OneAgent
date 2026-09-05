@@ -140,13 +140,25 @@ candidate publication.
 
 An occurrence owns `document_id`, `content_version`, exact byte range,
 occurrence kind `declaration|local_call|qualified_call`, exact captured token,
-optional mapped target Node ID, and resolution
+the bounded immediate lexical owner token for a qualified call, optional mapped
+target Node ID, and resolution
 `unique|unresolved|ambiguous|unsupported`. The mapped target is present if and
-only if resolution is `unique`. Its structured identity is the complete tuple.
-Exactly one declaration must map uniquely to the selected target. The complete
-evidence marker means that every accepted module was scanned and every
-syntactically relevant direct call candidate has one retained outcome; it does
-not mean unsupported syntax became supported.
+only if resolution is `unique`; the lexical owner is present if and only if the
+occurrence is a qualified call and is validated against the retained bytes. Its
+structured identity is the complete tuple. Exactly one declaration must map
+uniquely to the selected target. The complete evidence marker means that every
+accepted module was scanned and every syntactically relevant direct call
+candidate has one retained outcome; it does not mean unsupported syntax became
+supported.
+
+Target relevance for non-unique evidence is closed and source-independent. A
+declaration or local call is target-related only when its document Module ID is
+the selected target owner. A qualified call is target-related only when its
+immediate lexical owner token is BSL-equivalent to the selected owner Module
+name. Therefore an unrelated same-name local call in another Module and
+`MissingModule.TargetName()` do not block the request, while a non-unique
+`SelectedOwner.TargetName()` remains fail-closed. Unique mappings continue to
+use the mapped target Node ID directly.
 
 ### Publication and target identity
 
@@ -401,16 +413,19 @@ plan or precondition is valid across that boundary. No plan cache, plan
 history, mutable planner state, detached task, or cross-client session is
 introduced.
 
-Workspace cache schema remains `1` and semantic compatibility advances from
-`5` to `6`. The private source-state envelope remains the owner of exact cached
-regular-file bytes. The semantic cache DTO adds the canonical document and
+Workspace cache schema remains `1`; semantic compatibility initially advanced
+from `5` to `6` for the source-evidence manifest and advances to `7` when the
+manifest adds qualified-call lexical owner context. The private source-state
+envelope remains the owner of exact cached regular-file bytes. The semantic
+cache DTO adds the canonical document and
 occurrence manifest without duplicating raw content. Decode reconstructs each
 document from the accepted source-state bytes, recomputes its content version,
-and validates every identity, range, token, mapping, ordering, and completeness
-claim before publication. Version `5`, missing, conflicting, stale, corrupt,
-or non-canonical evidence follows the existing reject-and-clean-rebuild path.
-Cold and accepted version-`6` warm publications must expose equal source
-evidence and equal plans. Publication IDs and plans are never persisted.
+and validates every identity, range, token, lexical owner, mapping, ordering,
+and completeness claim before publication. Versions `5` and `6`, missing,
+conflicting, stale, corrupt, or non-canonical evidence follow the existing
+reject-and-clean-rebuild path. Cold and accepted version-`7` warm publications
+must expose equal source evidence and equal plans. Publication IDs and plans
+are never persisted.
 
 ### Runtime, Tool Policy, MCP, and compatibility
 
@@ -464,7 +479,8 @@ as specified.
 Planner evaluation then proves empty/cancelled inputs; Procedure and Function;
 English and Russian declarations; local, repeated, same-line, cross-line, and
 qualified calls; non-exported behavior; every target/source/version failure;
-no-op and collisions; duplicate, same-anchor, overlap, and forbidden
+unrelated same-name local and qualified evidence plus target-owner qualified
+ambiguity; no-op and collisions; duplicate, same-anchor, overlap, and forbidden
 dependency cases; checked summaries; exact and one-over bounds; input-order
 independence; stable/different identities; and unchanged retained source.
 Synthetic graphs may supplement conflicts but cannot replace production

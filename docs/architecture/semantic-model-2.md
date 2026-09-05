@@ -1531,7 +1531,8 @@ immediately preceding successful publication. Initial cold, warm, standalone,
 and fresh-service snapshots use ID 1 with no invented history. Failed,
 cancelled, stale, invalid, or over-bound rebuilds retain the last valid snapshot
 and consume no ID. Cache schema remains `1`; Sprint 40 source-evidence
-reconstruction advances current semantic compatibility to `7`, while
+reconstruction and fail-closed BSL receiver classification advance current
+semantic compatibility to `8`, while
 publication IDs and Change Impact reports remain unserialized.
 
 `oneagent.impact` keeps its legacy two-Configuration same-snapshot mode and adds
@@ -1592,11 +1593,21 @@ mutable handle. Planning and preview do not change source, repository,
 Workspace, cache, editor, protocol, or plan state and grant no authorization.
 
 Each Workspace Configuration snapshot now retains one complete source-evidence
-set. Cache schema stays `1` and semantic compatibility is `7`; decode rebuilds
+set. Cache schema stays `1` and semantic compatibility is `8`; decode rebuilds
 documents from the private source-state bytes and validates the canonical
 manifest. Publication IDs and plans are not persisted. Failed, cancelled,
 stale, incomplete, incompatible, or over-bound attempts return no partial
 result and do not replace a valid publication.
+
+The shared BSL callable-scope parser accepts balanced multiline signatures and
+exact `Async`/`Асинх` prefixes, requires valid identifiers and matching scope
+termination, and retains parameter and local bindings. Computed member calls
+and qualified calls whose leading name is shadowed by a callable or module
+binding are retained as unsupported instead of being guessed as local or
+cross-module targets. Direct qualifiers split across lines retain their lexical
+owner, while unsupported calls are excluded from Graph `Calls` resolution and
+retain one unresolved diagnostic/statistics outcome through a diagnostics-only
+path.
 
 `oneagent.refactor.plan` is the eighth lexicographically ordered read-only MCP
 tool for all three supported revisions. Its exact bounded request and result
@@ -2502,7 +2513,9 @@ edges. Every extracted call now contributes exactly one final reference outcome:
 an unqualified call is handled by local resolution and a qualified call by
 cross-module resolution. Successful outcomes emit a `Calls` edge; unresolved
 outcomes emit the existing typed unresolved-reference diagnostic and update EDT
-build reference statistics. Diagnostic provenance identifies the source BSL
+build reference statistics. Explicitly unsupported calls bypass both resolvers,
+emit no edge, and retain that unresolved diagnostic/statistics outcome. Diagnostic
+provenance identifies the source BSL
 file and stable call identity, and the source procedure or function is attached
 when available. There is no resolved-without-edge path in the current metadata
 reference flow: successful metadata resolution immediately emits a `References`

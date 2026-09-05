@@ -799,7 +799,11 @@ fn validate_occurrence(
 }
 
 fn lexical_owner_before(source: &str, token_start: usize) -> Option<&str> {
-    let qualifier = source.get(..token_start)?.strip_suffix('.')?;
+    let qualifier = source
+        .get(..token_start)?
+        .trim_end()
+        .strip_suffix('.')?
+        .trim_end();
     let owner_start = qualifier
         .char_indices()
         .rev()

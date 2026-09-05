@@ -1,6 +1,6 @@
 //! Cross-module resolution of qualified BSL calls.
 
-use crate::{BslCall, BslSymbol, bsl_name_key};
+use crate::{BslCall, BslCallKind, BslSymbol, bsl_name_key};
 use oneagent_common::{EntityId, EntityName};
 use std::collections::BTreeMap;
 
@@ -223,8 +223,10 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
         let mut unresolved = Vec::new();
 
         for call in calls {
-            if !call.target_symbol().as_str().contains('.') {
-                continue;
+            match call.kind() {
+                Some(BslCallKind::Local | BslCallKind::Unsupported) => continue,
+                None if !call.target_symbol().as_str().contains('.') => continue,
+                Some(BslCallKind::Qualified) | None => {}
             }
 
             let Some(source_name) = call.source_symbol() else {
@@ -324,8 +326,8 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use crate::{
-        BslCall, BslModuleSymbols, BslSymbol, BslSymbolKind, CrossModuleCallResolver,
-        QualifiedBslCallResolver, UnresolvedCrossModuleCallReason,
+        BslCall, BslCallKind, BslIdentifierRange, BslModuleSymbols, BslSymbol, BslSymbolKind,
+        CrossModuleCallResolver, QualifiedBslCallResolver, UnresolvedCrossModuleCallReason,
     };
 
     fn id(value: &str) -> EntityId {
@@ -466,5 +468,87 @@ mod tests {
             result.unresolved()[0].reason(),
             UnresolvedCrossModuleCallReason::TargetModuleNotFound
         );
+    }
+
+    #[test]
+    fn ignores_unsupported_calls_instead_of_creating_cross_module_edges() {
+        let source_module = BslModuleSymbols::new(
+            id("document-module"),
+            name("SalesObjectModule"),
+            vec![symbol(
+                "document-module:procedure:Post",
+                "Post",
+                BslSymbolKind::Procedure,
+                false,
+            )],
+        );
+        let target_module = BslModuleSymbols::new(
+            id("access-module"),
+            name("AccessManagement"),
+            vec![symbol(
+                "access-module:procedure:CheckRights",
+                "CheckRights",
+                BslSymbolKind::Procedure,
+                true,
+            )],
+        );
+        let calls = vec![BslCall::new_with_identifier_range(
+            id("document-module:call:2:1"),
+            Some(name("Post")),
+            name("AccessManagement.CheckRights"),
+            2,
+            BslCallKind::Unsupported,
+            BslIdentifierRange::new(0, 11).expect("range must be valid"),
+        )];
+
+        let result = QualifiedBslCallResolver.resolve_cross_module_calls(
+            &source_module,
+            &[target_module],
+            &calls,
+        );
+
+        assert!(result.resolved().is_empty());
+        assert!(result.unresolved().is_empty());
+    }
+
+    #[test]
+    fn explicit_local_kind_cannot_resolve_as_a_cross_module_call() {
+        let source_module = BslModuleSymbols::new(
+            id("document-module"),
+            name("SalesObjectModule"),
+            vec![symbol(
+                "document-module:procedure:Post",
+                "Post",
+                BslSymbolKind::Procedure,
+                false,
+            )],
+        );
+        let target_module = BslModuleSymbols::new(
+            id("access-module"),
+            name("AccessManagement"),
+            vec![symbol(
+                "access-module:procedure:CheckRights",
+                "CheckRights",
+                BslSymbolKind::Procedure,
+                true,
+            )],
+        );
+        let calls = vec![BslCall::new_with_identifier_range(
+            id("document-module:call:2:1"),
+            Some(name("Post")),
+            name("AccessManagement.CheckRights"),
+            2,
+            BslCallKind::Local,
+            BslIdentifierRange::new(0, 11).expect("range must be valid"),
+        )];
+
+        let result = QualifiedBslCallResolver.resolve_cross_module_calls(
+            &source_module,
+            &[target_module],
+            &calls,
+        );
+
+        assert!(result.resolved().is_empty());
+        assert!(result.unresolved().is_empty());
     }
 }

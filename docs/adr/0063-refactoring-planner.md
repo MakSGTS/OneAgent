@@ -415,15 +415,21 @@ introduced.
 
 Workspace cache schema remains `1`; semantic compatibility initially advanced
 from `5` to `6` for the source-evidence manifest and advances to `7` when the
-manifest adds qualified-call lexical owner context. The private source-state
-envelope remains the owner of exact cached regular-file bytes. The semantic
-cache DTO adds the canonical document and
+manifest adds qualified-call lexical owner context. It advances again to `8`
+when callable-scope parsing and receiver classification become fail-closed for
+multiline and async declarations, computed member access, and shadowed
+callable or module bindings. Split direct qualifiers retain their lexical owner,
+and unsupported calls do not enter Graph `Calls` resolution; a diagnostics-only
+path preserves their existing unresolved diagnostic and reference-statistic
+outcome without emitting an edge. The private
+source-state envelope remains the owner of exact cached regular-file bytes. The
+semantic cache DTO adds the canonical document and
 occurrence manifest without duplicating raw content. Decode reconstructs each
 document from the accepted source-state bytes, recomputes its content version,
 and validates every identity, range, token, lexical owner, mapping, ordering,
-and completeness claim before publication. Versions `5` and `6`, missing,
+and completeness claim before publication. Versions `5`, `6`, and `7`, missing,
 conflicting, stale, corrupt, or non-canonical evidence follow the existing
-reject-and-clean-rebuild path. Cold and accepted version-`7` warm publications
+reject-and-clean-rebuild path. Cold and accepted version-`8` warm publications
 must expose equal source evidence and equal plans. Publication IDs and plans
 are never persisted.
 

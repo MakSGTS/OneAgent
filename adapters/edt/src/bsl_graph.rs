@@ -1,7 +1,7 @@
 //! Integration between EDT module files, BSL declarations and the semantic graph.
 
 use oneagent_bsl::{
-    BslCall, BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor,
+    BslCall, BslCallError, BslCallExtractor, BslCallKind, BslCallResolver, BslDeclarationExtractor,
     BslModuleSymbols, BslParseError, BslQuery, BslQueryError, BslQueryExtractor, BslSymbol,
     BslSymbolKind, CrossModuleCallResolver, LineBslCallExtractor, LineBslDeclarationExtractor,
     LineBslQueryExtractor, LocalBslCallResolver, QualifiedBslCallResolver, QueryLanguageDiagnostic,
@@ -341,6 +341,7 @@ fn add_analyzed_modules(
             diagnostics,
             reference_statistics,
         )?;
+        record_unsupported_calls(module, diagnostics, reference_statistics);
     }
 
     Ok(modules.iter().map(|module| module.symbols().len()).sum())
@@ -843,11 +844,7 @@ fn insert_local_calls(
         )?;
     }
 
-    for call in module
-        .calls()
-        .iter()
-        .filter(|call| !is_qualified_call(call))
-    {
+    for call in module.calls().iter().filter(|call| is_local_call(call)) {
         if local_call_is_unresolved(call, resolution.unresolved()) {
             record_unresolved_call(module, call, diagnostics, reference_statistics);
         } else {
@@ -893,7 +890,33 @@ fn insert_cross_module_calls(
 }
 
 fn is_qualified_call(call: &BslCall) -> bool {
-    call.target_symbol().as_str().contains('.')
+    match call.kind() {
+        Some(BslCallKind::Qualified) => true,
+        None => call.target_symbol().as_str().contains('.'),
+        Some(BslCallKind::Local | BslCallKind::Unsupported) => false,
+    }
+}
+
+fn is_local_call(call: &BslCall) -> bool {
+    match call.kind() {
+        Some(BslCallKind::Local) => true,
+        None => !call.target_symbol().as_str().contains('.'),
+        Some(BslCallKind::Qualified | BslCallKind::Unsupported) => false,
+    }
+}
+
+fn record_unsupported_calls(
+    module: &AnalyzedBslModule,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) {
+    for call in module
+        .calls()
+        .iter()
+        .filter(|call| call.kind() == Some(BslCallKind::Unsupported))
+    {
+        record_unresolved_call(module, call, diagnostics, reference_statistics);
+    }
 }
 
 fn local_call_is_unresolved(call: &BslCall, unresolved: &[UnresolvedBslCall]) -> bool {

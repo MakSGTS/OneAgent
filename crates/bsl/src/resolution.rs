@@ -1,6 +1,6 @@
 //! Local resolution of BSL calls to declarations.
 
-use crate::{BslCall, BslSymbol, bsl_name_key};
+use crate::{BslCall, BslCallKind, BslSymbol, bsl_name_key};
 use oneagent_common::{EntityId, EntityName};
 use std::collections::BTreeMap;
 
@@ -160,6 +160,10 @@ impl BslCallResolver for LocalBslCallResolver {
         let mut unresolved = Vec::new();
 
         for call in calls {
+            match call.kind() {
+                Some(BslCallKind::Qualified | BslCallKind::Unsupported) => continue,
+                Some(BslCallKind::Local) | None => {}
+            }
             let Some(source_name) = call.source_symbol() else {
                 unresolved.push(UnresolvedBslCall::new(
                     None,
@@ -218,8 +222,8 @@ mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use crate::{
-        BslCall, BslCallResolver, BslSymbol, BslSymbolKind, LocalBslCallResolver,
-        UnresolvedCallReason,
+        BslCall, BslCallKind, BslCallResolver, BslIdentifierRange, BslSymbol, BslSymbolKind,
+        LocalBslCallResolver, UnresolvedCallReason,
     };
 
     fn id(value: &str) -> EntityId {
@@ -326,5 +330,55 @@ mod tests {
             result.unresolved()[0].reason(),
             UnresolvedCallReason::MissingSourceScope
         );
+    }
+
+    #[test]
+    fn ignores_unsupported_calls_instead_of_creating_local_edges() {
+        let symbols = vec![
+            symbol("module:procedure:Post", "Post", BslSymbolKind::Procedure),
+            symbol(
+                "module:procedure:Target",
+                "Target",
+                BslSymbolKind::Procedure,
+            ),
+        ];
+        let calls = vec![BslCall::new_with_identifier_range(
+            id("module:call:2:1"),
+            Some(name("Post")),
+            name("Target"),
+            2,
+            BslCallKind::Unsupported,
+            BslIdentifierRange::new(0, 6).expect("range must be valid"),
+        )];
+
+        let result = LocalBslCallResolver.resolve(&symbols, &calls);
+
+        assert!(result.resolved().is_empty());
+        assert!(result.unresolved().is_empty());
+    }
+
+    #[test]
+    fn explicit_qualified_kind_cannot_resolve_as_a_local_call() {
+        let symbols = vec![
+            symbol("module:procedure:Post", "Post", BslSymbolKind::Procedure),
+            symbol(
+                "module:procedure:Target",
+                "Target",
+                BslSymbolKind::Procedure,
+            ),
+        ];
+        let calls = vec![BslCall::new_with_identifier_range(
+            id("module:call:2:1"),
+            Some(name("Post")),
+            name("Target"),
+            2,
+            BslCallKind::Qualified,
+            BslIdentifierRange::new(0, 6).expect("range must be valid"),
+        )];
+
+        let result = LocalBslCallResolver.resolve(&symbols, &calls);
+
+        assert!(result.resolved().is_empty());
+        assert!(result.unresolved().is_empty());
     }
 }

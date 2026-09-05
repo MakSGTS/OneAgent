@@ -1169,20 +1169,28 @@ fn planner_rejects_nonunique_qualified_evidence_for_the_target_owner() {
         &unrelated_module,
     );
 
-    let raw = b"Main.OldName();\n".to_vec();
+    let raw = b"Main.\nOldName();\nMain\n.OldName();\n".to_vec();
     let version = SourceContentVersion::from_bytes(&raw);
     let document_id = document_id("module.caller");
-    let occurrence = SourceOccurrence::new_with_lexical_owner(
-        document_id.clone(),
-        version,
-        SourceByteRange::new(5, 12).expect("qualified range must be valid"),
-        SourceOccurrenceKind::QualifiedCall,
-        OLD_NAME,
-        Some("Main".to_owned()),
-        None,
-        SourceOccurrenceResolution::Ambiguous,
-    )
-    .expect("target-related qualified evidence must be valid");
+    let occurrences = std::str::from_utf8(&raw)
+        .expect("fixture must be UTF-8")
+        .match_indices(OLD_NAME)
+        .map(|(start, token)| {
+            SourceOccurrence::new_with_lexical_owner(
+                document_id.clone(),
+                version,
+                SourceByteRange::new(start, start + token.len())
+                    .expect("qualified range must be valid"),
+                SourceOccurrenceKind::QualifiedCall,
+                token,
+                Some("Main".to_owned()),
+                None,
+                SourceOccurrenceResolution::Ambiguous,
+            )
+            .expect("target-related multiline qualified evidence must be valid")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(occurrences.len(), 2);
     let caller_document = SourceDocument::new(
         document_id,
         SourceFormat::Edt,
@@ -1194,7 +1202,7 @@ fn planner_rejects_nonunique_qualified_evidence_for_the_target_owner() {
         )
         .expect("path must be confined"),
         raw,
-        vec![occurrence],
+        occurrences,
         SourceEvidenceCompleteness::BslCallableRenameV1,
     )
     .expect("caller document must be valid");

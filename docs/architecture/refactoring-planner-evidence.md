@@ -34,6 +34,18 @@ closed only when composed into their integration-test module. The four new BSL
 and adapter regressions increase the complete total to 1,342 tests without a
 cache, Graph, Coverage, protocol, or public planner contract change.
 
+The callable-scope remediation accepts balanced multiline and exact
+`Async`/`Асинх` declarations, validates identifier and matching end syntax,
+records parameters and local bindings, and retains computed-member and shadowed
+callable or module receivers as unsupported evidence rather than guessing a
+callable target. Split direct qualifiers retain their lexical owner, and
+unsupported calls cannot create Graph `Calls` edges while retaining the existing
+unresolved diagnostic/statistics outcome. Eight BSL and two paired
+adapter regressions increase the complete total to 1,352 tests. Because
+the reconstructed occurrence mapping changes, cache semantic compatibility
+advances from `7` to `8`; schema `1` and the public planner contract remain
+unchanged.
+
 The accepted first slice is exactly `bsl_callable_rename_v1`: one top-level BSL
 Procedure or Function declaration and every supported unique local or exported
 qualified direct-call identifier in one complete Configuration publication.
@@ -67,11 +79,11 @@ The committed implementation and recovery chain before Task 9 is:
 | Analysis owns source-independent documents, requests, preconditions, operations, plans, previews, bounds, summaries, and failures | `oneagent-analysis::refactoring`, 12 source-evidence tests, 17 plan/planner tests, strict Rustdoc | pass |
 | Adapters capture evidence, Runtime publishes it, and MCP only projects it through Tool Policy | EDT/Designer source-evidence targets, Workspace tests, MCP semantic/stdio/process targets, and dependency-direction audit | pass |
 | The only family is one top-level BSL Procedure or Function rename in one Configuration | Planner Procedure, Function, English, Russian, unsupported-target, missing-target, and single-Configuration tests | pass |
-| EDT supports exact declarations plus unique local and qualified calls; Designer supports accepted Object, Manager, and Common module roles with exported qualified calls | 5 EDT source-evidence tests, 5 Designer source-evidence tests, and the paired production conformance oracle | pass |
+| EDT supports exact declarations plus unique local and qualified calls; Designer supports accepted Object, Manager, and Common module roles with exported qualified calls | 6 EDT source-evidence tests, 6 Designer source-evidence tests, and the paired production conformance oracle | pass |
 | Unsupported, unresolved, ambiguous, dynamic, string/comment, nested, multi-segment, or otherwise incomplete target-related evidence never produces a guessed operation, while unrelated same-name calls do not block the plan | Adapter complete-ledger negative tests plus planner unrelated-local, unrelated-qualified, target-owner-qualified, missing, ambiguous, incompatible, and incomplete tests | pass |
 | One document is identified only by Configuration and Module IDs and binds format, role, confined relative path, exact raw bytes, content version, canonical occurrences, and completeness | 12 source-evidence tests cover identity, lexical owner, duplicate IDs/paths, format/role, confinement, raw bytes, canonical order, and complete sets | pass |
 | Content version is exact raw length plus all 32 SHA-256 bytes from one canonical implementation | Common SHA-256 vectors, deterministic content-version tests, moved private Designer hash implementation, and manifest/source audit | pass |
-| UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 44-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
+| UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 52-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
 | Accepted regular non-symlink sources are captured before publication and are never reopened by planning or preview | EDT/Designer non-UTF-8/symlink/changed-during-capture tests; Workspace and MCP tests change, remove, and rename source after publication while repeated plans remain equal | pass |
 | Every syntactically relevant direct-call candidate has one retained unique, unresolved, ambiguous, or unsupported outcome plus exact qualified-call lexical owner context | EDT and Designer complete-ledger/owner-context tests, Analysis byte-validation tests, and paired canonical occurrence projection | pass |
 | `WorkspacePublicationId` is the one checked process-local publication sequence shared with Change Impact | The public alias, Runtime initial/successor/stale tests, File Watching, MCP live-publication, and fresh Workspace runs | pass |
@@ -89,7 +101,7 @@ The committed implementation and recovery chain before Task 9 is:
 | Cancellation is checked through planning and Runtime joins owned work during shutdown | Planner cancellation checkpoints, Runtime library lifecycle tests, MCP cancellation projection, stdio cancellation, EOF, and process cleanup | pass |
 | Every Workspace Configuration snapshot publishes one complete source-evidence set atomically | Workspace public positive/failure tests, Runtime 124-test unit suite, and adapter failure/duplicate identity validation | pass |
 | Failed/cancelled/stale/incomplete builds publish nothing, consume no ID, retain the last valid snapshot, and recover normally | Runtime unit, Workspace, File Watching, Git-input, cache, and live MCP successor evidence | pass |
-| Cache schema stays `1`, semantic compatibility is `7`, exact bytes stay in the private source envelope, and the semantic DTO stores only the canonical manifest | Cache source audit, exact envelope assertions, version-6 invalidation, 124 Runtime unit tests, and 4 public persistent-cache tests | pass |
+| Cache schema stays `1`, semantic compatibility is `8`, exact bytes stay in the private source envelope, and the semantic DTO stores only the canonical manifest | Cache source audit, exact envelope assertions, version-7 invalidation, 124 Runtime unit tests, and 4 public persistent-cache tests | pass |
 | Cold and accepted warm snapshots expose equal source evidence and equal plans; plans and publication IDs are not persisted | Cache round-trip planner equality, public cold/warm/replacement tests, and serialized-envelope audit | pass |
 | The MCP catalog contains exactly eight lexicographically ordered read-only tools for all three accepted revisions | MCP catalog/schema tests, 53 Protocol tests, 10 semantic-tool tests, 8 stdio tests, 19 public-process tests, and 62 VS Code unit tests | pass |
 | `oneagent.refactor.plan` requires exact publication, Configuration, target, and desired-name fields, admits optional `1..=100` limit, and rejects unknown fields | Catalog schema assertions and positive/missing/extra/type/exact/one-over public tests | pass |
@@ -112,16 +124,16 @@ totals and explicit target reruns overlap and must not be added together.
 | Command or exact suite | Tests passed | Failed / ignored / filtered |
 | --- | ---: | --- |
 | `cargo test -p oneagent-common --quiet` | 6 | 0 / 0 / 0 |
-| `cargo test -p oneagent-bsl --quiet` | 44 | 0 / 0 / 0 |
+| `cargo test -p oneagent-bsl --quiet` | 52 | 0 / 0 / 0 |
 | `cargo test -p oneagent-graph --quiet` | 298 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --test refactoring_source_evidence --quiet` | 12 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --test refactoring_plan --quiet` | 17 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --quiet` | 158 | 0 / 0 / 0 |
-| `cargo test -p oneagent-edt --test source_evidence --quiet` | 5 | 0 / 0 / 0 |
-| `cargo test -p oneagent-designer-xml --test source_evidence --quiet` | 5 | 0 / 0 / 0 |
+| `cargo test -p oneagent-edt --test source_evidence --quiet` | 6 | 0 / 0 / 0 |
+| `cargo test -p oneagent-designer-xml --test source_evidence --quiet` | 6 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --test conformance --quiet` | 4 | 0 / 0 / 0 |
-| `cargo test -p oneagent-edt --quiet` | 345 | 0 / 0 / 0 |
-| `cargo test -p oneagent-designer-xml --quiet` | 40 | 0 / 0 / 0 |
+| `cargo test -p oneagent-edt --quiet` | 346 | 0 / 0 / 0 |
+| `cargo test -p oneagent-designer-xml --quiet` | 41 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --lib --quiet` | 124 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test workspace_service --quiet` | 9 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test file_watching --quiet` | 2 | 0 / 0 / 0 |
@@ -140,7 +152,7 @@ totals and explicit target reruns overlap and must not be added together.
 
 The completed canonical `cargo test --workspace --all-targets --quiet` run
 emitted 85 target summaries: 81 non-zero targets, the four expected zero-test
-binaries, and 1,342 tests. It reported exactly 1,342 passed tests with zero
+binaries, and 1,352 tests. It reported exactly 1,352 passed tests with zero
 failures, ignored, measured, or filtered tests.
 
 ## Paired source and planner oracle
@@ -166,7 +178,7 @@ Workspace tests prove that plans remain byte-equal after the original EDT file
 is changed and renamed and the Designer file is removed. A successor source
 version produces a new publication and plan while rejecting the predecessor
 request as stale; a retained predecessor `Arc` remains independently usable.
-Cold and accepted semantic-version-`7` warm cache snapshots reconstruct equal
+Cold and accepted semantic-version-`8` warm cache snapshots reconstruct equal
 documents, occurrences, versions, and plans from the private source-state bytes.
 
 The three accepted MCP revisions expose the same eight-name catalog and exact
@@ -206,7 +218,7 @@ diagnostics did not change any stage exit status.
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,342 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,352 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
 | `git diff --check` | exit 0 for the final Task 9 and post-review remediation documentation diffs |
@@ -231,10 +243,10 @@ diagnostics did not change any stage exit status.
   member, native library, license field, VS Code package, pnpm lock, or EDT
   package changed. The workspace continues to inherit Apache-2.0 and forbid
   unsafe Rust.
-- Cache schema is exactly `1` and semantic compatibility is exactly `7`.
+- Cache schema is exactly `1` and semantic compatibility is exactly `8`.
   Source bytes remain in the private source-state envelope; the semantic DTO
   adds only canonical document/occurrence/version/lexical-owner claims and
-  validates them against recomputed bytes during decode. Version `6` entries
+  validates them against recomputed bytes during decode. Version `7` entries
   cold-rebuild; publication IDs and plans are not serialized.
 - No Graph, EDT Coverage, or Designer Coverage registry path changed. Existing
   graph facts and Coverage capabilities remain unchanged; the planner consumes

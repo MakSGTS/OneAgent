@@ -451,7 +451,7 @@ async fn public_persistent_cache_cold_and_warm_runs_are_complete_and_equivalent(
     )
     .expect("cold cache entry must be JSON");
     assert_eq!(envelope["schema_version"], 1);
-    assert_eq!(envelope["semantic_version"], 7);
+    assert_eq!(envelope["semantic_version"], 8);
     assert!(envelope.get("publication_id").is_none());
     assert!(envelope.get("change_impact").is_none());
 
@@ -514,7 +514,8 @@ async fn public_persistent_cache_invalidates_rejects_and_cleanly_recovers() {
         ("semantic_version", 4),
         ("semantic_version", 5),
         ("semantic_version", 6),
-        ("semantic_version", 8),
+        ("semantic_version", 7),
+        ("semantic_version", 9),
     ] {
         set_cache_version(root.path(), field, version);
         let recovered = run_once(root.path()).await;

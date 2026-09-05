@@ -42,7 +42,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 7;
+const SEMANTIC_VERSION: u32 = 8;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -2909,7 +2909,7 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 7);
+        assert_eq!(envelope.semantic_version, 8);
         assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
@@ -3412,7 +3412,7 @@ mod tests {
         let mut envelope: EnvelopeDto =
             serde_json::from_slice(&bytes).expect("envelope must parse");
 
-        envelope.semantic_version = 5;
+        envelope.semantic_version = 7;
         let incompatible = serde_json::to_vec(&envelope).expect("test envelope must encode");
         assert_eq!(
             WorkspaceCacheCodec::decode(&incompatible, &empty_source, root)
@@ -3422,7 +3422,7 @@ mod tests {
         );
 
         envelope.schema_version = 2;
-        envelope.semantic_version = 7;
+        envelope.semantic_version = 8;
         let incompatible = serde_json::to_vec(&envelope).expect("test envelope must encode");
         assert_eq!(
             WorkspaceCacheCodec::decode(&incompatible, &empty_source, root)

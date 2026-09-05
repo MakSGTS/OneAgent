@@ -291,6 +291,32 @@ fn identity_and_occurrence_token_byte_bounds_are_exact() {
     );
 }
 
+fn assert_multiline_qualified_owner(document_id: &SourceDocumentId) {
+    let raw = b"Module.\n  Call()".to_vec();
+    let version = SourceContentVersion::from_bytes(&raw);
+    let occurrence = SourceOccurrence::new_with_lexical_owner(
+        document_id.clone(),
+        version,
+        SourceByteRange::new(10, 14).expect("multiline qualified range must be valid"),
+        SourceOccurrenceKind::QualifiedCall,
+        "Call",
+        Some("Module".to_owned()),
+        None,
+        SourceOccurrenceResolution::Unresolved,
+    )
+    .expect("multiline qualified owner must be retained");
+    SourceDocument::new(
+        document_id.clone(),
+        SourceFormat::Edt,
+        BslModuleRole::Common,
+        confined_path("configuration/Module.bsl"),
+        raw,
+        vec![occurrence],
+        SourceEvidenceCompleteness::BslCallableRenameV1,
+    )
+    .expect("multiline qualified owner must match captured bytes");
+}
+
 #[test]
 fn qualified_occurrence_requires_exact_bounded_lexical_owner_context() {
     let raw = b"Module.Call()".to_vec();
@@ -352,6 +378,8 @@ fn qualified_occurrence_requires_exact_bounded_lexical_owner_context() {
         SourceEvidenceCompleteness::BslCallableRenameV1,
     )
     .expect("qualified owner must match captured bytes");
+
+    assert_multiline_qualified_owner(&document_id);
 
     let mismatched = SourceOccurrence::new_with_lexical_owner(
         document_id.clone(),

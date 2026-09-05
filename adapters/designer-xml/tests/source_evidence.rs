@@ -2,6 +2,7 @@ use oneagent_analysis::refactoring::{
     MAX_SOURCE_DOCUMENT_BYTES, SourceEvidenceCompleteness, SourceEvidenceErrorKind,
     SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
 };
+use oneagent_bsl::BslParseError;
 use oneagent_designer_xml::{
     DesignerXmlBuildScope, DesignerXmlGraphError, DesignerXmlModuleError,
     DesignerXmlSemanticGraphBuilder, DesignerXmlSourceEvidenceError,
@@ -235,6 +236,57 @@ fn production_capture_rejects_non_utf8_symlink_and_one_over_bound_atomically() {
             ))
         ));
     }
+}
+
+#[test]
+fn keyword_like_names_do_not_export_and_nested_declarations_fail_closed() {
+    let temporary = tempdir().expect("temporary workspace must be created");
+    let project = temporary.path().join("designer");
+    copy_tree(&project_root(), &project);
+    let module = project.join("CommonModules/DynamicSecurityOverridable/Ext/Module.bsl");
+    fs::write(
+        &module,
+        concat!(
+            "Procedure ExportData()\nEndProcedure\n",
+            "Procedure Caller()\n",
+            "DynamicSecurityOverridable.ExportData();\n",
+            "EndProcedure\n",
+        ),
+    )
+    .expect("keyword-like fixture must be written");
+    let result = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
+            temporary.path(),
+            &project,
+            DesignerXmlBuildScope::Partial,
+        )
+        .expect("keyword-like callable name must build");
+    let qualified = result.source_evidence().documents()[0]
+        .occurrences()
+        .iter()
+        .find(|occurrence| occurrence.kind() == SourceOccurrenceKind::QualifiedCall)
+        .expect("qualified candidate must be retained");
+    assert_eq!(
+        qualified.resolution(),
+        SourceOccurrenceResolution::Unresolved
+    );
+    assert!(qualified.mapped_target_id().is_none());
+
+    fs::write(
+        &module,
+        "Procedure Outer()\nProcedure Inner()\nEndProcedure\nEndProcedure\n",
+    )
+    .expect("nested fixture must be written");
+    assert!(matches!(
+        FileSystemDesignerXmlSemanticGraphBuilder.build_graph_with_source_evidence(
+            temporary.path(),
+            &project,
+            DesignerXmlBuildScope::Partial,
+        ),
+        Err(DesignerXmlGraphError::Bsl(
+            BslParseError::NestedDeclaration(2)
+        ))
+    ));
 }
 
 #[test]

@@ -42,7 +42,7 @@ const SCHEMA_VERSION: u32 = 1;
 // Bump this in the same logical change as any behavior that can change a
 // complete snapshot for equal source state; package and Git versions do not
 // replace this manual compatibility boundary.
-const SEMANTIC_VERSION: u32 = 6;
+const SEMANTIC_VERSION: u32 = 7;
 const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 const FNV_PRIME: u64 = 1_099_511_628_211;
 const CACHE_OWNER_DIRECTORY: &str = ".oneagent";
@@ -640,6 +640,7 @@ struct SourceOccurrenceDto {
     end_byte: usize,
     kind: SourceOccurrenceKindDto,
     token: String,
+    lexical_owner_token: Option<String>,
     mapped_target_id: Option<String>,
     resolution: SourceOccurrenceResolutionDto,
 }
@@ -2423,12 +2424,13 @@ impl SourceOccurrenceDto {
                 "workspace cache occurrence range is invalid: {error}"
             ))
         })?;
-        SourceOccurrence::new(
+        SourceOccurrence::new_with_lexical_owner(
             occurrence_document_id,
             actual_version,
             range,
             occurrence_kind(self.kind),
             self.token,
+            self.lexical_owner_token,
             self.mapped_target_id.map(entity_id).transpose()?,
             occurrence_resolution(self.resolution),
         )
@@ -2446,6 +2448,7 @@ impl From<&SourceOccurrence> for SourceOccurrenceDto {
             end_byte: value.range().end_byte(),
             kind: occurrence_kind_dto(value.kind()),
             token: value.token().to_owned(),
+            lexical_owner_token: value.lexical_owner_token().map(str::to_owned),
             mapped_target_id: value
                 .mapped_target_id()
                 .map(|identity| identity.as_str().to_owned()),
@@ -2772,10 +2775,11 @@ mod tests {
         AccessRightPayloadDto, ConfidenceDto, DataSetKindDto, DiagnosticCodeDto, DiagnosticKindDto,
         EdgeKindDto, EnvelopeDto, FactOriginDto, MetadataKindDto, NodeKindDto, NodePayloadDto,
         ReferenceCategoryDto, ReferenceDto, ReferenceRequestOutcomeDto, ResolutionStateDto,
-        WebServiceParameterDirectionDto, WorkspaceCacheCodec, WorkspaceCacheCodecErrorKind,
-        WorkspaceCacheFailurePoint, WorkspaceCacheLoadOutcome, WorkspaceCacheSource,
-        WorkspaceCacheSourceEntry, WorkspaceCacheSourceEntryKind, WorkspaceCacheStore,
-        WorkspaceCacheWriteOutcome, WorkspaceDto, XdtoTypeKindDto, content_checksum,
+        SourceOccurrenceKindDto, WebServiceParameterDirectionDto, WorkspaceCacheCodec,
+        WorkspaceCacheCodecErrorKind, WorkspaceCacheFailurePoint, WorkspaceCacheLoadOutcome,
+        WorkspaceCacheSource, WorkspaceCacheSourceEntry, WorkspaceCacheSourceEntryKind,
+        WorkspaceCacheStore, WorkspaceCacheWriteOutcome, WorkspaceDto, XdtoTypeKindDto,
+        content_checksum,
     };
     use crate::workspace::change::WorkspaceFileState;
     use crate::workspace::{WorkspaceSnapshot, WorkspaceSnapshotBuilder, snapshot_from_parts};
@@ -2905,7 +2909,7 @@ mod tests {
         assert!(decoded.is_empty());
         assert_eq!(envelope.format, "oneagent.workspace-cache");
         assert_eq!(envelope.schema_version, 1);
-        assert_eq!(envelope.semantic_version, 6);
+        assert_eq!(envelope.semantic_version, 7);
         assert_eq!(decoded.root_path(), root);
         assert!(envelope.content_checksum.starts_with("fnv1a64:"));
         assert_eq!(envelope.content_checksum.len(), 24);
@@ -3418,7 +3422,7 @@ mod tests {
         );
 
         envelope.schema_version = 2;
-        envelope.semantic_version = 6;
+        envelope.semantic_version = 7;
         let incompatible = serde_json::to_vec(&envelope).expect("test envelope must encode");
         assert_eq!(
             WorkspaceCacheCodec::decode(&incompatible, &empty_source, root)
@@ -3544,6 +3548,30 @@ mod tests {
         }
     }
 
+    fn assert_invalid_lexical_owner_rejected(
+        bytes: &[u8],
+        source: &WorkspaceCacheSource,
+        root: &Path,
+    ) {
+        let mut envelope: EnvelopeDto = serde_json::from_slice(bytes).expect("envelope must parse");
+        let qualified = envelope
+            .workspace
+            .configurations
+            .iter_mut()
+            .flat_map(|configuration| &mut configuration.source_evidence.documents)
+            .flat_map(|document| &mut document.occurrences)
+            .find(|occurrence| occurrence.kind == SourceOccurrenceKindDto::QualifiedCall)
+            .expect("fixture must retain a qualified call");
+        qualified.lexical_owner_token = Some("OtherModule".to_owned());
+        let invalid = canonical_bytes(&mut envelope);
+        assert_eq!(
+            WorkspaceCacheCodec::decode(&invalid, source, root)
+                .expect_err("mismatched lexical owner must be rejected")
+                .kind(),
+            WorkspaceCacheCodecErrorKind::Invalid
+        );
+    }
+
     #[test]
     fn reconstruction_rejects_duplicate_invalid_and_inconsistent_build_evidence() {
         let root = fixture_root();
@@ -3591,6 +3619,8 @@ mod tests {
                 .kind(),
             WorkspaceCacheCodecErrorKind::Inconsistent
         );
+
+        assert_invalid_lexical_owner_rejected(&bytes, &source, &root);
 
         let mut invalid_payload: EnvelopeDto =
             serde_json::from_slice(&bytes).expect("envelope must parse");

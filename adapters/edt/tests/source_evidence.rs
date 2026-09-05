@@ -78,6 +78,11 @@ fn production_builder_captures_exact_complete_deterministic_occurrences() {
             .expect("occurrence bytes must be UTF-8"),
             occurrence.token()
         );
+        assert_eq!(
+            occurrence.lexical_owner_token(),
+            (occurrence.kind() == SourceOccurrenceKind::QualifiedCall)
+                .then_some("DynamicSecurityOverridable")
+        );
     }
     assert_eq!(
         first
@@ -206,18 +211,18 @@ fn complete_ledger_retains_ambiguous_unresolved_and_unsupported_candidates() {
     let result = FileSystemEdtSemanticGraphBuilder
         .build_graph_with_source_evidence(temporary.path(), &project)
         .expect("complete non-unique ledger must build without guessed mappings");
-    let resolutions = result.source_evidence().documents()[0]
+    let outcomes = result.source_evidence().documents()[0]
         .occurrences()
         .iter()
         .filter(|occurrence| occurrence.kind() != SourceOccurrenceKind::Declaration)
-        .map(SourceOccurrence::resolution)
+        .map(|occurrence| (occurrence.resolution(), occurrence.lexical_owner_token()))
         .collect::<Vec<_>>();
     assert_eq!(
-        resolutions,
+        outcomes,
         [
-            SourceOccurrenceResolution::Ambiguous,
-            SourceOccurrenceResolution::Unresolved,
-            SourceOccurrenceResolution::Unsupported,
+            (SourceOccurrenceResolution::Ambiguous, None),
+            (SourceOccurrenceResolution::Unresolved, None),
+            (SourceOccurrenceResolution::Unsupported, Some("B")),
         ]
     );
 }

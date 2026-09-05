@@ -1531,7 +1531,7 @@ immediately preceding successful publication. Initial cold, warm, standalone,
 and fresh-service snapshots use ID 1 with no invented history. Failed,
 cancelled, stale, invalid, or over-bound rebuilds retain the last valid snapshot
 and consume no ID. Cache schema remains `1`; Sprint 40 source-evidence
-reconstruction advances current semantic compatibility to `6`, while
+reconstruction advances current semantic compatibility to `7`, while
 publication IDs and Change Impact reports remain unserialized.
 
 `oneagent.impact` keeps its legacy two-Configuration same-snapshot mode and adds
@@ -1562,9 +1562,17 @@ direct-call identifier in one complete Configuration. A document is identified
 by Configuration and Module IDs and retains one accepted format/role, confined
 Workspace-relative path, exact raw UTF-8 bytes, raw length plus SHA-256 content
 version, canonical exact half-open raw-byte occurrences, and one completeness
-marker. EDT and Designer capture paired canonical declarations and calls while
+marker. Qualified-call occurrences additionally retain the bounded immediate
+lexical owner token validated against exact source bytes. EDT and Designer
+capture paired canonical declarations and calls while
 preserving their deliberate path, format, encoding, line-ending, version, and
 range differences.
+
+Non-unique declaration and local-call evidence is target-related only in the
+selected owner Module. Non-unique qualified-call evidence is target-related
+only when its immediate lexical owner token is BSL-equivalent to the selected
+owner Module name. Unrelated same-name calls therefore do not block a plan,
+while target-owner ambiguity remains fail-closed.
 
 One request binds the checked process-local Workspace publication,
 Configuration, pre-rename target Node ID, and bounded desired name. The planner
@@ -1584,7 +1592,7 @@ mutable handle. Planning and preview do not change source, repository,
 Workspace, cache, editor, protocol, or plan state and grant no authorization.
 
 Each Workspace Configuration snapshot now retains one complete source-evidence
-set. Cache schema stays `1` and semantic compatibility is `6`; decode rebuilds
+set. Cache schema stays `1` and semantic compatibility is `7`; decode rebuilds
 documents from the private source-state bytes and validates the canonical
 manifest. Publication IDs and plans are not persisted. Failed, cancelled,
 stale, incomplete, incompatible, or over-bound attempts return no partial

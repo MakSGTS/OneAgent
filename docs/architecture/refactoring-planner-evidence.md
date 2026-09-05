@@ -12,9 +12,19 @@ Sprint 39 prompt-suite retirement.
 
 Post-review remediation commit `36c28e48` restores Configuration-at-Workspace-
 root support and adds one public Workspace regression plus one public MCP
-process regression. A fresh live inventory from remediation merge `5d16782a`
-updates the affected counts below to 9 Workspace tests, 19 MCP process tests,
-and 1,334 tests across the unchanged 85-target inventory.
+process regression. The live inventory at remediation merge `5d16782a` was 9
+Workspace tests, 19 MCP process tests, and 1,334 tests across 85 targets.
+
+A later independent review found that the planner treated every non-unique
+same-name occurrence in the Configuration as target-related. The current
+implementation remediation retains and byte-validates the immediate lexical
+owner of qualified calls, scopes local/declaration relevance by owner Module
+ID, scopes qualified relevance by BSL-equivalent owner name, and adds paired
+positive/negative planner regressions. This changes the private occurrence
+manifest and advances cache semantic compatibility from `6` to `7`.
+A fresh full inventory on 2026-09-05 remains 85 targets with 81 non-zero and
+four expected zero-test binary entries; the four added Analysis regressions
+increase the complete total to 1,338 tests.
 
 The accepted first slice is exactly `bsl_callable_rename_v1`: one top-level BSL
 Procedure or Function declaration and every supported unique local or exported
@@ -46,16 +56,16 @@ The committed implementation and recovery chain before Task 9 is:
 | ADR-0063 requirement | Repository-owned evidence | Result |
 | --- | --- | --- |
 | Graph remains the sole Configuration, Module, callable, ownership, `Calls`, and query authority | No Graph production path changed in the ADR-through-recovery range; 298 Graph package tests; Analysis uses `SemanticGraphQuery` and the BSL-owned identity/name helpers | pass |
-| Analysis owns source-independent documents, requests, preconditions, operations, plans, previews, bounds, summaries, and failures | `oneagent-analysis::refactoring`, 10 source-evidence tests, 15 plan/planner tests, strict Rustdoc | pass |
+| Analysis owns source-independent documents, requests, preconditions, operations, plans, previews, bounds, summaries, and failures | `oneagent-analysis::refactoring`, 12 source-evidence tests, 17 plan/planner tests, strict Rustdoc | pass |
 | Adapters capture evidence, Runtime publishes it, and MCP only projects it through Tool Policy | EDT/Designer source-evidence targets, Workspace tests, MCP semantic/stdio/process targets, and dependency-direction audit | pass |
 | The only family is one top-level BSL Procedure or Function rename in one Configuration | Planner Procedure, Function, English, Russian, unsupported-target, missing-target, and single-Configuration tests | pass |
 | EDT supports exact declarations plus unique local and qualified calls; Designer supports accepted Object, Manager, and Common module roles with exported qualified calls | 4 EDT source-evidence tests, 4 Designer source-evidence tests, and the paired production conformance oracle | pass |
-| Unsupported, unresolved, ambiguous, dynamic, string/comment, nested, multi-segment, or otherwise incomplete target-related evidence never produces a guessed operation | Adapter complete-ledger negative tests and planner missing/ambiguous/incompatible/incomplete tests | pass |
-| One document is identified only by Configuration and Module IDs and binds format, role, confined relative path, exact raw bytes, content version, canonical occurrences, and completeness | 10 source-evidence tests cover identity, duplicate IDs/paths, format/role, confinement, raw bytes, canonical order, and complete sets | pass |
+| Unsupported, unresolved, ambiguous, dynamic, string/comment, nested, multi-segment, or otherwise incomplete target-related evidence never produces a guessed operation, while unrelated same-name calls do not block the plan | Adapter complete-ledger negative tests plus planner unrelated-local, unrelated-qualified, target-owner-qualified, missing, ambiguous, incompatible, and incomplete tests | pass |
+| One document is identified only by Configuration and Module IDs and binds format, role, confined relative path, exact raw bytes, content version, canonical occurrences, and completeness | 12 source-evidence tests cover identity, lexical owner, duplicate IDs/paths, format/role, confinement, raw bytes, canonical order, and complete sets | pass |
 | Content version is exact raw length plus all 32 SHA-256 bytes from one canonical implementation | Common SHA-256 vectors, deterministic content-version tests, moved private Designer hash implementation, and manifest/source audit | pass |
 | UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 42-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
 | Accepted regular non-symlink sources are captured before publication and are never reopened by planning or preview | EDT/Designer non-UTF-8/symlink/changed-during-capture tests; Workspace and MCP tests change, remove, and rename source after publication while repeated plans remain equal | pass |
-| Every syntactically relevant direct-call candidate has one retained unique, unresolved, ambiguous, or unsupported outcome | EDT and Designer complete-ledger tests plus paired canonical occurrence projection | pass |
+| Every syntactically relevant direct-call candidate has one retained unique, unresolved, ambiguous, or unsupported outcome plus exact qualified-call lexical owner context | EDT and Designer complete-ledger/owner-context tests, Analysis byte-validation tests, and paired canonical occurrence projection | pass |
 | `WorkspacePublicationId` is the one checked process-local publication sequence shared with Change Impact | The public alias, Runtime initial/successor/stale tests, File Watching, MCP live-publication, and fresh Workspace runs | pass |
 | Target identity binds Configuration, pre-rename node, kind, one owner Module, declaration, source version, and the BSL-owned expected post-rename ID | Planner target/owner/source tests and Graph-backed production fixture evaluation | pass |
 | Desired names use the accepted Unicode grammar, 256-byte bound, BSL lowercase equivalence, reserved set, no-op rule, and sibling/identity collision rules | Public name-bound/grammar/reserved/redaction test and planner no-op/name/identity collision tests | pass |
@@ -71,7 +81,7 @@ The committed implementation and recovery chain before Task 9 is:
 | Cancellation is checked through planning and Runtime joins owned work during shutdown | Planner cancellation checkpoints, Runtime library lifecycle tests, MCP cancellation projection, stdio cancellation, EOF, and process cleanup | pass |
 | Every Workspace Configuration snapshot publishes one complete source-evidence set atomically | Workspace public positive/failure tests, Runtime 124-test unit suite, and adapter failure/duplicate identity validation | pass |
 | Failed/cancelled/stale/incomplete builds publish nothing, consume no ID, retain the last valid snapshot, and recover normally | Runtime unit, Workspace, File Watching, Git-input, cache, and live MCP successor evidence | pass |
-| Cache schema stays `1`, semantic compatibility is `6`, exact bytes stay in the private source envelope, and the semantic DTO stores only the canonical manifest | Cache source audit, exact envelope assertions, 124 Runtime unit tests, and 4 public persistent-cache tests | pass |
+| Cache schema stays `1`, semantic compatibility is `7`, exact bytes stay in the private source envelope, and the semantic DTO stores only the canonical manifest | Cache source audit, exact envelope assertions, version-6 invalidation, 124 Runtime unit tests, and 4 public persistent-cache tests | pass |
 | Cold and accepted warm snapshots expose equal source evidence and equal plans; plans and publication IDs are not persisted | Cache round-trip planner equality, public cold/warm/replacement tests, and serialized-envelope audit | pass |
 | The MCP catalog contains exactly eight lexicographically ordered read-only tools for all three accepted revisions | MCP catalog/schema tests, 53 Protocol tests, 10 semantic-tool tests, 8 stdio tests, 19 public-process tests, and 62 VS Code unit tests | pass |
 | `oneagent.refactor.plan` requires exact publication, Configuration, target, and desired-name fields, admits optional `1..=100` limit, and rejects unknown fields | Catalog schema assertions and positive/missing/extra/type/exact/one-over public tests | pass |
@@ -96,9 +106,9 @@ totals and explicit target reruns overlap and must not be added together.
 | `cargo test -p oneagent-common --quiet` | 6 | 0 / 0 / 0 |
 | `cargo test -p oneagent-bsl --quiet` | 42 | 0 / 0 / 0 |
 | `cargo test -p oneagent-graph --quiet` | 298 | 0 / 0 / 0 |
-| `cargo test -p oneagent-analysis --test refactoring_source_evidence --quiet` | 10 | 0 / 0 / 0 |
-| `cargo test -p oneagent-analysis --test refactoring_plan --quiet` | 15 | 0 / 0 / 0 |
-| `cargo test -p oneagent-analysis --quiet` | 154 | 0 / 0 / 0 |
+| `cargo test -p oneagent-analysis --test refactoring_source_evidence --quiet` | 12 | 0 / 0 / 0 |
+| `cargo test -p oneagent-analysis --test refactoring_plan --quiet` | 17 | 0 / 0 / 0 |
+| `cargo test -p oneagent-analysis --quiet` | 158 | 0 / 0 / 0 |
 | `cargo test -p oneagent-edt --test source_evidence --quiet` | 4 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --test source_evidence --quiet` | 4 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --test conformance --quiet` | 4 | 0 / 0 / 0 |
@@ -120,11 +130,10 @@ totals and explicit target reruns overlap and must not be added together.
 | `cargo test -p oneagent-runtime --test lsp_process --quiet` | 8 | 0 / 0 / 0 |
 | `cargo test -p oneagent-cli --test runtime_client --quiet` | 2 | 0 / 0 / 0 |
 
-The executable inventory command
-`cargo test --workspace --all-targets -- --list --format terse` enumerated 85
-targets: 81 non-zero targets, the four expected zero-test binaries, and 1,334
-tests. The complete canonical test run reproduced exactly 1,334 passed tests
-with zero failures, ignored, measured, or filtered tests.
+The completed canonical `cargo test --workspace --all-targets --quiet` run
+emitted 85 target summaries: 81 non-zero targets, the four expected zero-test
+binaries, and 1,338 tests. It reported exactly 1,338 passed tests with zero
+failures, ignored, measured, or filtered tests.
 
 ## Paired source and planner oracle
 
@@ -133,8 +142,8 @@ The tracked Sprint 14 conformance fixture represents the same exported
 qualified call in EDT and Designer XML layouts. EDT retains LF bytes; Designer
 retains one UTF-8 BOM and CRLF bytes. Their paths, formats, raw bytes, content
 versions, and raw ranges deliberately differ, while the canonical declaration,
-local-call, qualified-call, resolution, mapped-target, owner-role, and semantic
-identity projection is equal.
+local-call, qualified-call, lexical-owner, resolution, mapped-target,
+owner-role, and semantic identity projection is equal.
 
 Each production adapter plan contains exactly one declaration, one local-call,
 and one qualified-call operation with no omission. Repeated evaluation over the
@@ -149,7 +158,7 @@ Workspace tests prove that plans remain byte-equal after the original EDT file
 is changed and renamed and the Designer file is removed. A successor source
 version produces a new publication and plan while rejecting the predecessor
 request as stale; a retained predecessor `Arc` remains independently usable.
-Cold and accepted semantic-version-`6` warm cache snapshots reconstruct equal
+Cold and accepted semantic-version-`7` warm cache snapshots reconstruct equal
 documents, occurrences, versions, and plans from the private source-state bytes.
 
 The three accepted MCP revisions expose the same eight-name catalog and exact
@@ -172,13 +181,19 @@ did not start TypeScript because `node` was absent from `PATH`; it exited 1 with
 the compilation/unit matrix were then executed directly with the provided
 bundled Node runtime and exited zero.
 
+The target-relevance remediation repeated the same five TypeScript stages
+sequentially on 2026-09-05. The chained command exited zero and again reported
+62 passed unit tests with zero failures, cancellations, skips, or todos. The
+Electron-as-Node wrapper emitted non-fatal macOS process-inspection diagnostics;
+they did not launch an Extension Host or change any stage exit status.
+
 ## Canonical gate
 
 | Command | Exact outcome |
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,334 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,338 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
 | `git diff --check` | exit 0 for the final Task 9 and post-review remediation documentation diffs |
@@ -189,8 +204,9 @@ bundled Node runtime and exited zero.
   source-evidence and planner domain. BSL additively exposes exact optional
   identifier ranges, one shared name-equivalence helper, and the existing
   callable-ID constructor. Common additively exposes the canonical SHA-256
-  implementation. Legacy constructors and call-resolution results remain
-  available and compatible.
+  implementation. `SourceOccurrence::new` remains available for declarations
+  and local calls; qualified calls use the additive explicit lexical-owner
+  constructor. Existing call-resolution results remain available.
 - EDT and Designer add source-evidence build results/accessors without changing
   existing graph results. Workspace Configuration snapshots add immutable
   evidence access, and `WorkspaceSnapshot::plan_refactoring` is additive. No
@@ -202,11 +218,11 @@ bundled Node runtime and exited zero.
   member, native library, license field, VS Code package, pnpm lock, or EDT
   package changed. The workspace continues to inherit Apache-2.0 and forbid
   unsafe Rust.
-- Cache schema is exactly `1` and semantic compatibility is exactly `6`.
+- Cache schema is exactly `1` and semantic compatibility is exactly `7`.
   Source bytes remain in the private source-state envelope; the semantic DTO
-  adds only canonical document/occurrence/version claims and validates them
-  against recomputed bytes during decode. Publication IDs and plans are not
-  serialized.
+  adds only canonical document/occurrence/version/lexical-owner claims and
+  validates them against recomputed bytes during decode. Version `6` entries
+  cold-rebuild; publication IDs and plans are not serialized.
 - No Graph, EDT Coverage, or Designer Coverage registry path changed. Existing
   graph facts and Coverage capabilities remain unchanged; the planner consumes
   them and retained source evidence without creating a competing fact or
@@ -269,6 +285,7 @@ the canonical test audit:
 
 - `local-artifacts/codex-runs/sprint40-task9/test-list.log`
 - `local-artifacts/codex-runs/sprint40-task9/workspace-tests.log`
+- `local-artifacts/codex-runs/sprint40-target-relevance-remediation/workspace-tests.log`
 
 They contain no credentials or external payloads and are ignored, untracked
 local artifacts.

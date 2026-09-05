@@ -9942,9 +9942,13 @@ canonical SHA-256 implementation, callable identity/name equivalence, and exact
 raw identifier ranges. Analysis owns complete immutable source evidence and the
 typed deterministic planner domain/evaluation. EDT and Designer capture paired
 documents and canonical declaration/local/qualified-call outcomes before
-publication. Workspace publishes the evidence atomically, reconstructs it from
-cache semantic compatibility `6`, and plans only from one retained immutable
-snapshot. Runtime, Tool Policy, and MCP expose the eighth read-only tool
+publication. Qualified calls retain their immediate lexical owner, and the
+planner scopes non-unique local/declaration evidence by owner Module ID and
+non-unique qualified evidence by the BSL-equivalent owner name, so unrelated
+same-name calls do not block a plan. Workspace publishes the evidence
+atomically, reconstructs it from cache semantic compatibility `7`, and plans
+only from one retained immutable snapshot. Runtime, Tool Policy, and MCP expose
+the eighth read-only tool
 `oneagent.refactor.plan`; VS Code changes only its catalog assertion.
 
 The [Sprint 40 evidence](architecture/refactoring-planner-evidence.md) maps
@@ -9958,14 +9962,14 @@ tests make the original source unreadable after publication and still produce
 equal repeated plans from retained bytes; successor publications reject stale
 requests and produce fresh identities.
 
-Focused unfiltered evidence passes 6 Common, 42 BSL, 298 Graph, 154 Analysis,
+Focused unfiltered evidence passes 6 Common, 42 BSL, 298 Graph, 158 Analysis,
 344 EDT, 39 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
 input, 4 cache, 53 Protocol, 33 Tool Policy, 10 semantic MCP, 8 MCP stdio, and
 19 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
 62-test VS Code unit matrix also pass. The executable inventory contains 85
 all-target entries: 81 non-zero targets, four expected zero-test public binary
-entry points reported only as inventory, and 1,334 tests. The canonical
-workspace run passes all 1,334 with zero failed, ignored, measured, or filtered
+entry points reported only as inventory, and 1,338 tests. The canonical
+workspace run passes all 1,338 with zero failed, ignored, measured, or filtered
 tests; format, all-target check, strict Clippy, warning-denied Rustdoc, and diff
 checks also pass.
 

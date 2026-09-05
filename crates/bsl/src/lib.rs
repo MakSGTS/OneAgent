@@ -228,6 +228,28 @@ pub(crate) fn source_lines(source: &str) -> Vec<BslSourceLine<'_>> {
     result
 }
 
+pub(crate) fn leading_bsl_token(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim_start();
+    let token_end = trimmed
+        .char_indices()
+        .find(|(_, scalar)| *scalar != '_' && !scalar.is_alphanumeric())
+        .map_or(trimmed.len(), |(index, _)| index);
+    (token_end > 0).then(|| (&trimmed[..token_end], &trimmed[token_end..]))
+}
+
+pub(crate) fn is_callable_scope_end(line: &str) -> bool {
+    leading_bsl_token(line).is_some_and(|(token, _)| {
+        [
+            "endprocedure",
+            "конецпроцедуры",
+            "endfunction",
+            "конецфункции",
+        ]
+        .into_iter()
+        .any(|keyword| bsl_names_equal(token, keyword))
+    })
+}
+
 /// Extracts top-level declarations from a BSL module.
 pub trait BslDeclarationExtractor {
     /// Extracts declarations using `module_id` as the stable parent identifier.
@@ -248,6 +270,7 @@ pub struct LineBslDeclarationExtractor;
 impl BslDeclarationExtractor for LineBslDeclarationExtractor {
     fn extract(&self, module_id: &EntityId, source: &str) -> Result<Vec<BslSymbol>, BslParseError> {
         let mut symbols = Vec::new();
+        let mut in_callable_scope = false;
 
         for source_line in source_lines(source) {
             let (line, bom_bytes) = if source_line.number == 1 {
@@ -266,24 +289,33 @@ impl BslDeclarationExtractor for LineBslDeclarationExtractor {
                 continue;
             }
 
-            if let Some(symbol) = parse_declaration(
+            if is_callable_scope_end(trimmed) {
+                in_callable_scope = false;
+                continue;
+            }
+
+            let symbol = match parse_declaration(
                 module_id,
                 trimmed,
                 trimmed_start,
                 source_line.number,
                 BslSymbolKind::Procedure,
             )? {
-                symbols.push(symbol);
-                continue;
-            }
+                Some(symbol) => Some(symbol),
+                None => parse_declaration(
+                    module_id,
+                    trimmed,
+                    trimmed_start,
+                    source_line.number,
+                    BslSymbolKind::Function,
+                )?,
+            };
 
-            if let Some(symbol) = parse_declaration(
-                module_id,
-                trimmed,
-                trimmed_start,
-                source_line.number,
-                BslSymbolKind::Function,
-            )? {
+            if let Some(symbol) = symbol {
+                if in_callable_scope {
+                    return Err(BslParseError::NestedDeclaration(source_line.number));
+                }
+                in_callable_scope = true;
                 symbols.push(symbol);
             }
         }
@@ -304,15 +336,14 @@ fn parse_declaration(
         BslSymbolKind::Function => ["function", "функция"],
     };
 
-    let lowercase = line.to_lowercase();
-    let Some(keyword) = keywords
-        .iter()
-        .find(|keyword| lowercase.starts_with(**keyword))
-    else {
+    let Some((keyword, after_keyword)) = leading_bsl_token(line).filter(|(token, _)| {
+        keywords
+            .into_iter()
+            .any(|keyword| bsl_names_equal(token, keyword))
+    }) else {
         return Ok(None);
     };
 
-    let after_keyword = &line[keyword.len()..];
     let remainder = after_keyword.trim_start();
     let remainder_start = keyword.len() + after_keyword.len().saturating_sub(remainder.len());
     let Some(open_parenthesis) = remainder.find('(') else {
@@ -331,8 +362,11 @@ fn parse_declaration(
         });
     }
 
-    let exported =
-        remainder.to_lowercase().contains("export") || remainder.to_lowercase().contains("экспорт");
+    let exported = remainder.rfind(')').is_some_and(|closing_parenthesis| {
+        leading_bsl_token(&remainder[closing_parenthesis + 1..]).is_some_and(|(token, _)| {
+            bsl_names_equal(token, "export") || bsl_names_equal(token, "экспорт")
+        })
+    });
 
     let name_start = line_start
         + remainder_start
@@ -365,6 +399,8 @@ pub enum BslParseError {
         /// Original source line.
         text: String,
     },
+    /// A callable declaration appeared inside another callable scope.
+    NestedDeclaration(usize),
     /// A symbol name could not be represented.
     InvalidName(usize),
     /// A symbol identifier could not be represented.
@@ -379,6 +415,9 @@ impl Display for BslParseError {
                     formatter,
                     "malformed BSL declaration at line {line}: {text}"
                 )
+            }
+            Self::NestedDeclaration(line) => {
+                write!(formatter, "nested BSL declaration at line {line}")
             }
             Self::InvalidName(line) => {
                 write!(formatter, "invalid BSL symbol name at line {line}")
@@ -458,8 +497,12 @@ EndProcedure
 
     #[test]
     fn declaration_ranges_preserve_bom_unicode_whitespace_and_line_endings() {
-        let source =
-            "\u{feff}  Процедура Тест () Экспорт\r\n\tFunction CalculateTotal()\rEndFunction\n";
+        let source = concat!(
+            "\u{feff}  Процедура Тест () Экспорт\r\n",
+            "КонецПроцедуры\r\n",
+            "\tFunction CalculateTotal()\r",
+            "EndFunction\n",
+        );
         let first = LineBslDeclarationExtractor
             .extract(&module_id(), source)
             .expect("declarations must parse");
@@ -479,7 +522,7 @@ EndProcedure
             );
         }
         assert_eq!(first[0].line(), 1);
-        assert_eq!(first[1].line(), 2);
+        assert_eq!(first[1].line(), 3);
     }
 
     #[test]
@@ -497,5 +540,45 @@ EndProcedure
             false,
         );
         assert!(symbol.identifier_range().is_none());
+    }
+
+    #[test]
+    fn declaration_and_export_keywords_are_token_exact_and_nested_scopes_fail() {
+        let source = concat!(
+            "Procedure Host()\n",
+            "    ProcedureCall();\n",
+            "EndProcedure\n",
+            "Procedure ExportData()\n",
+            "EndProcedure\n",
+            "Процедура ЭкспортДанных()\n",
+            "КонецПроцедуры\n",
+            "Function Published() Export\n",
+            "EndFunction\n",
+            "Функция Опубликована() Экспорт\n",
+            "КонецФункции\n",
+        );
+        let symbols = LineBslDeclarationExtractor
+            .extract(&module_id(), source)
+            .expect("token-exact declarations must parse");
+
+        assert_eq!(
+            symbols
+                .iter()
+                .map(|symbol| (symbol.name().as_str(), symbol.is_exported()))
+                .collect::<Vec<_>>(),
+            [
+                ("Host", false),
+                ("ExportData", false),
+                ("ЭкспортДанных", false),
+                ("Published", true),
+                ("Опубликована", true),
+            ]
+        );
+
+        let nested = "Procedure Outer()\nProcedure Inner()\nEndProcedure\nEndProcedure\n";
+        assert_eq!(
+            LineBslDeclarationExtractor.extract(&module_id(), nested),
+            Err(BslParseError::NestedDeclaration(2))
+        );
     }
 }

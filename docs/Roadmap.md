@@ -9916,8 +9916,10 @@ diagnostic, and MCP frame bounds are fixed by ADR-0063 with exact/one-over
 evidence and deterministic closed failure precedence.
 
 Workspace publications must contain complete paired source evidence or fail
-before replacement. Cache schema remains `1`, semantic compatibility advances
-from `5` to `6`, and warm decode reconstructs exact documents from the private
+before replacement. Cache schema remains `1`; the initial source manifest
+advanced semantic compatibility from `5` to `6`, and the later lexical-owner
+manifest amendment advanced it to the current value `7`. Warm decode
+reconstructs exact documents from the private
 source-state bytes while validating a persisted canonical occurrence manifest;
 publication IDs and plans are not persisted. Task 8 adds the eighth
 lexicographically ordered read-only tool `oneagent.refactor.plan` for all three
@@ -9962,14 +9964,14 @@ tests make the original source unreadable after publication and still produce
 equal repeated plans from retained bytes; successor publications reject stale
 requests and produce fresh identities.
 
-Focused unfiltered evidence passes 6 Common, 42 BSL, 298 Graph, 158 Analysis,
-344 EDT, 39 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
+Focused unfiltered evidence passes 6 Common, 44 BSL, 298 Graph, 158 Analysis,
+345 EDT, 40 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
 input, 4 cache, 53 Protocol, 33 Tool Policy, 10 semantic MCP, 8 MCP stdio, and
 19 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
 62-test VS Code unit matrix also pass. The executable inventory contains 85
 all-target entries: 81 non-zero targets, four expected zero-test public binary
-entry points reported only as inventory, and 1,338 tests. The canonical
-workspace run passes all 1,338 with zero failed, ignored, measured, or filtered
+entry points reported only as inventory, and 1,342 tests. The canonical
+workspace run passes all 1,342 with zero failed, ignored, measured, or filtered
 tests; format, all-target check, strict Clippy, warning-denied Rustdoc, and diff
 checks also pass.
 

@@ -3,7 +3,9 @@
 use oneagent_common::{EntityId, EntityName};
 use std::fmt::{Display, Formatter};
 
-use crate::{BslIdentifierRange, source_lines};
+use crate::{
+    BslIdentifierRange, bsl_names_equal, is_callable_scope_end, leading_bsl_token, source_lines,
+};
 
 /// Lexical form of one extracted direct BSL call target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -155,11 +157,14 @@ impl BslCallExtractor for LineBslCallExtractor {
 
             if !in_string {
                 if let Some(scope_name) = parse_scope_start(trimmed, source_line.number)? {
+                    if current_scope.is_some() {
+                        return Err(BslCallError::NestedScope(source_line.number));
+                    }
                     current_scope = Some(scope_name);
                     continue;
                 }
 
-                if is_scope_end(trimmed) {
+                if is_callable_scope_end(trimmed) {
                     current_scope = None;
                     continue;
                 }
@@ -195,17 +200,15 @@ impl BslCallExtractor for LineBslCallExtractor {
 }
 
 fn parse_scope_start(line: &str, line_number: usize) -> Result<Option<EntityName>, BslCallError> {
-    let lowercase = line.to_lowercase();
-
-    let keyword = ["procedure", "процедура", "function", "функция"]
-        .into_iter()
-        .find(|keyword| lowercase.starts_with(keyword));
-
-    let Some(keyword) = keyword else {
+    let Some((_, after_keyword)) = leading_bsl_token(line).filter(|(token, _)| {
+        ["procedure", "процедура", "function", "функция"]
+            .into_iter()
+            .any(|keyword| bsl_names_equal(token, keyword))
+    }) else {
         return Ok(None);
     };
 
-    let remainder = line[keyword.len()..].trim_start();
+    let remainder = after_keyword.trim_start();
 
     let Some(open_parenthesis) = remainder.find('(') else {
         return Err(BslCallError::MalformedScope {
@@ -226,13 +229,6 @@ fn parse_scope_start(line: &str, line_number: usize) -> Result<Option<EntityName
     EntityName::new(name)
         .map(Some)
         .map_err(|_| BslCallError::InvalidName(line_number))
-}
-
-fn is_scope_end(line: &str) -> bool {
-    matches!(
-        line.trim().to_lowercase().as_str(),
-        "endprocedure" | "конецпроцедуры" | "endfunction" | "конецфункции"
-    )
 }
 
 #[derive(Debug)]
@@ -371,6 +367,9 @@ pub enum BslCallError {
         /// Original source text.
         text: String,
     },
+
+    /// A callable declaration appeared inside another callable scope.
+    NestedScope(usize),
 }
 
 impl Display for BslCallError {
@@ -390,6 +389,10 @@ impl Display for BslCallError {
                     "malformed BSL scope declaration at line {line}: {text}"
                 )
             }
+
+            Self::NestedScope(line) => {
+                write!(formatter, "nested BSL callable scope at line {line}")
+            }
         }
     }
 }
@@ -400,7 +403,7 @@ impl std::error::Error for BslCallError {}
 mod tests {
     use oneagent_common::EntityId;
 
-    use super::{BslCall, BslCallExtractor, BslCallKind, LineBslCallExtractor};
+    use super::{BslCall, BslCallError, BslCallExtractor, BslCallKind, LineBslCallExtractor};
 
     fn module_id() -> EntityId {
         EntityId::new("module.sales.object").expect("identifier must be valid")
@@ -532,6 +535,31 @@ EndProcedure
                 .expect("extracted call must have an exact range");
             assert_eq!(&source[range.start_byte()..range.end_byte()], "Проверить");
         }
+    }
+
+    #[test]
+    fn scope_keywords_are_token_exact_and_nested_scopes_fail() {
+        let calls = LineBslCallExtractor
+            .extract_calls(
+                &module_id(),
+                "Procedure Host()\nProcedureCall();\nEndProcedure\n",
+            )
+            .expect("keyword-prefixed calls must remain calls");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].target_symbol().as_str(), "ProcedureCall");
+        assert_eq!(
+            calls[0]
+                .source_symbol()
+                .expect("call must retain its scope")
+                .as_str(),
+            "Host"
+        );
+
+        let nested = "Procedure Outer()\nFunction Inner()\nEndFunction\nEndProcedure\n";
+        assert_eq!(
+            LineBslCallExtractor.extract_calls(&module_id(), nested),
+            Err(BslCallError::NestedScope(2))
+        );
     }
 
     #[test]

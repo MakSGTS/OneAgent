@@ -26,6 +26,14 @@ A fresh full inventory on 2026-09-05 remains 85 targets with 81 non-zero and
 four expected zero-test binary entries; the four added Analysis regressions
 increase the complete total to 1,338 tests.
 
+The keyword-parser remediation makes declaration, scope, termination, and
+trailing `Export` recognition token-exact, rejects a callable declaration
+nested inside another callable scope, and proves the fail-closed behavior in
+both production adapters. Six intentionally truncated Writes snippets are
+closed only when composed into their integration-test module. The four new BSL
+and adapter regressions increase the complete total to 1,342 tests without a
+cache, Graph, Coverage, protocol, or public planner contract change.
+
 The accepted first slice is exactly `bsl_callable_rename_v1`: one top-level BSL
 Procedure or Function declaration and every supported unique local or exported
 qualified direct-call identifier in one complete Configuration publication.
@@ -59,11 +67,11 @@ The committed implementation and recovery chain before Task 9 is:
 | Analysis owns source-independent documents, requests, preconditions, operations, plans, previews, bounds, summaries, and failures | `oneagent-analysis::refactoring`, 12 source-evidence tests, 17 plan/planner tests, strict Rustdoc | pass |
 | Adapters capture evidence, Runtime publishes it, and MCP only projects it through Tool Policy | EDT/Designer source-evidence targets, Workspace tests, MCP semantic/stdio/process targets, and dependency-direction audit | pass |
 | The only family is one top-level BSL Procedure or Function rename in one Configuration | Planner Procedure, Function, English, Russian, unsupported-target, missing-target, and single-Configuration tests | pass |
-| EDT supports exact declarations plus unique local and qualified calls; Designer supports accepted Object, Manager, and Common module roles with exported qualified calls | 4 EDT source-evidence tests, 4 Designer source-evidence tests, and the paired production conformance oracle | pass |
+| EDT supports exact declarations plus unique local and qualified calls; Designer supports accepted Object, Manager, and Common module roles with exported qualified calls | 5 EDT source-evidence tests, 5 Designer source-evidence tests, and the paired production conformance oracle | pass |
 | Unsupported, unresolved, ambiguous, dynamic, string/comment, nested, multi-segment, or otherwise incomplete target-related evidence never produces a guessed operation, while unrelated same-name calls do not block the plan | Adapter complete-ledger negative tests plus planner unrelated-local, unrelated-qualified, target-owner-qualified, missing, ambiguous, incompatible, and incomplete tests | pass |
 | One document is identified only by Configuration and Module IDs and binds format, role, confined relative path, exact raw bytes, content version, canonical occurrences, and completeness | 12 source-evidence tests cover identity, lexical owner, duplicate IDs/paths, format/role, confinement, raw bytes, canonical order, and complete sets | pass |
 | Content version is exact raw length plus all 32 SHA-256 bytes from one canonical implementation | Common SHA-256 vectors, deterministic content-version tests, moved private Designer hash implementation, and manifest/source audit | pass |
-| UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 42-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
+| UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 44-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
 | Accepted regular non-symlink sources are captured before publication and are never reopened by planning or preview | EDT/Designer non-UTF-8/symlink/changed-during-capture tests; Workspace and MCP tests change, remove, and rename source after publication while repeated plans remain equal | pass |
 | Every syntactically relevant direct-call candidate has one retained unique, unresolved, ambiguous, or unsupported outcome plus exact qualified-call lexical owner context | EDT and Designer complete-ledger/owner-context tests, Analysis byte-validation tests, and paired canonical occurrence projection | pass |
 | `WorkspacePublicationId` is the one checked process-local publication sequence shared with Change Impact | The public alias, Runtime initial/successor/stale tests, File Watching, MCP live-publication, and fresh Workspace runs | pass |
@@ -104,16 +112,16 @@ totals and explicit target reruns overlap and must not be added together.
 | Command or exact suite | Tests passed | Failed / ignored / filtered |
 | --- | ---: | --- |
 | `cargo test -p oneagent-common --quiet` | 6 | 0 / 0 / 0 |
-| `cargo test -p oneagent-bsl --quiet` | 42 | 0 / 0 / 0 |
+| `cargo test -p oneagent-bsl --quiet` | 44 | 0 / 0 / 0 |
 | `cargo test -p oneagent-graph --quiet` | 298 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --test refactoring_source_evidence --quiet` | 12 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --test refactoring_plan --quiet` | 17 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --quiet` | 158 | 0 / 0 / 0 |
-| `cargo test -p oneagent-edt --test source_evidence --quiet` | 4 | 0 / 0 / 0 |
-| `cargo test -p oneagent-designer-xml --test source_evidence --quiet` | 4 | 0 / 0 / 0 |
+| `cargo test -p oneagent-edt --test source_evidence --quiet` | 5 | 0 / 0 / 0 |
+| `cargo test -p oneagent-designer-xml --test source_evidence --quiet` | 5 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --test conformance --quiet` | 4 | 0 / 0 / 0 |
-| `cargo test -p oneagent-edt --quiet` | 344 | 0 / 0 / 0 |
-| `cargo test -p oneagent-designer-xml --quiet` | 39 | 0 / 0 / 0 |
+| `cargo test -p oneagent-edt --quiet` | 345 | 0 / 0 / 0 |
+| `cargo test -p oneagent-designer-xml --quiet` | 40 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --lib --quiet` | 124 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test workspace_service --quiet` | 9 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test file_watching --quiet` | 2 | 0 / 0 / 0 |
@@ -132,7 +140,7 @@ totals and explicit target reruns overlap and must not be added together.
 
 The completed canonical `cargo test --workspace --all-targets --quiet` run
 emitted 85 target summaries: 81 non-zero targets, the four expected zero-test
-binaries, and 1,338 tests. It reported exactly 1,338 passed tests with zero
+binaries, and 1,342 tests. It reported exactly 1,342 passed tests with zero
 failures, ignored, measured, or filtered tests.
 
 ## Paired source and planner oracle
@@ -187,13 +195,18 @@ sequentially on 2026-09-05. The chained command exited zero and again reported
 Electron-as-Node wrapper emitted non-fatal macOS process-inspection diagnostics;
 they did not launch an Extension Host or change any stage exit status.
 
+The keyword-parser remediation repeated those five stages sequentially on the
+same date with the same successful 62-test result and zero failure,
+cancellation, skip, or todo counts. The same non-fatal process-inspection
+diagnostics did not change any stage exit status.
+
 ## Canonical gate
 
 | Command | Exact outcome |
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,338 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,342 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
 | `git diff --check` | exit 0 for the final Task 9 and post-review remediation documentation diffs |

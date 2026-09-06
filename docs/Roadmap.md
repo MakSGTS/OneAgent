@@ -10020,16 +10020,33 @@ tests make the original source unreadable after publication and still produce
 equal repeated plans from retained bytes; successor publications reject stale
 requests and produce fresh identities.
 
-Focused unfiltered evidence passes 6 Common, 52 BSL, 298 Graph, 158 Analysis,
-346 EDT, 41 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
+Focused unfiltered evidence passes 6 Common, 54 BSL, 298 Graph, 159 Analysis,
+351 EDT, 46 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
 input, 4 cache, 53 Protocol, 33 Tool Policy, 10 semantic MCP, 8 MCP stdio, and
 19 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
 62-test VS Code unit matrix also pass. The executable inventory contains 85
 all-target entries: 81 non-zero targets, four expected zero-test public binary
-entry points reported only as inventory, and 1,352 tests. The canonical
-workspace run passes all 1,352 with zero failed, ignored, measured, or filtered
+entry points reported only as inventory, and 1,365 tests. The canonical
+workspace run passes all 1,365 with zero failed, ignored, measured, or filtered
 tests; format, all-target check, strict Clippy, warning-denied Rustdoc, and diff
 checks also pass.
+
+Sprint 40.1 makes
+`oneagent-analysis::publication::WorkspacePublicationId` the only checked
+non-zero publication newtype, preserves `ChangeImpactPublicationId` and the
+former Refactoring export as type-identical compatibility paths, and migrates
+Runtime Workspace signatures to the canonical vocabulary. The added public
+oracle proves exact-path availability, conversion-free alias identity, and
+zero rejection. Numeric sequencing, snapshot/impact atomicity, stale and
+overflow failures, fresh-service reset, cache schema `1`, semantic compatibility
+`8`, MCP wire values, read-only behavior, and edit authorization remain
+unchanged.
+
+The six governance-only commits `dce7470e`, `25019f17`, `f1698840`, `89ce1402`,
+`6e038660`, and `8a8e4734` have a combined net diff confined to seven
+`docs/codex/**` paths and `scripts/validate-codex-prompts.sh` (453 additions, 15
+deletions). They contribute no Rust, Cargo, product API, cache, protocol,
+client, Graph, adapter, or Refactoring Planner behavior.
 
 Task-range audits find only accepted internal Cargo dependency edges, no third-
 party package/feature/license change, no removed public API, no Graph or

@@ -6,6 +6,7 @@ use oneagent_analysis::change_impact::{
     ChangeImpactPublicationId, ConfigurationImpactKind, MAX_CHANGE_IMPACT_CONFIGURATIONS,
     MAX_CHANGE_IMPACT_IDENTIFIER_BYTES, NeverCancelledChangeImpact,
 };
+use oneagent_analysis::publication::WorkspacePublicationId;
 use oneagent_common::{EntityId, EntityName};
 use oneagent_graph::{
     EdgeKind, GraphEdge, GraphNode, ImpactNodeAvailability, ImpactNodeStatus, ImpactReasonKind,
@@ -88,6 +89,18 @@ fn evaluate(
             &NeverCancelledChangeImpact,
         )
         .expect("report must build")
+}
+
+#[test]
+fn canonical_publication_path_and_change_impact_alias_are_type_identical_and_reject_zero() {
+    let canonical = WorkspacePublicationId::initial();
+    let compatibility: ChangeImpactPublicationId = canonical;
+    let canonical_again: WorkspacePublicationId = compatibility;
+
+    assert_eq!(canonical_again, canonical);
+    assert_eq!(compatibility.get(), 1);
+    assert_eq!(WorkspacePublicationId::new(0), None);
+    assert_eq!(ChangeImpactPublicationId::new(0), None);
 }
 
 #[test]

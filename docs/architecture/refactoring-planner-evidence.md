@@ -5,10 +5,21 @@
 This document records Task 9 evidence executed on 2026-09-02 from committed
 recovery head `3924acb37af4528f18dcaa0ee93c4358dae1730f`, whose parent is exact Task 8
 head `3ab6002355c5dcf471630b2b507238edc9494724`. The implemented boundary is
-governed by [ADR-0063](../adr/0063-refactoring-planner.md). Sprint 40 remains
-active until the mandatory fresh-context Task 10 review, primary
-reconciliation, artifact-consistency check, Sprint 41 hand-off, and conditional
-Sprint 39 prompt-suite retirement.
+governed by [ADR-0063](../adr/0063-refactoring-planner.md). Sprint 40 was later
+closed administratively with two acceptance blockers assigned to corrective
+Sprint 40.1.
+
+Sprint 40.1 Task 2 refreshed the executable evidence on 2026-09-07 from exact
+start `7a3bba517d4a6b0ecc0bac0a0f17e4335fcc43fd`. The remediation places the only
+publication newtype at
+`oneagent_analysis::publication::WorkspacePublicationId`, retains
+`oneagent_analysis::change_impact::ChangeImpactPublicationId` and the existing
+Refactoring export as type-identical compatibility paths, and migrates Runtime
+Workspace signatures to the canonical vocabulary. The public regression proves
+both names are assignable without conversion and explicitly rejects zero
+construction through both paths. Numeric values, checked sequencing, failed
+publication retention, fresh-service reset, cache exclusion, and wire output
+remain unchanged.
 
 Post-review remediation commit `36c28e48` restores Configuration-at-Workspace-
 root support and adds one public Workspace regression plus one public MCP
@@ -45,6 +56,11 @@ adapter regressions increase the complete total to 1,352 tests. Because
 the reconstructed occurrence mapping changes, cache semantic compatibility
 advances from `7` to `8`; schema `1` and the public planner contract remain
 unchanged.
+
+The exact Sprint 40.1 start already contains 54 BSL, 351 EDT, and 46 Designer
+tests. The identity regression adds one Analysis test. The live inventory
+therefore contains 85 targets, 81 non-zero targets, four expected zero-test
+binaries, and 1,365 tests.
 
 The accepted first slice is exactly `bsl_callable_rename_v1`: one top-level BSL
 Procedure or Function declaration and every supported unique local or exported
@@ -83,10 +99,10 @@ The committed implementation and recovery chain before Task 9 is:
 | Unsupported, unresolved, ambiguous, dynamic, string/comment, nested, multi-segment, or otherwise incomplete target-related evidence never produces a guessed operation, while unrelated same-name calls do not block the plan | Adapter complete-ledger negative tests plus planner unrelated-local, unrelated-qualified, target-owner-qualified, missing, ambiguous, incompatible, and incomplete tests | pass |
 | One document is identified only by Configuration and Module IDs and binds format, role, confined relative path, exact raw bytes, content version, canonical occurrences, and completeness | 12 source-evidence tests cover identity, lexical owner, duplicate IDs/paths, format/role, confinement, raw bytes, canonical order, and complete sets | pass |
 | Content version is exact raw length plus all 32 SHA-256 bytes from one canonical implementation | Common SHA-256 vectors, deterministic content-version tests, moved private Designer hash implementation, and manifest/source audit | pass |
-| UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 52-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
+| UTF-8, at most one BOM, CRLF/CR/LF preservation, UTF-8 scalar boundaries, and exact token bytes are enforced | BSL 54-test package, source-evidence range/token/BOM/encoding tests, and paired LF versus BOM+CRLF fixture | pass |
 | Accepted regular non-symlink sources are captured before publication and are never reopened by planning or preview | EDT/Designer non-UTF-8/symlink/changed-during-capture tests; Workspace and MCP tests change, remove, and rename source after publication while repeated plans remain equal | pass |
 | Every syntactically relevant direct-call candidate has one retained unique, unresolved, ambiguous, or unsupported outcome plus exact qualified-call lexical owner context | EDT and Designer complete-ledger/owner-context tests, Analysis byte-validation tests, and paired canonical occurrence projection | pass |
-| `WorkspacePublicationId` is the one checked process-local publication sequence shared with Change Impact | The public alias, Runtime initial/successor/stale tests, File Watching, MCP live-publication, and fresh Workspace runs | pass |
+| `WorkspacePublicationId` is the one checked process-local publication sequence shared with Change Impact | The canonical public path, type-identical compatibility alias, explicit zero rejection, Runtime initial/successor/stale tests, File Watching, MCP live-publication, and fresh Workspace runs | pass |
 | Target identity binds Configuration, pre-rename node, kind, one owner Module, declaration, source version, and the BSL-owned expected post-rename ID | Planner target/owner/source tests and Graph-backed production fixture evaluation | pass |
 | Desired names use the accepted Unicode grammar, 256-byte bound, BSL lowercase equivalence, reserved set, no-op rule, and sibling/identity collision rules | Public name-bound/grammar/reserved/redaction test and planner no-op/name/identity collision tests | pass |
 | Requests contain only family, publication, Configuration, target, and desired name; preconditions contain the complete ordered document/version set | Domain constructor tests, planner input API audit, and MCP exact schema audit | pass |
@@ -124,16 +140,16 @@ totals and explicit target reruns overlap and must not be added together.
 | Command or exact suite | Tests passed | Failed / ignored / filtered |
 | --- | ---: | --- |
 | `cargo test -p oneagent-common --quiet` | 6 | 0 / 0 / 0 |
-| `cargo test -p oneagent-bsl --quiet` | 52 | 0 / 0 / 0 |
+| `cargo test -p oneagent-bsl --quiet` | 54 | 0 / 0 / 0 |
 | `cargo test -p oneagent-graph --quiet` | 298 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --test refactoring_source_evidence --quiet` | 12 | 0 / 0 / 0 |
 | `cargo test -p oneagent-analysis --test refactoring_plan --quiet` | 17 | 0 / 0 / 0 |
-| `cargo test -p oneagent-analysis --quiet` | 158 | 0 / 0 / 0 |
+| `cargo test -p oneagent-analysis --quiet` | 159 | 0 / 0 / 0 |
 | `cargo test -p oneagent-edt --test source_evidence --quiet` | 6 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --test source_evidence --quiet` | 6 | 0 / 0 / 0 |
 | `cargo test -p oneagent-designer-xml --test conformance --quiet` | 4 | 0 / 0 / 0 |
-| `cargo test -p oneagent-edt --quiet` | 346 | 0 / 0 / 0 |
-| `cargo test -p oneagent-designer-xml --quiet` | 41 | 0 / 0 / 0 |
+| `cargo test -p oneagent-edt --quiet` | 351 | 0 / 0 / 0 |
+| `cargo test -p oneagent-designer-xml --quiet` | 46 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --lib --quiet` | 124 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test workspace_service --quiet` | 9 | 0 / 0 / 0 |
 | `cargo test -p oneagent-runtime --test file_watching --quiet` | 2 | 0 / 0 / 0 |
@@ -150,9 +166,9 @@ totals and explicit target reruns overlap and must not be added together.
 | `cargo test -p oneagent-runtime --test lsp_process --quiet` | 8 | 0 / 0 / 0 |
 | `cargo test -p oneagent-cli --test runtime_client --quiet` | 2 | 0 / 0 / 0 |
 
-The completed canonical `cargo test --workspace --all-targets --quiet` run
+The completed canonical `cargo test --workspace --all-targets` run
 emitted 85 target summaries: 81 non-zero targets, the four expected zero-test
-binaries, and 1,352 tests. It reported exactly 1,352 passed tests with zero
+binaries, and 1,365 tests. It reported exactly 1,365 passed tests with zero
 failures, ignored, measured, or filtered tests.
 
 ## Paired source and planner oracle
@@ -218,13 +234,18 @@ diagnostics did not change any stage exit status.
 | --- | --- |
 | `cargo fmt --all -- --check` | exit 0 |
 | `cargo check --workspace --all-targets` | exit 0 |
-| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,352 passed, 0 failed/ignored/measured/filtered |
+| `cargo test --workspace --all-targets` | exit 0; 85 targets, 1,365 passed, 0 failed/ignored/measured/filtered |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | exit 0 |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | exit 0 |
-| `git diff --check` | exit 0 for the final Task 9 and post-review remediation documentation diffs |
+| `git diff --check` | exit 0 for the stable Sprint 40.1 Task 2 diff |
 
 ## API, dependency, cache, Coverage, and sensitive-data audits
 
+- `oneagent-analysis::publication::WorkspacePublicationId` owns the only
+  checked non-zero publication newtype. Change Impact exposes
+  `ChangeImpactPublicationId` as a type alias, Refactoring preserves its former
+  export, and Runtime Workspace signatures use the canonical name without a
+  conversion or second sequence.
 - `oneagent-analysis::refactoring` is additive and publicly owns the complete
   source-evidence and planner domain. BSL additively exposes exact optional
   identifier ranges, one shared name-equivalence helper, and the existing
@@ -265,6 +286,12 @@ diagnostics did not change any stage exit status.
 - The ADR-through-recovery range contains no generated binary, cache, package, local log,
   credential, or unrelated artifact. Successful complete logs are ignored local
   artifacts rather than tracked evidence inputs.
+- Governance-only commits `dce7470e`, `25019f17`, `f1698840`, `89ce1402`,
+  `6e038660`, and `8a8e4734` have a combined net effect of 453 additions and 15
+  deletions across seven `docs/codex/**` paths and
+  `scripts/validate-codex-prompts.sh`. They change no Rust, Cargo, product API,
+  cache, protocol, client, Graph, adapter, or Refactoring Planner behavior and
+  are excluded from the product scope.
 
 ## Deferred scope and no-mutation boundary
 
@@ -311,6 +338,7 @@ the canonical test audit:
 - `local-artifacts/codex-runs/sprint40-task9/test-list.log`
 - `local-artifacts/codex-runs/sprint40-task9/workspace-tests.log`
 - `local-artifacts/codex-runs/sprint40-target-relevance-remediation/workspace-tests.log`
+- `local-artifacts/codex-runs/sprint40-1-task2/test-list.log`
 
 They contain no credentials or external payloads and are ignored, untracked
 local artifacts.

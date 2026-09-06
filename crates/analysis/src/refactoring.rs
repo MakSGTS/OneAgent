@@ -12,7 +12,7 @@ use oneagent_bsl::{BslSymbolKind, bsl_callable_id, bsl_name_key, bsl_names_equal
 use oneagent_common::{EntityId, SourcePath, SourcePosition, SourceSpan, sha256, sha256_hex};
 use oneagent_graph::{GraphNode, NodeId, NodeKind, SemanticGraph, SemanticGraphQuery};
 
-pub use crate::change_impact::ChangeImpactPublicationId as WorkspacePublicationId;
+pub use crate::publication::WorkspacePublicationId;
 
 /// Maximum raw bytes retained by one source document.
 pub const MAX_SOURCE_DOCUMENT_BYTES: usize = 1_048_576;

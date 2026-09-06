@@ -34,9 +34,10 @@ use std::sync::Arc;
 
 use oneagent_analysis::change_impact::{
     ChangeImpactCancellationSignal, ChangeImpactConfiguration, ChangeImpactError,
-    ChangeImpactEvaluator, ChangeImpactPublicationId, ChangeImpactReport,
+    ChangeImpactEvaluator, ChangeImpactReport,
 };
 use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy, DiagnosticReport};
+use oneagent_analysis::publication::WorkspacePublicationId;
 use oneagent_analysis::refactoring::{
     RefactoringCancellationSignal, RefactoringError, RefactoringEvaluation, RefactoringPlanner,
     RefactoringPlannerInput, RefactoringRequest, SourceEvidenceSet,
@@ -1303,7 +1304,7 @@ pub enum WorkspaceChangeImpact {
     /// This is the first complete publication of a fresh Workspace service.
     NoPreviousPublication {
         /// Process-local identity of the current publication.
-        current_publication_id: ChangeImpactPublicationId,
+        current_publication_id: WorkspacePublicationId,
     },
     /// Complete bounded impact from the immediately preceding publication.
     Available(ChangeImpactReport),
@@ -1312,7 +1313,7 @@ pub enum WorkspaceChangeImpact {
 impl WorkspaceChangeImpact {
     /// Returns the process-local identity of the snapshot containing this value.
     #[must_use]
-    pub const fn current_publication_id(&self) -> ChangeImpactPublicationId {
+    pub const fn current_publication_id(&self) -> WorkspacePublicationId {
         match self {
             Self::NoPreviousPublication {
                 current_publication_id,
@@ -1345,7 +1346,7 @@ impl WorkspaceSnapshot {
             root_path,
             configurations,
             change_impact: WorkspaceChangeImpact::NoPreviousPublication {
-                current_publication_id: ChangeImpactPublicationId::initial(),
+                current_publication_id: WorkspacePublicationId::initial(),
             },
         }
     }
@@ -1364,7 +1365,7 @@ impl WorkspaceSnapshot {
 
     /// Returns the process-local identity of this complete publication.
     #[must_use]
-    pub const fn publication_id(&self) -> ChangeImpactPublicationId {
+    pub const fn publication_id(&self) -> WorkspacePublicationId {
         self.change_impact.current_publication_id()
     }
 
@@ -1745,12 +1746,12 @@ mod tests {
     use std::time::Duration;
 
     use oneagent_analysis::change_impact::{
-        ChangeImpactCancellationSignal, ChangeImpactErrorKind, ChangeImpactPublicationId,
-        NeverCancelledChangeImpact,
+        ChangeImpactCancellationSignal, ChangeImpactErrorKind, NeverCancelledChangeImpact,
     };
     use oneagent_analysis::diagnostics::{
         DiagnosticCategory, DiagnosticFamily, DiagnosticSeverity, MAX_SEMANTIC_DIAGNOSTICS,
     };
+    use oneagent_analysis::publication::WorkspacePublicationId;
     use oneagent_analysis::refactoring::SourceEvidenceSet;
     use oneagent_analysis::rules::{
         Rule, RuleCancellationSignal, RuleConfiguration, RuleContext, RuleDefinition,
@@ -2146,10 +2147,7 @@ mod tests {
         assert_eq!(snapshot.len(), 0);
         assert!(snapshot.configurations().is_empty());
         assert_eq!(snapshot.root_path(), root.path());
-        assert_eq!(
-            snapshot.publication_id(),
-            ChangeImpactPublicationId::initial()
-        );
+        assert_eq!(snapshot.publication_id(), WorkspacePublicationId::initial());
         assert!(matches!(
             snapshot.change_impact(),
             WorkspaceChangeImpact::NoPreviousPublication { .. }
@@ -2189,7 +2187,7 @@ mod tests {
 
         let exhausted = WorkspaceSnapshot {
             change_impact: WorkspaceChangeImpact::NoPreviousPublication {
-                current_publication_id: ChangeImpactPublicationId::new(u64::MAX)
+                current_publication_id: WorkspacePublicationId::new(u64::MAX)
                     .expect("maximum publication identity is non-zero"),
             },
             ..WorkspaceSnapshot::default()

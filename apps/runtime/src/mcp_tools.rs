@@ -13,9 +13,10 @@ use oneagent_analysis::diagnostics::{
     DiagnosticCategory, DiagnosticDisposition, DiagnosticFamily, DiagnosticFilter,
     DiagnosticFinding, DiagnosticIdentity, DiagnosticReport, DiagnosticSeverity, DiagnosticSummary,
 };
+use oneagent_analysis::publication::WorkspacePublicationId;
 use oneagent_analysis::refactoring::{
     RefactoringCancellationSignal, RefactoringErrorKind, RefactoringEvaluation, RefactoringFamily,
-    RefactoringRequest, WorkspacePublicationId,
+    RefactoringRequest,
 };
 use oneagent_common::{EntityId, SourceLocation};
 use oneagent_graph::{

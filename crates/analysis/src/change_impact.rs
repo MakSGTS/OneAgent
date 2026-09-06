@@ -13,6 +13,8 @@ use oneagent_graph::{
     SemanticGraphQuery, SemanticImpactAnalyzer, SemanticImpactOptions, SemanticImpactResult,
 };
 
+pub use crate::publication::WorkspacePublicationId as ChangeImpactPublicationId;
+
 /// Maximum number of unique Configurations admitted in either endpoint.
 pub const MAX_CHANGE_IMPACT_CONFIGURATIONS: usize = 4_096;
 /// Maximum UTF-8 bytes in a Configuration, node, or edge identifier.
@@ -25,37 +27,6 @@ pub const MAX_CHANGE_IMPACT_REASONS_PER_NODE: usize = 256;
 pub const MAX_CHANGE_IMPACT_REASONS: usize = 262_144;
 /// Fixed maximum traversal depth of the complete product report.
 pub const CHANGE_IMPACT_MAX_DEPTH: usize = 4;
-
-/// Process-local identity of one successful Workspace publication.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ChangeImpactPublicationId(u64);
-
-impl ChangeImpactPublicationId {
-    /// Returns the first publication identity of a fresh service run.
-    #[must_use]
-    pub const fn initial() -> Self {
-        Self(1)
-    }
-
-    /// Creates a non-zero process-local publication identity.
-    #[must_use]
-    pub const fn new(value: u64) -> Option<Self> {
-        if value == 0 { None } else { Some(Self(value)) }
-    }
-
-    /// Returns the numeric process-local identity.
-    #[must_use]
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    fn next(self) -> Result<Self, ChangeImpactError> {
-        self.0
-            .checked_add(1)
-            .and_then(Self::new)
-            .ok_or_else(ChangeImpactError::summary_overflow)
-    }
-}
 
 /// Borrowed canonical Configuration evidence for one complete endpoint.
 #[derive(Debug, Clone, Copy)]
@@ -647,7 +618,9 @@ impl ChangeImpactEvaluator {
         cancellation: &dyn ChangeImpactCancellationSignal,
     ) -> Result<ChangeImpactReport, ChangeImpactError> {
         observe_cancellation(cancellation)?;
-        let current_publication_id = previous_publication_id.next()?;
+        let current_publication_id = previous_publication_id
+            .checked_successor()
+            .ok_or_else(ChangeImpactError::summary_overflow)?;
         let previous = normalize_endpoint(previous, cancellation)?;
         let current = normalize_endpoint(current, cancellation)?;
         let empty = SemanticGraph::new();

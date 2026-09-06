@@ -252,9 +252,10 @@ The complete acceptance matrix, focused and canonical counts, compatibility,
 API/dependency/cache/Coverage/sensitive-data/scope audits, and exact Task 10
 hand-off are recorded in the
 [Sprint 40 evidence](architecture/refactoring-planner-evidence.md). Sprint 40
-remains active: Task 10 still owns the mandatory fresh-context integration
-review, primary reconciliation, artifact consistency, state transition, Sprint
-41 hand-off, and conditional prompt retirement. Source mutation, apply
+is administratively completed without a passing integration review. Sprint 40.1
+Refactoring Planner Remediation owns the canonical publication-identity and
+stale-evidence blockers, a fresh-context design review, implementation, and a
+new integration-review gate before Sprint 41. Source mutation, apply
 authorization, transaction staging, atomicity, rollback, reversibility,
 recovery, and post-edit validation remain Sprint 41 scope.
 
@@ -293,8 +294,9 @@ The roadmap assigns future boundaries explicitly:
   records `pass` and completes Sprint 38. The
   [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
   records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
-  active through Task 9 and remains subject to the Task 10 integration-review
-  gate before completion.
+  administratively completed without a passing integration review; Sprint 40.1
+  Refactoring Planner Remediation is the unique corrective `next` target for
+  its publication-owner and evidence blockers.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The

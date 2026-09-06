@@ -384,8 +384,10 @@ records `pass` and completes Sprint 36. The
 [Sprint 38 Git Change Adapter review](../reviews/sprint-38-git-change-adapter.md)
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](../reviews/sprint-39-change-impact-analysis.md)
-records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is active
-through Task 9 and remains subject to the Task 10 integration-review gate.
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
+administratively completed without a passing integration review. Sprint 40.1
+Refactoring Planner Remediation is the unique corrective `next` target and owns
+the accepted publication-identity and final-evidence corrections.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -1618,10 +1620,12 @@ there is no command, code action, edit request, preview UI, or automatic
 invocation. The complete executable matrix and limitations are recorded in the
 [Sprint 40 evidence](refactoring-planner-evidence.md).
 
-Sprint 40 remains active pending Task 10 review. Source mutation, apply
-authorization, transactions, atomicity, rollback, reversibility, recovery,
-post-edit semantic validation, other refactoring families, and new UI remain
-Sprint 41 or later scope.
+Sprint 40 is administratively completed without a passing integration review.
+Sprint 40.1 owns its publication-owner and stale-evidence blockers plus a new
+independent completion review. Source mutation, apply authorization,
+transactions, atomicity, rollback, reversibility, recovery, post-edit semantic
+validation, other refactoring families, and new UI remain Sprint 41 or later
+scope.
 
 ## Incremental indexing
 

@@ -3,6 +3,11 @@
 Use this workflow only when the current user instruction launches an ordered
 Prompt Contract v2 sprint suite.
 
+The efficiency gates added for invariant mapping, targeted design review,
+numeric scope baselines, staged validation, and remediation stop-loss apply to
+Sprint 41 and later suites. Earlier active suites continue under their committed
+execution prompts.
+
 ## Dispatcher boundary
 
 The master prompt is a dispatcher and durable ledger. It must not execute two
@@ -32,9 +37,11 @@ Before dispatch:
    suggested commit messages, current Roadmap state, and previous-suite
    inventory against live committed evidence.
 6. Record and preserve pre-existing modified, staged, and untracked paths.
-7. Resolve the accepted ADR-invariant matrix, targeted design-review result,
-   expected task-owned path/diff baseline, and validation budget. Stop before
-   implementation when a required item is missing or blocked.
+7. For Sprint 41 and later, resolve the committed ADR-invariant matrix selector,
+   targeted design-review decision, and each task's `expected_path_count`,
+   `expected_text_line_churn`, expected binary paths, and validation budget from
+   the authoritative Roadmap execution plan and master prompt. Stop before
+   implementation when a required item is missing, inconsistent, or blocked.
 
 ## Child input contract
 
@@ -46,7 +53,11 @@ Pass only:
 - applicable `AGENTS.md`;
 - the selected Profile, base Template, specialized Template, Core, and Workflow
   modules; and
-- material admitted by its `Must read` Context Manifest.
+- material admitted by its `Must read` Context Manifest; and
+- for Sprint 41 and later implementation tasks, the committed invariant-matrix
+  selector, targeted design-review decision, `expected_path_count`,
+  `expected_text_line_churn`, expected binary paths, validation budget, and
+  exact task start commit.
 
 Do not preload `Lookup on demand` material. Do not pass previous child
 transcripts, implementation reasoning, conclusions, or complete logs.
@@ -65,8 +76,12 @@ For each manifest entry:
 4. Implement only the child-owned outcome and preserve unrelated work.
 5. Run focused validation and the canonical checks triggered by
    `docs/codex/core/validation.md`.
-6. Recheck acceptance, exclusions, diff, meaningful test counts, state, and
-   actual path/diff scale against the accepted planning baseline.
+6. Recheck acceptance, exclusions, diff, meaningful test counts, and state. For
+   Sprint 41 and later, also calculate actual scope from the exact task start:
+   unique paths are the sorted `git diff --name-only` count, and textual line
+   churn is the sum of numeric additions plus deletions from
+   `git diff --numstat`; enumerate binary `-` entries separately. Compare those
+   values with the committed baseline.
 7. If commit mode is authorized, stage only enumerated paths and create exactly
    one logical commit with the manifest message. Otherwise do not stage or
    commit.
@@ -83,17 +98,24 @@ uncommitted task-created change remains.
 
 ## Scope and remediation stop-loss
 
-If the actual task-owned changed-path count or estimated diff scale exceeds
-twice the accepted planning baseline, stop before further implementation,
-validation, or commit. Report the evidence, revised scope, risk, and validation
-budget, and obtain renewed user agreement before continuing.
+For Sprint 41 and later, if actual unique changed paths exceed
+`2 * expected_path_count`, textual additions plus deletions exceed
+`2 * expected_text_line_churn`, or a binary path is absent from the expected
+inventory, stop before further implementation, full validation, or commit. A
+zero baseline admits no change in that dimension. Report the exact counts,
+commands, revised scope, risk, and validation budget, and obtain renewed user
+agreement before continuing.
 
-Count architecture-level blocked review outcomes across the sprint. After the
-second such blocker, stop patch-by-patch remediation. Re-audit the complete
-ADR-invariant matrix against the latest production paths and negative oracles,
-revise the implementation and validation plan, and obtain renewed user
-agreement before another remediation. A local fix for only the latest finding
-is not sufficient evidence to resume.
+For Sprint 41 and later, count architecture-level blocked review outcomes across
+the sprint. An architecture-level blocker is a confirmed finding that
+invalidates or leaves unmapped an accepted production owner, authority,
+boundary, ordering, lifecycle, failure, or cross-layer invariant; formatting,
+an isolated regression, missing command output, and transient validation
+failure do not qualify. After the second such blocker, stop patch-by-patch
+remediation. Re-audit the complete ADR-invariant matrix against the latest
+production paths and negative oracles, revise the implementation and validation
+plan, and obtain renewed user agreement before another remediation. A local fix
+for only the latest finding is not sufficient evidence to resume.
 
 ## Ledger
 

@@ -39,19 +39,27 @@ without implementing production behavior.
   behind an explicit `Lookup on demand` trigger.
 - Give every task one coherent owned outcome, explicit prerequisite, scope
   boundary, acceptance evidence, validation additions, and commit boundary.
-- Before production implementation, build an ADR-invariant matrix that maps
-  every accepted requirement to its exact production location, the operation
-  or retention point that it must precede when ordering matters, one negative
-  production oracle, and the focused validation that proves the placement.
+- For Sprint 41 and later, before production implementation, commit an
+  ADR-invariant matrix that maps every applicable accepted production invariant
+  to its exact production location, the operation or retention point that it
+  must precede when ordering matters, one negative production oracle, and the
+  focused validation that proves the placement. Keep documentation, reporting,
+  review-process, and explicitly deferred requirements outside this production
+  mapping and record their evidence separately.
 - For a cross-layer, parser, persistence, filesystem, concurrency, security, or
-  other architecture-sensitive change, require one targeted read-only design
-  review of the invariant matrix before implementation begins. Resolve every
-  blocking design finding in the plan; this review does not replace the final
-  integration review.
-- Record a planning baseline for expected task-owned paths, approximate diff
-  scale, and focused/full validation budget. Require renewed user agreement
-  before continuing when live evidence expands either changed-path count or
-  estimated diff scale beyond twice that baseline.
+  other architecture-sensitive Sprint 41 or later change, require the targeted
+  pre-implementation design review defined by
+  `docs/codex/workflows/review.md`. Commit its non-blocking decision before
+  implementation begins. This review does not replace the final integration
+  review.
+- For every Sprint 41 or later implementation task, commit the following
+  baseline in both the authoritative Roadmap execution plan and generated
+  master prompt: `expected_path_count`, an integer upper bound for unique
+  task-owned changed paths; `expected_text_line_churn`, an integer upper bound
+  for additions plus deletions on textual paths; the expected binary-path
+  inventory; and the exact focused/full validation budget. Require renewed user
+  agreement before continuing when live evidence exceeds twice either numeric
+  bound or introduces an unexpected binary path.
 - Order tasks so that every implementation prompt begins from a committed or
   explicitly proven prerequisite.
 - Define `already_complete`, blocked-review, sprint-completion, and next-sprint
@@ -68,8 +76,9 @@ without implementing production behavior.
 - Readiness findings
 - Template readiness decision
 - Accepted planning baseline
-- ADR-invariant matrix and targeted design-review result
-- Expected path/diff baseline and validation budget
+- Committed ADR-invariant matrix and targeted design-review decision
+- `expected_path_count`, `expected_text_line_churn`, expected binary paths, and
+  validation budget
 - Ordered task manifest
 - Dependency and state gates
 - Deferred scope

@@ -38,6 +38,10 @@ Run full workspace validation when:
 
 ## Validation staging
 
+These staging rules apply to Sprint 41 and later sprint suites. Earlier active
+suites continue under their committed execution prompts and validation
+contracts.
+
 Treat a changing implementation as unstable until its accepted architecture,
 production locations, negative oracles, and task-owned path inventory are
 reconciled. While the diff is unstable, run only the focused and package checks
@@ -45,12 +49,13 @@ needed to develop or diagnose the current change. Do not spend a canonical full
 workspace gate on a speculative, partially remediated, or reviewer-visible
 floating diff unless a higher-priority instruction explicitly requires it.
 
-Run the canonical full workspace gate once per implementation or remediation
-runner after the diff is stable and all focused checks pass. If review requires
-a fix, return to focused validation and run one final canonical gate after the
-last accepted fix. The independent reviewer and primary completion-gate runs
-remain separate required evidence; they do not justify additional pre-review
-full runs on the same unchanged diff.
+Run the canonical full workspace gate once after the pre-review implementation
+diff is stable and all focused checks pass. If review requires remediation, do
+not rerun the full gate for each individual finding or remediation commit:
+return to focused validation until all accepted findings are fixed, then run
+one final canonical gate on the stable final remediation range. The independent
+reviewer and primary completion-gate runs remain separate required evidence;
+they do not justify additional pre-review full runs on the same unchanged diff.
 
 Do not run a reviewer or another Cargo command concurrently with validation
 that shares the same build directory. Sequence those operations or give them

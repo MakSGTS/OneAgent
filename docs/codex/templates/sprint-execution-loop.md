@@ -19,6 +19,10 @@ plan strictly in dependency order.
 - Commit authorization mode
 - Fresh-context child-runner authorization and unavailable-runtime fallback
 - Initial audit additions
+- Sprint 41+ committed ADR-invariant matrix selector and targeted design-review
+  decision
+- Sprint 41+ per-task `expected_path_count`, `expected_text_line_churn`, expected
+  binary paths, and focused/full validation budget
 - Task-loop additions, if any
 - Already-complete policy additions, if any
 - Failure and integration-review gates
@@ -54,6 +58,10 @@ The ordered manifest must identify, for every task:
 - Preserve prompt-suite files unless their modification is explicitly part of
   the current task scope.
 - Stop after the first blocking failure.
+- For Sprint 41 and later, transport the committed invariant-matrix selector,
+  design-review decision, and numeric/path validation baseline to every affected
+  fresh-context child; do not rely on a planning transcript or dispatcher
+  memory.
 
 ## Additional report sections
 

@@ -23,6 +23,15 @@ require_line() {
     fi
 }
 
+require_pattern() {
+    local prompt_file=$1
+    local pattern=$2
+    local description=$3
+    if ! grep -Eq -- "$pattern" "$prompt_file"; then
+        report_error "$prompt_file" "missing $description"
+    fi
+}
+
 front_matter_value() {
     local prompt_file=$1
     local key=$2
@@ -160,6 +169,25 @@ validate_prompt() {
     validated_count=$((validated_count + 1))
 }
 
+validate_future_sprint_execution_loop() {
+    local prompt_file=$1
+
+    require_pattern "$prompt_file" 'ADR-invariant matrix' \
+        'Sprint 41+ ADR-invariant matrix contract'
+    require_pattern "$prompt_file" '[Tt]argeted design review' \
+        'Sprint 41+ targeted design-review contract'
+    require_pattern "$prompt_file" 'expected_path_count' \
+        'Sprint 41+ expected_path_count baseline'
+    require_pattern "$prompt_file" 'expected_text_line_churn' \
+        'Sprint 41+ expected_text_line_churn baseline'
+    require_pattern "$prompt_file" 'expected binary' \
+        'Sprint 41+ expected binary-path inventory'
+    require_pattern "$prompt_file" 'validation budget' \
+        'Sprint 41+ validation budget'
+
+    validated_count=$((validated_count + 1))
+}
+
 prompt_files=()
 if (( $# > 0 )); then
     prompt_files=("$@")
@@ -190,21 +218,36 @@ else
         find docs/codex/prompts -mindepth 2 -maxdepth 2 -type f \
             -name '[0-9][0-9]-*.md' ! -name '00-*' -print | sort
     )
+
+    while IFS= read -r master_file; do
+        if [[ "$master_file" =~ /sprint-([0-9]+)- ]] \
+            && (( 10#${BASH_REMATCH[1]} >= 41 )); then
+            prompt_files+=("$master_file")
+        fi
+    done < <(
+        find docs/codex/prompts -mindepth 2 -maxdepth 2 -type f \
+            -name '00-sprint-*-execution-loop.md' -print | sort
+    )
 fi
 
 if (( ${#prompt_files[@]} == 0 )); then
-    printf 'ERROR no Prompt Contract v2 files found\n' >&2
+    printf 'ERROR no Codex prompt files found\n' >&2
     exit 1
 fi
 
 for prompt_file in "${prompt_files[@]}"; do
-    validate_prompt "$prompt_file"
+    if [[ "$prompt_file" =~ /sprint-([0-9]+)-[^/]+/00-sprint-[0-9]+-execution-loop\.md$ ]] \
+        && (( 10#${BASH_REMATCH[1]} >= 41 )); then
+        validate_future_sprint_execution_loop "$prompt_file"
+    else
+        validate_prompt "$prompt_file"
+    fi
 done
 
 if (( error_count > 0 )); then
-    printf 'Prompt Contract v2 validation failed: %d error(s) in %d file(s).\n' \
+    printf 'Codex prompt validation failed: %d error(s) in %d file(s).\n' \
         "$error_count" "$validated_count" >&2
     exit 1
 fi
 
-printf 'Prompt Contract v2 validation passed: %d file(s).\n' "$validated_count"
+printf 'Codex prompt validation passed: %d file(s).\n' "$validated_count"

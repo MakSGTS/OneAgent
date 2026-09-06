@@ -10,6 +10,32 @@ Use this workflow for review-only tasks.
 - Prioritize findings by severity.
 - Report missing evidence separately from confirmed defects.
 
+## Targeted pre-implementation design review
+
+For architecture-sensitive Sprint 41 and later work, run one separate
+fresh-context read-only reviewer before production implementation. Review the
+exact committed planning/ADR range and committed ADR-invariant matrix, without
+implementation transcripts or an expected decision. The reviewer returns one
+decision, `pass` or `blocked`, plus matrix coverage, findings with exact
+evidence, missing evidence, scope conformance, and the recommended next action.
+
+A current user instruction that plans or launches a Sprint 41 or later suite
+under the Sprint Planning or Sequential Sprint Execution workflow authorizes
+exactly this one read-only design reviewer. Start it automatically when the
+committed pre-implementation gate is reached. The authorization does not permit
+delegation, mutation, staging, commit, or another reviewer, and an explicit user
+prohibition on subagents makes the gate blocked.
+
+The design review is blocked when an applicable accepted production invariant
+lacks an exact owner or production location, an order-sensitive guard lacks the
+operation or retention point it must precede, a negative production oracle is
+missing, accepted owners or boundaries contradict each other, or planned scope
+cannot implement the invariant. Commit the non-blocking decision with the
+planning evidence before starting production implementation. If the required
+fresh reviewer is unavailable, stop at this gate. This targeted review does not
+run a full production validation gate and does not replace the final integration
+review.
+
 ## Independent sprint integration review
 
 Starting with Sprint 27, every sprint integration-review completion gate
@@ -50,12 +76,14 @@ The primary agent must:
 7. independently inspect the same range and rerun the required review matrix
    before issuing the completion decision.
 
-Never dispatch a reviewer against a floating working tree, an uncommitted diff,
-an open-ended range, or a branch name whose head may move during review. Pass
-the exact commit IDs and range. Do not mutate the reviewed paths or move either
-endpoint while the reviewer is running. If the baseline changes, invalidate the
-in-flight result and start a new review only after the replacement range is
-committed, stable, and has passed its required focused validation.
+For Sprint 41 and later, never dispatch a reviewer against a floating working
+tree, an uncommitted diff, an open-ended range, or a branch name whose head may
+move during review. Pass the exact commit IDs and range. Do not mutate the
+reviewed paths or move either endpoint while the reviewer is running. If the
+baseline changes, invalidate the in-flight result and start a new review only
+after the replacement range is committed, stable, and has passed its required
+focused validation. Earlier sprint reviews retain their committed exact-range
+contracts.
 
 The reviewer may inspect repository files, Git evidence, and command output and
 may run non-destructive read-only or validation commands. It must not:

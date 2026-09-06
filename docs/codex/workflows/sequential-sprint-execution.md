@@ -31,17 +31,20 @@ Before dispatch:
 2. Reconcile branch, merge, review, remediation, and immediate-push behavior
    with applicable `AGENTS.md`.
 3. Resolve commit mode only from the current user instruction.
-4. Validate every Prompt Contract v2 child with
-   `scripts/validate-codex-prompts.sh`.
+4. Validate the Sprint 41+ master together with every Prompt Contract v2 child
+   using `scripts/validate-codex-prompts.sh`; earlier suites retain their
+   committed child-only validation contract.
 5. Verify manifest order, prerequisites, outcomes, validation additions,
    suggested commit messages, current Roadmap state, and previous-suite
    inventory against live committed evidence.
 6. Record and preserve pre-existing modified, staged, and untracked paths.
-7. For Sprint 41 and later, resolve the committed ADR-invariant matrix selector,
-   targeted design-review decision, and each task's `expected_path_count`,
-   `expected_text_line_churn`, expected binary paths, and validation budget from
-   the authoritative Roadmap execution plan and master prompt. Stop before
-   implementation when a required item is missing, inconsistent, or blocked.
+7. For Sprint 41 and later, resolve the committed invariant-matrix selector,
+   design-review child, planned decision artifact and commit boundary, and each
+   implementation task's `expected_path_count`, `expected_text_line_churn`,
+   expected binary paths, and validation budget from the authoritative Roadmap
+   execution plan and master prompt. Stop before dispatch when a gate definition
+   or baseline is missing or inconsistent; the design-review decision remains
+   pending until its manifest child executes.
 
 ## Child input contract
 
@@ -55,9 +58,9 @@ Pass only:
   modules; and
 - material admitted by its `Must read` Context Manifest; and
 - for Sprint 41 and later implementation tasks, the committed invariant-matrix
-  selector, targeted design-review decision, `expected_path_count`,
-  `expected_text_line_churn`, expected binary paths, validation budget, and
-  exact task start commit.
+  selector, committed targeted design-review `pass` artifact and commit,
+  `expected_path_count`, `expected_text_line_churn`, expected binary paths,
+  validation budget, and exact task start commit.
 
 Do not preload `Lookup on demand` material. Do not pass previous child
 transcripts, implementation reasoning, conclusions, or complete logs.
@@ -71,17 +74,25 @@ limit.
 For each manifest entry:
 
 1. Enforce the committed prerequisite and clean task-owned state.
+   Before the first Sprint 41 or later production implementation child, require
+   the predeclared design-review artifact to record `pass` and resolve to the
+   separate committed design-review boundary from the manifest.
 2. Start one guaranteed fresh-context runner with the child input contract.
 3. Require the runner to print its Change Contract before edits.
 4. Implement only the child-owned outcome and preserve unrelated work.
 5. Run focused validation and the canonical checks triggered by
    `docs/codex/core/validation.md`.
 6. Recheck acceptance, exclusions, diff, meaningful test counts, and state. For
-   Sprint 41 and later, also calculate actual scope from the exact task start:
-   unique paths are the sorted `git diff --name-only` count, and textual line
-   churn is the sum of numeric additions plus deletions from
-   `git diff --numstat`; enumerate binary `-` entries separately. Compare those
-   values with the committed baseline.
+   Sprint 41 and later, also calculate actual scope from the exact task start.
+   Form the unique path set as the union of tracked paths from
+   `git diff --name-only <task-start>` and untracked paths from
+   `git ls-files --others --exclude-standard`. Textual line churn is the sum of
+   numeric additions plus deletions from `git diff --numstat <task-start>` plus
+   the line count of each untracked text file as an addition from empty. Treat
+   an empty untracked file as text with zero churn; classify every other
+   untracked file with the repository's Git attributes and the same NUL-byte
+   convention as Git, and enumerate tracked or untracked binary paths
+   separately. Compare all values with the committed baseline before staging.
 7. If commit mode is authorized, stage only enumerated paths and create exactly
    one logical commit with the manifest message. Otherwise do not stage or
    commit.

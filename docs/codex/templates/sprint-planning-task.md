@@ -49,9 +49,10 @@ without implementing production behavior.
 - For a cross-layer, parser, persistence, filesystem, concurrency, security, or
   other architecture-sensitive Sprint 41 or later change, require the targeted
   pre-implementation design review defined by
-  `docs/codex/workflows/review.md`. Commit its non-blocking decision before
-  implementation begins. This review does not replace the final integration
-  review.
+  `docs/codex/workflows/review.md` as a dedicated manifest child after the ADR
+  and invariant-matrix task and before the first production implementation
+  task. Its primary records the decision in the planned review artifact and a
+  separate commit. This review does not replace the final integration review.
 - For every Sprint 41 or later implementation task, commit the following
   baseline in both the authoritative Roadmap execution plan and generated
   master prompt: `expected_path_count`, an integer upper bound for unique
@@ -60,6 +61,10 @@ without implementing production behavior.
   inventory; and the exact focused/full validation budget. Require renewed user
   agreement before continuing when live evidence exceeds twice either numeric
   bound or introduces an unexpected binary path.
+- Encode the matrix selector, design-review gate, and per-implementation-task
+  baselines in the exact `Sprint efficiency contract` record format defined by
+  `docs/codex/templates/sprint-execution-loop.md`. Repeat its design-review and
+  baseline records byte-for-byte in the authoritative Roadmap execution plan.
 - Order tasks so that every implementation prompt begins from a committed or
   explicitly proven prerequisite.
 - Define `already_complete`, blocked-review, sprint-completion, and next-sprint
@@ -88,5 +93,7 @@ without implementing production behavior.
 
 - Validate Markdown consistency, internal links, task numbering, dependency
   order, and Roadmap status.
-- Run `scripts/validate-codex-prompts.sh` against every generated child prompt.
+- For Sprint 41 and later, run `scripts/validate-codex-prompts.sh` against the
+  generated master and every child prompt; earlier suites retain their
+  committed validation contract.
 - Do not run production tests unless implementation files are changed.

@@ -39,6 +39,26 @@ The ordered manifest must identify, for every task:
 - Prompt Contract v2 and Context Manifest validation state;
 - suggested commit message.
 
+For Sprint 41 and later, the master prompt must also contain one machine-readable
+`Sprint efficiency contract` block with this exact record shape:
+
+```text
+sprint_efficiency_contract: v1
+adr_invariant_matrix: <repository-path>::<exact-section-heading>
+design_review_gate: <review-prompt-path>|<required-prerequisite>|<decision-artifact-path>|<commit-message>
+implementation_baseline: <implementation-prompt-path>|<expected_path_count>|<expected_text_line_churn>|<expected-binary-paths-or-none>|<focused-check-count>|<full-gate-count>
+```
+
+Use exactly one non-empty matrix and design-review record and exactly one
+implementation baseline per implementation child. Numeric fields are base-10
+non-negative integers, `full-gate-count` is `0` or `1`, and binary paths are
+`none` or a comma-separated repository-relative inventory. Do not place `|` in
+any field. The `full-gate-count` values across all implementation records must
+sum to exactly `1`; independent reviewer and primary completion-gate validation
+remain outside this implementation budget. Repeat the exact
+`design_review_gate` and `implementation_baseline` records in the authoritative
+Roadmap execution plan so validation can reconcile them mechanically.
+
 ## Additional acceptance requirements
 
 - Treat the manifest as an execution plan, not proof of current repository
@@ -77,7 +97,8 @@ The ordered manifest must identify, for every task:
 
 - Validate that every manifest prompt and authoritative document exists before
   starting the first task.
-- Validate every Prompt Contract v2 child with
-  `scripts/validate-codex-prompts.sh`.
+- Validate the Sprint 41+ master together with every Prompt Contract v2 child
+  using `scripts/validate-codex-prompts.sh`; earlier suites validate their
+  children under their committed contract.
 - Validate that prerequisite and commit-message metadata agree with the accepted
   Roadmap execution plan.

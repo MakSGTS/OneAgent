@@ -30,11 +30,16 @@ The design review is blocked when an applicable accepted production invariant
 lacks an exact owner or production location, an order-sensitive guard lacks the
 operation or retention point it must precede, a negative production oracle is
 missing, accepted owners or boundaries contradict each other, or planned scope
-cannot implement the invariant. Commit the non-blocking decision with the
-planning evidence before starting production implementation. If the required
-fresh reviewer is unavailable, stop at this gate. This targeted review does not
-run a full production validation gate and does not replace the final integration
-review.
+cannot implement the invariant. The manifest must place this review after the
+committed ADR/matrix prerequisite and before the first production implementation
+child. After a `pass`, the primary writes only the predeclared design-review
+artifact, records the exact reviewed range and matrix, reviewer result,
+findings, missing evidence, and decision, validates the documentation diff, and
+creates the separately planned design-review commit. A later implementation
+child requires that exact committed `pass` artifact. If the reviewer blocks or
+is unavailable, create no artifact or commit and stop at this gate. This
+targeted review does not run a full production validation gate and does not
+replace the final integration review.
 
 ## Independent sprint integration review
 

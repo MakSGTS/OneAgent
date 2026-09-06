@@ -8520,6 +8520,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | active |
+| Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence before closing Sprint 40. | next |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
 
 ##### Sprint 36 Diagnostics Engine execution plan
@@ -10029,6 +10030,95 @@ Suggested planning-amendment commit message:
 
 ```text
 Amend Sprint 40 plan for immutable source evidence
+```
+
+##### Sprint 40.1 Refactoring Planner Remediation execution plan
+
+Sprint 40.1 is a bounded corrective completion sprint from version head
+`427a78cd809a16bae2ee160867b20bb64c1d415e`. The interrupted Sprint 40
+integration review confirmed two completion blockers: ADR-0063 names
+`oneagent-analysis::publication::WorkspacePublicationId` as the canonical
+checked identity and `ChangeImpactPublicationId` as compatibility only, while
+the implementation owns the newtype under the old name and exposes the new name
+only from `refactoring`; and the committed evidence reports the pre-remediation
+52 BSL, 346 EDT, 41 Designer, and 1,352 workspace totals instead of deriving the
+final counts from the live post-`346f542f` baseline. The same review also
+identified six governance-only efficiency commits whose scope must be audited
+separately from Refactoring Planner product behavior.
+
+Sprint 40 remains `active`. Sprint 40.1 is the unique `next` corrective target
+during planning and becomes `active` when its targeted design review starts
+from the committed planning baseline. Sprint 41 remains `planned` and cannot
+start until the final combined Sprint 40/Sprint 40.1 review is non-blocking.
+
+This corrective sprint explicitly opts into the Sprint 41+ execution controls:
+one committed ADR-invariant matrix, one fresh-context targeted design review
+before production changes, one numeric implementation scope baseline, one
+stable pre-review full gate, exact immutable integration-review endpoints, one
+fresh-context integration reviewer, independent primary validation, and
+same-reviewer artifact consistency before state transition.
+
+###### Sprint 40.1 objective
+
+Restore the exact accepted publication identity ownership without changing its
+numeric value, sequence, lifecycle, or wire behavior; preserve the old public
+name as a source-compatible alias; migrate Runtime's Rust vocabulary; add the
+missing public-path oracle; update evidence from executed counts; and classify
+the post-Task-9 governance changes separately from product scope. Source edits,
+transactions, protocol revisions, cache changes, Graph changes, new
+refactoring families, UI, and Sprint 41 behavior remain excluded.
+
+###### Sprint 40.1 ADR invariant matrix
+
+| Accepted invariant | Production owner/location | Required ordering or retention point | Negative production oracle | Focused validation |
+|---|---|---|---|---|
+| One canonical checked non-zero Workspace publication identity | `crates/analysis/src/publication.rs` owning `WorkspacePublicationId` and exported by `crates/analysis/src/lib.rs` | Construction and checked successor occur before publication replacement | Zero is rejected and `u64::MAX` successor fails without publication | Analysis publication and Change Impact tests |
+| Change Impact preserves source compatibility without a second sequence | `crates/analysis/src/change_impact.rs` compatibility export `ChangeImpactPublicationId` | Alias/projection resolves to the canonical type before report construction | Compile/runtime identity oracle proves both names are the same type and value | Analysis Change Impact and public API tests |
+| Refactoring and Change Impact observe the same publication | `crates/analysis/src/refactoring.rs` requests/plans and `apps/runtime/src/workspace/mod.rs` snapshots/impact | One Runtime-owned checked successor is retained atomically with snapshot and impact | Stale, overflow, failed-build, recovery, and fresh-service tests expose no second ID | Refactoring plan, Runtime lib, Workspace, watching, Git-input, and cache tests |
+| Public product behavior remains read-only and wire-compatible | Runtime MCP projection plus existing Protocol, Tool Policy, process, and VS Code consumers | Canonical Rust identity is projected before unchanged bounded numeric wire output | Legacy revisions/catalog, denial, oversize, EOF, repeated-session, and no-edit assertions | Protocol, Tool Policy, MCP semantic/stdio/process, and VS Code tests |
+| Final evidence matches the immutable reviewed head | `docs/architecture/refactoring-planner-evidence.md` and Sprint 40/40.1 Roadmap evidence | Enumerate after the stable implementation diff and before review dispatch | Any stale, additive, zero-match, filtered, or unreconciled count blocks completion | Focused suite inventory plus `cargo test --workspace --all-targets` enumeration |
+| Governance changes do not become product scope | Exact commits `dce7470e`, `25019f17`, `f1698840`, `89ce1402`, `6e038660`, and `8a8e4734` | Classify path/net effect separately before the combined acceptance decision | Any Rust/product/API behavior attributable only to those commits blocks review | Exact range/path audit and prompt validator |
+
+###### Sprint efficiency contract
+
+sprint_efficiency_contract: v1
+adr_invariant_matrix: docs/Roadmap.md::Sprint 40.1 ADR invariant matrix
+design_review_gate: docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/01-review-refactoring-planner-remediation-design.md|Sprint 40.1 planning baseline|docs/reviews/sprint-40-1-refactoring-planner-remediation-design.md|Approve Sprint 40.1 remediation design
+implementation_baseline: docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/02-remediate-refactoring-planner-contract.md|10|600|none|9|1
+
+The implementation stop-loss is 10 unique task-owned paths, 600 textual added
+plus deleted lines, and no binary paths. The implementation budget contains
+nine focused check groups and exactly one stable full workspace gate; the
+design and final integration reviewers plus the primary completion gate remain
+separate required evidence.
+
+###### Ordered Sprint 40.1 task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Review the remediation design. | Review / review | Fresh-context targeted decision over the publication owner, compatibility alias, Runtime boundary, evidence plan, scope audit, and numeric baseline; a `pass` is recorded in the predeclared artifact. | Sprint 40.1 planning baseline on `codex/v0.7-sprint-40.1`. | `Approve Sprint 40.1 remediation design` |
+| 2 | Remediate the Refactoring Planner contract. | Refactoring and Safe Edits / Refactoring and Safe Edits | Canonical public identity owner, source-compatible alias, migrated Rust consumers, regressions, exact live evidence, and governance/product scope classification. | Task 1 committed `pass` artifact. | `Remediate Sprint 40.1 Refactoring Planner contract` |
+| 3 | Review and close Sprint 40/Sprint 40.1. | Review / review | Fresh-context combined integration review, primary reconciliation, artifact consistency, state transition, Sprint 41 hand-off, and conditional exact Sprint 39 suite retirement. | Task 2 commit and validation, no-ff implementation merge into `codex/v0.7`, and immutable `codex/v0.7-sprint-40.1-review`. | `Complete Sprint 40.1 Refactoring Planner remediation review` |
+
+Tasks execute strictly through
+`docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/00-sprint-40-1-execution-loop.md`.
+The final review covers both the complete product range from completed Sprint
+39 head `8d28ba8acacd00efd902eb2aa4ab3194f1636c05` and the corrective range from
+`427a78cd809a16bae2ee160867b20bb64c1d415e` through the immutable Sprint 40.1
+implementation merge.
+
+Only a non-blocking final decision may mark Sprint 40 and Sprint 40.1
+`completed`, make Sprint 41 the unique `next` target, create
+`docs/reviews/sprint-40-1-refactoring-planner-remediation.md`, and retire the
+exact eight tracked Sprint 39 prompt files already listed by the Sprint 40
+plan. The Sprint 40 and Sprint 40.1 suites remain preserved. Any design,
+implementation, scope, validation, review, consistency, commit, merge, push, or
+inventory failure stops the sprint without a completion transition.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 40.1 Refactoring Planner remediation
 ```
 
 The v0.7 release integration review follows Sprint 41.

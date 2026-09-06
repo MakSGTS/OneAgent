@@ -385,9 +385,11 @@ records `pass` and completes Sprint 36. The
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](../reviews/sprint-39-change-impact-analysis.md)
 records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
-administratively completed without a passing integration review. Sprint 40.1
-Refactoring Planner Remediation is the unique corrective `next` target and owns
-the accepted publication-identity and final-evidence corrections.
+administratively completed. The
+[Sprint 40.1 Refactoring Planner Remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass`, completes the accepted publication-identity and final-evidence
+corrections, and makes Sprint 41 Safe Edit Transactions the unique `next`
+target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -1620,9 +1622,10 @@ there is no command, code action, edit request, preview UI, or automatic
 invocation. The complete executable matrix and limitations are recorded in the
 [Sprint 40 evidence](refactoring-planner-evidence.md).
 
-Sprint 40 is administratively completed without a passing integration review.
-Sprint 40.1 owns its publication-owner and stale-evidence blockers plus a new
-independent completion review. Source mutation, apply authorization,
+Sprint 40 is administratively completed. The
+[Sprint 40.1 remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass` and completes the publication-owner and stale-evidence
+corrections. Sprint 41 is the unique `next` target. Source mutation, apply authorization,
 transactions, atomicity, rollback, reversibility, recovery, post-edit semantic
 validation, other refactoring families, and new UI remain Sprint 41 or later
 scope.

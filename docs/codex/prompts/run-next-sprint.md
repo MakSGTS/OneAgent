@@ -217,7 +217,8 @@ Run:
 
 ```bash
 set -o pipefail
-find docs/codex/prompts/sprint-<N>-<slug> -maxdepth 1 -type f -name '[0-9][0-9]-*.md' -print0 \
+find docs/codex/prompts/sprint-<N>-<slug> -maxdepth 1 -type f \
+  -name '[0-9][0-9]-*.md' ! -name '00-*' -print0 \
   | xargs -0 scripts/validate-codex-prompts.sh
 git diff --check
 git status --short

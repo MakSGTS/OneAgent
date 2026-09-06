@@ -1,10 +1,33 @@
 # OneAgent Calendar Roadmap Forecast
 
-## Current forecast — 2026-08-20 rebaseline
+## Superseded forecast — 2026-08-20 rebaseline
 
-This forecast supersedes the 2026-08-19 calendar baseline retained below for
-comparison. It is a planning model, not a delivery commitment, and does not
-replace dependency order or authoritative status in `docs/Roadmap.md`.
+This forecast superseded the 2026-08-19 calendar baseline retained below for
+comparison. It is now retained only as a historical planning model: the
+2026-08-30 roadmap expansion adds v0.8 Designer XML Structure and v0.9 Designer
+XML Parity as mandatory predecessors of v1.0, expands v1.0 through Sprint 49,
+and moves the v1.1 Configuration Structure Explorer to Sprint 50. All v1.0
+dates, costs, sprint numbers from Sprint 42 onward, and completion projections
+below predate that scope change and are no longer current. A replacement
+forecast requires a new capacity and scope baseline; this document does not
+invent one. Authoritative dependency order and status remain in
+`docs/Roadmap.md`.
+
+### Reason for supersession — 2026-08-30
+
+The previous baseline assumed that v1.0 started with Public API Stabilization in
+Sprint 42, ended with the release decision in Sprint 46, and was followed by the
+v1.1 Configuration Structure Explorer in Sprint 47. That sequence did not fund
+the Designer XML semantic work intentionally deferred by the bounded Sprint 14
+adapter slice.
+
+The product requirement now makes complete Designer XML semantics mandatory
+before v1.0. Sprints 42–44 are reassigned to v0.8–v0.9 structure, specialized
+semantics, code, query, dependency, and cross-adapter parity. The original v1.0
+sequence moves intact to Sprints 45–49, and the v1.1 explorer moves to Sprint 50.
+The shift is therefore caused by added mandatory scope and dependency order, not
+by a missed sprint, failed validation, or reduced delivery rate. Accepted actual
+completion dates remain unchanged.
 
 ### Current schedule variance — 2026-08-26
 

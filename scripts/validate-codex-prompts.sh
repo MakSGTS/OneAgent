@@ -178,6 +178,8 @@ validate_future_sprint_execution_loop() {
     local gate_artifact
     local gate_commit
     local gate_extra
+    local none_marker
+    local none_master
     local baseline_count=0
     local full_gate_total=0
     local prompt_directory
@@ -232,11 +234,17 @@ validate_future_sprint_execution_loop() {
     if [[ "$gate_count" != 1 ]]; then
         report_error "$prompt_file" \
             "Sprint efficiency contract needs exactly one design_review_gate record"
-    elif [[ "$gate_line" == 'design_review_gate: none' ]]; then
-        if [[ $(awk -v expected="$gate_line" '$0 == expected { count += 1 } END { print count + 0 }' \
+    elif [[ "$gate_line" == 'design_review_gate: none|'* ]]; then
+        gate_value=${gate_line#design_review_gate: }
+        IFS='|' read -r none_marker none_master gate_extra <<< "$gate_value"
+        if [[ "$none_marker" != none || "$none_master" != "$prompt_file" \
+            || -n "$gate_extra" ]]; then
+            report_error "$prompt_file" \
+                "none design_review_gate must name this exact master prompt"
+        elif [[ $(awk -v expected="$gate_line" '$0 == expected { count += 1 } END { print count + 0 }' \
             docs/Roadmap.md) != 1 ]]; then
             report_error "$prompt_file" \
-                "design_review_gate: none must occur exactly once in docs/Roadmap.md"
+                "suite-specific none design_review_gate must occur exactly once in docs/Roadmap.md"
         fi
     else
         gate_value=${gate_line#design_review_gate: }

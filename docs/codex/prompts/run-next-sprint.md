@@ -182,8 +182,9 @@ For Sprint 41 and later, the master also contains the exact machine-readable
 Repeat every `design_review_gate` and `implementation_baseline` record
 byte-for-byte in the Roadmap execution plan. The design-review record names the
 dedicated review child and future decision artifact without claiming a decision
-during planning, or is exactly `design_review_gate: none` when live evidence
-shows that the sprint has no architecture-sensitive change.
+during planning, or is exactly
+`design_review_gate: none|<master-prompt-path>` when live evidence shows that
+the sprint has no architecture-sensitive change.
 
 Record the exact immediately preceding suite inventory for conditional
 retirement by the final review. Do not retire prompts during planning or

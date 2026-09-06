@@ -42,10 +42,11 @@ Before dispatch:
    optional design-review gate, and each implementation task's
    `expected_path_count`, `expected_text_line_churn`, expected binary paths, and
    validation budget from the authoritative Roadmap execution plan and master
-   prompt. When the design-review gate is not `none`, also resolve its child,
-   planned decision artifact, and commit boundary. Stop before dispatch when a
-   gate definition or baseline is missing or inconsistent; an applicable
-   design-review decision remains pending until its manifest child executes.
+   prompt. When the design-review gate does not use the suite-specific
+   `none|<master-prompt-path>` form, also resolve its child, planned decision
+   artifact, and commit boundary. Stop before dispatch when a gate definition or
+   baseline is missing or inconsistent; an applicable design-review decision
+   remains pending until its manifest child executes.
 
 ## Child input contract
 
@@ -79,7 +80,7 @@ For each manifest entry:
    efficiency contract has a design-review gate, require the predeclared
    artifact to record `pass` and resolve to the separate committed design-review
    boundary from the manifest. No artifact is required when the record is
-   exactly `design_review_gate: none`.
+   the suite-specific `design_review_gate: none|<master-prompt-path>` form.
 2. Start one guaranteed fresh-context runner with the child input contract.
 3. Require the runner to print its Change Contract before edits.
 4. Implement only the child-owned outcome and preserve unrelated work.

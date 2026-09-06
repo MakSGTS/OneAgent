@@ -68,7 +68,7 @@ without implementing production behavior.
   Create the selected matrix file and unique section heading during planning;
   an architecture child may populate or replace the provisional rows only after
   its ADR is accepted and before the targeted design-review gate. Use
-  `design_review_gate: none` when the accepted scope is not
+  `design_review_gate: none|<master-prompt-path>` when the accepted scope is not
   architecture-sensitive.
 - Order tasks so that every implementation prompt begins from a committed or
   explicitly proven prerequisite.

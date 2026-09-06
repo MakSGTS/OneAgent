@@ -51,13 +51,15 @@ implementation_baseline: <implementation-prompt-path>|<expected_path_count>|<exp
 
 Use exactly one non-empty matrix and design-review record and exactly one
 implementation baseline per implementation child. For a sprint without an
-architecture-sensitive change, use exactly `design_review_gate: none`; otherwise
-use the four-field form and a dedicated review child. Numeric fields are base-10
-non-negative integers, `full-gate-count` is `0` or `1`, and binary paths are
-`none` or a comma-separated repository-relative inventory. Do not place `|` in
-any field. The `full-gate-count` values across all implementation records must
-sum to exactly `1`; independent reviewer and primary completion-gate validation
-remain outside this implementation budget. Repeat the exact
+architecture-sensitive change, use
+`design_review_gate: none|<master-prompt-path>`; otherwise use the four-field
+form and a dedicated review child. Numeric fields are base-10 non-negative
+integers, `full-gate-count` is `0` or `1`, and binary paths are `none` or a
+comma-separated repository-relative inventory. Do not place `|` in any field
+except as the record separator shown above. The `full-gate-count` values across
+all implementation records must sum to exactly `1`; independent reviewer and
+primary completion-gate validation remain outside this implementation budget.
+Repeat the exact
 `design_review_gate` and `implementation_baseline` records in the authoritative
 Roadmap execution plan so validation can reconcile them mechanically.
 

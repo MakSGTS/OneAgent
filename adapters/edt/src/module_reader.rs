@@ -1,6 +1,8 @@
 //! Reader for module files inside EDT metadata objects.
 
-use oneagent_analysis::refactoring::MAX_SOURCE_DOCUMENT_BYTES;
+use oneagent_analysis::refactoring::{
+    MAX_SOURCE_DOCUMENT_BYTES, SourceEvidenceAdmission, SourceEvidenceError,
+};
 use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::MetadataKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -228,12 +230,149 @@ pub trait EdtModuleReader {
 #[derive(Debug, Default)]
 pub struct FileSystemEdtModuleReader;
 
+#[derive(Debug)]
+pub(crate) struct EdtSourceManifest {
+    admitted_metadata: BTreeMap<PathBuf, fs::Metadata>,
+}
+
+impl EdtSourceManifest {
+    pub(crate) fn from_paths(mut paths: Vec<PathBuf>) -> Result<Self, EdtModuleError> {
+        paths.sort();
+        if let Some(duplicate) = paths.windows(2).find(|pair| pair[0] == pair[1]) {
+            return Err(EdtModuleError::DuplicateAdmissionPath(duplicate[0].clone()));
+        }
+        let mut admission = SourceEvidenceAdmission::new(paths.len())?;
+        let mut admitted_metadata = BTreeMap::new();
+        for path in paths {
+            let metadata = inspect_optional_module(&path)?
+                .ok_or_else(|| EdtModuleError::ChangedDuringCapture(path.clone()))?;
+            let length = admitted_length(&path, &metadata)?;
+            admission.admit_document(length)?;
+            admitted_metadata.insert(path, metadata);
+        }
+        admission.finish()?;
+        Ok(Self { admitted_metadata })
+    }
+
+    pub(crate) fn finish(self) -> Result<(), EdtModuleError> {
+        self.admitted_metadata
+            .into_keys()
+            .next()
+            .map_or(Ok(()), |path| {
+                Err(EdtModuleError::ChangedDuringCapture(path))
+            })
+    }
+
+    fn take_metadata(&mut self, path: &Path) -> Result<fs::Metadata, EdtModuleError> {
+        self.admitted_metadata
+            .remove(path)
+            .ok_or_else(|| EdtModuleError::ChangedDuringCapture(path.to_path_buf()))
+    }
+}
+
+enum SourceCapture<'a> {
+    Unbounded,
+    Discover(&'a mut Vec<PathBuf>),
+    Manifest(&'a mut EdtSourceManifest),
+}
+
+enum RetainedSource {
+    Discovered,
+    Captured(Vec<u8>),
+}
+
 impl EdtModuleReader for FileSystemEdtModuleReader {
     fn read_modules(
         &self,
         object_id: &EntityId,
         object_name: &EntityName,
         object_directory: &Path,
+    ) -> Result<Vec<EdtModuleDescriptor>, EdtModuleError> {
+        Self::read_modules_internal(
+            object_id,
+            object_name,
+            object_directory,
+            &mut SourceCapture::Unbounded,
+        )
+    }
+
+    fn read_form_command_modules(
+        &self,
+        object: &crate::EdtMetadataObjectDescriptor,
+        children: &[crate::EdtMetadataChildDescriptor],
+        object_directory: &Path,
+    ) -> Result<Vec<EdtModuleLayoutObservation>, EdtModuleError> {
+        Self::read_form_command_modules_internal(
+            object,
+            children,
+            object_directory,
+            &mut SourceCapture::Unbounded,
+        )
+    }
+}
+
+impl FileSystemEdtModuleReader {
+    pub(crate) fn discover_modules(
+        object_id: &EntityId,
+        object_name: &EntityName,
+        object_directory: &Path,
+        paths: &mut Vec<PathBuf>,
+    ) -> Result<Vec<EdtModuleDescriptor>, EdtModuleError> {
+        Self::read_modules_internal(
+            object_id,
+            object_name,
+            object_directory,
+            &mut SourceCapture::Discover(paths),
+        )
+    }
+
+    pub(crate) fn discover_form_command_modules(
+        object: &crate::EdtMetadataObjectDescriptor,
+        children: &[crate::EdtMetadataChildDescriptor],
+        object_directory: &Path,
+        paths: &mut Vec<PathBuf>,
+    ) -> Result<Vec<EdtModuleLayoutObservation>, EdtModuleError> {
+        Self::read_form_command_modules_internal(
+            object,
+            children,
+            object_directory,
+            &mut SourceCapture::Discover(paths),
+        )
+    }
+
+    pub(crate) fn read_modules_with_manifest(
+        object_id: &EntityId,
+        object_name: &EntityName,
+        object_directory: &Path,
+        manifest: &mut EdtSourceManifest,
+    ) -> Result<Vec<EdtModuleDescriptor>, EdtModuleError> {
+        Self::read_modules_internal(
+            object_id,
+            object_name,
+            object_directory,
+            &mut SourceCapture::Manifest(manifest),
+        )
+    }
+
+    pub(crate) fn read_form_command_modules_with_manifest(
+        object: &crate::EdtMetadataObjectDescriptor,
+        children: &[crate::EdtMetadataChildDescriptor],
+        object_directory: &Path,
+        manifest: &mut EdtSourceManifest,
+    ) -> Result<Vec<EdtModuleLayoutObservation>, EdtModuleError> {
+        Self::read_form_command_modules_internal(
+            object,
+            children,
+            object_directory,
+            &mut SourceCapture::Manifest(manifest),
+        )
+    }
+
+    fn read_modules_internal(
+        object_id: &EntityId,
+        object_name: &EntityName,
+        object_directory: &Path,
+        capture: &mut SourceCapture<'_>,
     ) -> Result<Vec<EdtModuleDescriptor>, EdtModuleError> {
         let candidates = [
             ("ObjectModule.bsl", EdtModuleKind::Object),
@@ -245,7 +384,7 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
 
         for (file_name, kind) in candidates {
             let path = object_directory.join(file_name);
-            let Some(raw_source) = read_optional_module(&path)? else {
+            let Some(raw_source) = read_optional_module(&path, capture)? else {
                 continue;
             };
 
@@ -265,19 +404,22 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
                 }
             };
 
-            modules.push(EdtModuleDescriptor::new_with_raw_source(
-                id, name, kind, path, raw_source,
-            ));
+            modules.push(match raw_source {
+                RetainedSource::Captured(raw_source) => {
+                    EdtModuleDescriptor::new_with_raw_source(id, name, kind, path, raw_source)
+                }
+                RetainedSource::Discovered => EdtModuleDescriptor::new(id, name, kind, path),
+            });
         }
 
         Ok(modules)
     }
 
-    fn read_form_command_modules(
-        &self,
+    fn read_form_command_modules_internal(
         object: &crate::EdtMetadataObjectDescriptor,
         children: &[crate::EdtMetadataChildDescriptor],
         object_directory: &Path,
+        capture: &mut SourceCapture<'_>,
     ) -> Result<Vec<EdtModuleLayoutObservation>, EdtModuleError> {
         let mut observations = Vec::new();
 
@@ -292,6 +434,7 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
             "FormModule",
             children,
             &mut observations,
+            capture,
         )?;
         collect_child_layouts(
             object_directory,
@@ -304,9 +447,10 @@ impl EdtModuleReader for FileSystemEdtModuleReader {
             "CommandModule",
             children,
             &mut observations,
+            capture,
         )?;
 
-        collect_common_command_layout(object, object_directory, &mut observations)?;
+        collect_common_command_layout(object, object_directory, &mut observations, capture)?;
         sort_observations(&mut observations);
         Ok(observations)
     }
@@ -324,6 +468,7 @@ fn collect_child_layouts(
     module_name: &str,
     children: &[crate::EdtMetadataChildDescriptor],
     observations: &mut Vec<EdtModuleLayoutObservation>,
+    capture: &mut SourceCapture<'_>,
 ) -> Result<(), EdtModuleError> {
     let root = object_directory.join(directory_name);
     let directories = direct_directories(&root)?;
@@ -396,6 +541,7 @@ fn collect_child_layouts(
             directory,
             expected_file_name,
             alternate_file_name,
+            capture,
         )?);
     }
 
@@ -418,6 +564,7 @@ fn collect_common_command_layout(
     object: &crate::EdtMetadataObjectDescriptor,
     object_directory: &Path,
     observations: &mut Vec<EdtModuleLayoutObservation>,
+    capture: &mut SourceCapture<'_>,
 ) -> Result<(), EdtModuleError> {
     let command_path = object_directory.join("CommandModule.bsl");
     if object.kind() != MetadataKind::Command {
@@ -454,6 +601,7 @@ fn collect_common_command_layout(
         object_directory,
         "CommandModule.bsl",
         "Module.bsl",
+        capture,
     )?);
     Ok(())
 }
@@ -468,19 +616,25 @@ fn classify_owned_layout(
     directory: &Path,
     expected_file_name: &str,
     alternate_file_name: &str,
+    capture: &mut SourceCapture<'_>,
 ) -> Result<EdtModuleLayoutObservation, EdtModuleError> {
     let path = directory.join(expected_file_name);
-    if let Some(raw_source) = read_optional_module(&path)? {
+    if let Some(raw_source) = read_optional_module(&path, capture)? {
         let id = EntityId::new(format!("{}:{}", owner_id.as_str(), module_kind.as_str()))
             .map_err(|_| EdtModuleError::InvalidIdentifier)?;
         let name = EntityName::new(module_name).map_err(|_| EdtModuleError::InvalidName)?;
-        let module = EdtModuleDescriptor::new_with_raw_source(
-            id,
-            name,
-            module_kind,
-            path.clone(),
-            raw_source,
-        );
+        let module = match raw_source {
+            RetainedSource::Captured(raw_source) => EdtModuleDescriptor::new_with_raw_source(
+                id,
+                name,
+                module_kind,
+                path.clone(),
+                raw_source,
+            ),
+            RetainedSource::Discovered => {
+                EdtModuleDescriptor::new(id, name, module_kind, path.clone())
+            }
+        };
         return Ok(EdtModuleLayoutObservation {
             owner_id: Some(owner_id.clone()),
             owner_name: Some(owner_name.clone()),
@@ -586,7 +740,92 @@ fn sort_observations(observations: &mut [EdtModuleLayoutObservation]) {
     });
 }
 
-fn read_optional_module(path: &Path) -> Result<Option<Vec<u8>>, EdtModuleError> {
+fn read_optional_module(
+    path: &Path,
+    capture: &mut SourceCapture<'_>,
+) -> Result<Option<RetainedSource>, EdtModuleError> {
+    let Some(path_metadata) = inspect_optional_module(path)? else {
+        return Ok(None);
+    };
+    if let SourceCapture::Discover(paths) = capture {
+        paths.push(path.to_path_buf());
+        return Ok(Some(RetainedSource::Discovered));
+    }
+    let admitted_metadata = match capture {
+        SourceCapture::Manifest(manifest) => Some(manifest.take_metadata(path)?),
+        SourceCapture::Unbounded => None,
+        SourceCapture::Discover(_) => unreachable!("discovery returned before capture"),
+    };
+    if admitted_metadata.is_some() {
+        admitted_length(path, &path_metadata)?;
+    }
+    if admitted_metadata
+        .as_ref()
+        .is_some_and(|admitted| source_metadata_changed(admitted, &path_metadata))
+    {
+        return Err(EdtModuleError::ChangedDuringCapture(path.to_path_buf()));
+    }
+    let expected_length = admitted_metadata
+        .as_ref()
+        .map_or(path_metadata.len(), fs::Metadata::len);
+
+    let mut file = fs::File::open(path).map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let before = file.metadata().map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if source_metadata_changed(&path_metadata, &before)
+        || admitted_metadata
+            .as_ref()
+            .is_some_and(|admitted| source_metadata_changed(admitted, &before))
+        || before.len() != expected_length
+    {
+        return Err(EdtModuleError::ChangedDuringCapture(path.to_path_buf()));
+    }
+    let capacity =
+        usize::try_from(before.len()).map_err(|_| EdtModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: before.len(),
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        })?;
+    let mut raw_source = Vec::with_capacity(capacity);
+    file.by_ref()
+        .take(if admitted_metadata.is_some() {
+            MAX_SOURCE_DOCUMENT_BYTES as u64 + 1
+        } else {
+            u64::MAX
+        })
+        .read_to_end(&mut raw_source)
+        .map_err(|source| EdtModuleError::ReadFile {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    let captured_len = u64::try_from(raw_source.len()).unwrap_or(u64::MAX);
+    if admitted_metadata.is_some() && raw_source.len() > MAX_SOURCE_DOCUMENT_BYTES {
+        return Err(EdtModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: captured_len,
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        });
+    }
+    let after = fs::symlink_metadata(path).map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if source_metadata_changed(&before, &after) || captured_len != expected_length {
+        return Err(EdtModuleError::ChangedDuringCapture(path.to_path_buf()));
+    }
+    std::str::from_utf8(&raw_source).map_err(|source| EdtModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
+    })?;
+    Ok(Some(RetainedSource::Captured(raw_source)))
+}
+
+fn inspect_optional_module(path: &Path) -> Result<Option<fs::Metadata>, EdtModuleError> {
     let path_metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -603,58 +842,22 @@ fn read_optional_module(path: &Path) -> Result<Option<Vec<u8>>, EdtModuleError> 
     if !path_metadata.file_type().is_file() {
         return Err(EdtModuleError::ArtifactNotRegularFile(path.to_path_buf()));
     }
-    if path_metadata.len() > MAX_SOURCE_DOCUMENT_BYTES as u64 {
-        return Err(EdtModuleError::SourceBoundExceeded {
-            path: path.to_path_buf(),
-            actual: path_metadata.len(),
-            maximum: MAX_SOURCE_DOCUMENT_BYTES,
-        });
-    }
+    Ok(Some(path_metadata))
+}
 
-    let mut file = fs::File::open(path).map_err(|source| EdtModuleError::ReadFile {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    let before = file.metadata().map_err(|source| EdtModuleError::ReadFile {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    let capacity = usize::try_from(before.len())
-        .ok()
-        .filter(|capacity| *capacity <= MAX_SOURCE_DOCUMENT_BYTES)
-        .ok_or_else(|| EdtModuleError::SourceBoundExceeded {
-            path: path.to_path_buf(),
-            actual: before.len(),
-            maximum: MAX_SOURCE_DOCUMENT_BYTES,
-        })?;
-    let mut raw_source = Vec::with_capacity(capacity);
-    file.by_ref()
-        .take(MAX_SOURCE_DOCUMENT_BYTES as u64 + 1)
-        .read_to_end(&mut raw_source)
-        .map_err(|source| EdtModuleError::ReadFile {
-            path: path.to_path_buf(),
-            source,
-        })?;
-    let captured_len = u64::try_from(raw_source.len()).unwrap_or(u64::MAX);
-    if raw_source.len() > MAX_SOURCE_DOCUMENT_BYTES {
+fn admitted_length(path: &Path, metadata: &fs::Metadata) -> Result<usize, EdtModuleError> {
+    if metadata.len() > MAX_SOURCE_DOCUMENT_BYTES as u64 {
         return Err(EdtModuleError::SourceBoundExceeded {
             path: path.to_path_buf(),
-            actual: captured_len,
+            actual: metadata.len(),
             maximum: MAX_SOURCE_DOCUMENT_BYTES,
         });
     }
-    let after = fs::symlink_metadata(path).map_err(|source| EdtModuleError::ReadFile {
+    usize::try_from(metadata.len()).map_err(|_| EdtModuleError::SourceBoundExceeded {
         path: path.to_path_buf(),
-        source,
-    })?;
-    if source_metadata_changed(&before, &after) || captured_len != after.len() {
-        return Err(EdtModuleError::ChangedDuringCapture(path.to_path_buf()));
-    }
-    std::str::from_utf8(&raw_source).map_err(|source| EdtModuleError::ReadFile {
-        path: path.to_path_buf(),
-        source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
-    })?;
-    Ok(Some(raw_source))
+        actual: metadata.len(),
+        maximum: MAX_SOURCE_DOCUMENT_BYTES,
+    })
 }
 
 fn source_metadata_changed(before: &fs::Metadata, after: &fs::Metadata) -> bool {
@@ -705,10 +908,20 @@ pub enum EdtModuleError {
     },
     /// A module changed while exact bytes were captured.
     ChangedDuringCapture(PathBuf),
+    /// Source-evidence document or aggregate admission failed before reading.
+    Admission(SourceEvidenceError),
+    /// Preflight discovered the same accepted module path more than once.
+    DuplicateAdmissionPath(PathBuf),
     /// A module identifier could not be created.
     InvalidIdentifier,
     /// A module name could not be created.
     InvalidName,
+}
+
+impl From<SourceEvidenceError> for EdtModuleError {
+    fn from(value: SourceEvidenceError) -> Self {
+        Self::Admission(value)
+    }
 }
 
 impl Display for EdtModuleError {
@@ -750,6 +963,12 @@ impl Display for EdtModuleError {
                 "EDT module changed during capture: {}",
                 path.display()
             ),
+            Self::Admission(source) => write!(formatter, "EDT source admission failed: {source}"),
+            Self::DuplicateAdmissionPath(path) => write!(
+                formatter,
+                "duplicate EDT source admission path: {}",
+                path.display()
+            ),
             Self::InvalidIdentifier => formatter.write_str("EDT module identifier is invalid"),
             Self::InvalidName => formatter.write_str("EDT module name is invalid"),
         }
@@ -760,10 +979,12 @@ impl std::error::Error for EdtModuleError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::ReadDirectory { source, .. } | Self::ReadFile { source, .. } => Some(source),
+            Self::Admission(source) => Some(source),
             Self::SymlinkArtifact(_)
             | Self::ArtifactNotRegularFile(_)
             | Self::SourceBoundExceeded { .. }
             | Self::ChangedDuringCapture(_)
+            | Self::DuplicateAdmissionPath(_)
             | Self::InvalidIdentifier
             | Self::InvalidName => None,
         }
@@ -772,13 +993,81 @@ impl std::error::Error for EdtModuleError {
 
 #[cfg(test)]
 mod tests {
+    use oneagent_analysis::refactoring::{
+        MAX_SOURCE_BYTES_PER_CONFIGURATION, MAX_SOURCE_DOCUMENT_BYTES,
+        MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION, SourceEvidenceErrorKind,
+    };
     use oneagent_common::{EntityId, EntityName};
     use std::fs;
     use tempfile::tempdir;
 
     use super::{
-        EdtModuleKind, EdtModuleReader, FileSystemEdtModuleReader, source_metadata_changed,
+        EdtModuleError, EdtModuleKind, EdtModuleReader, EdtSourceManifest,
+        FileSystemEdtModuleReader, SourceCapture, read_optional_module, source_metadata_changed,
     };
+
+    fn assert_admission_bound(error: &EdtModuleError, actual: usize, maximum: usize) {
+        let EdtModuleError::Admission(error) = error else {
+            panic!("reader must preserve source-evidence admission failure");
+        };
+        assert_eq!(error.kind(), SourceEvidenceErrorKind::BoundExceeded);
+        assert_eq!(error.actual(), Some(actual));
+        assert_eq!(error.maximum(), Some(maximum));
+    }
+
+    #[test]
+    fn production_preflight_rejects_document_count_before_file_inspection() {
+        let root = tempdir().expect("temporary directory must be created");
+        let paths = (0..=MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION)
+            .map(|index| root.path().join(format!("missing-{index}.bsl")))
+            .collect();
+        let error = EdtSourceManifest::from_paths(paths)
+            .expect_err("one-over count must fail before paths are inspected");
+        assert_admission_bound(
+            &error,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION + 1,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+        );
+    }
+
+    #[test]
+    fn production_preflight_rejects_aggregate_before_raw_source_retention() {
+        let root = tempdir().expect("temporary directory must be created");
+        let mut paths = Vec::new();
+        for index in 0..(MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES) {
+            let path = root.path().join(format!("module-{index}.bsl"));
+            let file = fs::File::create(&path).expect("sparse fixture must be created");
+            file.set_len(MAX_SOURCE_DOCUMENT_BYTES as u64)
+                .expect("sparse fixture length must be set");
+            paths.push(path);
+        }
+        let one_over = root.path().join("one-over.bsl");
+        fs::write(&one_over, b" ").expect("one-over fixture must be created");
+        paths.push(one_over);
+        let error = EdtSourceManifest::from_paths(paths)
+            .expect_err("one-over aggregate must fail during metadata preflight");
+        assert_admission_bound(
+            &error,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION + 1,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION,
+        );
+    }
+
+    #[test]
+    fn production_reader_binds_preflight_metadata_to_opened_file() {
+        let root = tempdir().expect("temporary directory must be created");
+        let path = root.path().join("Module.bsl");
+        fs::write(&path, b"old").expect("fixture must be created");
+        let mut manifest =
+            EdtSourceManifest::from_paths(vec![path.clone()]).expect("preflight must succeed");
+        fs::remove_file(&path).expect("admitted fixture must be removed");
+        fs::write(&path, b"new").expect("replacement fixture must be created");
+
+        assert!(matches!(
+            read_optional_module(&path, &mut SourceCapture::Manifest(&mut manifest)),
+            Err(EdtModuleError::ChangedDuringCapture(changed)) if changed == path
+        ));
+    }
 
     #[test]
     fn changed_during_capture_metadata_is_rejected() {

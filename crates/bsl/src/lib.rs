@@ -311,9 +311,40 @@ impl BslDeclarationExtractor for LineBslDeclarationExtractor {
     }
 }
 
+impl LineBslDeclarationExtractor {
+    /// Extracts declarations while rejecting the first symbol above `maximum`
+    /// before retaining it in parser state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a parse error or a bounded error for the first excess symbol.
+    pub fn extract_bounded(
+        &self,
+        module_id: &EntityId,
+        source: &str,
+        maximum: usize,
+    ) -> Result<Vec<BslSymbol>, BslParseError> {
+        parse_callable_scopes_bounded(module_id, source, Some(maximum)).map(|module| {
+            module
+                .scopes
+                .into_iter()
+                .map(|scope| scope.symbol)
+                .collect()
+        })
+    }
+}
+
 pub(crate) fn parse_callable_scopes(
     module_id: &EntityId,
     source: &str,
+) -> Result<ParsedCallableModule, BslParseError> {
+    parse_callable_scopes_bounded(module_id, source, None)
+}
+
+fn parse_callable_scopes_bounded(
+    module_id: &EntityId,
+    source: &str,
+    maximum: Option<usize>,
 ) -> Result<ParsedCallableModule, BslParseError> {
     if source
         .as_bytes()
@@ -371,6 +402,12 @@ pub(crate) fn parse_callable_scopes(
             bindings_complete &= collect_line_bindings(body_text, &mut shadowed_names);
             body_index += 1;
         };
+        if maximum.is_some_and(|maximum| scopes.len() >= maximum) {
+            return Err(BslParseError::BoundExceeded {
+                actual: scopes.len().saturating_add(1),
+                maximum: maximum.expect("bounded parser has a maximum"),
+            });
+        }
         scopes.push(ParsedCallableScope {
             symbol,
             header_end_line: lines[header_end_index].number,
@@ -821,6 +858,13 @@ pub enum BslParseError {
     InvalidName(usize),
     /// A symbol identifier could not be represented.
     InvalidIdentifier(usize),
+    /// The declaration collection exceeded an inclusive caller-supplied bound.
+    BoundExceeded {
+        /// First rejected collection size.
+        actual: usize,
+        /// Accepted maximum.
+        maximum: usize,
+    },
 }
 
 impl Display for BslParseError {
@@ -841,6 +885,10 @@ impl Display for BslParseError {
             Self::InvalidIdentifier(line) => {
                 write!(formatter, "invalid BSL symbol identifier at line {line}")
             }
+            Self::BoundExceeded { actual, maximum } => write!(
+                formatter,
+                "BSL declaration count {actual} exceeds maximum {maximum}"
+            ),
         }
     }
 }
@@ -1045,5 +1093,23 @@ EndProcedure
                 Err(BslParseError::MalformedDeclaration { .. })
             ));
         }
+    }
+
+    #[test]
+    fn bounded_declaration_extraction_rejects_before_the_first_excess_push() {
+        let source = concat!(
+            "Procedure P0()\nEndProcedure\n",
+            "Procedure P1()\nEndProcedure\n",
+            "Procedure P2()\nEndProcedure\n",
+            "Procedure P3()\nEndProcedure\n",
+            "Procedure P4()\nEndProcedure\n",
+        );
+        assert_eq!(
+            LineBslDeclarationExtractor.extract_bounded(&module_id(), source, 4),
+            Err(BslParseError::BoundExceeded {
+                actual: 5,
+                maximum: 4,
+            })
+        );
     }
 }

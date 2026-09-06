@@ -119,6 +119,137 @@ impl Display for SourceEvidenceError {
 
 impl std::error::Error for SourceEvidenceError {}
 
+/// Incremental admission guard for one Configuration source-evidence set.
+///
+/// Production adapters use this guard before retaining analyzed documents or
+/// cloning raw source into immutable domain values. Domain constructors repeat
+/// the same checks as defense in depth.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceEvidenceAdmission {
+    expected_documents: Option<usize>,
+    admitted_documents: usize,
+    total_raw_bytes: usize,
+}
+
+impl SourceEvidenceAdmission {
+    /// Starts one bounded document-set admission before proportional work.
+    ///
+    /// # Errors
+    ///
+    /// Returns a bounded error when the declared document count is over the
+    /// accepted per-Configuration maximum.
+    pub const fn new(expected_documents: usize) -> Result<Self, SourceEvidenceError> {
+        if expected_documents > MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION {
+            return Err(SourceEvidenceError::bounded(
+                expected_documents,
+                MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+            ));
+        }
+        Ok(Self {
+            expected_documents: Some(expected_documents),
+            admitted_documents: 0,
+            total_raw_bytes: 0,
+        })
+    }
+
+    /// Starts admission when accepted documents are discovered incrementally.
+    #[must_use]
+    pub const fn incremental() -> Self {
+        Self {
+            expected_documents: None,
+            admitted_documents: 0,
+            total_raw_bytes: 0,
+        }
+    }
+
+    /// Admits one raw document length before cloning or retaining its bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed error for a per-document or aggregate byte overflow,
+    /// arithmetic overflow, or more documents than declared at construction.
+    pub fn admit_document(&mut self, raw_byte_len: usize) -> Result<(), SourceEvidenceError> {
+        if raw_byte_len > MAX_SOURCE_DOCUMENT_BYTES {
+            return Err(SourceEvidenceError::bounded(
+                raw_byte_len,
+                MAX_SOURCE_DOCUMENT_BYTES,
+            ));
+        }
+        let admitted_documents = self
+            .admitted_documents
+            .checked_add(1)
+            .ok_or_else(|| SourceEvidenceError::new(SourceEvidenceErrorKind::ArithmeticOverflow))?;
+        if admitted_documents > MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION {
+            return Err(SourceEvidenceError::bounded(
+                admitted_documents,
+                MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+            ));
+        }
+        if self
+            .expected_documents
+            .is_some_and(|expected| admitted_documents > expected)
+        {
+            return Err(SourceEvidenceError::new(
+                SourceEvidenceErrorKind::IncompatibleEvidence,
+            ));
+        }
+        let total_raw_bytes = self
+            .total_raw_bytes
+            .checked_add(raw_byte_len)
+            .ok_or_else(|| SourceEvidenceError::new(SourceEvidenceErrorKind::ArithmeticOverflow))?;
+        if total_raw_bytes > MAX_SOURCE_BYTES_PER_CONFIGURATION {
+            return Err(SourceEvidenceError::bounded(
+                total_raw_bytes,
+                MAX_SOURCE_BYTES_PER_CONFIGURATION,
+            ));
+        }
+        self.admitted_documents = admitted_documents;
+        self.total_raw_bytes = total_raw_bytes;
+        Ok(())
+    }
+
+    /// Completes admission after every declared document length was observed.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed error when the observed document count differs from
+    /// the declared count.
+    pub fn finish(self) -> Result<usize, SourceEvidenceError> {
+        if self
+            .expected_documents
+            .is_some_and(|expected| self.admitted_documents != expected)
+        {
+            return Err(SourceEvidenceError::new(
+                SourceEvidenceErrorKind::IncompatibleEvidence,
+            ));
+        }
+        Ok(self.total_raw_bytes)
+    }
+
+    /// Checks the combined declaration and call count before allocating an
+    /// occurrence collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed error for arithmetic overflow or a count above the
+    /// accepted per-document maximum.
+    pub fn occurrence_capacity(
+        declarations: usize,
+        calls: usize,
+    ) -> Result<usize, SourceEvidenceError> {
+        let actual = declarations
+            .checked_add(calls)
+            .ok_or_else(|| SourceEvidenceError::new(SourceEvidenceErrorKind::ArithmeticOverflow))?;
+        if actual > MAX_SOURCE_OCCURRENCES_PER_DOCUMENT {
+            return Err(SourceEvidenceError::bounded(
+                actual,
+                MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+            ));
+        }
+        Ok(actual)
+    }
+}
+
 fn validate_identity_component(value: &EntityId) -> Result<(), SourceEvidenceError> {
     if value.as_str().len() > MAX_SOURCE_IDENTITY_BYTES {
         return Err(SourceEvidenceError::bounded(
@@ -569,12 +700,7 @@ impl SourceDocument {
                 MAX_SOURCE_DOCUMENT_BYTES,
             ));
         }
-        if occurrences.len() > MAX_SOURCE_OCCURRENCES_PER_DOCUMENT {
-            return Err(SourceEvidenceError::bounded(
-                occurrences.len(),
-                MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
-            ));
-        }
+        SourceEvidenceAdmission::occurrence_capacity(occurrences.len(), 0)?;
         let source = std::str::from_utf8(&raw_content)
             .map_err(|_| SourceEvidenceError::new(SourceEvidenceErrorKind::UnsupportedEncoding))?;
         if raw_content
@@ -694,32 +820,16 @@ impl SourceEvidenceSet {
         mut documents: Vec<SourceDocument>,
     ) -> Result<Self, SourceEvidenceError> {
         validate_identity_component(&configuration_id)?;
-        if documents.len() > MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION {
-            return Err(SourceEvidenceError::bounded(
-                documents.len(),
-                MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
-            ));
-        }
-
-        let mut total_raw_bytes = 0_usize;
+        let mut admission = SourceEvidenceAdmission::new(documents.len())?;
         for document in &documents {
             if document.id().configuration_id() != &configuration_id {
                 return Err(SourceEvidenceError::new(
                     SourceEvidenceErrorKind::IncompatibleEvidence,
                 ));
             }
-            total_raw_bytes = total_raw_bytes
-                .checked_add(document.raw_content().len())
-                .ok_or_else(|| {
-                    SourceEvidenceError::new(SourceEvidenceErrorKind::ArithmeticOverflow)
-                })?;
-            if total_raw_bytes > MAX_SOURCE_BYTES_PER_CONFIGURATION {
-                return Err(SourceEvidenceError::bounded(
-                    total_raw_bytes,
-                    MAX_SOURCE_BYTES_PER_CONFIGURATION,
-                ));
-            }
+            admission.admit_document(document.raw_content().len())?;
         }
+        let total_raw_bytes = admission.finish()?;
 
         documents.sort_unstable_by(|left, right| left.id().cmp(right.id()));
         if documents

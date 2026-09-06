@@ -131,81 +131,116 @@ impl BslCallExtractor for LineBslCallExtractor {
         module_id: &EntityId,
         source: &str,
     ) -> Result<Vec<BslCall>, BslCallError> {
-        let parsed_module = parse_callable_scopes(module_id, source).map_err(scope_parse_error)?;
-        let mut calls = Vec::new();
-        let mut ordinal = 0_usize;
-        let mut in_string = false;
-        let mut member_continuation = None;
+        extract_calls_impl(module_id, source, None)
+    }
+}
 
-        for source_line in source_lines(source) {
-            let (line, bom_bytes) = if source_line.number == 1 {
-                source_line
-                    .text
-                    .strip_prefix('\u{feff}')
-                    .map_or((source_line.text, 0), |line| (line, 3))
-            } else {
-                (source_line.text, 0)
-            };
-            let trimmed = line.trim_start();
-            let trimmed_start =
-                source_line.start_byte + bom_bytes + line.len().saturating_sub(trimmed.len());
+fn extract_calls_impl(
+    module_id: &EntityId,
+    source: &str,
+    bound: Option<(usize, usize)>,
+) -> Result<Vec<BslCall>, BslCallError> {
+    let parsed_module = parse_callable_scopes(module_id, source).map_err(scope_parse_error)?;
+    let mut calls = Vec::new();
+    let mut ordinal = 0_usize;
+    let mut in_string = false;
+    let mut member_continuation = None;
 
-            if !in_string
-                && (trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#'))
-            {
-                continue;
-            }
+    for source_line in source_lines(source) {
+        let (line, bom_bytes) = if source_line.number == 1 {
+            source_line
+                .text
+                .strip_prefix('\u{feff}')
+                .map_or((source_line.text, 0), |line| (line, 3))
+        } else {
+            (source_line.text, 0)
+        };
+        let trimmed = line.trim_start();
+        let trimmed_start =
+            source_line.start_byte + bom_bytes + line.len().saturating_sub(trimmed.len());
 
-            let scope = containing_scope(parsed_module.scopes(), source_line.number);
-            if scope.is_some_and(|scope| {
-                source_line.number <= scope.header_end_line()
-                    || source_line.number == scope.end_line()
-            }) {
-                member_continuation = None;
-                continue;
-            }
-
-            for mut callee in extract_calls(
-                trimmed,
-                trimmed_start,
-                &mut in_string,
-                &mut member_continuation,
-            ) {
-                if callee.kind == BslCallKind::Qualified
-                    && callee.target.split_once('.').is_some_and(|(qualifier, _)| {
-                        scope.map_or_else(
-                            || parsed_module.shadows(qualifier),
-                            |scope| scope.shadows(qualifier),
-                        )
-                    })
-                {
-                    callee.kind = BslCallKind::Unsupported;
-                }
-                ordinal += 1;
-
-                let id = EntityId::new(format!(
-                    "{}:call:{}:{}",
-                    module_id.as_str(),
-                    source_line.number,
-                    ordinal
-                ))
-                .map_err(|_| BslCallError::InvalidIdentifier(source_line.number))?;
-
-                let target_symbol = EntityName::new(callee.target)
-                    .map_err(|_| BslCallError::InvalidName(source_line.number))?;
-
-                calls.push(BslCall::new_with_identifier_range(
-                    id,
-                    scope.map(|scope| scope.symbol().name().clone()),
-                    target_symbol,
-                    source_line.number,
-                    callee.kind,
-                    callee.identifier_range,
-                ));
-            }
+        if !in_string
+            && (trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#'))
+        {
+            continue;
         }
 
-        Ok(calls)
+        let scope = containing_scope(parsed_module.scopes(), source_line.number);
+        if scope.is_some_and(|scope| {
+            source_line.number <= scope.header_end_line() || source_line.number == scope.end_line()
+        }) {
+            member_continuation = None;
+            continue;
+        }
+
+        let retained_before_line = bound
+            .map(|(retained, maximum)| {
+                retained
+                    .checked_add(calls.len())
+                    .map(|retained| (retained, maximum))
+                    .ok_or(BslCallError::ArithmeticOverflow)
+            })
+            .transpose()?;
+        for mut callee in extract_calls(
+            trimmed,
+            trimmed_start,
+            &mut in_string,
+            &mut member_continuation,
+            retained_before_line,
+        )? {
+            if callee.kind == BslCallKind::Qualified
+                && callee.target.split_once('.').is_some_and(|(qualifier, _)| {
+                    scope.map_or_else(
+                        || parsed_module.shadows(qualifier),
+                        |scope| scope.shadows(qualifier),
+                    )
+                })
+            {
+                callee.kind = BslCallKind::Unsupported;
+            }
+            ordinal += 1;
+
+            let id = EntityId::new(format!(
+                "{}:call:{}:{}",
+                module_id.as_str(),
+                source_line.number,
+                ordinal
+            ))
+            .map_err(|_| BslCallError::InvalidIdentifier(source_line.number))?;
+
+            let target_symbol = EntityName::new(callee.target)
+                .map_err(|_| BslCallError::InvalidName(source_line.number))?;
+
+            calls.push(BslCall::new_with_identifier_range(
+                id,
+                scope.map(|scope| scope.symbol().name().clone()),
+                target_symbol,
+                source_line.number,
+                callee.kind,
+                callee.identifier_range,
+            ));
+        }
+    }
+
+    Ok(calls)
+}
+
+impl LineBslCallExtractor {
+    /// Extracts calls while sharing one inclusive occurrence bound with
+    /// declarations already retained by the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns a call, scope, or bounded error before retaining the first call
+    /// above `maximum`.
+    pub fn extract_calls_bounded(
+        &self,
+        module_id: &EntityId,
+        source: &str,
+        retained: usize,
+        maximum: usize,
+    ) -> Result<Vec<BslCall>, BslCallError> {
+        extract_calls_impl(module_id, source, Some((retained, maximum)))
     }
 }
 
@@ -223,6 +258,9 @@ fn scope_parse_error(error: BslParseError) -> BslCallError {
         }
         BslParseError::InvalidName(line) => BslCallError::InvalidName(line),
         BslParseError::InvalidIdentifier(line) => BslCallError::InvalidIdentifier(line),
+        BslParseError::BoundExceeded { actual, maximum } => {
+            BslCallError::BoundExceeded { actual, maximum }
+        }
     }
 }
 
@@ -256,7 +294,8 @@ fn extract_calls(
     line_start: usize,
     in_string: &mut bool,
     member_continuation: &mut Option<MemberContinuation>,
-) -> Vec<ExtractedCall> {
+    bound: Option<(usize, usize)>,
+) -> Result<Vec<ExtractedCall>, BslCallError> {
     let mut calls = Vec::new();
     let starts_in_string = *in_string;
     let characters = line.char_indices().collect::<Vec<_>>();
@@ -343,6 +382,7 @@ fn extract_calls(
                         classify_member_receiver(receiver, true)
                     });
                     let effective_member = inherited_member.or(current_member.as_ref());
+                    admit_extracted_call(bound, calls.len())?;
                     let (target, kind) = classify_extracted_call(
                         candidate,
                         final_start == start,
@@ -364,7 +404,24 @@ fn extract_calls(
         ContinuationUpdate::Clear => *member_continuation = None,
         ContinuationUpdate::Set(next) => *member_continuation = Some(next),
     }
-    calls
+    Ok(calls)
+}
+
+fn admit_extracted_call(
+    bound: Option<(usize, usize)>,
+    retained_on_line: usize,
+) -> Result<(), BslCallError> {
+    let Some((retained, maximum)) = bound else {
+        return Ok(());
+    };
+    let actual = retained
+        .checked_add(retained_on_line)
+        .and_then(|value| value.checked_add(1))
+        .ok_or(BslCallError::ArithmeticOverflow)?;
+    if actual > maximum {
+        return Err(BslCallError::BoundExceeded { actual, maximum });
+    }
+    Ok(())
 }
 
 fn classify_extracted_call(
@@ -518,6 +575,15 @@ pub enum BslCallError {
 
     /// A callable declaration appeared inside another callable scope.
     NestedScope(usize),
+    /// The combined occurrence collection exceeded an inclusive caller bound.
+    BoundExceeded {
+        /// First rejected collection size.
+        actual: usize,
+        /// Accepted maximum.
+        maximum: usize,
+    },
+    /// Combined occurrence accounting overflowed.
+    ArithmeticOverflow,
 }
 
 impl Display for BslCallError {
@@ -540,6 +606,13 @@ impl Display for BslCallError {
 
             Self::NestedScope(line) => {
                 write!(formatter, "nested BSL callable scope at line {line}")
+            }
+            Self::BoundExceeded { actual, maximum } => write!(
+                formatter,
+                "BSL occurrence count {actual} exceeds maximum {maximum}"
+            ),
+            Self::ArithmeticOverflow => {
+                formatter.write_str("BSL occurrence count arithmetic overflow")
             }
         }
     }
@@ -842,5 +915,17 @@ EndProcedure
 
         assert!(call.kind().is_none());
         assert!(call.identifier_range().is_none());
+    }
+
+    #[test]
+    fn bounded_call_extraction_shares_the_declaration_budget_before_push() {
+        let source = "CallOne(); CallTwo(); CallThree();";
+        assert_eq!(
+            LineBslCallExtractor.extract_calls_bounded(&module_id(), source, 2, 4),
+            Err(BslCallError::BoundExceeded {
+                actual: 5,
+                maximum: 4,
+            })
+        );
     }
 }

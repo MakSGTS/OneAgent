@@ -5,14 +5,16 @@ use std::path::{Component, Path, PathBuf};
 
 use oneagent_analysis::refactoring::{
     BslModuleRole, ConfinedSourcePath, SourceByteRange, SourceContentVersion, SourceDocument,
-    SourceDocumentId, SourceEvidenceCompleteness, SourceEvidenceError, SourceEvidenceSet,
-    SourceFormat, SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
+    SourceDocumentId, SourceEvidenceAdmission, SourceEvidenceCompleteness, SourceEvidenceError,
+    SourceEvidenceSet, SourceFormat, SourceOccurrence, SourceOccurrenceKind,
+    SourceOccurrenceResolution,
 };
 use oneagent_bsl::{BslCallKind, bsl_names_equal};
 use oneagent_common::{EntityId, SourcePath};
 
 use crate::{
-    AnalyzedBslModule, EdtBslGraphError, EdtModuleDescriptor, EdtModuleKind, analyze_module,
+    AnalyzedBslModule, EdtBslGraphError, EdtModuleDescriptor, EdtModuleKind,
+    bsl_graph::analyze_module_bounded,
 };
 
 pub(crate) fn build_source_evidence(
@@ -21,9 +23,14 @@ pub(crate) fn build_source_evidence(
     configuration_id: &EntityId,
     modules: &[EdtModuleDescriptor],
 ) -> Result<SourceEvidenceSet, EdtSourceEvidenceError> {
+    admit_modules(modules)?;
     let analyzed = modules
         .iter()
-        .map(analyze_module)
+        .map(|module| {
+            let analysis = analyze_module_bounded(module)?;
+            admitted_occurrence_capacity(analysis.symbols().len(), analysis.calls().len())?;
+            Ok::<_, EdtSourceEvidenceError>(analysis)
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let roots = ConfinedRoots::new(workspace_root, project_root)?;
     let mut documents = Vec::with_capacity(modules.len());
@@ -43,6 +50,40 @@ pub(crate) fn build_source_evidence(
     SourceEvidenceSet::new(configuration_id.clone(), documents).map_err(Into::into)
 }
 
+fn admit_modules(modules: &[EdtModuleDescriptor]) -> Result<usize, EdtSourceEvidenceError> {
+    admit_document_lengths(
+        modules.len(),
+        modules.iter().map(|module| {
+            module.raw_source().map_or_else(
+                || {
+                    Err(EdtSourceEvidenceError::MissingCapturedSource(
+                        module.path().to_path_buf(),
+                    ))
+                },
+                |raw| Ok(raw.len()),
+            )
+        }),
+    )
+}
+
+fn admit_document_lengths(
+    document_count: usize,
+    raw_byte_lengths: impl IntoIterator<Item = Result<usize, EdtSourceEvidenceError>>,
+) -> Result<usize, EdtSourceEvidenceError> {
+    let mut admission = SourceEvidenceAdmission::new(document_count)?;
+    for raw_byte_len in raw_byte_lengths {
+        admission.admit_document(raw_byte_len?)?;
+    }
+    admission.finish().map_err(Into::into)
+}
+
+fn admitted_occurrence_capacity(
+    declarations: usize,
+    calls: usize,
+) -> Result<usize, EdtSourceEvidenceError> {
+    SourceEvidenceAdmission::occurrence_capacity(declarations, calls).map_err(Into::into)
+}
+
 fn build_document(
     roots: &ConfinedRoots,
     configuration_id: &EntityId,
@@ -55,7 +96,8 @@ fn build_document(
     let version = SourceContentVersion::from_bytes(raw);
     let source = std::str::from_utf8(raw)
         .map_err(|_| EdtSourceEvidenceError::InvalidCapturedUtf8(module.path().to_path_buf()))?;
-    let mut occurrences = Vec::with_capacity(analysis.symbols().len() + analysis.calls().len());
+    let capacity = admitted_occurrence_capacity(analysis.symbols().len(), analysis.calls().len())?;
+    let mut occurrences = Vec::with_capacity(capacity);
 
     for symbol in analysis.symbols() {
         let range = symbol
@@ -122,8 +164,7 @@ fn map_call(
                 .symbols()
                 .iter()
                 .filter(|symbol| bsl_names_equal(symbol.name().as_str(), target))
-                .map(|symbol| symbol.id().clone())
-                .collect::<Vec<_>>();
+                .map(|symbol| symbol.id().clone());
             mapped(SourceOccurrenceKind::LocalCall, candidates)
         }
         Some(BslCallKind::Qualified) => {
@@ -141,8 +182,7 @@ fn map_call(
                 .filter(|symbol| {
                     symbol.is_exported() && bsl_names_equal(symbol.name().as_str(), symbol_name)
                 })
-                .map(|symbol| symbol.id().clone())
-                .collect::<Vec<_>>();
+                .map(|symbol| symbol.id().clone());
             mapped(SourceOccurrenceKind::QualifiedCall, candidates)
         }
         Some(BslCallKind::Unsupported) | None => (
@@ -325,5 +365,130 @@ impl From<EdtBslGraphError> for EdtSourceEvidenceError {
 impl From<SourceEvidenceError> for EdtSourceEvidenceError {
     fn from(value: SourceEvidenceError) -> Self {
         Self::Domain(value)
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use oneagent_analysis::refactoring::{
+        MAX_SOURCE_BYTES_PER_CONFIGURATION, MAX_SOURCE_DOCUMENT_BYTES,
+        MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION, MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+        SourceEvidenceErrorKind,
+    };
+    use oneagent_bsl::BslCallError;
+    use oneagent_common::{EntityId, EntityName};
+    use std::path::PathBuf;
+
+    use super::{EdtSourceEvidenceError, admit_document_lengths, admitted_occurrence_capacity};
+    use crate::bsl_graph::analyze_module_bounded;
+    use crate::{EdtBslGraphError, EdtModuleDescriptor, EdtModuleKind};
+
+    fn assert_bound(error: &EdtSourceEvidenceError, actual: usize, maximum: usize) {
+        let EdtSourceEvidenceError::Domain(error) = error else {
+            panic!("admission must preserve the source-evidence domain error");
+        };
+        assert_eq!(error.kind(), SourceEvidenceErrorKind::BoundExceeded);
+        assert_eq!(error.actual(), Some(actual));
+        assert_eq!(error.maximum(), Some(maximum));
+    }
+
+    #[test]
+    fn production_admission_accepts_exact_and_rejects_one_over_before_collection() {
+        let exact_documents = admit_document_lengths(
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+            (0..MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION).map(|_| Ok(0)),
+        )
+        .expect("exact document count must be admitted");
+        assert_eq!(exact_documents, 0);
+
+        let count_error = admit_document_lengths(
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION + 1,
+            std::iter::once_with(|| -> Result<usize, EdtSourceEvidenceError> {
+                panic!("over-bound document count must fail before iteration")
+            }),
+        )
+        .expect_err("one-over document count must fail");
+        assert_bound(
+            &count_error,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION + 1,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+        );
+
+        let exact_aggregate = admit_document_lengths(
+            MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES,
+            (0..MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES)
+                .map(|_| Ok(MAX_SOURCE_DOCUMENT_BYTES)),
+        )
+        .expect("exact aggregate byte count must be admitted");
+        assert_eq!(exact_aggregate, MAX_SOURCE_BYTES_PER_CONFIGURATION);
+
+        let aggregate_documents =
+            MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES + 1;
+        let aggregate_error = admit_document_lengths(
+            aggregate_documents,
+            (0..aggregate_documents).map(|index| {
+                Ok(if index + 1 == aggregate_documents {
+                    1
+                } else {
+                    MAX_SOURCE_DOCUMENT_BYTES
+                })
+            }),
+        )
+        .expect_err("one-over aggregate byte count must fail");
+        assert_bound(
+            &aggregate_error,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION + 1,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION,
+        );
+
+        assert_eq!(
+            admitted_occurrence_capacity(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, 0)
+                .expect("exact occurrence count must be admitted"),
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT
+        );
+        let occurrence_error = admitted_occurrence_capacity(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, 1)
+            .expect_err("one-over occurrence count must fail");
+        assert_bound(
+            &occurrence_error,
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT + 1,
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+        );
+    }
+
+    #[test]
+    fn production_analyzer_rejects_the_first_occurrence_above_the_contract_bound() {
+        let exact_source = "Target();".repeat(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT);
+        let exact_module = EdtModuleDescriptor::new_with_raw_source(
+            EntityId::new("configuration:exact_bounded_module").expect("identifier must be valid"),
+            EntityName::new("ExactBoundedModule").expect("name must be valid"),
+            EdtModuleKind::Common,
+            PathBuf::from("src/CommonModules/ExactBoundedModule/Module.bsl"),
+            exact_source.into_bytes(),
+        );
+        assert_eq!(
+            analyze_module_bounded(&exact_module)
+                .expect("exact occurrence bound must be accepted")
+                .calls()
+                .len(),
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT
+        );
+
+        let source = "Target();".repeat(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT + 1);
+        let module = EdtModuleDescriptor::new_with_raw_source(
+            EntityId::new("configuration:bounded_module").expect("identifier must be valid"),
+            EntityName::new("BoundedModule").expect("name must be valid"),
+            EdtModuleKind::Common,
+            PathBuf::from("src/CommonModules/BoundedModule/Module.bsl"),
+            source.into_bytes(),
+        );
+
+        assert!(matches!(
+            analyze_module_bounded(&module),
+            Err(EdtBslGraphError::ParseCalls(BslCallError::BoundExceeded {
+                actual,
+                maximum,
+            })) if actual == MAX_SOURCE_OCCURRENCES_PER_DOCUMENT + 1
+                && maximum == MAX_SOURCE_OCCURRENCES_PER_DOCUMENT
+        ));
     }
 }

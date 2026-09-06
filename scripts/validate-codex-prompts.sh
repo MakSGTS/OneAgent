@@ -160,6 +160,200 @@ validate_prompt() {
     validated_count=$((validated_count + 1))
 }
 
+validate_future_sprint_execution_loop() {
+    local prompt_file=$1
+    local contract_block
+    local contract_count
+    local matrix_count
+    local matrix_line
+    local matrix_value
+    local matrix_path
+    local matrix_heading
+    local matrix_heading_count
+    local gate_count
+    local gate_line
+    local gate_value
+    local gate_prompt
+    local gate_prerequisite
+    local gate_artifact
+    local gate_commit
+    local gate_extra
+    local none_marker
+    local none_master
+    local baseline_count=0
+    local full_gate_total=0
+    local prompt_directory
+
+    require_line "$prompt_file" '## Sprint efficiency contract'
+    contract_block=$(awk '
+        $0 == "## Sprint efficiency contract" { active = 1; next }
+        active && /^## / { exit }
+        active { print }
+    ' "$prompt_file")
+
+    contract_count=$(awk '$0 == "sprint_efficiency_contract: v1" { count += 1 } END { print count + 0 }' \
+        <<< "$contract_block")
+    if [[ "$contract_count" != 1 ]]; then
+        report_error "$prompt_file" \
+            "Sprint efficiency contract must contain exactly one sprint_efficiency_contract: v1 record"
+    fi
+
+    matrix_count=$(awk '/^adr_invariant_matrix: / { count += 1 } END { print count + 0 }' \
+        <<< "$contract_block")
+    matrix_line=$(awk '/^adr_invariant_matrix: / { print; exit }' <<< "$contract_block")
+    matrix_value=${matrix_line#adr_invariant_matrix: }
+    matrix_path=${matrix_value%%::*}
+    matrix_heading=${matrix_value#*::}
+    if [[ "$matrix_count" != 1 ]] \
+        || ! grep -Eq '^adr_invariant_matrix: docs/[A-Za-z0-9._/-]+::[^|]+$' \
+            <<< "$contract_block"; then
+        report_error "$prompt_file" \
+            "Sprint efficiency contract needs one non-empty repository matrix path and section"
+    elif [[ ! -f "$matrix_path" ]]; then
+        report_error "$prompt_file" "ADR-invariant matrix file does not exist: $matrix_path"
+    else
+        matrix_heading_count=$(awk -v expected="$matrix_heading" '
+            /^#{1,6} / {
+                heading = $0
+                sub(/^#{1,6} /, "", heading)
+                if (heading == expected) {
+                    count += 1
+                }
+            }
+            END { print count + 0 }
+        ' "$matrix_path")
+        if [[ "$matrix_heading_count" != 1 ]]; then
+            report_error "$prompt_file" \
+                "ADR-invariant matrix selector must resolve to one exact Markdown heading"
+        fi
+    fi
+
+    gate_count=$(awk '/^design_review_gate: / { count += 1 } END { print count + 0 }' \
+        <<< "$contract_block")
+    gate_line=$(awk '/^design_review_gate: / { print; exit }' <<< "$contract_block")
+    if [[ "$gate_count" != 1 ]]; then
+        report_error "$prompt_file" \
+            "Sprint efficiency contract needs exactly one design_review_gate record"
+    elif [[ "$gate_line" == 'design_review_gate: none|'* ]]; then
+        gate_value=${gate_line#design_review_gate: }
+        IFS='|' read -r none_marker none_master gate_extra <<< "$gate_value"
+        if [[ "$none_marker" != none || "$none_master" != "$prompt_file" \
+            || -n "$gate_extra" ]]; then
+            report_error "$prompt_file" \
+                "none design_review_gate must name this exact master prompt"
+        elif [[ $(awk -v expected="$gate_line" '$0 == expected { count += 1 } END { print count + 0 }' \
+            docs/Roadmap.md) != 1 ]]; then
+            report_error "$prompt_file" \
+                "suite-specific none design_review_gate must occur exactly once in docs/Roadmap.md"
+        fi
+    else
+        gate_value=${gate_line#design_review_gate: }
+        IFS='|' read -r gate_prompt gate_prerequisite gate_artifact gate_commit gate_extra \
+            <<< "$gate_value"
+        if [[ -z "$gate_prompt" || -z "$gate_prerequisite" || -z "$gate_artifact" \
+            || -z "$gate_commit" || -n "$gate_extra" ]]; then
+            report_error "$prompt_file" \
+                "design_review_gate must be none or contain exactly four non-empty fields"
+        else
+            if [[ ! -f "$gate_prompt" ]]; then
+                report_error "$prompt_file" "design-review prompt does not exist: $gate_prompt"
+            elif [[ $(front_matter_value "$gate_prompt" task_kind) != review ]]; then
+                report_error "$prompt_file" "design-review prompt must use task_kind: review"
+            fi
+            if [[ $(dirname "$gate_prompt") != $(dirname "$prompt_file") ]]; then
+                report_error "$prompt_file" "design-review prompt must belong to the same sprint suite"
+            fi
+            if [[ ! "$gate_artifact" =~ ^docs/reviews/[A-Za-z0-9._/-]+\.md$ ]]; then
+                report_error "$prompt_file" \
+                    "design-review artifact must be a repository-relative docs/reviews Markdown path"
+            fi
+            if [[ $(awk -v expected="$gate_line" '$0 == expected { count += 1 } END { print count + 0 }' \
+                docs/Roadmap.md) != 1 ]]; then
+                report_error "$prompt_file" \
+                    "design_review_gate record must occur exactly once in docs/Roadmap.md"
+            fi
+        fi
+    fi
+
+    while IFS= read -r baseline_line; do
+        local baseline_value
+        local baseline_prompt
+        local expected_paths
+        local expected_churn
+        local expected_binaries
+        local focused_check_count
+        local full_gate_count
+        local baseline_extra
+
+        [[ -z "$baseline_line" ]] && continue
+        baseline_count=$((baseline_count + 1))
+        baseline_value=${baseline_line#implementation_baseline: }
+        IFS='|' read -r baseline_prompt expected_paths expected_churn \
+            expected_binaries focused_check_count full_gate_count baseline_extra \
+            <<< "$baseline_value"
+
+        if [[ -z "$baseline_prompt" || -z "$expected_paths" || -z "$expected_churn" \
+            || -z "$expected_binaries" || -z "$focused_check_count" \
+            || -z "$full_gate_count" || -n "$baseline_extra" ]]; then
+            report_error "$prompt_file" \
+                "implementation_baseline must contain exactly six non-empty fields"
+            continue
+        fi
+        if [[ ! "$expected_paths" =~ ^[0-9]+$ || ! "$expected_churn" =~ ^[0-9]+$ \
+            || ! "$focused_check_count" =~ ^[0-9]+$ \
+            || ! "$full_gate_count" =~ ^[01]$ ]]; then
+            report_error "$prompt_file" \
+                "implementation baseline counts must be non-negative integers and full gate 0 or 1"
+        else
+            full_gate_total=$((full_gate_total + full_gate_count))
+        fi
+        if [[ "$expected_binaries" != none \
+            && ! "$expected_binaries" =~ ^[A-Za-z0-9._/-]+(,[A-Za-z0-9._/-]+)*$ ]]; then
+            report_error "$prompt_file" \
+                "expected binary paths must be none or a comma-separated repository-relative inventory"
+        fi
+        if [[ ! -f "$baseline_prompt" ]]; then
+            report_error "$prompt_file" "implementation prompt does not exist: $baseline_prompt"
+        elif [[ $(front_matter_value "$baseline_prompt" task_kind) != implementation ]]; then
+            report_error "$prompt_file" \
+                "implementation baseline prompt must use task_kind: implementation"
+        fi
+        if [[ $(dirname "$baseline_prompt") != $(dirname "$prompt_file") ]]; then
+            report_error "$prompt_file" "implementation baseline must belong to the same sprint suite"
+        fi
+        if [[ $(awk -v expected="$baseline_line" '$0 == expected { count += 1 } END { print count + 0 }' \
+            docs/Roadmap.md) != 1 ]]; then
+            report_error "$prompt_file" \
+                "implementation_baseline record must occur exactly once in docs/Roadmap.md"
+        fi
+    done < <(awk '/^implementation_baseline: / { print }' <<< "$contract_block")
+
+    if (( baseline_count == 0 )); then
+        report_error "$prompt_file" \
+            "Sprint efficiency contract needs at least one implementation_baseline record"
+    elif (( full_gate_total != 1 )); then
+        report_error "$prompt_file" \
+            "implementation_baseline full-gate counts must sum to exactly 1"
+    fi
+
+    prompt_directory=$(dirname "$prompt_file")
+    while IFS= read -r child_prompt; do
+        if [[ $(front_matter_value "$child_prompt" task_kind) == implementation ]]; then
+            local matching_baselines
+            matching_baselines=$(awk -v prefix="implementation_baseline: $child_prompt|" \
+                'index($0, prefix) == 1 { count += 1 } END { print count + 0 }' \
+                <<< "$contract_block")
+            if [[ "$matching_baselines" != 1 ]]; then
+                report_error "$prompt_file" \
+                    "implementation child needs exactly one baseline: $child_prompt"
+            fi
+        fi
+    done < <(find "$prompt_directory" -maxdepth 1 -type f \
+        -name '[0-9][0-9]-*.md' ! -name '00-*' -print | sort)
+
+    validated_count=$((validated_count + 1))
+}
+
 prompt_files=()
 if (( $# > 0 )); then
     prompt_files=("$@")
@@ -190,21 +384,36 @@ else
         find docs/codex/prompts -mindepth 2 -maxdepth 2 -type f \
             -name '[0-9][0-9]-*.md' ! -name '00-*' -print | sort
     )
+
+    while IFS= read -r master_file; do
+        if [[ "$master_file" =~ /sprint-([0-9]+)- ]] \
+            && (( 10#${BASH_REMATCH[1]} >= 41 )); then
+            prompt_files+=("$master_file")
+        fi
+    done < <(
+        find docs/codex/prompts -mindepth 2 -maxdepth 2 -type f \
+            -name '00-sprint-*-execution-loop.md' -print | sort
+    )
 fi
 
 if (( ${#prompt_files[@]} == 0 )); then
-    printf 'ERROR no Prompt Contract v2 files found\n' >&2
+    printf 'ERROR no Codex prompt files found\n' >&2
     exit 1
 fi
 
 for prompt_file in "${prompt_files[@]}"; do
-    validate_prompt "$prompt_file"
+    if [[ "$prompt_file" =~ /sprint-([0-9]+)-[^/]+/00-sprint-[0-9]+-execution-loop\.md$ ]] \
+        && (( 10#${BASH_REMATCH[1]} >= 41 )); then
+        validate_future_sprint_execution_loop "$prompt_file"
+    else
+        validate_prompt "$prompt_file"
+    fi
 done
 
 if (( error_count > 0 )); then
-    printf 'Prompt Contract v2 validation failed: %d error(s) in %d file(s).\n' \
+    printf 'Codex prompt validation failed: %d error(s) in %d file(s).\n' \
         "$error_count" "$validated_count" >&2
     exit 1
 fi
 
-printf 'Prompt Contract v2 validation passed: %d file(s).\n' "$validated_count"
+printf 'Codex prompt validation passed: %d file(s).\n' "$validated_count"

@@ -39,6 +39,37 @@ without implementing production behavior.
   behind an explicit `Lookup on demand` trigger.
 - Give every task one coherent owned outcome, explicit prerequisite, scope
   boundary, acceptance evidence, validation additions, and commit boundary.
+- For Sprint 41 and later, before production implementation, commit an
+  ADR-invariant matrix that maps every applicable accepted production invariant
+  to its exact production location, the operation or retention point that it
+  must precede when ordering matters, one negative production oracle, and the
+  focused validation that proves the placement. Keep documentation, reporting,
+  review-process, and explicitly deferred requirements outside this production
+  mapping and record their evidence separately.
+- For a cross-layer, parser, persistence, filesystem, concurrency, security, or
+  other architecture-sensitive Sprint 41 or later change, require the targeted
+  pre-implementation design review defined by
+  `docs/codex/workflows/review.md` as a dedicated manifest child after the ADR
+  and invariant-matrix task and before the first production implementation
+  task. Its primary records the decision in the planned review artifact and a
+  separate commit. This review does not replace the final integration review.
+- For every Sprint 41 or later implementation task, commit the following
+  baseline in both the authoritative Roadmap execution plan and generated
+  master prompt: `expected_path_count`, an integer upper bound for unique
+  task-owned changed paths; `expected_text_line_churn`, an integer upper bound
+  for additions plus deletions on textual paths; the expected binary-path
+  inventory; and the exact focused/full validation budget. Require renewed user
+  agreement before continuing when live evidence exceeds twice either numeric
+  bound or introduces an unexpected binary path.
+- Encode the matrix selector, design-review gate, and per-implementation-task
+  baselines in the exact `Sprint efficiency contract` record format defined by
+  `docs/codex/templates/sprint-execution-loop.md`. Repeat its design-review and
+  baseline records byte-for-byte in the authoritative Roadmap execution plan.
+  Create the selected matrix file and unique section heading during planning;
+  an architecture child may populate or replace the provisional rows only after
+  its ADR is accepted and before the targeted design-review gate. Use
+  `design_review_gate: none|<master-prompt-path>` when the accepted scope is not
+  architecture-sensitive.
 - Order tasks so that every implementation prompt begins from a committed or
   explicitly proven prerequisite.
 - Define `already_complete`, blocked-review, sprint-completion, and next-sprint
@@ -55,6 +86,9 @@ without implementing production behavior.
 - Readiness findings
 - Template readiness decision
 - Accepted planning baseline
+- Committed ADR-invariant matrix and targeted design-review decision
+- `expected_path_count`, `expected_text_line_churn`, expected binary paths, and
+  validation budget
 - Ordered task manifest
 - Dependency and state gates
 - Deferred scope
@@ -64,5 +98,7 @@ without implementing production behavior.
 
 - Validate Markdown consistency, internal links, task numbering, dependency
   order, and Roadmap status.
-- Run `scripts/validate-codex-prompts.sh` against every generated child prompt.
+- For Sprint 41 and later, run `scripts/validate-codex-prompts.sh` against the
+  generated master and every child prompt; earlier suites retain their
+  committed validation contract.
 - Do not run production tests unless implementation files are changed.

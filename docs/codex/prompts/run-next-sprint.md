@@ -20,6 +20,8 @@ The current user instruction that launches this prompt authorizes:
 
 - one guaranteed fresh-context task runner for each manifest child, executed
   sequentially and without further delegation; and
+- for Sprint 41 and later, one guaranteed fresh-context read-only targeted
+  design reviewer when the accepted scope is architecture-sensitive; and
 - one guaranteed fresh-context read-only reviewer when the selected Review
   workflow requires it.
 
@@ -156,6 +158,14 @@ Workflow text. Use exact sections, symbols, ranges, diffs, or queries for large
 authorities. Put optional evidence in `Lookup on demand` with an explicit
 trigger.
 
+For Sprint 41 and later, place an ADR-invariant matrix task after the accepted
+architecture decision and, when the scope is architecture-sensitive, a
+dedicated targeted design-review child immediately after that matrix and before
+the first production implementation child. Predeclare the review artifact,
+commit message, and prerequisite. A passing reviewer result is recorded by the
+primary in that artifact and its own commit; a blocker creates neither and
+stops the suite.
+
 The final child is an integration review. It selects the Review Profile,
 Template, and Workflow, receives the exact immutable range and validation
 matrix, launches the separately authorized fresh read-only reviewer, reconciles
@@ -166,6 +176,15 @@ dispatcher plus durable ledger. Its manifest records:
 
 | Order | Prompt | Prerequisite | Outcome | Validation additions | Commit message |
 |---:|---|---|---|---|---|
+
+For Sprint 41 and later, the master also contains the exact machine-readable
+`Sprint efficiency contract` block defined by the Execution Loop Template.
+Repeat every `design_review_gate` and `implementation_baseline` record
+byte-for-byte in the Roadmap execution plan. The design-review record names the
+dedicated review child and future decision artifact without claiming a decision
+during planning, or is exactly
+`design_review_gate: none|<master-prompt-path>` when live evidence shows that
+the sprint has no architecture-sensitive change.
 
 Record the exact immediately preceding suite inventory for conditional
 retirement by the final review. Do not retire prompts during planning or
@@ -198,7 +217,8 @@ Run:
 
 ```bash
 set -o pipefail
-find docs/codex/prompts/sprint-<N>-<slug> -maxdepth 1 -type f -name '[0-9][0-9]-*.md' ! -name '00-*' -print0 \
+find docs/codex/prompts/sprint-<N>-<slug> -maxdepth 1 -type f \
+  -name '[0-9][0-9]-*.md' ! -name '00-*' -print0 \
   | xargs -0 scripts/validate-codex-prompts.sh
 git diff --check
 git status --short
@@ -207,7 +227,8 @@ git status --short
 Also verify links, contiguous numbering, manifest and prerequisite order,
 commit-message agreement, Context Manifest selectors, budget preflight,
 accepted versus deferred scope, unchanged `next` state, previous-suite
-inventory, review handoff, and absence of unrelated changes.
+inventory, review handoff, Sprint 41+ Roadmap/master efficiency-record
+agreement, and absence of unrelated changes.
 
 Use `docs/codex/core/validation.md` as the only canonical validation source. Do
 not copy its full command matrix into generated prompts.
@@ -232,6 +253,11 @@ For each child:
 4. verify repository state, validation, commit, and required push from the
    parent context; and
 5. record the durable ledger before dispatching the next child.
+
+For Sprint 41 and later, execute the targeted design-review child as the
+two-phase gate defined by the Review workflow. Only after its primary-created
+decision artifact is committed may the dispatcher pass that artifact, commit,
+matrix selector, and task baseline to a production implementation child.
 
 Never continue a second child inside the first child's context. Never pass one
 child's implementation reasoning to another child or to the independent

@@ -1,5 +1,6 @@
 //! Integration between EDT module files, BSL declarations and the semantic graph.
 
+use oneagent_analysis::refactoring::MAX_SOURCE_OCCURRENCES_PER_DOCUMENT;
 use oneagent_bsl::{
     BslCall, BslCallError, BslCallExtractor, BslCallKind, BslCallResolver, BslDeclarationExtractor,
     BslModuleSymbols, BslParseError, BslQuery, BslQueryError, BslQueryExtractor, BslSymbol,
@@ -180,6 +181,19 @@ impl AnalyzedBslModule {
 ///
 /// Returns an error when the module cannot be read or parsed.
 pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule, EdtBslGraphError> {
+    analyze_module_internal(module, None)
+}
+
+pub(crate) fn analyze_module_bounded(
+    module: &EdtModuleDescriptor,
+) -> Result<AnalyzedBslModule, EdtBslGraphError> {
+    analyze_module_internal(module, Some(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT))
+}
+
+fn analyze_module_internal(
+    module: &EdtModuleDescriptor,
+    occurrence_maximum: Option<usize>,
+) -> Result<AnalyzedBslModule, EdtBslGraphError> {
     let fallback;
     let raw_source = if let Some(raw_source) = module.raw_source() {
         raw_source
@@ -196,12 +210,25 @@ pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule,
             source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
         })?;
 
-    let symbols = LineBslDeclarationExtractor
-        .extract(module.id(), source)
+    let symbols = occurrence_maximum
+        .map_or_else(
+            || LineBslDeclarationExtractor.extract(module.id(), source),
+            |maximum| LineBslDeclarationExtractor.extract_bounded(module.id(), source, maximum),
+        )
         .map_err(EdtBslGraphError::ParseDeclarations)?;
 
-    let calls = LineBslCallExtractor
-        .extract_calls(module.id(), source)
+    let calls = occurrence_maximum
+        .map_or_else(
+            || LineBslCallExtractor.extract_calls(module.id(), source),
+            |maximum| {
+                LineBslCallExtractor.extract_calls_bounded(
+                    module.id(),
+                    source,
+                    symbols.len(),
+                    maximum,
+                )
+            },
+        )
         .map_err(EdtBslGraphError::ParseCalls)?;
 
     let queries = LineBslQueryExtractor
@@ -280,9 +307,55 @@ pub(crate) fn add_configuration_module_symbols_with_diagnostics_in_scope(
     reference_statistics: &mut SemanticReferenceStatistics,
     reference_requests: &mut SemanticReferenceRequestLedger,
 ) -> Result<usize, EdtBslGraphError> {
+    add_configuration_module_symbols_with_diagnostics_in_scope_internal(
+        graph,
+        modules,
+        workspace_scope,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+        false,
+    )
+}
+
+pub(crate) fn add_configuration_module_symbols_with_bounded_source_evidence(
+    graph: &mut SemanticGraph,
+    modules: &[EdtModuleDescriptor],
+    workspace_scope: WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
+) -> Result<usize, EdtBslGraphError> {
+    add_configuration_module_symbols_with_diagnostics_in_scope_internal(
+        graph,
+        modules,
+        workspace_scope,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_configuration_module_symbols_with_diagnostics_in_scope_internal(
+    graph: &mut SemanticGraph,
+    modules: &[EdtModuleDescriptor],
+    workspace_scope: WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
+    bounded_source_evidence: bool,
+) -> Result<usize, EdtBslGraphError> {
     let analyzed_modules = modules
         .iter()
-        .map(analyze_module)
+        .map(|module| {
+            if bounded_source_evidence {
+                analyze_module_bounded(module)
+            } else {
+                analyze_module(module)
+            }
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     add_analyzed_modules(

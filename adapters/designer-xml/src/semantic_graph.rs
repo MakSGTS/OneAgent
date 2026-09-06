@@ -1,6 +1,6 @@
 //! Production semantic graph emission for hierarchical Designer XML sources.
 
-use oneagent_analysis::refactoring::SourceEvidenceSet;
+use oneagent_analysis::refactoring::{MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, SourceEvidenceSet};
 use oneagent_bsl::{
     BslDeclarationExtractor, BslParseError, BslSymbolKind, LineBslDeclarationExtractor,
 };
@@ -98,7 +98,7 @@ impl DesignerXmlSemanticGraphBuilder for FileSystemDesignerXmlSemanticGraphBuild
         project_root: &Path,
         scope: DesignerXmlBuildScope,
     ) -> Result<SemanticGraph, DesignerXmlGraphError> {
-        build_graph_artifacts(project_root, scope).map(|artifacts| artifacts.graph)
+        build_graph_artifacts(project_root, scope, false).map(|artifacts| artifacts.graph)
     }
 
     fn build_graph_with_source_evidence(
@@ -107,7 +107,7 @@ impl DesignerXmlSemanticGraphBuilder for FileSystemDesignerXmlSemanticGraphBuild
         project_root: &Path,
         scope: DesignerXmlBuildScope,
     ) -> Result<DesignerXmlSemanticGraphBuildResult, DesignerXmlGraphError> {
-        let artifacts = build_graph_artifacts(project_root, scope)?;
+        let artifacts = build_graph_artifacts(project_root, scope, true)?;
         let source_evidence = crate::source_evidence::build_source_evidence(
             workspace_root,
             project_root,
@@ -131,11 +131,25 @@ struct DesignerXmlGraphBuildArtifacts {
 fn build_graph_artifacts(
     project_root: &Path,
     scope: DesignerXmlBuildScope,
+    capture_source_evidence: bool,
 ) -> Result<DesignerXmlGraphBuildArtifacts, DesignerXmlGraphError> {
     let (configuration, configuration_payload) =
         FileSystemDesignerXmlConfigurationLoader::load_with_payload(project_root, scope)?;
     let metadata = FileSystemDesignerXmlMetadataObjectReader.read_all(project_root, scope)?;
-    let modules = FileSystemDesignerXmlModuleReader.read_modules(project_root, scope, &metadata)?;
+    let modules = if capture_source_evidence {
+        let mut manifest =
+            FileSystemDesignerXmlModuleReader::preflight_modules(project_root, scope, &metadata)?;
+        let modules = FileSystemDesignerXmlModuleReader::read_modules_with_manifest(
+            project_root,
+            scope,
+            &metadata,
+            &mut manifest,
+        )?;
+        manifest.finish()?;
+        modules
+    } else {
+        FileSystemDesignerXmlModuleReader.read_modules(project_root, scope, &metadata)?
+    };
 
     let mut graph = SemanticGraph::new();
     let configuration_path = project_root.join(CONFIGURATION_FILE);
@@ -157,7 +171,7 @@ fn build_graph_artifacts(
         emit_metadata(&mut graph, configuration.id(), descriptor)?;
     }
     for module in &modules {
-        emit_module_and_declarations(&mut graph, module)?;
+        emit_module_and_declarations(&mut graph, module, capture_source_evidence)?;
     }
     Ok(DesignerXmlGraphBuildArtifacts {
         graph,
@@ -199,6 +213,7 @@ fn emit_metadata(
 fn emit_module_and_declarations(
     graph: &mut SemanticGraph,
     module: &DesignerXmlModuleDescriptor,
+    capture_source_evidence: bool,
 ) -> Result<(), DesignerXmlGraphError> {
     let module_source = source_id(
         module.source().artifact_path(),
@@ -228,7 +243,15 @@ fn emit_module_and_declarations(
         module_provenance,
     )?;
 
-    let symbols = LineBslDeclarationExtractor.extract(module.id(), module.source_text())?;
+    let symbols = if capture_source_evidence {
+        LineBslDeclarationExtractor.extract_bounded(
+            module.id(),
+            module.source_text(),
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+        )?
+    } else {
+        LineBslDeclarationExtractor.extract(module.id(), module.source_text())?
+    };
     for symbol in symbols {
         let symbol_source = EntityId::new(format!(
             "{};declaration={};line={}",
@@ -497,7 +520,9 @@ mod tests {
         DesignerXmlGraphError, DesignerXmlSemanticGraphBuilder,
         FileSystemDesignerXmlSemanticGraphBuilder,
     };
-    use crate::DesignerXmlBuildScope;
+    use crate::{DesignerXmlBuildScope, DesignerXmlSourceEvidenceError};
+    use oneagent_analysis::refactoring::MAX_SOURCE_OCCURRENCES_PER_DOCUMENT;
+    use oneagent_bsl::BslCallError;
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{EdgeKind, NodeId, NodeKind};
     use oneagent_metadata::MetadataKind;
@@ -542,6 +567,56 @@ mod tests {
             DESIGNER_MODULE,
         )
         .expect("exact module fixture must be written");
+    }
+
+    #[test]
+    fn source_evidence_builder_enforces_the_occurrence_bound_in_production_extraction() {
+        let exact_root = tempdir().expect("temporary directory must be created");
+        write_project(exact_root.path());
+        write_common_module(exact_root.path());
+        fs::write(
+            exact_root
+                .path()
+                .join("CommonModules/DynamicSecurityOverridable/Ext/Module.bsl"),
+            "Target();".repeat(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT),
+        )
+        .expect("exact-bound module must be written");
+        let exact = FileSystemDesignerXmlSemanticGraphBuilder
+            .build_graph_with_source_evidence(
+                exact_root.path(),
+                exact_root.path(),
+                DesignerXmlBuildScope::Complete,
+            )
+            .expect("exact occurrence bound must be accepted");
+        assert_eq!(
+            exact.source_evidence().documents()[0].occurrences().len(),
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT
+        );
+
+        let over_root = tempdir().expect("temporary directory must be created");
+        write_project(over_root.path());
+        write_common_module(over_root.path());
+        fs::write(
+            over_root
+                .path()
+                .join("CommonModules/DynamicSecurityOverridable/Ext/Module.bsl"),
+            "Target();".repeat(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT + 1),
+        )
+        .expect("one-over module must be written");
+        assert!(matches!(
+            FileSystemDesignerXmlSemanticGraphBuilder.build_graph_with_source_evidence(
+                over_root.path(),
+                over_root.path(),
+                DesignerXmlBuildScope::Complete,
+            ),
+            Err(DesignerXmlGraphError::SourceEvidence(
+                DesignerXmlSourceEvidenceError::ParseCalls(BslCallError::BoundExceeded {
+                    actual,
+                    maximum,
+                })
+            )) if actual == MAX_SOURCE_OCCURRENCES_PER_DOCUMENT + 1
+                && maximum == MAX_SOURCE_OCCURRENCES_PER_DOCUMENT
+        ));
     }
 
     #[test]

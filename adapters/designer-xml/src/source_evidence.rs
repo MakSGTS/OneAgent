@@ -4,13 +4,14 @@ use std::fmt::{Display, Formatter};
 use std::path::{Component, Path, PathBuf};
 
 use oneagent_analysis::refactoring::{
-    BslModuleRole, ConfinedSourcePath, SourceByteRange, SourceContentVersion, SourceDocument,
-    SourceDocumentId, SourceEvidenceCompleteness, SourceEvidenceError, SourceEvidenceSet,
-    SourceFormat, SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
+    BslModuleRole, ConfinedSourcePath, MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, SourceByteRange,
+    SourceContentVersion, SourceDocument, SourceDocumentId, SourceEvidenceAdmission,
+    SourceEvidenceCompleteness, SourceEvidenceError, SourceEvidenceSet, SourceFormat,
+    SourceOccurrence, SourceOccurrenceKind, SourceOccurrenceResolution,
 };
 use oneagent_bsl::{
-    BslCall, BslCallExtractor, BslCallKind, BslDeclarationExtractor, BslParseError, BslSymbol,
-    LineBslCallExtractor, LineBslDeclarationExtractor, bsl_names_equal,
+    BslCall, BslCallKind, BslParseError, BslSymbol, LineBslCallExtractor,
+    LineBslDeclarationExtractor, bsl_names_equal,
 };
 use oneagent_common::{EntityId, SourcePath};
 
@@ -22,7 +23,15 @@ pub(crate) fn build_source_evidence(
     configuration_id: &EntityId,
     modules: &[DesignerXmlModuleDescriptor],
 ) -> Result<SourceEvidenceSet, DesignerXmlSourceEvidenceError> {
-    let analyzed = modules.iter().map(analyze).collect::<Result<Vec<_>, _>>()?;
+    admit_modules(modules)?;
+    let analyzed = modules
+        .iter()
+        .map(|module| {
+            let analysis = analyze(module)?;
+            admitted_occurrence_capacity(analysis.symbols.len(), analysis.calls.len())?;
+            Ok::<_, DesignerXmlSourceEvidenceError>(analysis)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let roots = ConfinedRoots::new(workspace_root, project_root)?;
     let mut documents = Vec::with_capacity(modules.len());
     for (module, analysis) in modules.iter().zip(&analyzed) {
@@ -35,6 +44,35 @@ pub(crate) fn build_source_evidence(
         )?);
     }
     SourceEvidenceSet::new(configuration_id.clone(), documents).map_err(Into::into)
+}
+
+fn admit_modules(
+    modules: &[DesignerXmlModuleDescriptor],
+) -> Result<usize, DesignerXmlSourceEvidenceError> {
+    admit_document_lengths(
+        modules.len(),
+        modules
+            .iter()
+            .map(|module| Ok(module.source().raw_source().len())),
+    )
+}
+
+fn admit_document_lengths(
+    document_count: usize,
+    raw_byte_lengths: impl IntoIterator<Item = Result<usize, DesignerXmlSourceEvidenceError>>,
+) -> Result<usize, DesignerXmlSourceEvidenceError> {
+    let mut admission = SourceEvidenceAdmission::new(document_count)?;
+    for raw_byte_len in raw_byte_lengths {
+        admission.admit_document(raw_byte_len?)?;
+    }
+    admission.finish().map_err(Into::into)
+}
+
+fn admitted_occurrence_capacity(
+    declarations: usize,
+    calls: usize,
+) -> Result<usize, DesignerXmlSourceEvidenceError> {
+    SourceEvidenceAdmission::occurrence_capacity(declarations, calls).map_err(Into::into)
 }
 
 struct AnalyzedModule<'module> {
@@ -51,10 +89,21 @@ fn analyze(
             module.source().artifact_path().to_path_buf(),
         )
     })?;
+    let symbols = LineBslDeclarationExtractor.extract_bounded(
+        module.id(),
+        source,
+        MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+    )?;
+    let calls = LineBslCallExtractor.extract_calls_bounded(
+        module.id(),
+        source,
+        symbols.len(),
+        MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+    )?;
     Ok(AnalyzedModule {
         descriptor: module,
-        symbols: LineBslDeclarationExtractor.extract(module.id(), source)?,
-        calls: LineBslCallExtractor.extract_calls(module.id(), source)?,
+        symbols,
+        calls,
     })
 }
 
@@ -73,7 +122,8 @@ fn build_document(
     })?;
     let document_id = SourceDocumentId::new(configuration_id.clone(), module.id().clone())?;
     let version = SourceContentVersion::from_bytes(raw);
-    let mut occurrences = Vec::with_capacity(analysis.symbols.len() + analysis.calls.len());
+    let capacity = admitted_occurrence_capacity(analysis.symbols.len(), analysis.calls.len())?;
+    let mut occurrences = Vec::with_capacity(capacity);
     for symbol in &analysis.symbols {
         let range = symbol
             .identifier_range()
@@ -357,5 +407,90 @@ impl From<oneagent_bsl::BslCallError> for DesignerXmlSourceEvidenceError {
 impl From<SourceEvidenceError> for DesignerXmlSourceEvidenceError {
     fn from(value: SourceEvidenceError) -> Self {
         Self::Domain(value)
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use oneagent_analysis::refactoring::{
+        MAX_SOURCE_BYTES_PER_CONFIGURATION, MAX_SOURCE_DOCUMENT_BYTES,
+        MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION, MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+        SourceEvidenceErrorKind,
+    };
+
+    use super::{
+        DesignerXmlSourceEvidenceError, admit_document_lengths, admitted_occurrence_capacity,
+    };
+
+    fn assert_bound(error: &DesignerXmlSourceEvidenceError, actual: usize, maximum: usize) {
+        let DesignerXmlSourceEvidenceError::Domain(error) = error else {
+            panic!("admission must preserve the source-evidence domain error");
+        };
+        assert_eq!(error.kind(), SourceEvidenceErrorKind::BoundExceeded);
+        assert_eq!(error.actual(), Some(actual));
+        assert_eq!(error.maximum(), Some(maximum));
+    }
+
+    #[test]
+    fn production_admission_accepts_exact_and_rejects_one_over_before_collection() {
+        let exact_documents = admit_document_lengths(
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+            (0..MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION).map(|_| Ok(0)),
+        )
+        .expect("exact document count must be admitted");
+        assert_eq!(exact_documents, 0);
+
+        let count_error = admit_document_lengths(
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION + 1,
+            std::iter::once_with(|| -> Result<usize, DesignerXmlSourceEvidenceError> {
+                panic!("over-bound document count must fail before iteration")
+            }),
+        )
+        .expect_err("one-over document count must fail");
+        assert_bound(
+            &count_error,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION + 1,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+        );
+
+        let exact_aggregate = admit_document_lengths(
+            MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES,
+            (0..MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES)
+                .map(|_| Ok(MAX_SOURCE_DOCUMENT_BYTES)),
+        )
+        .expect("exact aggregate byte count must be admitted");
+        assert_eq!(exact_aggregate, MAX_SOURCE_BYTES_PER_CONFIGURATION);
+
+        let aggregate_documents =
+            MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES + 1;
+        let aggregate_error = admit_document_lengths(
+            aggregate_documents,
+            (0..aggregate_documents).map(|index| {
+                Ok(if index + 1 == aggregate_documents {
+                    1
+                } else {
+                    MAX_SOURCE_DOCUMENT_BYTES
+                })
+            }),
+        )
+        .expect_err("one-over aggregate byte count must fail");
+        assert_bound(
+            &aggregate_error,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION + 1,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION,
+        );
+
+        assert_eq!(
+            admitted_occurrence_capacity(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, 0)
+                .expect("exact occurrence count must be admitted"),
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT
+        );
+        let occurrence_error = admitted_occurrence_capacity(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, 1)
+            .expect_err("one-over occurrence count must fail");
+        assert_bound(
+            &occurrence_error,
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT + 1,
+            MAX_SOURCE_OCCURRENCES_PER_DOCUMENT,
+        );
     }
 }

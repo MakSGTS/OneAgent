@@ -29,8 +29,9 @@ Correct the two confirmed Sprint 40 completion blockers: make
 publication identity while preserving `ChangeImpactPublicationId` as a
 source-compatible alias, and synchronize the final evidence with the live
 post-remediation test inventory. Audit the six governance-only efficiency
-commits separately from the product implementation. Sprint 40 remains `active`
-and Sprint 40.1 is `next` until Task 1 starts.
+commits separately from the product implementation. Sprint 40 is
+administratively `completed` without a passing integration review, and Sprint
+40.1 is `next` until Task 1 starts.
 
 ## Starting-state requirements
 
@@ -49,7 +50,7 @@ and Sprint 40.1 is `next` until Task 1 starts.
 |---:|---|---|---|---|---|
 | 1 | `01-review-refactoring-planner-remediation-design.md` | Sprint 40.1 planning baseline | Fresh-context targeted design decision over the accepted publication-owner correction and invariant matrix | Exact planning range, owner/alias/consumer matrix, negative oracle, scope baseline, and documentation checks | `Approve Sprint 40.1 remediation design` |
 | 2 | `02-remediate-refactoring-planner-contract.md` | Task 1 committed `pass` artifact | Canonical Workspace publication identity, source-compatible Change Impact alias, Runtime migration, regressions, and synchronized evidence | Non-zero Analysis/Runtime/adapters suites, inventory, public API and scope audits, one stable full gate | `Remediate Sprint 40.1 Refactoring Planner contract` |
-| 3 | `03-sprint-40-1-integration-review.md` | Task 2 commit, successful validation, no-ff implementation merge into `codex/v0.7`, and immutable review branch | Independent review, primary reconciliation, artifact consistency, Sprint 40/40.1 closure, Sprint 41 hand-off, and conditional Sprint 39 suite retirement | Exact immutable combined and corrective ranges, complete matrices, scope classification, links, inventories, and cleanliness | `Complete Sprint 40.1 Refactoring Planner remediation review` |
+| 3 | `03-sprint-40-1-integration-review.md` | Task 2 commit, successful validation, no-ff implementation merge into `codex/v0.7`, and immutable review branch | Independent review, primary reconciliation, artifact consistency, Sprint 40.1 closure, Sprint 41 hand-off, and conditional Sprint 39 suite retirement | Exact immutable combined and corrective ranges, complete matrices, scope classification, links, inventories, and cleanliness | `Complete Sprint 40.1 Refactoring Planner remediation review` |
 
 All child prompts use `prompt_contract: v2`, `fresh_context: required`, bounded
 Context Manifests, and validated framework selectors.
@@ -89,12 +90,12 @@ and corrective execution record.
 
 Stop after the first context, prerequisite, design-review, scope, validation,
 commit, push, integration-review, reconciliation, artifact-consistency, or
-retirement-inventory failure. Do not close either sprint on a blocking or
+retirement-inventory failure. Do not close Sprint 40.1 on a blocking or
 incomplete result.
 
-Task 3 may transition Sprint 40 and Sprint 40.1 to `completed` and Sprint 41 to
-`next` only after the independent and primary matrices pass and the same
-reviewer confirms the complete uncommitted review artifact and state diff.
+Task 3 may transition Sprint 40.1 to `completed` and Sprint 41 to `next` only
+after the independent and primary matrices pass and the same reviewer confirms
+the complete uncommitted review artifact and state diff.
 
 ## Final report additions
 

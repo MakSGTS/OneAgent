@@ -43,8 +43,9 @@ records `pass` and completes Sprint 36. The
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
 records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
-`active` through Task 9 and remains subject to the Task 10 integration-review
-gate. The
+administratively `completed` without a passing integration review; its two
+confirmed blockers are assigned to Sprint 40.1 Refactoring Planner Remediation,
+the unique `next` target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -8519,8 +8520,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
-| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | active |
-| Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence before closing Sprint 40. | next |
+| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | completed |
+| Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | next |
 | Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
 
 ##### Sprint 36 Diagnostics Engine execution plan
@@ -9997,9 +9998,13 @@ remains `active`; it is not completed and no Sprint 39 prompt is retired here.
 
 ###### State, failure, and validation gates
 
-Sprint 40 remains `next` during planning, becomes `active` only from Task 1,
-and may become `completed` only after Task 10. A task may be `already_complete`
-only when committed evidence and successful required validation prove every
+Sprint 40 remained `next` during planning and became `active` from Task 1. Its
+ordinary acceptance gate required a non-blocking Task 10 review. The explicit
+2026-09-06 user direction administratively closes Sprint 40 without claiming
+that gate passed and transfers the confirmed publication-owner and stale-
+evidence blockers to Sprint 40.1. No Sprint 40 review artifact or prompt
+retirement is implied by this closure. A task may be `already_complete` only
+when committed evidence and successful required validation prove every
 criterion; no empty commit is created.
 
 Missing or contradictory source/precondition evidence, absence of a
@@ -10046,10 +10051,12 @@ final counts from the live post-`346f542f` baseline. The same review also
 identified six governance-only efficiency commits whose scope must be audited
 separately from Refactoring Planner product behavior.
 
-Sprint 40 remains `active`. Sprint 40.1 is the unique `next` corrective target
-during planning and becomes `active` when its targeted design review starts
-from the committed planning baseline. Sprint 41 remains `planned` and cannot
-start until the final combined Sprint 40/Sprint 40.1 review is non-blocking.
+Sprint 40 is administratively `completed` without a passing integration review;
+the two confirmed acceptance blockers remain open only in this corrective
+scope. Sprint 40.1 is the unique `next` target during planning and becomes
+`active` when its targeted design review starts from the committed planning
+baseline. Sprint 41 remains `planned` and cannot start until the Sprint 40.1
+review is non-blocking.
 
 This corrective sprint explicitly opts into the Sprint 41+ execution controls:
 one committed ADR-invariant matrix, one fresh-context targeted design review
@@ -10098,7 +10105,7 @@ separate required evidence.
 |---:|---|---|---|---|---|
 | 1 | Review the remediation design. | Review / review | Fresh-context targeted decision over the publication owner, compatibility alias, Runtime boundary, evidence plan, scope audit, and numeric baseline; a `pass` is recorded in the predeclared artifact. | Sprint 40.1 planning baseline on `codex/v0.7-sprint-40.1`. | `Approve Sprint 40.1 remediation design` |
 | 2 | Remediate the Refactoring Planner contract. | Refactoring and Safe Edits / Refactoring and Safe Edits | Canonical public identity owner, source-compatible alias, migrated Rust consumers, regressions, exact live evidence, and governance/product scope classification. | Task 1 committed `pass` artifact. | `Remediate Sprint 40.1 Refactoring Planner contract` |
-| 3 | Review and close Sprint 40/Sprint 40.1. | Review / review | Fresh-context combined integration review, primary reconciliation, artifact consistency, state transition, Sprint 41 hand-off, and conditional exact Sprint 39 suite retirement. | Task 2 commit and validation, no-ff implementation merge into `codex/v0.7`, and immutable `codex/v0.7-sprint-40.1-review`. | `Complete Sprint 40.1 Refactoring Planner remediation review` |
+| 3 | Review and close Sprint 40.1. | Review / review | Fresh-context combined-baseline integration review, primary reconciliation, artifact consistency, Sprint 40.1 state transition, Sprint 41 hand-off, and conditional exact Sprint 39 suite retirement. | Task 2 commit and validation, no-ff implementation merge into `codex/v0.7`, and immutable `codex/v0.7-sprint-40.1-review`. | `Complete Sprint 40.1 Refactoring Planner remediation review` |
 
 Tasks execute strictly through
 `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/00-sprint-40-1-execution-loop.md`.
@@ -10107,8 +10114,8 @@ The final review covers both the complete product range from completed Sprint
 `427a78cd809a16bae2ee160867b20bb64c1d415e` through the immutable Sprint 40.1
 implementation merge.
 
-Only a non-blocking final decision may mark Sprint 40 and Sprint 40.1
-`completed`, make Sprint 41 the unique `next` target, create
+Only a non-blocking final decision may mark Sprint 40.1 `completed`, make
+Sprint 41 the unique `next` target, create
 `docs/reviews/sprint-40-1-refactoring-planner-remediation.md`, and retire the
 exact eight tracked Sprint 39 prompt files already listed by the Sprint 40
 plan. The Sprint 40 and Sprint 40.1 suites remain preserved. Any design,

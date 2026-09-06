@@ -76,9 +76,8 @@ Sprint 40 plus Sprint 40.1 baseline. Prove that the confirmed publication-owner
 and stale-evidence blockers are resolved, classify governance-only changes,
 and re-evaluate every ADR-0063 acceptance criterion. For a non-blocking result,
 create `docs/reviews/sprint-40-1-refactoring-planner-remediation.md`, transition
-Sprint 40 and Sprint 40.1 to `completed`, make Sprint 41 the unique `next`
-target, and retire exactly the verified Sprint 39 suite after same-reviewer
-artifact consistency.
+Sprint 40.1 to `completed`, make Sprint 41 the unique `next` target, and retire
+exactly the verified Sprint 39 suite after same-reviewer artifact consistency.
 
 ## Review target
 
@@ -160,8 +159,9 @@ artifact consistency.
 - Both immutable ranges and all matrix rows receive non-blocking evidence.
 - Same-reviewer artifact consistency passes before any state change/deletion is
   staged or committed.
-- Sprint 40 and Sprint 40.1 become `completed`, Sprint 41 becomes the unique
-  `next` target, and prompt inventories agree.
+- Sprint 40 remains administratively `completed`; Sprint 40.1 becomes
+  `completed`, Sprint 41 becomes the unique `next` target, and prompt
+  inventories agree.
 - Review commit is pushed, merged `--no-ff` into `codex/v0.7`, and that merge is
   pushed with a clean final worktree.
 

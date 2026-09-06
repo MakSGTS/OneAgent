@@ -34,7 +34,8 @@ default and makes a mandatory independent review blocked.
 The primary agent must:
 
 1. finish and commit, or prove `already_complete`, every preceding task;
-2. verify a clean task-owned working tree and resolve the exact review range;
+2. verify a clean task-owned working tree and resolve an exact immutable review
+   range whose endpoints are committed objects;
 3. use the active agent runtime's context-selection controls to start the
    automatically authorized reviewer without inherited implementation
    conversation turns, and block the review when a fresh context cannot be
@@ -48,6 +49,13 @@ The primary agent must:
    complete result; and
 7. independently inspect the same range and rerun the required review matrix
    before issuing the completion decision.
+
+Never dispatch a reviewer against a floating working tree, an uncommitted diff,
+an open-ended range, or a branch name whose head may move during review. Pass
+the exact commit IDs and range. Do not mutate the reviewed paths or move either
+endpoint while the reviewer is running. If the baseline changes, invalidate the
+in-flight result and start a new review only after the replacement range is
+committed, stable, and has passed its required focused validation.
 
 The reviewer may inspect repository files, Git evidence, and command output and
 may run non-destructive read-only or validation commands. It must not:

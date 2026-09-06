@@ -32,6 +32,9 @@ Before dispatch:
    suggested commit messages, current Roadmap state, and previous-suite
    inventory against live committed evidence.
 6. Record and preserve pre-existing modified, staged, and untracked paths.
+7. Resolve the accepted ADR-invariant matrix, targeted design-review result,
+   expected task-owned path/diff baseline, and validation budget. Stop before
+   implementation when a required item is missing or blocked.
 
 ## Child input contract
 
@@ -62,7 +65,8 @@ For each manifest entry:
 4. Implement only the child-owned outcome and preserve unrelated work.
 5. Run focused validation and the canonical checks triggered by
    `docs/codex/core/validation.md`.
-6. Recheck acceptance, exclusions, diff, meaningful test counts, and state.
+6. Recheck acceptance, exclusions, diff, meaningful test counts, state, and
+   actual path/diff scale against the accepted planning baseline.
 7. If commit mode is authorized, stage only enumerated paths and create exactly
    one logical commit with the manifest message. Otherwise do not stage or
    commit.
@@ -76,6 +80,20 @@ For each manifest entry:
 
 Proceed only when the next committed prerequisite is satisfied and no
 uncommitted task-created change remains.
+
+## Scope and remediation stop-loss
+
+If the actual task-owned changed-path count or estimated diff scale exceeds
+twice the accepted planning baseline, stop before further implementation,
+validation, or commit. Report the evidence, revised scope, risk, and validation
+budget, and obtain renewed user agreement before continuing.
+
+Count architecture-level blocked review outcomes across the sprint. After the
+second such blocker, stop patch-by-patch remediation. Re-audit the complete
+ADR-invariant matrix against the latest production paths and negative oracles,
+revise the implementation and validation plan, and obtain renewed user
+agreement before another remediation. A local fix for only the latest finding
+is not sufficient evidence to resume.
 
 ## Ledger
 

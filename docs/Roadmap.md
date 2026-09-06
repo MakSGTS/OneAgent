@@ -19,7 +19,10 @@ boundaries; they do not define a second task sequence.
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | completed |
 | v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | completed |
 | v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | planned |
-| v1.0 — Stable Platform | Stable APIs, plugin SDK, hardening, documentation, and release | Sprints 42–46 | planned |
+| v0.8 — Designer XML Structure | Complete nested metadata and specialized semantic coverage for Designer XML | Sprints 42–43 | planned |
+| v0.9 — Designer XML Parity | Complete code, query, dependency, and cross-adapter semantic parity for Designer XML | Sprint 44 | planned |
+| v1.0 — Stable Platform | Stable APIs, plugin SDK, hardening, documentation, and release over the complete Designer XML model | Sprints 45–49 | planned |
+| v1.1 — Project Experience | Interactive VS Code configuration structure explorer | Sprint 50 | planned |
 
 Calendar forecasts are intentionally kept outside this document until capacity,
 scope, and release criteria are baselined. Adding a forecast must not duplicate
@@ -52,6 +55,35 @@ The project audit remediation is recorded here as completed governance work:
 - [x] Align README and architecture documents with implemented and planned scope.
 - [x] Replace the stale architecture audit with a current point-in-time audit.
 - [x] Add retrospective completion evidence for Sprints 1–2 and the v0.1 release review.
+
+## Roadmap scope changes
+
+### 2026-08-30 — Complete Designer XML semantics before v1.0
+
+The product requirement is that v1.0 must not ship while official hierarchical
+Designer XML inputs lack semantic capabilities that the source-independent model
+supports and the format can represent. Sprint 14 intentionally delivered a
+bounded first adapter slice and explicitly deferred nested metadata,
+specialized semantics, additional module roles, Calls, Query/Reads/Writes,
+References, Grants, Includes, Extends, Triggers, DependsOn, and resolution
+diagnostics. Leaving those deferrals in place until or beyond v1.0 would produce
+format-dependent product behavior and would let the planned Configuration
+Structure Explorer expose an incomplete Designer XML project hierarchy.
+
+The roadmap therefore inserts v0.8 and v0.9 as mandatory completeness releases:
+
+| Previous plan | Updated plan | Reason |
+|---|---|---|
+| v1.0 started with Public API Stabilization at Sprint 42. | v0.8 owns Designer XML structure and specialized semantics in Sprints 42–43. | Stabilizing public APIs before completing a production source adapter would freeze an incomplete contract. |
+| v1.0 used Sprint 44 for Performance and Security Hardening. | v0.9 owns Designer XML code and dependency parity in Sprint 44. | Calls, Query/Reads/Writes, References, Grants, Includes, Extends, Triggers, DependsOn, and diagnostics must pass parity before stabilization. |
+| v1.0 occupied Sprints 42–46 and released in Sprint 46. | v1.0 occupies Sprints 45–49 and releases in Sprint 49. | Three mandatory Designer XML parity sprints are inserted before the original five-sprint v1.0 sequence. |
+| v1.1 Configuration Structure Explorer was Sprint 47. | v1.1 Configuration Structure Explorer is Sprint 50. | The explorer follows the complete v1.0 semantic model instead of compensating for missing source facts in the UI. |
+
+This is a scope-driven schedule shift, not measured execution delay or recovery
+from failed implementation. It does not change the completion status or
+dependency order recorded through Sprint 41. The 2026-08-20 calendar forecast
+is invalid from Sprint 42 onward; replacement dates require a new capacity
+baseline for the expanded scope.
 
 ## Completed interim assurance stages
 
@@ -90,8 +122,27 @@ core integrations.
 ### v0.7 — Intelligence
 Diagnostics, Git-aware change ingestion, impact analysis, planning, refactoring and safe edit transactions.
 
+### v0.8 — Designer XML Structure
+Complete Designer XML nested metadata and specialized semantic coverage,
+including members, Forms, Commands, Roles and access rights, Subsystems, report
+Data Composition Schemas, XDTO packages, HTTP and Web services, Event
+Subscriptions, payloads, ownership, and provenance.
+
+### v0.9 — Designer XML Parity
+Complete Designer XML module-role, BSL, Calls, Query/Reads/Writes, References,
+Grants, Includes, Extends, Triggers, DependsOn, resolution, diagnostics,
+statistics, reports, and cross-adapter conformance. v0.9 may not defer any
+source-independent semantic capability when official hierarchical Designer XML
+represents the corresponding source fact.
+
 ### v1.0 — Stable Platform
-Stable APIs, plugin SDK, performance/security hardening, documentation and examples.
+Stable APIs, plugin SDK, performance/security hardening, documentation, examples,
+and release over the complete Designer XML semantic model accepted by v0.9.
+
+### v1.1 — Project Experience
+Interactive VS Code configuration structure explorer over the source-independent
+semantic graph, with deterministic hierarchy, lazy expansion, source navigation,
+refresh, accessibility, and EDT/Designer XML compatibility.
 
 ## Sprint execution roadmap
 
@@ -127,7 +178,7 @@ kickoff because distant scope remains provisional.
 | Stage | Required before | Required task-contract coverage | Planned reuse | Status |
 |---|---|---|---|---|
 | Task prompt template update completed — Semantic Index | Sprint 4 | Read-only investigation, snapshot and incremental index boundaries, query/resolution equivalence, lifecycle and staleness, and sprint integration-review evidence implemented by the [Semantic Index profile](codex/profiles/semantic-index-implementation.md), [Semantic Index template](codex/templates/semantic-index-task.md), [investigation template](codex/templates/investigation-task.md), and [review template](codex/templates/review-task.md). | Sprints 4–5 | completed |
-| Task prompt template update completed — Sequential Sprint Planning and Execution | Sprint 7 | Live readiness audit, explicit prerequisite gates, dependency-ordered task manifests, current-instruction commit authorization, already-complete evidence, failure stopping, integration-review transitions, and final repository-state reporting implemented by the [Sprint planning template](codex/templates/sprint-planning-task.md), [Sprint execution-loop template](codex/templates/sprint-execution-loop.md), [sequential execution workflow](codex/workflows/sequential-sprint-execution.md), and updated task templates. | Sprints 7–46 | completed |
+| Task prompt template update completed — Sequential Sprint Planning and Execution | Sprint 7 | Live readiness audit, explicit prerequisite gates, dependency-ordered task manifests, current-instruction commit authorization, already-complete evidence, failure stopping, integration-review transitions, and final repository-state reporting implemented by the [Sprint planning template](codex/templates/sprint-planning-task.md), [Sprint execution-loop template](codex/workflows/sequential-sprint-execution.md), and updated task templates. | Sprints 7–50 | completed |
 | Task prompt template update completed — Source Adapter Ingestion | Sprint 14 | Multi-artifact source discovery and parsing, partial and malformed input, canonical identity equivalence across adapters, and end-to-end adapter conformance implemented by the [Source Adapter profile](codex/profiles/source-adapter-implementation.md), [Source Adapter workflow](codex/workflows/source-adapter.md), and [Source Adapter template](codex/templates/source-adapter-task.md). | Sprint 14 | completed |
 | Task prompt template update completed — Runtime Services and APIs | Sprint 15 | Long-running service lifecycle, ownership, concurrency, cancellation, shutdown, health, transport compatibility, observability, and client/server integration evidence implemented by the [Runtime Service profile](codex/profiles/runtime-service-implementation.md), [Runtime Service workflow](codex/workflows/runtime-service.md), and [Runtime Service template](codex/templates/runtime-service-task.md). | Sprints 15–19 and 21; baseline for Sprints 28 and 32 | completed |
 | Task prompt template update completed — Persistent State | Sprint 20 | Persisted schema ownership, deterministic invalidation, compatibility, corruption handling, migration, recovery, and clean-rebuild equivalence implemented by the [Persistent State profile](codex/profiles/persistent-state-implementation.md), [Persistent State workflow](codex/workflows/persistent-state.md), and [Persistent State template](codex/templates/persistent-state-task.md). | Sprint 20 | completed |
@@ -139,10 +190,12 @@ kickoff because distant scope remains provisional.
 | Task prompt template update required — Diagnostics and Rules | Sprint 36 | Stable diagnostic identity, severity and configuration, deterministic rule registration and execution, suppression, reporting, and regression evidence. | Sprints 36–37 and 39 | planned |
 | Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
 | Task prompt template update required — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation. | Sprints 40–41 | planned |
-| Task prompt template update required — API Stability and Plugin SDK | Sprint 42 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 42–43 | planned |
-| Task prompt template update required — Performance and Security | Sprint 44 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 44 | planned |
-| Task prompt template update required — Documentation and Examples | Sprint 45 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 45 | planned |
-| Task prompt template update required — Release | Sprint 46 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 46 | planned |
+| Task prompt template update required — Designer XML Semantic Parity | Sprint 42 | Official-format source evidence, complete nested and specialized metadata mapping, all accepted module roles, code and dependency semantics, cross-adapter capability parity, explicit `Supported`/`NotApplicable` decisions, deterministic conformance, and release-blocking coverage evidence. | Sprints 42–44 | planned |
+| Task prompt template update required — API Stability and Plugin SDK | Sprint 45 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 45–46 | planned |
+| Task prompt template update required — Performance and Security | Sprint 47 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 47 | planned |
+| Task prompt template update required — Documentation and Examples | Sprint 48 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 48 | planned |
+| Task prompt template update required — Release | Sprint 49 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 49 | planned |
+| Task prompt template update required — Configuration Structure Explorer | Sprint 50 | Source-independent hierarchy projection, deterministic lazy loading and refresh, VS Code Tree View lifecycle, source navigation, accessibility, multi-configuration behavior, EDT/Designer XML compatibility, and extension-host integration evidence. | Sprint 50 | planned |
 
 The Context Engine audit at committed v0.4 release head
 `b47e6ff493a5db2b1188761bc7b7bab362e511ca` found that the generic
@@ -8484,23 +8537,51 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 
 The v0.7 release integration review follows Sprint 41.
 
+#### v0.8 — Designer XML Structure
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 42 — Designer XML Metadata Structure Parity | Parse and emit every nested metadata family represented by official hierarchical Designer XML, including Attributes, Tabular Sections and nested Attributes, Standard Attributes, Dimensions, Resources, Measures, Forms, Commands, Templates, and their canonical ownership, identity, payload, provenance, validation, and query behavior. | planned |
+| Sprint 43 — Designer XML Specialized Semantics Parity | Parse and emit the complete specialized semantics represented by official hierarchical Designer XML for Roles and access rights, Subsystem hierarchy and composition, Event Subscriptions, report Data Composition Schemas, XDTO packages, HTTP and Web services, kind-specific payloads, and their canonical References, Grants, Includes, Triggers, ownership, diagnostics, and provenance. | planned |
+
+The v0.8 release integration review follows Sprint 43. It must prove complete
+production and consumer coverage for the structure and specialized semantics
+owned by Sprints 42–43 before v0.9 begins.
+
+#### v0.9 — Designer XML Parity
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 44 — Designer XML Code and Dependency Parity | Support every module role represented by official hierarchical Designer XML and emit the same accepted BSL declarations, Calls, Query, Reads, Writes, References, Includes, Extends, Triggers, DependsOn, resolution diagnostics, statistics, reports, and deterministic consumer-visible behavior as the source-independent model. | planned |
+
+Designer XML parity is a blocking v0.9 release gate and a prerequisite for v1.0.
+Every source-independent semantic capability must have complete Designer XML
+production, consumer, deterministic, malformed-input, and cross-adapter
+conformance evidence when official hierarchical Designer XML represents that
+source fact. A capability may be `NotApplicable` only when official-format
+evidence proves that the format cannot represent it. No such capability may
+remain `Unsupported`, `Unknown`, or `Deferred`, and none of the scope listed in
+Sprints 42–44 may be moved beyond v0.9. The v0.9 release integration review
+follows Sprint 44 and must pass before Sprint 45 starts. These sprints explicitly
+promote and close the historical Designer XML deferrals recorded by Sprint 14.
+
 #### v1.0 — Stable Platform
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 42 — Public API Stabilization | Stabilize supported public APIs and compatibility policy. | planned |
-| Sprint 43 — Plugin SDK | Define and publish the supported extension SDK. | planned |
-| Sprint 44 — Performance and Security Hardening | Complete profiling, performance, threat-model, and security hardening work. | planned |
-| Sprint 45 — Documentation and Examples | Complete user, operator, contributor, and API documentation with examples. | planned |
-| Sprint 46 — OneAgent 1.0 Release | Complete final release validation, packaging, and publication. | planned |
+| Sprint 45 — Public API Stabilization | Stabilize supported public APIs and compatibility policy only after the Designer XML parity gate passes. | planned |
+| Sprint 46 — Plugin SDK | Define and publish the supported extension SDK. | planned |
+| Sprint 47 — Performance and Security Hardening | Complete profiling, performance, threat-model, and security hardening work. | planned |
+| Sprint 48 — Documentation and Examples | Complete user, operator, contributor, and API documentation with examples. | planned |
+| Sprint 49 — OneAgent 1.0 Release | Complete final release validation, packaging, and publication. | planned |
 
-Sprint 46 completes the planned implementation and produces the final release
-candidate. Final project closure and the v1.0 publication decision require the
-post-project assurance gates below.
+Sprint 49 completes the planned v1.0 implementation and produces the v1.0
+release candidate. Closure of the v1.0 release boundary and its publication
+decision require the assurance gates below.
 
-#### Post-project assurance and external validation
+#### v1.0 release assurance and external validation
 
-These stages run only after the Sprint 46 implementation baseline is committed,
+These stages run only after the Sprint 49 implementation baseline is committed,
 the working tree is clean, and the complete Definition of Done gate passes. A
 stage may not weaken or silently omit a finding from an earlier stage. Every
 finding must be remediated in a separate bounded change or explicitly accepted
@@ -8515,10 +8596,20 @@ with an owner, rationale, scope, and residual risk before the next stage starts.
 | 5 | External security audit | An independent external security specialist assesses the same immutable release candidate, including source, dependencies, build/release pipeline, threat model, attack surface, configuration, deployment assumptions, and reproducible security evidence. Unresolved critical or high findings block publication. | planned |
 | 6 | Final remediation, revalidation, and release decision | Apply accepted findings through separately reviewed commits, rerun the full integration, hygiene, security, packaging, and Definition of Done gates, obtain targeted re-review from the originating reviewers, publish residual risks, and record the final v1.0 go/no-go decision against one immutable commit. | planned |
 
-The project is not finally closed and v1.0 is not publication-eligible until
-all six stages are complete, all blocking findings are resolved, required
+The v1.0 release boundary is not closed and v1.0 is not publication-eligible
+until all six stages are complete, all blocking findings are resolved, required
 external reports are preserved, and the final decision names the exact release
 commit and artifacts.
+
+#### v1.1 — Project Experience
+
+| Sprint | Goal | Status |
+|---|---|---|
+| Sprint 50 — Configuration Structure Explorer | Add a production VS Code Tree View that projects the complete v1.0 source-independent configuration hierarchy from `SemanticGraph`, lets users expand configurations, metadata families, objects, and supported nested members, and navigates located items to source. Define bounded lazy loading, deterministic ordering and refresh, stale-state invalidation, accessibility, multi-configuration behavior, and equivalent EDT/Designer XML presentation without making the extension a second semantic authority. | planned |
+
+The v1.1 release integration review follows Sprint 50. Detailed scope and task
+decomposition remain provisional until the Sprint 50 kickoff investigation and
+accepted architecture decision.
 
 Deferred Sprint 3 scope is not implicitly promoted by this schedule. The
 accepted direct Query-source-derived `DependsOn` slice belongs to Sprint 8 and

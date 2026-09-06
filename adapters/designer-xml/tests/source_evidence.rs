@@ -289,6 +289,122 @@ fn keyword_like_names_do_not_export_and_nested_declarations_fail_closed() {
     ));
 }
 
+fn assert_receiver_call_evidence(target_calls: &[&SourceOccurrence]) {
+    assert_eq!(target_calls.len(), 11);
+    assert_eq!(
+        target_calls
+            .iter()
+            .map(|occurrence| occurrence.kind())
+            .collect::<Vec<_>>(),
+        [
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::LocalCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::QualifiedCall,
+            SourceOccurrenceKind::LocalCall,
+        ]
+    );
+    assert_eq!(
+        target_calls
+            .iter()
+            .map(|occurrence| occurrence.lexical_owner_token())
+            .collect::<Vec<_>>(),
+        [
+            Some("GlobalReceiver"),
+            None,
+            Some("Stable"),
+            Some("Stable"),
+            Some("DynamicSecurityOverridable"),
+            Some("GlobalReceiver"),
+            Some("Stable"),
+            Some("Stable"),
+            Some("Stable"),
+            Some("Stable"),
+            None,
+        ]
+    );
+    assert_eq!(
+        target_calls
+            .iter()
+            .map(|occurrence| occurrence.resolution())
+            .collect::<Vec<_>>(),
+        [
+            SourceOccurrenceResolution::Unsupported,
+            SourceOccurrenceResolution::Unsupported,
+            SourceOccurrenceResolution::Unsupported,
+            SourceOccurrenceResolution::Unsupported,
+            SourceOccurrenceResolution::Unsupported,
+            SourceOccurrenceResolution::Unsupported,
+            SourceOccurrenceResolution::Unresolved,
+            SourceOccurrenceResolution::Unresolved,
+            SourceOccurrenceResolution::Unresolved,
+            SourceOccurrenceResolution::Unresolved,
+            SourceOccurrenceResolution::Unique,
+        ]
+    );
+    assert!(
+        target_calls[..10]
+            .iter()
+            .all(|occurrence| occurrence.mapped_target_id().is_none())
+    );
+    assert!(target_calls[10].mapped_target_id().is_some());
+}
+
+#[test]
+fn computed_and_shadowed_receivers_never_map_to_callable_targets() {
+    let temporary = tempdir().expect("temporary workspace must be created");
+    let project = temporary.path().join("designer");
+    copy_tree(&project_root(), &project);
+    let module = project.join("CommonModules/DynamicSecurityOverridable/Ext/Module.bsl");
+    fs::write(
+        &module,
+        concat!(
+            "Var GlobalReceiver;\n",
+            "GlobalReceiver.Target();\n",
+            "Procedure Target(\n",
+            "    Value = 1) Export\n",
+            "EndProcedure\n",
+            "Procedure Caller(DynamicSecurityOverridable)\n",
+            "GetObject().\n",
+            "Target();\n",
+            "Text = \"Stable.  Target()\"; // Stable. Target()\n",
+            "DynamicSecurityOverridable.Target();\n",
+            "GlobalReceiver.\n",
+            "Target();\n",
+            "Stable.\n",
+            "Target();\n",
+            "Stable\n",
+            ".Target();\n",
+            "Stable.  Target();\n",
+            "Stable . Target();\n",
+            "Target();\n",
+            "EndProcedure\n",
+        ),
+    )
+    .expect("receiver fixture must be written");
+    let result = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
+            temporary.path(),
+            &project,
+            DesignerXmlBuildScope::Partial,
+        )
+        .expect("unsupported receivers must remain complete evidence");
+    let target_calls = result.source_evidence().documents()[0]
+        .occurrences()
+        .iter()
+        .filter(|occurrence| {
+            occurrence.token() == "Target" && occurrence.kind() != SourceOccurrenceKind::Declaration
+        })
+        .collect::<Vec<_>>();
+    assert_receiver_call_evidence(&target_calls);
+}
+
 #[test]
 fn complete_ledger_retains_ambiguous_unresolved_and_unsupported_candidates() {
     let temporary = tempdir().expect("temporary workspace must be created");

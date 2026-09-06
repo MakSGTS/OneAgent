@@ -170,7 +170,8 @@ and fresh-service starts use publication `1` without invented history. Failed,
 cancelled, stale, invalid, or over-bound rebuilds retain the last valid
 publication and consume no ID; later recovery compares against that last
 success. Cache schema remains `1`; Sprint 40 source-evidence reconstruction
-advances current semantic compatibility to `7`, while publication IDs and
+and fail-closed BSL callable-scope classification advance current semantic
+compatibility to `8`, while publication IDs and
 Change Impact reports remain unserialized.
 
 The MCP catalog is now eight tools at revision `2026-07-28` with the existing
@@ -222,11 +223,21 @@ and a structured no-snippet preview are fail-closed and deterministic. Source
 is never reopened after publication and no planner or preview writes it.
 
 Workspace publications now retain a complete source-evidence set for every
-Configuration. Cache schema remains `1` and semantic compatibility is `7`;
+Configuration. Cache schema remains `1` and semantic compatibility is `8`;
 decode reconstructs documents from the private source-state bytes and validates
 the canonical manifest. Publication IDs and plans are not persisted. Failed,
 cancelled, stale, incomplete, or over-bound attempts publish no partial state,
 consume no publication ID, and do not replace the last valid snapshot.
+
+Callable declaration parsing accepts balanced multiline signatures and exact
+`Async`/`Асинх` prefixes, validates identifier and matching scope-end syntax,
+and retains parameter and local bindings for receiver classification. Computed
+member access and a module-like name shadowed by a callable or module binding
+remain complete `Unsupported` evidence and cannot be mapped to a rename target.
+Direct qualifiers split across lines retain their lexical owner, and unsupported
+calls cannot create Graph `Calls` edges. They bypass local and cross-module
+resolution but retain the existing unresolved diagnostic and reference-statistic
+outcome.
 
 `oneagent.refactor.plan` is the eighth lexicographically ordered MCP tool for
 revisions `2025-06-18`, `2025-11-25`, and `2026-07-28`. It is Tool Policy

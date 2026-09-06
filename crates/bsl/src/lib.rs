@@ -1,6 +1,7 @@
 //! BSL source models, extraction, and minimum query-language parsing for `OneAgent`.
 
 use oneagent_common::{EntityId, EntityIdError, EntityName};
+use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 
 mod calls;
@@ -237,17 +238,48 @@ pub(crate) fn leading_bsl_token(line: &str) -> Option<(&str, &str)> {
     (token_end > 0).then(|| (&trimmed[..token_end], &trimmed[token_end..]))
 }
 
-pub(crate) fn is_callable_scope_end(line: &str) -> bool {
-    leading_bsl_token(line).is_some_and(|(token, _)| {
-        [
-            "endprocedure",
-            "конецпроцедуры",
-            "endfunction",
-            "конецфункции",
-        ]
-        .into_iter()
-        .any(|keyword| bsl_names_equal(token, keyword))
-    })
+#[derive(Debug, Clone)]
+pub(crate) struct ParsedCallableScope {
+    symbol: BslSymbol,
+    header_end_line: usize,
+    end_line: usize,
+    shadowed_names: BTreeSet<String>,
+    bindings_complete: bool,
+}
+
+impl ParsedCallableScope {
+    pub(crate) const fn symbol(&self) -> &BslSymbol {
+        &self.symbol
+    }
+
+    pub(crate) const fn header_end_line(&self) -> usize {
+        self.header_end_line
+    }
+
+    pub(crate) const fn end_line(&self) -> usize {
+        self.end_line
+    }
+
+    pub(crate) fn shadows(&self, value: &str) -> bool {
+        !self.bindings_complete || self.shadowed_names.contains(&bsl_name_key(value))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ParsedCallableModule {
+    scopes: Vec<ParsedCallableScope>,
+    shadowed_names: BTreeSet<String>,
+    bindings_complete: bool,
+}
+
+impl ParsedCallableModule {
+    pub(crate) fn scopes(&self) -> &[ParsedCallableScope] {
+        &self.scopes
+    }
+
+    pub(crate) fn shadows(&self, value: &str) -> bool {
+        !self.bindings_complete || self.shadowed_names.contains(&bsl_name_key(value))
+    }
 }
 
 /// Extracts top-level declarations from a BSL module.
@@ -269,124 +301,508 @@ pub struct LineBslDeclarationExtractor;
 
 impl BslDeclarationExtractor for LineBslDeclarationExtractor {
     fn extract(&self, module_id: &EntityId, source: &str) -> Result<Vec<BslSymbol>, BslParseError> {
-        let mut symbols = Vec::new();
-        let mut in_callable_scope = false;
-
-        for source_line in source_lines(source) {
-            let (line, bom_bytes) = if source_line.number == 1 {
-                source_line
-                    .text
-                    .strip_prefix('\u{feff}')
-                    .map_or((source_line.text, 0), |line| (line, 3))
-            } else {
-                (source_line.text, 0)
-            };
-            let trimmed = line.trim_start();
-            let trimmed_start =
-                source_line.start_byte + bom_bytes + line.len().saturating_sub(trimmed.len());
-
-            if trimmed.starts_with("//") || trimmed.starts_with('#') {
-                continue;
-            }
-
-            if is_callable_scope_end(trimmed) {
-                in_callable_scope = false;
-                continue;
-            }
-
-            let symbol = match parse_declaration(
-                module_id,
-                trimmed,
-                trimmed_start,
-                source_line.number,
-                BslSymbolKind::Procedure,
-            )? {
-                Some(symbol) => Some(symbol),
-                None => parse_declaration(
-                    module_id,
-                    trimmed,
-                    trimmed_start,
-                    source_line.number,
-                    BslSymbolKind::Function,
-                )?,
-            };
-
-            if let Some(symbol) = symbol {
-                if in_callable_scope {
-                    return Err(BslParseError::NestedDeclaration(source_line.number));
-                }
-                in_callable_scope = true;
-                symbols.push(symbol);
-            }
-        }
-
-        Ok(symbols)
+        parse_callable_scopes(module_id, source).map(|module| {
+            module
+                .scopes
+                .into_iter()
+                .map(|scope| scope.symbol)
+                .collect()
+        })
     }
 }
 
-fn parse_declaration(
+pub(crate) fn parse_callable_scopes(
     module_id: &EntityId,
-    line: &str,
-    line_start: usize,
-    line_number: usize,
-    kind: BslSymbolKind,
-) -> Result<Option<BslSymbol>, BslParseError> {
-    let keywords = match kind {
-        BslSymbolKind::Procedure => ["procedure", "процедура"],
-        BslSymbolKind::Function => ["function", "функция"],
-    };
-
-    let Some((keyword, after_keyword)) = leading_bsl_token(line).filter(|(token, _)| {
-        keywords
-            .into_iter()
-            .any(|keyword| bsl_names_equal(token, keyword))
-    }) else {
-        return Ok(None);
-    };
-
-    let remainder = after_keyword.trim_start();
-    let remainder_start = keyword.len() + after_keyword.len().saturating_sub(remainder.len());
-    let Some(open_parenthesis) = remainder.find('(') else {
-        return Err(BslParseError::MalformedDeclaration {
-            line: line_number,
-            text: line.to_owned(),
-        });
-    };
-
-    let before_parenthesis = &remainder[..open_parenthesis];
-    let raw_name = before_parenthesis.trim();
-    if raw_name.is_empty() {
-        return Err(BslParseError::MalformedDeclaration {
-            line: line_number,
-            text: line.to_owned(),
+    source: &str,
+) -> Result<ParsedCallableModule, BslParseError> {
+    if source
+        .as_bytes()
+        .strip_prefix(b"\xef\xbb\xbf")
+        .is_some_and(|remainder| remainder.starts_with(b"\xef\xbb\xbf"))
+    {
+        return Ok(ParsedCallableModule {
+            scopes: Vec::new(),
+            shadowed_names: BTreeSet::new(),
+            bindings_complete: true,
         });
     }
+    let lines = source_lines(source);
+    let mut scopes = Vec::new();
+    let mut index = 0_usize;
 
-    let exported = remainder.rfind(')').is_some_and(|closing_parenthesis| {
-        leading_bsl_token(&remainder[closing_parenthesis + 1..]).is_some_and(|(token, _)| {
-            bsl_names_equal(token, "export") || bsl_names_equal(token, "экспорт")
-        })
-    });
+    while index < lines.len() {
+        let source_line = lines[index];
+        let (line, bom_bytes) = source_line_text(source_line);
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#') {
+            index += 1;
+            continue;
+        }
+        if callable_end_kind(trimmed).is_some() {
+            return Err(malformed_declaration(source_line.number, trimmed));
+        }
+        let Some(kind) = callable_start_kind(trimmed) else {
+            index += 1;
+            continue;
+        };
+        let (symbol, header_end_index, parameters, mut bindings_complete) =
+            parse_callable_header(module_id, &lines, index, line, bom_bytes, kind)?;
+        let mut shadowed_names = parameters;
+        let mut body_index = header_end_index + 1;
+        let end_line = loop {
+            let Some(body_line) = lines.get(body_index).copied() else {
+                return Err(malformed_declaration(source_line.number, trimmed));
+            };
+            let (body_text, _) = source_line_text(body_line);
+            let body_trimmed = body_text.trim_start();
+            if body_trimmed.starts_with("//") || body_trimmed.starts_with('#') {
+                body_index += 1;
+                continue;
+            }
+            if callable_start_kind(body_trimmed).is_some() {
+                return Err(BslParseError::NestedDeclaration(body_line.number));
+            }
+            if let Some(actual_end) = callable_end_kind(body_trimmed) {
+                if actual_end != kind || !valid_scope_end_tail(body_trimmed) {
+                    return Err(malformed_declaration(body_line.number, body_trimmed));
+                }
+                break body_line.number;
+            }
+            bindings_complete &= collect_line_bindings(body_text, &mut shadowed_names);
+            body_index += 1;
+        };
+        scopes.push(ParsedCallableScope {
+            symbol,
+            header_end_line: lines[header_end_index].number,
+            end_line,
+            shadowed_names,
+            bindings_complete,
+        });
+        index = body_index + 1;
+    }
+    let mut module_bindings = BTreeSet::new();
+    let mut module_bindings_complete = true;
+    for source_line in &lines {
+        if scopes.iter().any(|scope| {
+            scope.symbol.line() <= source_line.number && source_line.number <= scope.end_line
+        }) {
+            continue;
+        }
+        let (line, _) = source_line_text(*source_line);
+        module_bindings_complete &= collect_line_bindings(line, &mut module_bindings);
+    }
+    for scope in &mut scopes {
+        scope.shadowed_names.extend(module_bindings.iter().cloned());
+        scope.bindings_complete &= module_bindings_complete;
+    }
+    Ok(ParsedCallableModule {
+        scopes,
+        shadowed_names: module_bindings,
+        bindings_complete: module_bindings_complete,
+    })
+}
 
-    let name_start = line_start
-        + remainder_start
-        + before_parenthesis
-            .len()
-            .saturating_sub(before_parenthesis.trim_start().len());
+fn source_line_text(source_line: BslSourceLine<'_>) -> (&str, usize) {
+    if source_line.number == 1 {
+        source_line
+            .text
+            .strip_prefix('\u{feff}')
+            .map_or((source_line.text, 0), |line| (line, 3))
+    } else {
+        (source_line.text, 0)
+    }
+}
+
+fn callable_start_kind(line: &str) -> Option<BslSymbolKind> {
+    callable_header_keyword(line).and_then(|(_, token, _)| {
+        if ["procedure", "процедура"]
+            .into_iter()
+            .any(|keyword| bsl_names_equal(token, keyword))
+        {
+            Some(BslSymbolKind::Procedure)
+        } else if ["function", "функция"]
+            .into_iter()
+            .any(|keyword| bsl_names_equal(token, keyword))
+        {
+            Some(BslSymbolKind::Function)
+        } else {
+            None
+        }
+    })
+}
+
+fn callable_header_keyword(line: &str) -> Option<(usize, &str, &str)> {
+    let (first, after_first) = leading_bsl_token(line)?;
+    if !bsl_names_equal(first, "async") && !bsl_names_equal(first, "асинх") {
+        return Some((0, first, after_first));
+    }
+    let remainder = after_first.trim_start();
+    let whitespace = after_first.len().saturating_sub(remainder.len());
+    let (keyword, after_keyword) = leading_bsl_token(remainder)?;
+    Some((first.len() + whitespace, keyword, after_keyword))
+}
+
+fn callable_end_kind(line: &str) -> Option<BslSymbolKind> {
+    leading_bsl_token(line).and_then(|(token, _)| {
+        if ["endprocedure", "конецпроцедуры"]
+            .into_iter()
+            .any(|keyword| bsl_names_equal(token, keyword))
+        {
+            Some(BslSymbolKind::Procedure)
+        } else if ["endfunction", "конецфункции"]
+            .into_iter()
+            .any(|keyword| bsl_names_equal(token, keyword))
+        {
+            Some(BslSymbolKind::Function)
+        } else {
+            None
+        }
+    })
+}
+
+fn valid_scope_end_tail(line: &str) -> bool {
+    leading_bsl_token(line).is_some_and(|(_, tail)| {
+        let tail = tail.trim_start();
+        tail.is_empty()
+            || tail.starts_with("//")
+            || tail.strip_prefix(';').is_some_and(|rest| {
+                rest.trim_start().is_empty() || rest.trim_start().starts_with("//")
+            })
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn parse_callable_header(
+    module_id: &EntityId,
+    lines: &[BslSourceLine<'_>],
+    start_index: usize,
+    first_line: &str,
+    bom_bytes: usize,
+    kind: BslSymbolKind,
+) -> Result<(BslSymbol, usize, BTreeSet<String>, bool), BslParseError> {
+    let source_line = lines[start_index];
+    let trimmed = first_line.trim_start();
+    let (keyword_start, keyword, after_keyword) = callable_header_keyword(trimmed)
+        .ok_or_else(|| malformed_declaration(source_line.number, trimmed))?;
+    let remainder = after_keyword.trim_start();
+    let whitespace_after_keyword = after_keyword.len().saturating_sub(remainder.len());
+    let Some((raw_name, after_name)) = leading_bsl_token(remainder) else {
+        return Err(malformed_declaration(source_line.number, trimmed));
+    };
+    if !is_bsl_identifier(raw_name) || !after_name.trim_start().starts_with('(') {
+        return Err(malformed_declaration(source_line.number, trimmed));
+    }
+    let name_start = source_line.start_byte
+        + bom_bytes
+        + first_line.len().saturating_sub(trimmed.len())
+        + keyword_start
+        + keyword.len()
+        + whitespace_after_keyword;
     let identifier_range = BslIdentifierRange::new(name_start, name_start + raw_name.len())
-        .expect("a non-empty extracted identifier must have a non-empty range");
-    let name = EntityName::new(raw_name).map_err(|_| BslParseError::InvalidName(line_number))?;
-    let id = bsl_callable_id(module_id, kind, raw_name)
-        .map_err(|_| BslParseError::InvalidIdentifier(line_number))?;
+        .expect("a validated identifier has a non-empty range");
 
-    Ok(Some(BslSymbol::new_with_identifier_range(
-        id,
-        name,
-        kind,
-        line_number,
-        exported,
-        identifier_range,
-    )))
+    let open_in_trimmed = keyword_start
+        + keyword.len()
+        + whitespace_after_keyword
+        + raw_name.len()
+        + after_name
+            .len()
+            .saturating_sub(after_name.trim_start().len());
+    let parsed_header = parse_callable_header_tail(
+        lines,
+        start_index,
+        trimmed,
+        open_in_trimmed,
+        source_line.number,
+    )?;
+    let (parameters, bindings_complete) = parameter_bindings(&parsed_header.parameter_source);
+    if !bindings_complete {
+        return Err(malformed_declaration(source_line.number, trimmed));
+    }
+    let name =
+        EntityName::new(raw_name).map_err(|_| BslParseError::InvalidName(source_line.number))?;
+    let id = bsl_callable_id(module_id, kind, raw_name)
+        .map_err(|_| BslParseError::InvalidIdentifier(source_line.number))?;
+    Ok((
+        BslSymbol::new_with_identifier_range(
+            id,
+            name,
+            kind,
+            source_line.number,
+            parsed_header.exported,
+            identifier_range,
+        ),
+        parsed_header.end_index,
+        parameters,
+        bindings_complete,
+    ))
+}
+
+struct ParsedCallableHeaderTail {
+    end_index: usize,
+    parameter_source: String,
+    exported: bool,
+}
+
+fn parse_callable_header_tail(
+    lines: &[BslSourceLine<'_>],
+    start_index: usize,
+    trimmed_first_line: &str,
+    open_in_trimmed: usize,
+    declaration_line: usize,
+) -> Result<ParsedCallableHeaderTail, BslParseError> {
+    let mut depth = 0_usize;
+    let mut in_string = false;
+    let mut parameter_source = String::new();
+
+    for (line_index, line) in lines.iter().enumerate().skip(start_index) {
+        let (line_text, _) = source_line_text(*line);
+        let segment = if line_index == start_index {
+            &trimmed_first_line[open_in_trimmed..]
+        } else {
+            line_text
+        };
+        let characters = segment.char_indices().collect::<Vec<_>>();
+        let mut character_index = 0_usize;
+        while character_index < characters.len() {
+            let (byte_index, scalar) = characters[character_index];
+            if scalar == '"' {
+                if in_string
+                    && characters
+                        .get(character_index + 1)
+                        .is_some_and(|(_, next)| *next == '"')
+                {
+                    if depth > 0 {
+                        parameter_source.push_str("\"\"");
+                    }
+                    character_index += 2;
+                    continue;
+                }
+                in_string = !in_string;
+                if depth > 0 {
+                    parameter_source.push(scalar);
+                }
+                character_index += 1;
+                continue;
+            }
+            if !in_string
+                && scalar == '/'
+                && characters
+                    .get(character_index + 1)
+                    .is_some_and(|(_, next)| *next == '/')
+            {
+                break;
+            }
+            if !in_string && scalar == '(' {
+                depth = depth
+                    .checked_add(1)
+                    .ok_or_else(|| malformed_declaration(declaration_line, trimmed_first_line))?;
+                if depth > 1 {
+                    parameter_source.push(scalar);
+                }
+            } else if !in_string && scalar == ')' {
+                if depth == 0 {
+                    return Err(malformed_declaration(line.number, line_text));
+                }
+                depth -= 1;
+                if depth == 0 {
+                    let scalar_end = byte_index + scalar.len_utf8();
+                    let exported = parse_export_tail(&segment[scalar_end..])
+                        .ok_or_else(|| malformed_declaration(line.number, line_text))?;
+                    return Ok(ParsedCallableHeaderTail {
+                        end_index: line_index,
+                        parameter_source,
+                        exported,
+                    });
+                }
+                parameter_source.push(scalar);
+            } else if depth > 0 {
+                parameter_source.push(scalar);
+            }
+            character_index += 1;
+        }
+        if depth > 0 {
+            parameter_source.push('\n');
+        }
+    }
+    Err(malformed_declaration(declaration_line, trimmed_first_line))
+}
+
+fn parse_export_tail(tail: &str) -> Option<bool> {
+    let tail = tail.trim_start();
+    if tail.is_empty() || tail.starts_with("//") {
+        return Some(false);
+    }
+    let (token, rest) = leading_bsl_token(tail)?;
+    if !bsl_names_equal(token, "export") && !bsl_names_equal(token, "экспорт") {
+        return None;
+    }
+    let rest = rest.trim_start();
+    (rest.is_empty() || rest.starts_with("//")).then_some(true)
+}
+
+fn parameter_bindings(source: &str) -> (BTreeSet<String>, bool) {
+    let mut result = BTreeSet::new();
+    if source.trim().is_empty() {
+        return (result, true);
+    }
+    let mut complete = true;
+    for parameter in split_top_level(source, ',') {
+        let before_default = split_top_level(parameter, '=')
+            .into_iter()
+            .next()
+            .unwrap_or_default()
+            .trim();
+        if before_default.is_empty() {
+            complete = false;
+            continue;
+        }
+        let tokens = before_default
+            .split_whitespace()
+            .filter(|token| !bsl_names_equal(token, "val") && !bsl_names_equal(token, "знач"))
+            .collect::<Vec<_>>();
+        if tokens.len() != 1 || !is_bsl_identifier(tokens[0]) {
+            complete = false;
+            continue;
+        }
+        result.insert(bsl_name_key(tokens[0]));
+    }
+    (result, complete)
+}
+
+fn split_top_level(source: &str, delimiter: char) -> Vec<&str> {
+    let mut result = Vec::new();
+    let mut start = 0_usize;
+    let mut depth = 0_usize;
+    let mut in_string = false;
+    let characters = source.char_indices().collect::<Vec<_>>();
+    let mut index = 0_usize;
+    while index < characters.len() {
+        let (byte_index, scalar) = characters[index];
+        if scalar == '"' {
+            if in_string
+                && characters
+                    .get(index + 1)
+                    .is_some_and(|(_, next)| *next == '"')
+            {
+                index += 2;
+                continue;
+            }
+            in_string = !in_string;
+        } else if !in_string && scalar == '(' {
+            depth += 1;
+        } else if !in_string && scalar == ')' {
+            depth = depth.saturating_sub(1);
+        } else if !in_string && depth == 0 && scalar == delimiter {
+            result.push(&source[start..byte_index]);
+            start = byte_index + scalar.len_utf8();
+        }
+        index += 1;
+    }
+    result.push(&source[start..]);
+    result
+}
+
+fn collect_line_bindings(line: &str, bindings: &mut BTreeSet<String>) -> bool {
+    let visible = visible_bsl_prefix(line);
+    let mut complete = true;
+    for statement in visible.split(';') {
+        let statement = statement.trim_start();
+        let Some((first, rest)) = leading_bsl_token(statement) else {
+            continue;
+        };
+        if bsl_names_equal(first, "var") || bsl_names_equal(first, "перем") {
+            for candidate in rest.split(',').map(str::trim) {
+                if let Some(name) = variable_binding_name(candidate) {
+                    bindings.insert(bsl_name_key(name));
+                } else {
+                    complete = false;
+                }
+            }
+            continue;
+        }
+        if is_bsl_identifier(first) && rest.trim_start().starts_with('=') {
+            bindings.insert(bsl_name_key(first));
+            continue;
+        }
+        if bsl_names_equal(first, "for") || bsl_names_equal(first, "для") {
+            let rest = rest.trim_start();
+            let candidate = leading_bsl_token(rest).and_then(|(token, tail)| {
+                if bsl_names_equal(token, "each") || bsl_names_equal(token, "каждого") {
+                    leading_bsl_token(tail.trim_start()).map(|(name, _)| name)
+                } else {
+                    Some(token)
+                }
+            });
+            if let Some(candidate) = candidate.filter(|candidate| is_bsl_identifier(candidate)) {
+                bindings.insert(bsl_name_key(candidate));
+            } else {
+                complete = false;
+            }
+        }
+    }
+    complete
+}
+
+fn variable_binding_name(candidate: &str) -> Option<&str> {
+    let mut tokens = candidate.split_whitespace();
+    let name = tokens.next()?;
+    if !is_bsl_identifier(name) {
+        return None;
+    }
+    match (tokens.next(), tokens.next()) {
+        (None, None) => Some(name),
+        (Some(export), None)
+            if bsl_names_equal(export, "export") || bsl_names_equal(export, "экспорт") =>
+        {
+            Some(name)
+        }
+        _ => None,
+    }
+}
+
+fn visible_bsl_prefix(line: &str) -> &str {
+    let mut in_string = false;
+    let characters = line.char_indices().collect::<Vec<_>>();
+    let mut index = 0_usize;
+    while index < characters.len() {
+        let (byte_index, scalar) = characters[index];
+        if scalar == '"' {
+            if in_string
+                && characters
+                    .get(index + 1)
+                    .is_some_and(|(_, next)| *next == '"')
+            {
+                index += 2;
+                continue;
+            }
+            in_string = !in_string;
+        } else if !in_string
+            && scalar == '/'
+            && characters
+                .get(index + 1)
+                .is_some_and(|(_, next)| *next == '/')
+        {
+            return &line[..byte_index];
+        }
+        index += 1;
+    }
+    line
+}
+
+fn is_bsl_identifier(value: &str) -> bool {
+    let mut scalars = value.chars();
+    scalars.next().is_some_and(|first| {
+        (first == '_' || first.is_alphabetic())
+            && scalars.all(|scalar| scalar == '_' || scalar.is_alphanumeric())
+    })
+}
+
+fn malformed_declaration(line: usize, text: &str) -> BslParseError {
+    BslParseError::MalformedDeclaration {
+        line,
+        text: text.to_owned(),
+    }
 }
 
 /// Error produced while extracting BSL declarations.
@@ -452,18 +868,28 @@ mod tests {
 
 Function CalculateTotal()
 EndFunction
+
+Async Procedure LoadData()
+EndProcedure
+
+Асинх Функция ЗагрузитьДанные()
+КонецФункции
 ";
 
         let symbols = LineBslDeclarationExtractor
             .extract(&module_id(), source)
             .expect("declarations must parse");
 
-        assert_eq!(symbols.len(), 2);
+        assert_eq!(symbols.len(), 4);
         assert_eq!(symbols[0].name().as_str(), "ПередЗаписью");
         assert_eq!(symbols[0].kind(), BslSymbolKind::Procedure);
         assert!(symbols[0].is_exported());
         assert_eq!(symbols[1].name().as_str(), "CalculateTotal");
         assert_eq!(symbols[1].kind(), BslSymbolKind::Function);
+        assert_eq!(symbols[2].name().as_str(), "LoadData");
+        assert_eq!(symbols[2].kind(), BslSymbolKind::Procedure);
+        assert_eq!(symbols[3].name().as_str(), "ЗагрузитьДанные");
+        assert_eq!(symbols[3].kind(), BslSymbolKind::Function);
     }
 
     #[test]
@@ -580,5 +1006,44 @@ EndProcedure
             LineBslDeclarationExtractor.extract(&module_id(), nested),
             Err(BslParseError::NestedDeclaration(2))
         );
+    }
+
+    #[test]
+    fn multiline_headers_preserve_export_parameters_and_exact_name_ranges() {
+        let source = concat!(
+            "Procedure Publish(\n",
+            "    Val Module,\n",
+            "    Amount = CalculateDefault(1, 2)) Export\n",
+            "    Module.Target();\n",
+            "EndProcedure\n",
+        );
+        let symbols = LineBslDeclarationExtractor
+            .extract(&module_id(), source)
+            .expect("multiline declaration must parse");
+        assert_eq!(symbols.len(), 1);
+        assert_eq!(symbols[0].name().as_str(), "Publish");
+        assert!(symbols[0].is_exported());
+        let range = symbols[0]
+            .identifier_range()
+            .expect("multiline declaration must retain its exact name range");
+        assert_eq!(&source[range.start_byte()..range.end_byte()], "Publish");
+    }
+
+    #[test]
+    fn malformed_names_headers_and_scope_ends_fail_closed() {
+        for source in [
+            "Procedure Invalid Name()\nEndProcedure\n",
+            "Procedure MissingClose(\nEndProcedure\n",
+            "Procedure MissingEnd()\n",
+            "Procedure WrongEnd()\nEndFunction\n",
+            "Procedure TrailingParameter(Value,)\nEndProcedure\n",
+            "Procedure LeadingParameter(, Value)\nEndProcedure\n",
+            "EndProcedure\n",
+        ] {
+            assert!(matches!(
+                LineBslDeclarationExtractor.extract(&module_id(), source),
+                Err(BslParseError::MalformedDeclaration { .. })
+            ));
+        }
     }
 }

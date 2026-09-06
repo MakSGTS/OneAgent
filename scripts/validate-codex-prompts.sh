@@ -165,6 +165,11 @@ validate_future_sprint_execution_loop() {
     local contract_block
     local contract_count
     local matrix_count
+    local matrix_line
+    local matrix_value
+    local matrix_path
+    local matrix_heading
+    local matrix_heading_count
     local gate_count
     local gate_line
     local gate_value
@@ -193,40 +198,72 @@ validate_future_sprint_execution_loop() {
 
     matrix_count=$(awk '/^adr_invariant_matrix: / { count += 1 } END { print count + 0 }' \
         <<< "$contract_block")
+    matrix_line=$(awk '/^adr_invariant_matrix: / { print; exit }' <<< "$contract_block")
+    matrix_value=${matrix_line#adr_invariant_matrix: }
+    matrix_path=${matrix_value%%::*}
+    matrix_heading=${matrix_value#*::}
     if [[ "$matrix_count" != 1 ]] \
         || ! grep -Eq '^adr_invariant_matrix: docs/[A-Za-z0-9._/-]+::[^|]+$' \
             <<< "$contract_block"; then
         report_error "$prompt_file" \
             "Sprint efficiency contract needs one non-empty repository matrix path and section"
+    elif [[ ! -f "$matrix_path" ]]; then
+        report_error "$prompt_file" "ADR-invariant matrix file does not exist: $matrix_path"
+    else
+        matrix_heading_count=$(awk -v expected="$matrix_heading" '
+            /^#{1,6} / {
+                heading = $0
+                sub(/^#{1,6} /, "", heading)
+                if (heading == expected) {
+                    count += 1
+                }
+            }
+            END { print count + 0 }
+        ' "$matrix_path")
+        if [[ "$matrix_heading_count" != 1 ]]; then
+            report_error "$prompt_file" \
+                "ADR-invariant matrix selector must resolve to one exact Markdown heading"
+        fi
     fi
 
     gate_count=$(awk '/^design_review_gate: / { count += 1 } END { print count + 0 }' \
         <<< "$contract_block")
     gate_line=$(awk '/^design_review_gate: / { print; exit }' <<< "$contract_block")
-    gate_value=${gate_line#design_review_gate: }
-    IFS='|' read -r gate_prompt gate_prerequisite gate_artifact gate_commit gate_extra \
-        <<< "$gate_value"
-    if [[ "$gate_count" != 1 || -z "$gate_prompt" || -z "$gate_prerequisite" \
-        || -z "$gate_artifact" || -z "$gate_commit" || -n "$gate_extra" ]]; then
+    if [[ "$gate_count" != 1 ]]; then
         report_error "$prompt_file" \
-            "Sprint efficiency contract needs one four-field design_review_gate record"
-    else
-        if [[ ! -f "$gate_prompt" ]]; then
-            report_error "$prompt_file" "design-review prompt does not exist: $gate_prompt"
-        elif [[ $(front_matter_value "$gate_prompt" task_kind) != review ]]; then
-            report_error "$prompt_file" "design-review prompt must use task_kind: review"
-        fi
-        if [[ $(dirname "$gate_prompt") != $(dirname "$prompt_file") ]]; then
-            report_error "$prompt_file" "design-review prompt must belong to the same sprint suite"
-        fi
-        if [[ ! "$gate_artifact" =~ ^docs/reviews/[A-Za-z0-9._/-]+\.md$ ]]; then
-            report_error "$prompt_file" \
-                "design-review artifact must be a repository-relative docs/reviews Markdown path"
-        fi
+            "Sprint efficiency contract needs exactly one design_review_gate record"
+    elif [[ "$gate_line" == 'design_review_gate: none' ]]; then
         if [[ $(awk -v expected="$gate_line" '$0 == expected { count += 1 } END { print count + 0 }' \
             docs/Roadmap.md) != 1 ]]; then
             report_error "$prompt_file" \
-                "design_review_gate record must occur exactly once in docs/Roadmap.md"
+                "design_review_gate: none must occur exactly once in docs/Roadmap.md"
+        fi
+    else
+        gate_value=${gate_line#design_review_gate: }
+        IFS='|' read -r gate_prompt gate_prerequisite gate_artifact gate_commit gate_extra \
+            <<< "$gate_value"
+        if [[ -z "$gate_prompt" || -z "$gate_prerequisite" || -z "$gate_artifact" \
+            || -z "$gate_commit" || -n "$gate_extra" ]]; then
+            report_error "$prompt_file" \
+                "design_review_gate must be none or contain exactly four non-empty fields"
+        else
+            if [[ ! -f "$gate_prompt" ]]; then
+                report_error "$prompt_file" "design-review prompt does not exist: $gate_prompt"
+            elif [[ $(front_matter_value "$gate_prompt" task_kind) != review ]]; then
+                report_error "$prompt_file" "design-review prompt must use task_kind: review"
+            fi
+            if [[ $(dirname "$gate_prompt") != $(dirname "$prompt_file") ]]; then
+                report_error "$prompt_file" "design-review prompt must belong to the same sprint suite"
+            fi
+            if [[ ! "$gate_artifact" =~ ^docs/reviews/[A-Za-z0-9._/-]+\.md$ ]]; then
+                report_error "$prompt_file" \
+                    "design-review artifact must be a repository-relative docs/reviews Markdown path"
+            fi
+            if [[ $(awk -v expected="$gate_line" '$0 == expected { count += 1 } END { print count + 0 }' \
+                docs/Roadmap.md) != 1 ]]; then
+                report_error "$prompt_file" \
+                    "design_review_gate record must occur exactly once in docs/Roadmap.md"
+            fi
         fi
     fi
 

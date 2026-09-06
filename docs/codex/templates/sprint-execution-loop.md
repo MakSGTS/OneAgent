@@ -50,7 +50,9 @@ implementation_baseline: <implementation-prompt-path>|<expected_path_count>|<exp
 ```
 
 Use exactly one non-empty matrix and design-review record and exactly one
-implementation baseline per implementation child. Numeric fields are base-10
+implementation baseline per implementation child. For a sprint without an
+architecture-sensitive change, use exactly `design_review_gate: none`; otherwise
+use the four-field form and a dedicated review child. Numeric fields are base-10
 non-negative integers, `full-gate-count` is `0` or `1`, and binary paths are
 `none` or a comma-separated repository-relative inventory. Do not place `|` in
 any field. The `full-gate-count` values across all implementation records must

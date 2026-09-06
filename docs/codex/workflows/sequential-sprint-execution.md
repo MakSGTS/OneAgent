@@ -39,12 +39,13 @@ Before dispatch:
    inventory against live committed evidence.
 6. Record and preserve pre-existing modified, staged, and untracked paths.
 7. For Sprint 41 and later, resolve the committed invariant-matrix selector,
-   design-review child, planned decision artifact and commit boundary, and each
-   implementation task's `expected_path_count`, `expected_text_line_churn`,
-   expected binary paths, and validation budget from the authoritative Roadmap
-   execution plan and master prompt. Stop before dispatch when a gate definition
-   or baseline is missing or inconsistent; the design-review decision remains
-   pending until its manifest child executes.
+   optional design-review gate, and each implementation task's
+   `expected_path_count`, `expected_text_line_churn`, expected binary paths, and
+   validation budget from the authoritative Roadmap execution plan and master
+   prompt. When the design-review gate is not `none`, also resolve its child,
+   planned decision artifact, and commit boundary. Stop before dispatch when a
+   gate definition or baseline is missing or inconsistent; an applicable
+   design-review decision remains pending until its manifest child executes.
 
 ## Child input contract
 
@@ -58,9 +59,9 @@ Pass only:
   modules; and
 - material admitted by its `Must read` Context Manifest; and
 - for Sprint 41 and later implementation tasks, the committed invariant-matrix
-  selector, committed targeted design-review `pass` artifact and commit,
-  `expected_path_count`, `expected_text_line_churn`, expected binary paths,
-  validation budget, and exact task start commit.
+  selector, `expected_path_count`, `expected_text_line_churn`, expected binary
+  paths, validation budget, exact task start commit, and, when applicable, the
+  committed targeted design-review `pass` artifact and commit.
 
 Do not preload `Lookup on demand` material. Do not pass previous child
 transcripts, implementation reasoning, conclusions, or complete logs.
@@ -74,9 +75,11 @@ limit.
 For each manifest entry:
 
 1. Enforce the committed prerequisite and clean task-owned state.
-   Before the first Sprint 41 or later production implementation child, require
-   the predeclared design-review artifact to record `pass` and resolve to the
-   separate committed design-review boundary from the manifest.
+   Before the first Sprint 41 or later production implementation child whose
+   efficiency contract has a design-review gate, require the predeclared
+   artifact to record `pass` and resolve to the separate committed design-review
+   boundary from the manifest. No artifact is required when the record is
+   exactly `design_review_gate: none`.
 2. Start one guaranteed fresh-context runner with the child input contract.
 3. Require the runner to print its Change Contract before edits.
 4. Implement only the child-owned outcome and preserve unrelated work.
@@ -84,15 +87,18 @@ For each manifest entry:
    `docs/codex/core/validation.md`.
 6. Recheck acceptance, exclusions, diff, meaningful test counts, and state. For
    Sprint 41 and later, also calculate actual scope from the exact task start.
-   Form the unique path set as the union of tracked paths from
+   Form the unique task-owned path set as the union of tracked paths from
    `git diff --name-only <task-start>` and untracked paths from
-   `git ls-files --others --exclude-standard`. Textual line churn is the sum of
-   numeric additions plus deletions from `git diff --numstat <task-start>` plus
-   the line count of each untracked text file as an addition from empty. Treat
-   an empty untracked file as text with zero churn; classify every other
-   untracked file with the repository's Git attributes and the same NUL-byte
-   convention as Git, and enumerate tracked or untracked binary paths
-   separately. Compare all values with the committed baseline before staging.
+   `git ls-files --others --exclude-standard`, after subtracting the preserved
+   initial untracked inventory recorded before the task. Include a pre-existing
+   path only when the current task explicitly adopts it and records that scope
+   transition. Textual line churn is the sum of numeric additions plus deletions
+   from `git diff --numstat <task-start>` plus the line count of each remaining
+   task-owned untracked text file as an addition from empty. Treat an empty
+   untracked file as text with zero churn; classify every other untracked file
+   with the repository's Git attributes and the same NUL-byte convention as
+   Git, and enumerate tracked or task-owned untracked binary paths separately.
+   Compare all values with the committed baseline before staging.
 7. If commit mode is authorized, stage only enumerated paths and create exactly
    one logical commit with the manifest message. Otherwise do not stage or
    commit.

@@ -311,24 +311,25 @@ confinement, and authorization precondition immediately before any accepted
 mutation. A Sprint 40 plan is evidence for that future decision, not permission
 to write.
 
-## Review hand-off
+## Review and Sprint 41 hand-off
 
-The complete planning-through-Task-9 implementation-branch range begins after
-completed Sprint 39 version head
-`8d28ba8acacd00efd902eb2aa4ab3194f1636c05`. Its terminal must be the unique
-Task 9 commit whose first parent is recovery head
-`3924acb37af4528f18dcaa0ee93c4358dae1730f` and whose subject is exactly
-`Complete Sprint 40 Refactoring Planner evidence`; the Task 9 final report
-records that terminal SHA.
+The [Sprint 40.1 remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass` over immutable combined range
+`8d28ba8acacd00efd902eb2aa4ab3194f1636c05..dd55365a62a12f8733ca91185237eaff2f09aa95`
+and corrective range
+`427a78cd809a16bae2ee160867b20bb64c1d415e..dd55365a62a12f8733ca91185237eaff2f09aa95`.
+The independent reviewer and primary independently reconciled all ADR-0063 and
+Sprint 40.1 invariants and reran the complete focused, enumeration, canonical,
+client, compatibility, API/dependency/license, cache/Coverage, governance,
+sensitive-data, deferred-scope, tracked-artifact, prompt, link, and cleanliness
+matrix. Each enumerated 85 targets, 81 non-zero targets, four expected zero-test
+binaries, and 1,365 tests with no failed, ignored, measured, or filtered tests.
 
-After that commit is pushed and the sprint branch is merged with `--no-ff` into
-`codex/v0.7`, Task 10 must resolve and review the immutable range
-`8d28ba8acacd00efd902eb2aa4ab3194f1636c05..<Sprint 40 implementation merge>`.
-It must start from a path inventory, map every ADR-0063 row to independent and
-primary evidence, and rerun the complete focused, executable-enumeration,
-canonical, compatibility, API/dependency/license, cache/Coverage,
-sensitive-data, deferred-scope, tracked-artifact, and cleanliness matrix above.
-Task 9 supplies no review decision and does not mark Sprint 40 completed.
+Sprint 40 remains administratively completed. Sprint 40.1 is completed and
+Sprint 41 Safe Edit Transactions is the unique `next` target. Sprint 41 must
+recheck publication identity, document version, range, expected token,
+confinement, and authorization immediately before any mutation; this plan
+remains evidence rather than edit permission.
 
 ## Retained command logs
 
@@ -339,6 +340,8 @@ the canonical test audit:
 - `local-artifacts/codex-runs/sprint40-task9/workspace-tests.log`
 - `local-artifacts/codex-runs/sprint40-target-relevance-remediation/workspace-tests.log`
 - `local-artifacts/codex-runs/sprint40-1-task2/test-list.log`
+- `local-artifacts/codex-runs/sprint40-1-task3-primary/rust-validation.log`
+- `local-artifacts/codex-runs/sprint40-1-task3-primary/vscode-validation.log`
 
 They contain no credentials or external payloads and are ignored, untracked
 local artifacts.

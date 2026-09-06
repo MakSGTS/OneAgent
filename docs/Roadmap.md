@@ -46,9 +46,10 @@ records `pass` and completes Sprint 36. The
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
 records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
-administratively `completed` without a passing integration review; its two
-confirmed blockers are assigned to Sprint 40.1 Refactoring Planner Remediation,
-the unique `next` target. The
+administratively `completed`. The
+[Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass`, resolves the two confirmed blockers, and completes Sprint 40.1.
+Sprint 41 Safe Edit Transactions is the unique `next` target. The
 completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -8574,8 +8575,8 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | completed |
-| Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | next |
-| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
+| Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | completed |
+| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | next |
 
 ##### Sprint 36 Diagnostics Engine execution plan
 
@@ -10191,6 +10192,27 @@ exact eight tracked Sprint 39 prompt files already listed by the Sprint 40
 plan. The Sprint 40 and Sprint 40.1 suites remain preserved. Any design,
 implementation, scope, validation, review, consistency, commit, merge, push, or
 inventory failure stops the sprint without a completion transition.
+
+###### Sprint 40.1 completion evidence
+
+The [Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass` over immutable combined range
+`8d28ba8acacd00efd902eb2aa4ab3194f1636c05..dd55365a62a12f8733ca91185237eaff2f09aa95`
+and corrective range
+`427a78cd809a16bae2ee160867b20bb64c1d415e..dd55365a62a12f8733ca91185237eaff2f09aa95`.
+The independent reviewer and primary each passed all 34 ADR-0063 criteria and
+all six corrective invariants, 26 non-zero focused Rust commands, the complete
+canonical gate, five VS Code compiler/unit stages, and the API, dependency,
+cache, protocol, governance, sensitive-data, artifact, scope, prompt, link, and
+cleanliness audits. Each independently enumerated 85 targets, 81 non-zero
+targets, four expected zero-test binaries, and 1,365 tests.
+
+The same reviewer confirmed the complete uncommitted review and state diff
+before the exact eight-file Sprint 39 prompt suite was retired. Sprint 40 and
+Sprint 40.1 prompt suites remain preserved. Sprint 40 remains administratively
+`completed`; Sprint 40.1 is `completed`, and Sprint 41 Safe Edit Transactions
+is the unique `next` target. The v0.7 release integration review remains after
+Sprint 41.
 
 Suggested planning commit message:
 

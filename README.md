@@ -32,9 +32,10 @@ records `pass` and completes Sprint 36. Sprint 37 Rules Engine is completed; its
 records `pass` and completes Sprint 38. The
 [Sprint 39 Change Impact Analysis review](docs/reviews/sprint-39-change-impact-analysis.md)
 records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
-administratively completed with its two unresolved acceptance blockers assigned
-to Sprint 40.1 Refactoring Planner Remediation, the unique `next` target. This
-closure does not claim a passing Sprint 40 integration review.
+administratively completed, and the
+[Sprint 40.1 Refactoring Planner Remediation review](docs/reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass`, resolves its two acceptance blockers, and completes Sprint 40.1.
+Sprint 41 Safe Edit Transactions is the unique `next` target.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

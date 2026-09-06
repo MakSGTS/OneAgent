@@ -249,13 +249,12 @@ assertion; no command, code action, edit request, preview UI, or automatic call
 is added.
 
 The complete acceptance matrix, focused and canonical counts, compatibility,
-API/dependency/cache/Coverage/sensitive-data/scope audits, and exact Task 10
-hand-off are recorded in the
-[Sprint 40 evidence](architecture/refactoring-planner-evidence.md). Sprint 40
-is administratively completed without a passing integration review. Sprint 40.1
-Refactoring Planner Remediation owns the canonical publication-identity and
-stale-evidence blockers, a fresh-context design review, implementation, and a
-new integration-review gate before Sprint 41. Source mutation, apply
+API/dependency/cache/Coverage/sensitive-data/scope audits, and hand-off are
+recorded in the [Sprint 40 evidence](architecture/refactoring-planner-evidence.md)
+and [Sprint 40.1 remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md).
+Sprint 40 is administratively completed, and Sprint 40.1 records `pass`,
+resolves the publication-identity and stale-evidence blockers, and is completed.
+Sprint 41 is the unique `next` target. Source mutation, apply
 authorization, transaction staging, atomicity, rollback, reversibility,
 recovery, and post-edit validation remain Sprint 41 scope.
 
@@ -294,9 +293,10 @@ The roadmap assigns future boundaries explicitly:
   records `pass` and completes Sprint 38. The
   [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
   records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
-  administratively completed without a passing integration review; Sprint 40.1
-  Refactoring Planner Remediation is the unique corrective `next` target for
-  its publication-owner and evidence blockers.
+  administratively completed. The
+  [Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
+  records `pass`, completes the correction, and makes Sprint 41 Safe Edit
+  Transactions the unique `next` target.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The

@@ -31,7 +31,7 @@ Graph semantics, wire endpoint, UI, dependency, or existing API removal is added
 | Owner | Accepted responsibility |
 |---|---|
 | `crates/analysis/src/refactoring.rs` | Existing immutable source/request/plan contracts and pure planner remain canonical. |
-| New `crates/analysis/src/safe_edit.rs`, exported by `crates/analysis/src/lib.rs` | Additive pure exact-plan comparison, replacement/range transformation and complete semantic postcondition evaluation over borrowed before/after Graph and source evidence. No disk, policy, service, cache or publication writer. |
+| New `crates/analysis/src/safe_edit.rs`, exported by `crates/analysis/src/lib.rs` | Additive pure exact-plan comparison, replacement/range transformation, typed `SafeEditProducerProjection` admission and complete semantic postcondition evaluation over borrowed before/after evidence. Owns complete mapping consumption and bounds; does not encode adapter provenance. No disk, policy, service, cache or publication writer. |
 | Graph query and BSL identity owners already used by Analysis | Sole identity, ownership, edge, callable-name and resolution authority. Validators use public queries and existing constructors, not new graph facts or duplicated ID formats. |
 | EDT/Designer adapters and `WorkspaceSnapshotBuilder` | Complete production discovery/capture/build/validation, including reference ledger, rules and diagnostics. Adapter semantics stay unchanged. |
 | New `apps/runtime/src/workspace/edit.rs` | Service-bound API, bounded attempt/undo state, policy gate, ordered transaction state machine and results; integrates into `workspace/mod.rs`. |
@@ -39,6 +39,10 @@ Graph semantics, wire endpoint, UI, dependency, or existing API removal is added
 | `apps/runtime/src/workspace/mod.rs` | Single lifecycle coordinator for startup, all rebuilds, transactions, cache publication decisions, recovery quarantine and shutdown. Owns the snapshot sender. |
 | `crates/tool-policy/src/confirmation.rs` and `execution.rs` | Existing exact binding, one-use confirmation and policy execution gate. Runtime composes these unchanged; no transaction/domain dependency enters Tool Policy. |
 | `apps/runtime/src/workspace/cache.rs` | Existing rebuildable cache owner, never a source journal or backup store. |
+| New `adapters/designer-xml/src/safe_edit.rs` and `adapters/edt/src/safe_edit.rs`, exported by their existing `lib.rs` | Pure `project_safe_edit_provenance` APIs produce expected typed evidence from the complete before publication and exact replacement bytes, before staging or candidate build. Encoding stays with shared adapter producers. |
+| `adapters/designer-xml/src/semantic_graph.rs` | Shared canonical module/declaration provenance helpers used by both builder and projector; recompute whole-module SHA and all declarations in changed modules. |
+| `adapters/edt/src/bsl_graph.rs` and `query_source_resolution.rs` | Shared captured-byte analysis and canonical Query, request, edge and diagnostic context producers; unchanged public builder entry points delegate to them. |
+| `crates/bsl/src/queries.rs`, exported by `crates/bsl/src/lib.rs` | Extract public `bsl_query_id(owner_id: &EntityId, binding_name: &str) -> Result<EntityId, BslQueryError>` from private `query_id`; both extractor and projector reuse exactly the existing encoding. |
 
 Direction remains Graph/BSL/common -> Analysis -> adapters -> Runtime. Tool
 Policy is consumed by Runtime. No new production dependency edge or package is
@@ -165,7 +169,7 @@ Transaction-specific inclusive bounds are deliberately narrower than planning:
 | Aggregate original / aggregate resulting edited bytes | 8,388,608 bytes each, checked before retaining copies; rollback reserve is mandatory. |
 | Complete baseline entries / each relative path / aggregate path bytes | 16,384 / 4,096 / 4,194,304; admit each directory entry before collecting/sorting or retaining a path. |
 | Each baseline regular file / all baseline regular-file bytes | 8,388,608 / 67,108,864; check metadata and remaining allowance before reading, use a limited read and detect one extra byte without retaining an unbounded allocation. |
-| Additional transaction-owned raw buffers | 268,435,456 bytes across baseline, verification scans, original/result/recovery copies; reserve checked upper bounds before allocation, share immutable unchanged bytes, release scans promptly. |
+| Additional transaction-owned raw/projection buffers | 268,435,456 bytes across baseline, verification scans, original/result/recovery copies and new projection-owned records/strings/scratch; reserve checked capacities before allocation/retention, share immutable unchanged bytes, release scans promptly. |
 | Temporary disk bytes / files | 16,777,216 / 128 total for result and backup files; reserve before `create_new`. Restoration reuses each backup slot. |
 
 These are per-service transaction retention limits, not a bound on arbitrary
@@ -198,7 +202,9 @@ The normative order for apply is:
    ownership. Check the next publication increment before any file mutation.
 3. Construct exact result bytes by applying each document's operations in
    descending raw-offset order, checking versions, bounds, nonoverlap and expected
-   tokens. Reserve/check result and recovery budgets before allocation. Preserve
+   tokens. Reserve/check result and recovery budgets before allocation. Freeze
+   the complete producer-owned expected projection below before staging, source
+   writes or candidate rebuild; projection errors are pre-write rejections. Preserve
    every byte outside those ranges, including BOM, CRLF/LF and trailing newline.
 4. Validate roots/ancestors/targets, permissions and aliases; create all private
    staged result and backup files with `create_new`, bounded names and no source
@@ -292,9 +298,12 @@ node/edge counts. Define the expected transformation from the original plan:
    edit, root addition/removal or source-evidence omission is permitted.
 2. The old target disappears and exactly the BSL-owned expected post-rename
    Node ID appears with the same kind, Module owner, export/async/parameter and
-   other payload attributes except the accepted name/identity. No other node
-   is added, removed or changes payload. For every Graph edge compare its kind,
-   endpoints and provenance after the single target-ID substitution; derive
+   other payload attributes except the accepted name/identity. The sole dependent
+   identity closure is the selected callable's directly owned Query nodes,
+   derived by `bsl_query_id` with unchanged exact binding. Query text and payload
+   remain equal. No other node is added, removed or changes payload. For every
+   Graph edge compare its kind, endpoints and complete provenance after this
+   bounded identity closure and the producer projection below; derive
    edge IDs through the Graph owner. This covers incoming/outgoing ownership
    and calls, including calls originating inside the renamed callable.
 3. Compare every source occurrence in canonical document/range/kind order.
@@ -309,9 +318,10 @@ node/edge counts. Define the expected transformation from the original plan:
 4. Source locations/provenance and reference-ledger anchors are recomputed from
    exact before/result bytes using the same source-location owners (including
    BOM and Unicode scalar columns). Compare full records after this explicit
-   mapping, preserving source kind/role and unaffected fields. All reference
+   mapping, using canonical producer-owned expected source identities/contexts,
+   preserving source kind/role and unaffected fields. All reference
    requests and their resolved/unresolved/unsupported dispositions must match
-   after the target/name/range transformation; equal aggregate statistics alone
+   after the admitted callable/Query identity and name/range transformation; equal aggregate statistics alone
    are insufficient. No unresolved record may silently disappear.
 5. Graph validation, built-in rules and diagnostic composition must complete.
    Compare the full diagnostic/rule evidence after the same target and anchor
@@ -334,6 +344,184 @@ equivalent fails closed; implementation must not weaken this definition to
 parsing, selected lookups, full-graph counts or “no extra errors”. Task 3 must
 map each complete-oracle component to its actual owner and negative test before
 design review permits implementation.
+
+### Producer-owned expected projection
+
+The user-approved producer-projection correction supersedes target-only identity
+and mechanical provenance substitution. It preserves eligibility, including
+callables containing resolved, unresolved, malformed or unsupported Query text
+already admitted by the production builder. It does not change write, recovery,
+undo, coordinator or authorization mechanisms. Earlier complete T01-T35
+representability/constructor/type evidence remains required.
+
+Both adapters expose the same additive pure signature:
+`project_safe_edit_provenance(input: SafeEditProducerInput<'_>, admission: &mut SafeEditProjectionAdmission) -> Result<SafeEditProducerProjection, SafeEditError>`.
+The new Analysis types have private storage and checked public construction.
+`SafeEditProducerInput` borrows the complete before Configuration evidence,
+complete plan and the complete ordered document replacement list, including
+unchanged documents by borrow. Each `SafeEditModuleInput` binds document/module/
+owner IDs, module name, format/role, canonical captured `SourcePath`, original
+bytes and exact replacement bytes. Runtime supplies paths from the retained
+confined baseline, not caller input. Analysis validates input completeness,
+path/document correspondence and exact plan replacement before adapter dispatch.
+The input has no candidate, filesystem handle, callback to a candidate, transport
+argument or authority to reread source. One projector handles one Configuration;
+Runtime combines results for the complete Workspace, retaining exact unchanged
+evidence for other Configurations.
+
+`SafeEditProducerProjection` binds the exact before publication/Configuration,
+plan structure and original/result document versions, not hashes alone. It
+contains these typed mappings, canonicalized by the **before** keys:
+
+| Mapping / key (all scoped by Configuration ID) | Required value and complete domain |
+|---|---|
+| `NodeIdentity { before: EntityId }` | Expected `EntityId` for exactly the selected callable and each directly owned Query. No unrelated or identity-equal entry is allowed. Both domains/ranges must be unique and disjoint from all unchanged node IDs. |
+| `NodeFact { before: EntityId }` | Full ordered expected provenance list for every before node, including unchanged nodes and all declarations in a changed Designer module. Payload/name/kind comparison remains independently constrained by the semantic oracle. |
+| `EdgeFact { before_source: EntityId, kind: EdgeKind, before_target: EntityId }` | Full expected provenance list for every before edge. Expected endpoints use only `NodeIdentity`; Graph derives the edge ID. No opaque EdgeId decoding. |
+| `RequestFact { before: SemanticReferenceRequestId }` | Full canonical expected terminal request, including source, category, typed reference, expected kinds, candidates, state, outcome and complete provenance. Expected request IDs are derived by the canonical producer/`reconstruct_terminal`. |
+| `DiagnosticFact { before_ordinal: usize }` | Full expected `SemanticDiagnostic` for every record in the before snapshot's canonical diagnostic order; the key also binds that exact full before record by immutable borrow. An ordinal alone cannot identify a diagnostic in another publication. |
+| `QueryFact { before: EntityId }` | Captured before/expected owner, exact binding and exact query text plus canonical source projection for every format-supported producer Query, independently reconciled with the complete before Graph Query inventory. EDT includes malformed/unsupported Query text because its Query/Contains emission precedes query-language parsing. Designer's current producer emits no Query facts: its QueryFact and dependent Query closure are empty, even when unchanged BSL text contains Query. This adds no Designer Graph/query semantics; exact bytes still prove unchanged text. |
+
+Fact keys are an enum with these variants, not concatenated strings or hashes.
+Provenance values compare every source ID, optional location, producer, origin,
+confidence and resolution field. Each value is typed `Unchanged` or
+`Expected(T)`: `Unchanged` explicitly resolves its checked fact key against the
+same retained before publication when compared, while `Expected(T)` owns its
+prepaid result. The frozen projection stores no borrowing pointer into a scoped
+parser result and needs no self-referential Runtime structure. The coordinator
+retains the before Arc separately and Analysis checks its binding on use. Duplicate
+keys, duplicate expected identities, conflicting mappings, omitted identities
+or facts, extra facts and version/publication/plan mismatch reject the projection.
+Canonical sorting must not deduplicate an invalid input into apparent success.
+Analysis derives the complete key inventory from before evidence independently
+of projector output, and requires equality with that inventory before staging.
+Each mapping is consumed exactly once while assembling expected collections;
+unused or reused entries reject. Candidate collections are then compared in
+their own canonical order against those frozen expected collections, including
+full provenance explicitly rather than `GraphEdge::eq`. Candidate ordering or
+counts cannot supply missing keys, align diagnostics or repair a projection.
+
+For the identity closure, Query membership is proven through Graph `Contains`
+with exactly one owner equal to the selected callable and the before canonical
+BSL extraction. Re-run the same BSL producer on replacement bytes; pair Query
+by before owner and exact binding, never by a string prefix or encounter order.
+Verify identical Query count/binding/text, no changed unrelated Query, and no
+new collision. Call `bsl_query_id` for old and expected IDs and require old ID
+agreement too. The allowed closure has no recursive descendants, metadata or
+other-callable nodes. For every edge/request/diagnostic use these exact mapped
+IDs; Reads/DependsOn targets, candidate sets and terminal outcomes remain equal.
+Extra/removed Query, changed text/binding/payload or another callable's equal
+binding is a negative case, not a reason to drop Query-containing targets.
+
+Designer shares `module_source_id` and `declaration_provenance` helpers within
+`semantic_graph.rs`, extracted from `emit_module_and_declarations`/`source_id`.
+They take captured path, exact raw bytes and existing typed module/declaration
+facts. Builder and projector call the same helpers. The whole-module digest
+changes every dependent declaration provenance in each changed module; unchanged
+declarations therefore receive their canonical new source IDs too. Unrelated
+metadata/Configuration provenance is exact. Analysis never formats this encoding.
+
+EDT extracts pure `analyze_captured_module` in `bsl_graph.rs` with typed module
+ID/name/path, borrowed raw bytes and the existing occurrence limit; the current
+file-reading `analyze_module` wrappers delegate after capture. The projector
+uses this same pure analyzer for before and exact result bytes. Share existing
+`query_context`, `query_provenance`, `query_request_projection_provenance`,
+`query_diagnostic_provenance`, and the collection/resolver context builders in
+`query_source_resolution.rs`; no new context encoder exists in Analysis or
+Runtime. Query resolution uses the complete before metadata index, whose exact
+unchanged inventory is checked, and production Complete scope. It preserves
+all collected/terminal ledger records and pre-existing parser diagnostics,
+including unsupported/malformed Query cases with no successful Reads edge.
+Do not recover typed inputs by parsing private formatted provenance strings.
+
+The projector reproduces the before-side producer evidence and checks it against
+the captured publication before accepting expected mappings. This prevents
+silently trusting an incompatible baseline. Expected diagnostics use canonical
+producer constructors with the mapped typed fields, then existing Analysis
+validation/rule/diagnostic owners derive complete expected reports from these
+expected facts. This pure computation is a comparison projection, never a new
+published Graph or inference rule. Outcomes, codes, severities, unsupported
+dispositions, unchanged messages/fields and report statuses remain independently
+constrained; only canonically dependent IDs/anchors/messages may transform.
+Neither the candidate nor its rebuilt diagnostics are their own expected value.
+
+### Projection admission arithmetic and freeze point
+
+`SafeEditProjectionAdmission` shares the attempt's existing 268,435,456-byte
+additional-buffer reservation; it does not add another independent allowance.
+Charge newly owned projection strings, mapping/record storage and scratch as
+well as raw bytes. Existing borrowed snapshots are not copied or charged again;
+the existing exclusion of canonical builder/parser/Graph internal heap from a
+total-process-memory guarantee remains. Any parser result retained by the new
+projection is charged before copying/retaining it, never retrospectively.
+
+Let `R` be already reserved attempt bytes. For every new vector of type `T`
+and admitted capacity `n`, reserve `n.checked_mul(size_of::<T>())`; for every
+owned string/raw slice reserve its UTF-8/raw capacity, including duplicated
+copies; for every nested vector/boxed allocation add its separate storage.
+Enum/record inline fields are included once in `size_of`, nested allocations
+are not. `P = sum(checked capacities)` covers all concurrent projection output,
+canonical key inventory, consumption bitset (`(fact_count + 7) / 8` with checked
+addition), sorting/index arrays, context-formatting scratch and before/result
+producer records. Require checked `R + P <= 268435456` before allocation or
+retention. An allocation failure is a closed pre-write error. Do not use hidden
+`collect`, `format!`, clone, implicit Vec growth or growing maps outside this
+reservation. Reserve vector capacity explicitly; account for granted capacity
+before retaining/using it, failing and releasing an unexpected over-allocation.
+
+The budget remains a transaction-owned retention bound, not a new bound on
+existing parser internals. The pure captured analyzer may run the existing
+canonical extractor/parser work under its existing admission and scoped internal
+working lifetime. Its existing internal token/scope/AST/source-map allocations
+remain in the previously excluded parser heap; do not create extra copies,
+retain them in the attempt, or silently reclassify new projection allocations as
+parser internals. In particular this correction introduces no universal
+raw-byte-times-identity scratch reserve or smaller effective document-size cap.
+The existing exact 1,048,576-byte simple-rename positive must remain admissible
+when the actual transaction-owned reservations fit.
+
+There are three separate phases. First, canonical parsing owns its scoped
+internal result; it is not yet retained producer output or a transaction buffer.
+Second, the projection count pass visits borrowed before facts, exact result
+bytes and those scoped parser results without allocation. It must not invoke
+another parser/extractor, build formatted contexts, clone records, collect or
+sort. It counts output elements and every nested byte length with the shared
+canonical encoder's counting sink. Third, only after A/E grants the exact
+checked capacity lease may the producer emit/retain new output, key arrays,
+strings, Query text/maps or projection-specific scratch. Release the parser
+working result when its borrowed visit/emission finishes. Anything moved or
+copied out of parser internals into retained producer output is charged before
+that retention; no uncharged parser result may escape in EditAttempt/EditUndo.
+
+Count inventory and consumed-bitset sizes directly from existing complete
+before collections. Use two borrowed passes instead of a temporary collecting
+map; sort only the pre-reserved emitted arrays. All new producer context encoders
+write first to a nonallocating counting `fmt::Write` sink and then to the
+already leased buffer, using
+the exact same canonical encoder, so the expected context length is computed
+without allocating its string. In particular length-prefix digit counts and
+UTF-8 bytes come from that producer, not an Analysis copy of the encoding.
+Keep at most one module's new raw/context scratch concurrently; release its
+lease before processing the next. Every additional output buffer owned by the
+projector uses this counting/emitting reservation path. If a vector/string must
+grow, reserve the full new capacity while the old capacity remains charged;
+release the old lease only after replacement/deallocation. No implicit growth
+may borrow space already reserved for originals or frozen expected evidence.
+Checked arithmetic overflow,
+one-over capacity, missing counts or output exceeding the measured reservation
+reject before staging. Tests instrument reservation before each new allocation
+and retention boundary, including nested provenance/request/diagnostic strings,
+sorting scratch, Query text and partial-construction error cleanup.
+
+Freeze the validated complete projection in `EditAttempt` after exact result
+bytes exist and before `stage_all`. Bind it to the same consumed attempt and
+predecessor; no candidate access or post-write regeneration can replace it.
+F3 candidate fault injection runs only after the production rebuild with this
+expected projection already immutable. Reversal retains exact original evidence
+in the existing `EditUndo` reservation and compares a rebuilt original state to
+it; no candidate-derived expected undo. Drop, denial, cancellation, commit,
+undo expiry and quarantine release or transfer each lease exactly once, while
+recovery retains its previously reserved originals. New failures stay redacted.
 
 ### Recovery, failure precedence and reversal
 

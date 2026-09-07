@@ -10244,7 +10244,8 @@ transaction recovery/undo tests and exact ownership mechanisms remain pending.
 No essential source-format oracle is missing. Task 1 adds no production behavior,
 API, dependency, test or Coverage claim. Exact validation is recorded in its
 investigation and master ledger. Task 2 architecture acceptance is recorded
-below; Task 3 mapping is recorded after it, and Tasks 4-7 remain `not_started`.
+below; Task 3 mapping and subsequent gate/blocker history follow. The current
+producer correction leaves Task 5 blocked and Tasks 6-7 `not_started`.
 
 ###### Task 2 architecture result
 
@@ -10286,7 +10287,7 @@ provenance comparison avoids Graph edge equality's narrower semantics; canonical
 coordinate and identity constructors remain their existing owners.
 
 All new symbols/tests are planned; this documentation gate claims no production
-test execution or design-review pass. The live design is allocated across 16
+test execution or design-review pass. At that mapping boundary the design was allocated across 16
 exact implementation paths and 5000 estimated text additions/deletions, including
 the ledger, with no binary/dependency changes, 12 focused checks and one stable
 full gate. Task 4 independently evaluates the committed mapping and scope before
@@ -10340,9 +10341,46 @@ or nonexistent incomplete/omission markers. Constructor rejection is never
 credited as an executed Runtime comparator test.
 
 Production comparison, source/semantic/failure guarantees, ADR-0064 and the
-16-file/5000-line/12-group budget remain unchanged. Task 5 still has zero source
-changes and must await the new complete-audit design pass and commit shown in
-the manifest. Earlier decisions remain evidence only for their own ranges.
+16-file/5000-line/12-group budget remain unchanged. At that historical boundary Task 5 had zero source
+changes and awaited the complete-audit design pass. That pass was committed as
+93661837df8d63bfed10c9b70d1986c4e0d12aa5; the later blocked implementation
+attempt and new producer-projection prerequisite are recorded below.
+
+###### Producer-owned projection correction and Task 5 resume
+
+The user explicitly approved the revised producer plan after Task 5 started at
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5` and exposed Designer whole-module
+SHA/declaration provenance and EDT callable-owned Query identity dependencies.
+The incomplete attempt has 9 task-owned paths/1593 text churn/no binary paths,
+no implementation commit and no push. Analysis package checking passed; Runtime
+all-targets checking passed before later uncovered edits. Runtime integration
+exited 101 with 1 passed and 1 failed test (SemanticMismatch, Recovered, zero
+retained files). Remaining focused and canonical full gates have not run; logs
+are in `local-artifacts/codex-runs/sprint-41/task-5/`.
+
+The original implementation is preserved by the dispatcher; the clean corrective
+branch starts at `b2f1bdcfb9591ba24a1da9ef79c4a388083bac7f`. The separate
+`Define Sprint 41 producer-owned semantic projection` documentation commit fixes
+canonical adapter/BSL ownership, typed before-fact mappings, complete consumption
+and reservation before producer scratch/retention. Expected values freeze before
+staging and candidate rebuild. Only directly owned format-supported Query IDs
+join the target closure; unchanged Query binding/text, all provenance, ledger
+and diagnostics remain required. Designer gains no Query Graph semantics.
+
+The complete T01-T35 representability audit, all reachable negative cases and
+accepted eligibility remain. Filesystem/recovery/undo/coordinator mechanisms do
+not change. Prior review decisions remain historical. The next unique gate is
+`Approve Sprint 41 producer-owned semantic projection design`; review is pending,
+and this correction does not self-approve or resume production work.
+
+The new pass is the resume prerequisite, not a new implementation budget start.
+Keep `93661837df8d63bfed10c9b70d1986c4e0d12aa5` as Task 5's original
+accounting baseline. Include the preserved 9 files/1593 churn and every subsequent
+task-owned change, untracked text, formatting and ledger update. Exclude only
+separately committed prerequisite documentation/review deltas by exact range;
+never classify the preserved work as unrelated or subtract whole shared paths.
+Reconcile the cumulative diff without double-counting overlapping snapshots.
+Sprint 41 remains active; Task 5 blocked, Tasks 6-7 not started, push at sprint end.
 
 ###### Objective, evidence, and bounded scope
 
@@ -10412,8 +10450,8 @@ stop at the concrete child boundary with its committed prerequisite.
 | 1 | [01-investigate-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/01-investigate-safe-edit-transactions.md) | investigation / investigation | Repository-backed transaction readiness and boundary investigation. | Plan Sprint 41 Safe Edit Transactions | `Investigate Sprint 41 Safe Edit Transactions` |
 | 2 | [02-define-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/02-define-safe-edit-transactions.md) | architecture / architecture | Accepted bounded transaction ADR and compatibility contract. | Investigate Sprint 41 Safe Edit Transactions | `Define Sprint 41 Safe Edit Transactions` |
 | 3 | [03-map-safe-edit-transaction-invariants.md](codex/prompts/sprint-41-safe-edit-transactions/03-map-safe-edit-transaction-invariants.md) | architecture / architecture | Complete accepted-ADR production invariant matrix. | Define Sprint 41 Safe Edit Transactions | `Map Sprint 41 Safe Edit Transaction Invariants` |
-| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Clarify Sprint 41 complete invariant evidence placement | `Approve Sprint 41 complete invariant evidence design` |
-| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 complete invariant evidence design | `Implement Sprint 41 Safe Edit Transactions` |
+| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Define Sprint 41 producer-owned semantic projection | `Approve Sprint 41 producer-owned semantic projection design` |
+| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 producer-owned semantic projection design | `Implement Sprint 41 Safe Edit Transactions` |
 | 6 | [06-complete-safe-edit-transaction-evidence.md](codex/prompts/sprint-41-safe-edit-transactions/06-complete-safe-edit-transaction-evidence.md) | architecture / architecture | Exact final implementation evidence, consumer audit, and immutable review handoff. | Implement Sprint 41 Safe Edit Transactions | `Document Sprint 41 Safe Edit Transaction Evidence` |
 | 7 | [07-sprint-41-integration-review.md](codex/prompts/sprint-41-safe-edit-transactions/07-sprint-41-integration-review.md) | review / review | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Document Sprint 41 Safe Edit Transaction Evidence | `Complete Sprint 41 Safe Edit Transactions Review` |
 
@@ -10439,17 +10477,19 @@ only its separate committed pass artifact unlocks Task 5.
 ```text
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
-design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Clarify Sprint 41 complete invariant evidence placement|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 complete invariant evidence design
-implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|16|5000|none|12|1
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 producer-owned semantic projection|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 producer-owned semantic projection design
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|8500|none|12|1
 ```
 
-Task 5's expected path count is 16, expected text additions plus deletions 5000,
-binary inventory none, focused validation budget 12 checks, and stable full gate
-budget 1. Task 3 binds all 12 focused checks to exact production oracles and
-allocates the 16 paths in the matrix. Task 5 counts its master-ledger update in
-actual scope. Apply the sequential workflow's 2x scope/binary stop-loss and two-architecture-blocker
-remediation rule. Independent reviewer and primary completion gates remain
-separate required evidence.
+Task 5's revised expected path count is 25 and estimated text additions plus
+deletions 8500, with no binary paths, 12 focused groups and one stable full gate.
+The matrix allocates all 25 paths exactly. F10 becomes
+`cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes
+`cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`.
+F1-F9/F12 remain unchanged. Explicitly stop before further work at more than
+32 paths, more than 10000 text churn or any binary path; these tighter caps
+override the general 2x calculation for the new estimate. Independent reviewer
+and primary completion gates remain separate required evidence.
 
 ###### State, validation, review and retirement gates
 

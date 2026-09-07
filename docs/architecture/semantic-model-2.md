@@ -1640,7 +1640,12 @@ capability, complete source baseline, serialized lifecycle and confined I/O.
 Success requires the complete production Workspace builder, including Designer
 `Complete`, Graph validation, reference ledger, rules and diagnostics. Exact
 planned byte replacements must produce only the expected target identity/name
-substitution and mechanically shifted source anchors. All planned declaration
+substitution, the bounded identity closure to its directly owned format-supported
+Query nodes, and canonical producer provenance/shifted anchors. Analysis validates
+complete typed mappings frozen from before evidence and exact result bytes before
+staging or candidate rebuild. EDT/Designer share their existing producers with
+pure projection APIs; BSL owns Query ID derivation. Designer gains no Query Graph
+facts. Query binding/text and unrelated Query remain unchanged. All planned declaration
 and call occurrences must resolve to the renamed target; every other node, edge, payload,
 occurrence, reference disposition and rule/diagnostic record must be equivalent
 under that explicit mapping. Designer's complete occurrence evidence does not

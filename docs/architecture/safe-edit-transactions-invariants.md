@@ -63,13 +63,13 @@ rejection also asserts zero source replacement attempts.
 | T14 Single coordinator and guard ordering, order 4 | I `stage_all`, `read_checked`, `cleanup_owned` | Fully write results/backups, preserve standard permissions without broadening temp access, `sync_all`, close/read back exact bytes; verify all backups before first replace. Staging failure cleans only owned artifacts. | `I::staging_faults_preserve_sources`: every create/write/permission/sync/close-observation/readback ordinal for results/backups, short/corrupt output; no replacement, successful cleanup or explicit cleanup recovery failure. | F4 |
 | T15 Single coordinator and guard ordering, order 5 | E `run_attempt`; I `verify_tree`, `replace_checked` | Repeat complete original baseline and path guards immediately before first replace; recheck original bytes/kind/identity before each later file in canonical path order. Rename verified sibling over target, no pre-delete/truncate/copy fallback. Record attempt before call and classify observed result even on ambiguous error. | `I::replacement_ordinals_classify_ambiguous_failure`: faults before/after each actual rename and later-target external edit; recovery reflects observed bytes, never false success or lost unrelated change. | F4 |
 | T16 Single coordinator and guard ordering, order 6 | I `verify_tree`; E `run_attempt`; B | Entire actual tree must equal baseline plus exact result bytes before rebuild, excluding only verified owned files. Build complete Workspace; repeat scan after build; evaluate A. No candidate cache write. | `E::post_write_build_and_tree_failures_recover`: unrelated module/metadata mutation, added/removed root/file, edit during build; fail builder/Designer Complete/validation/rule/diagnostic composition; recover without candidate publication/cache write. | F3 |
-| T17 Complete semantic oracle 1/6 | A `validate_postconditions`, `SafeEditEvidence`; B; I `verify_tree` | Before commit compare all Configuration IDs/roots/formats, Module identities/owners, document IDs/roles/paths/completeness/inventory and exact changed/untouched bytes. Other Configurations exactly equal; undo uses saved original projection. | `A::inventory_and_untouched_evidence_mismatch_rejects`: missing document, extra root, changed role/path/completeness or second Configuration; `E::semantic_candidate_faults_recover` submits each candidate mutant through production comparison. | F1, F3 |
+| T17 Complete semantic oracle 1/6 | A `validate_postconditions`, `SafeEditEvidence`; B; I `verify_tree` | Before commit compare all Configuration IDs/roots/formats, Module identities/owners, document IDs/roles/paths/completeness/inventory and exact changed/untouched bytes. Other Configurations exactly equal; undo uses saved original projection. | `A::inventory_and_untouched_evidence_mismatch_rejects`: missing document/occurrence evidence, extra root, changed role/path or second Configuration; `E::semantic_candidate_faults_recover` submits every reachable candidate mutant through production comparison. The sole `SourceEvidenceCompleteness::BslCallableRenameV1` variant is closed-type evidence, not an executable changed-marker mutant. | F1, F3 |
 | T18 Complete semantic oracle 2 | A projection/comparison; G | BSL-owned expected target appears once and old target disappears; compare target name/kind/Module owner and all node payloads/provenance after substitution. Exact nonidentifier bytes also preserve export/async/parameters absent from Graph payload. No unrelated node change. | `A::node_and_edge_projection_rejects_unrelated_changes`: retained old/wrong new target, changed owner/kind/export source or unrelated equal-count node/payload change; `E::semantic_candidate_faults_recover` rejects same mutants. | F1, F3 |
 | T19 Complete semantic oracle 2 | A comparison; G | Exhaustive endpoints/kinds/full provenance after single target substitution; `SemanticGraphQuery::edge_id` derives IDs. Explicit provenance comparison is mandatory: `GraphEdge::eq` omits it. Include incoming/outgoing calls inside target and ownership. | `A::node_and_edge_projection_rejects_unrelated_changes`: equal-count edge swap, lost internal/outgoing call, provenance-only change; `E::semantic_candidate_faults_recover` prevents publication. | F1, F3 |
-| T20 Complete semantic oracle 3 | A projection/comparison; AP occurrences; B capture | Every occurrence in canonical document/range/kind order: exact cumulative byte deltas, replacement lengths, tokens/kinds/lexical owners/unique resolutions. Only prescribed target/range changes. Designer mappings remain required without unsupported Graph Calls edges. | `A::occurrence_projection_rejects_omission_and_ambiguity`: missing/extra same-count call, wrong shifted range/token/lexical owner, ambiguous/unsupported or retargeted untouched occurrence, missing Designer mapping; `E::semantic_candidate_faults_recover` checks production rejection. | F1, F3, F11 |
+| T20 Complete semantic oracle 3 | A projection/comparison; AP occurrences; B capture | Every occurrence in canonical document/range/kind order: exact cumulative byte deltas, replacement lengths, tokens/kinds/lexical owners/unique resolutions. Only prescribed target/range changes. Designer mappings remain required without unsupported Graph Calls edges. | `A::occurrence_projection_rejects_omission_and_ambiguity`: missing/extra same-count call, constructor-valid differing range/token/lexical-owner evidence, ambiguous/unsupported or retargeted untouched occurrence, missing Designer mapping; constructor rejection of inconsistent raw bytes/version/range is separate evidence, never credited as Runtime comparator execution; `E::semantic_candidate_faults_recover` checks production rejection. | F1, F3, F11 |
 | T21 Complete semantic oracle 4 | A projection; AP coordinate helpers; L; G provenance | Map before/result raw coordinates with canonical helpers; preserve path/source kind/role, producer/origin/confidence/resolution. Respect producer line-start/file-only anchors; never replace with token spans. Compare every node/edge/reference provenance record. | `A::anchor_and_reference_projection_rejects_loss`: BOM/multibyte longer/shorter names, CRLF/LF, file-only anchors, changed producer/path/span with same count; `E::semantic_candidate_faults_recover` blocks acceptance. | F1, F3 |
-| T22 Complete semantic oracle 4 | A projection/comparison; L | Map typed references/source IDs/names/anchors; reconstruct terminal IDs via `reconstruct_terminal`; compare every category/expected kind/candidate/state/outcome/provenance. Resolved/unresolved/unsupported dispositions and statistics agree, no omitted request. | `A::anchor_and_reference_projection_rejects_loss`: lost unresolved request, altered candidate/outcome at equal statistics, changed identity/provenance alone; `E::semantic_candidate_faults_recover` rejects. | F1, F3 |
-| T23 Complete semantic oracle 5 | A comparison; D; B `compose_rule_evidence` | Require complete validation/rule/diagnostic composition; compare full reports/statuses/completeness/omissions, code/severity/parameters/related evidence/anchors. Reconstruct canonical findings/IDs from typed inputs; unchanged messages exact, derived messages use known producer. Unclassifiable mapping fails closed, no blanket replacement/clean-project prerequisite. | `A::diagnostic_and_rule_projection_rejects_non_equivalence`: lost unrelated pre-existing finding, changed severity/message/related evidence/omission or equal-count rule status; valid mapped pre-existing diagnostics pass. `E::semantic_candidate_faults_recover` checks all report mutants. | F1, F3 |
+| T22 Complete semantic oracle 4 | A projection/comparison; L | Map typed references/source IDs/names/anchors; reconstruct terminal IDs via `reconstruct_terminal`; compare every category/expected kind/candidate/state/outcome/provenance. Resolved/unresolved/unsupported dispositions and statistics agree, no omitted request. | `A::anchor_and_reference_projection_rejects_loss`: lost unresolved request, altered candidate/outcome at equal statistics, canonical identity changed through a structural reference substitution or provenance change; no isolated corruption of a private derived ID; `E::semantic_candidate_faults_recover` rejects. | F1, F3 |
+| T23 Complete semantic oracle 5 | A comparison; D; B `compose_rule_evidence` | Require complete validation/rule/diagnostic composition; compare every existing report/status/count and complete record collection, code/severity/parameters/related evidence/anchors; no absent incomplete marker or omission-counter field is invented. Reconstruct canonical findings/IDs from typed inputs; unchanged messages exact, derived messages use known producer. Unclassifiable mapping fails closed, no blanket replacement/clean-project prerequisite. | `A::diagnostic_and_rule_projection_rejects_non_equivalence`: lost unrelated pre-existing finding, changed severity/message/related evidence, lost producer evidence or equal-count producer-generated rule status; use canonical whole-record/report substitutions rather than private derived-field corruption; valid mapped pre-existing diagnostics pass. `E::semantic_candidate_faults_recover` checks all report mutants. | F1, F3 |
 | T24 Complete semantic oracle 6; order 7 | W `compose_change_impact`; E `run_attempt`, `commit`; U | Derive impact from actual adjacent pair after complete oracle; check current predecessor Arc and successor overflow. Undo receives new publication/impact IDs, never original ID. | `E::publication_barriers_and_overflow`: stale Arc, wrong impact pair/overflow reject or recover; `R::apply_reversal_preserve_exact_bytes_and_old_arcs` proves old readers immutable and one increment. | F3, F2 |
 | T25 Single coordinator and guard ordering, order 7/8 | E `run_attempt`, `commit`; I `cleanup_owned`, `verify_tree`; W sender | Check cancellation/predecessor/full state, remove all owned stage/backup while retaining pre-reserved originals; cleanup failure recovers. Final expected source/path scan and cancellation after cleanup precede sole commit `send_replace(Some(successor))`. Same turn installs baseline/outcome/undo and invalidates preparation. No fallible source I/O or cancellation rollback after commit. | `E::final_cleanup_scan_and_commit_barrier`: cleanup failure, edit after cleanup, cancel at final guard/just after commit; only precommit cases recover, committed success remains. | F3 |
 | T26 Single coordinator and guard ordering, order 9 | E `commit`; W update loop/cache status; C `write` | Only accepted successor writes cache while serialized; success delivered after bounded cache attempt. Cache failure affects cache status, never source success/count. Existing schema/version; no baseline/capability/undo persistence. | `E::cache_namespace_and_scan_exclusions` blocks/fails postcommit cache write without rollback; **planned** `apps/runtime/tests/persistent_cache.rs::edit_commit_cache_failure_preserves_success` checks public status/cold restart without edit authority. | F3, F7 |
@@ -105,6 +105,55 @@ not replace reachable negative tests. All other T rows and semantic/failure
 oracles remain unchanged. The corrected mapping requires a new committed
 targeted design pass before Task 5 resumes.
 
+## Complete matrix representability audit
+
+The user explicitly agreed to this consolidated evidence-placement plan after
+the independent full T01-T35 audit of
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..d2dc6fdb772f04cb15cc38029b7494d262cae9af`.
+That review accepted the T03 correction but blocked the still-impossible T17
+changed-completeness marker. This section records the complete audit, not another
+isolated exception. It changes no production invariant or transaction mechanism.
+
+R means reachable through a public API/constructor/producer and exercised through
+the admitted production path. L means a safely representable private state tested
+inside its owning module. C means constructor rejection precedes publication of
+the invalid combination. T means an alternative value/field does not exist in
+safe Rust. Constructor/type evidence never replaces a reachable negative test
+and must not be counted as an executed Runtime comparator test.
+
+| Classification | Complete audited row inventory | Evidence placement |
+|---|---|---|
+| R | T01, T19, T34 | Existing public alternatives/constructors and production consumer paths. |
+| L | T10 | Private E/I reservation and lifecycle seams inside their owners. |
+| R + C | T12, T18, T20, T21, T22, T23 | Constructor-valid but semantically wrong whole values/records reach the real comparator; rejected combinations are documented separately. |
+| R + L | T02, T04, T06, T07, T08, T09, T11, T13, T14, T15, T16, T24, T25, T26, T27, T28, T29, T30, T31, T32, T33, T35 | Real operations plus already admitted private E/I/W/C seams; no new forging surface. |
+| R + L + C | T05 | Real policy alternatives plus Runtime-private binding tests and canonical policy rejection. |
+| R + L + C + T | T03 | The constructor-boundary split above, including both reachable same-ID differences and AP owner-local comparator tests. |
+| R + T | T17 | Executable missing/extra documents, occurrences, inventory, role/path/root/Configuration substitutions; the sole source-completeness variant is type evidence only. |
+
+For T17 the exact type owner is
+`crates/analysis/src/refactoring.rs::SourceEvidenceCompleteness`, whose only
+variant is `BslCallableRenameV1`. `SourceDocument::new` and
+`SourceDocument::completeness` carry that same closed type. A different marker
+cannot be manufactured even in an owner-local safe test. Keep comparison of the
+actual field and all reachable incompleteness (lost documents/occurrences/source
+evidence); do not add a variant, unsafe value, or public forge API for testing.
+
+T20 uses `SourceDocument::new`-valid semantic differences, preserving its raw
+byte/version/Unicode/lexical consistency checks. T22 uses
+`SemanticReferenceRequest::reconstruct_terminal` for structural identity and
+complete-record changes; a private ID alone is not separately forgeable. T23
+uses canonical diagnostic constructors, `SemanticGraphValidator`,
+`RuleEngine`, and report/finding producers. Compare all real fields/records;
+do not invent a report incomplete marker, omission counter, or direct mutation
+of private derived identity/status fields. All actual omissions and unrelated
+finding/request losses remain negative production-path cases.
+
+The revised plan keeps 35 requirements, all reachable negative oracles, the
+16-path/5000-churn/no-binary baseline, F1's library target and 12 focused groups.
+Require the separately committed complete-audit design pass before resuming
+implementation. No test or production conformance is claimed by this document.
+
 ## Concrete focused validation commands
 
 Task 5 runs these **12 checks**, sequentially, after implementing planned tests.
@@ -130,9 +179,10 @@ Record per-target counts and zero-match filters separately.
 | F12 | `cargo test -p oneagent-runtime --test mcp_process --test mcp_semantic_tools --test lsp_stdio --test graph_query_api` |
 
 F1 covers each representable pure comparator mutant at its admitted owner.
-T03 follows the constructor-boundary split above; it does not require Runtime
-to forge Analysis-private or type-unrepresentable values. For T16-T23 semantic
-candidate evidence, F3 must pass the same candidate mutants
+Every row follows the complete representability audit above. T03 and T17 do not
+require Runtime to forge Analysis-private or type-unrepresentable values. For
+T16-T23 semantic candidate evidence, F3 must pass every reachable, safely
+constructed candidate mutant
 through `EditCoordinator::run_attempt` after the real production build and before
 the real comparator/commit. That seam changes candidate evidence only; it cannot
 bypass production admission, use a test-only validator or directly publish a

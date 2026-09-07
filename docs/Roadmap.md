@@ -8576,7 +8576,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | completed |
 | Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | completed |
-| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | next |
+| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | active |
 
 ##### Sprint 36 Diagnostics Engine execution plan
 
@@ -10224,9 +10224,26 @@ Plan Sprint 40.1 Refactoring Planner remediation
 
 Planning starts from clean version head
 `ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7` after the
-committed non-blocking Sprint 40.1 review. Sprint 41 remains `next` during
-planning and becomes `active` when Task 1 starts. No production transaction
-or design-review pass is claimed by this plan.
+committed non-blocking Sprint 40.1 review. Sprint 41 became `active` when Task 1
+started from committed planning boundary
+`078b258e150842da0a79da96ea09395887080cfc`. No production transaction or
+design-review pass is claimed by the investigation.
+
+###### Task 1 investigation result
+
+The [transaction investigation](architecture/safe-edit-transactions-investigation.md)
+is ready for Task 2 architecture. It traces all three production snapshot
+writers, watcher/explicit-input rebuilds, cache timing, planner consumers,
+confirmation/cancellation behavior and confinement primitives. Operation-only
+source preconditions do not cover semantically relevant changes to untouched
+modules or metadata; Runtime must bind a complete stable publication source
+baseline. Existing rebuild instability checks skip cache writes but do not
+themselves prevent publication. The paired three-operation oracle, complete
+Runtime builders and controlled lifecycle/I/O harness primitives are available;
+transaction recovery/undo tests and exact ownership mechanisms remain pending.
+No essential source-format oracle is missing. Task 1 adds no production behavior,
+API, dependency, test or Coverage claim. Exact validation is recorded in its
+investigation and master ledger; Tasks 2-7 remain `not_started`.
 
 ###### Objective, evidence, and bounded scope
 

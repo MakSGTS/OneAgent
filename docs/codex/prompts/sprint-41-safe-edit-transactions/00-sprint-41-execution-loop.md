@@ -146,7 +146,7 @@ file edits only, and include retirement in the single Task 7 review commit.
 
 | Order | Prompt | Status | Start HEAD | End HEAD | Validation | Commit/push | Tokens | Logs |
 |---:|---|---|---|---|---|---|---|---|
-| 1 | 01-investigate-safe-edit-transactions.md | not_started | pending | pending | pending | pending | unavailable | none |
+| 1 | 01-investigate-safe-edit-transactions.md | completed | 078b258e150842da0a79da96ea09395887080cfc | commit subject: Investigate Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | Analysis plan 17; paired conformance 4; Runtime public 9; Runtime Workspace unit 75 (49 filtered); Tool Policy 26+7; 0 policy doc-tests separately; prompt syntax pass, explicit suite 8 and repository 22 pass; Markdown/selector/efficiency checks and diff-check pass | Investigate Sprint 41 Safe Edit Transactions; local, push deferred to sprint end | unavailable; preflight warning | local-artifacts/codex-runs/sprint-41/task-1/ |
 | 2 | 02-define-safe-edit-transactions.md | not_started | pending | pending | pending | pending | unavailable | none |
 | 3 | 03-map-safe-edit-transaction-invariants.md | not_started | pending | pending | pending | pending | unavailable | none |
 | 4 | 04-review-safe-edit-transaction-design.md | not_started | pending | pending | pending | pending | unavailable | none |

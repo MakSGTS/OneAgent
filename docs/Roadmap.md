@@ -10478,16 +10478,25 @@ only its separate committed pass artifact unlocks Task 5.
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
 design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 producer-owned semantic projection|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 producer-owned semantic projection design
-implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|8500|none|12|1
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|12000|none|12|1
 ```
 
 Task 5's revised expected path count is 25 and estimated text additions plus
-deletions 8500, with no binary paths, 12 focused groups and one stable full gate.
-The matrix allocates all 25 paths exactly. F10 becomes
+deletions 12000, with no binary paths, 12 focused groups and one stable full gate.
+The user explicitly increased the hard cap to 20000 on 2026-09-08, superseding
+the proposed 14000 and former 10000. The complete audited remaining-work estimate
+sets the final estimate at 12000; this numeric-only override changes no owner,
+architecture, requirement or gate. The existing design pass
+f25388cd8073bcd228c8eaa951ef1c0178907431 remains the mechanism gate. The
+24-path/9369-churn paused implementation remains incomplete and counted from
+original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
+carried work and the eventual Task 5 ledger delta; only exact separately
+committed prerequisite documentation ranges are excluded. No accounting reset
+or completion claim follows. The matrix allocates all 25 paths exactly. F10 becomes
 `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes
 `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`.
 F1-F9/F12 remain unchanged. Explicitly stop before further work at more than
-32 paths, more than 10000 text churn or any binary path; these tighter caps
+32 paths, more than 20000 text churn or any binary path; these tighter caps
 override the general 2x calculation for the new estimate. Independent reviewer
 and primary completion gates remain separate required evidence.
 

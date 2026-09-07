@@ -133,7 +133,8 @@ adapter APIs and checked preallocation before producer scratch/retention. Expect
 projection freezes before staging/candidate; the only identity closure adds
 format-supported directly owned Query. The full T01-T35 audit and eligibility
 remain; write/recovery/undo/coordinator, dependencies and wire/UI stay unchanged.
-The matrix allocates exactly 25 paths/8500 estimated churn, expands only F10/F11,
+At that producer correction the matrix allocated 25 paths/8500 estimated churn,
+expanded only F10/F11,
 and retains 12 focused groups/one stable full gate.
 
 Resume must retain original implementation accounting baseline
@@ -145,8 +146,35 @@ cumulative implementation diff, including all task-owned untracked text,
 formatting and Task 5 ledger, against that baseline. Exclude separately committed
 prerequisite documentation corrections/review deltas by exact commit/range only;
 never subtract entire shared paths or double-count overlapping snapshots.
-Stop before further work above 32 unique paths, 10000 additions/deletions or any
-binary path, overriding the general 2x calculation for the new baseline.
+The producer correction originally capped 32 paths/10000 additions plus
+deletions/no binaries. The explicit user override below supersedes only its
+text estimate/cap; the cumulative accounting rule remains unchanged.
+
+## User-authorized completion budget increase
+
+On 2026-09-08 the user explicitly authorized raising the completion hard cap to
+20000 text additions plus deletions and continuing. The complete audited
+remaining-work estimate sets the final estimate at 12000. The user chose 20000,
+not the proposed 14000; the previous 10000 cap and historical 25/8500 estimate
+are superseded. Keep exactly 25 planned paths, a hard path cap of 32, no binary
+paths, all T01-T35 requirements, 12 focused groups and one stable full gate.
+This is a numeric execution-budget override, not architecture/remediation scope.
+The existing targeted design pass f25388cd8073bcd228c8eaa951ef1c0178907431
+remains the mechanism gate; no new gate or pass claim is required.
+
+The pause inventory is 24 implementation paths/9369 churn/no binaries, including
+all carried work, with no Task 5 completion or stable full-gate claim. Evidence:
+`local-artifacts/codex-runs/sprint-41/task-5/producer-resume/completion-budget-estimate.md`,
+`budget-pause-summary.md` and `budget-pause-state.json` in that same directory.
+Keep original cumulative baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5;
+f25388cd8073bcd228c8eaa951ef1c0178907431 is a resume/mechanism checkpoint,
+not a reset. Exclude only exact separately committed prerequisite documentation
+ranges, including this four-document budget commit; count all implementation
+work and the eventual Task 5 ledger delta, even in the shared master path.
+Historical Task 4 passes and incomplete Task 5 ledger state are preserved.
+Stop before further work above 32 paths, 20000 churn or any binary; do not
+substitute the general 2x baseline rule. Commit completed tasks and push only
+at sprint end under the current user instruction.
 
 ## Initial audit additions
 
@@ -162,20 +190,20 @@ Effective context window/telemetry may be unknown; estimates are admission-only.
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
 design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 producer-owned semantic projection|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 producer-owned semantic projection design
-implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|8500|none|12|1
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|12000|none|12|1
 ```
 
 The matrix is provisional during planning. Task 3 maps all applicable accepted
 production invariants after ADR-0064 is committed. Task 4 is a pending design
 gate, not a claimed pass. Before Task 5, supply the exact matrix commit, design
 pass artifact/commit, task-start commit, and initial untracked inventory.
-The revised numerical baseline admits 25 paths and 8500 text additions/deletions, no
+The revised numerical baseline admits 25 paths and 12000 text additions/deletions, no
 binary paths, 12 focused checks and one stable full implementation gate.
 The focused commands are fixed by the accepted matrix before design review.
 Independent reviewer and primary completion gates are separate evidence.
 Use the cumulative implementation accounting below. Explicitly stop at more than
-32 paths, more than 10000 text churn or any binary path; these tighter caps
-override twice the new 25/8500 baseline. The canonical full gate remains one.
+32 paths, more than 20000 text churn or any binary path; these tighter caps
+override twice the new 25/12000 baseline. The canonical full gate remains one.
 
 ## Task-loop additions
 

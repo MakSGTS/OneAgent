@@ -263,7 +263,7 @@ and old Arcs. Missing complete-build acceptance blocks implementation completion
 ## Implementation scope and validation budget
 
 The user-approved revised allocation is **25 unique
-paths, 8500 textual additions plus deletions, no binaries, 12 focused checks,
+paths, 12000 textual additions plus deletions, no binaries, 12 focused checks,
 one stable canonical full gate**. This allocation is an estimate, not measured
 implementation churn or permission to weaken an invariant. Existing dependency
 edges/public queries/constructors suffice; no package/manifest, Graph payload,
@@ -272,38 +272,46 @@ producer helper extraction is now expressly included.
 
 | # | Exact Task 5 path | Planned purpose | Estimated text churn |
 |---:|---|---|---:|
-| 1 | `crates/analysis/src/safe_edit.rs` | Pure plan/range/semantic comparison | 800 |
+| 1 | `crates/analysis/src/safe_edit.rs` | Pure plan/range/semantic comparison | 1800 |
 | 2 | `crates/analysis/src/lib.rs` | Additive export | 10 |
-| 3 | `crates/analysis/src/refactoring.rs` | Internal coordinate helper reuse and private-field comparator unit tests | 160 |
-| 4 | `apps/runtime/src/workspace/edit.rs` | API/coordinator/policy/state and F3 tests | 1250 |
-| 5 | `apps/runtime/src/workspace/edit_io.rs` | Confined bounded I/O/shared seams and F4 tests | 1000 |
-| 6 | `apps/runtime/src/workspace/mod.rs` | Writer/baseline/builder integration | 430 |
+| 3 | `crates/analysis/src/refactoring.rs` | Internal coordinate helper reuse and private-field comparator unit tests | 300 |
+| 4 | `apps/runtime/src/workspace/edit.rs` | API/coordinator/policy/state and F3 tests | 3600 |
+| 5 | `apps/runtime/src/workspace/edit_io.rs` | Confined bounded I/O/shared seams and F4 tests | 1550 |
+| 6 | `apps/runtime/src/workspace/mod.rs` | Writer/baseline/builder integration | 450 |
 | 7 | `apps/runtime/src/workspace/cache.rs` | Private namespace preparation | 60 |
 | 8 | `apps/runtime/src/lib.rs` | Additive local exports | 20 |
-| 9 | `crates/analysis/tests/safe_edit.rs` | F1 public/semantic comparison mutants; private mutants move to owner-local unit tests | 350 |
-| 10 | `apps/runtime/tests/safe_edit_transactions.rs` | F2 public paired/multi-file evidence | 630 |
-| 11 | `apps/runtime/tests/workspace_service.rs` | F5 default/readiness/stop compatibility | 60 |
-| 12 | `apps/runtime/tests/file_watching.rs` | F6 self-write/external-change evidence | 60 |
-| 13 | `apps/runtime/tests/persistent_cache.rs` | F7 cache failure/restart evidence | 60 |
-| 14 | `apps/runtime/tests/git_change_workspace.rs` | F8 explicit-input serialization | 60 |
+| 9 | `crates/analysis/tests/safe_edit.rs` | F1 public/semantic comparison mutants; private mutants move to owner-local unit tests | 850 |
+| 10 | `apps/runtime/tests/safe_edit_transactions.rs` | F2 public paired/multi-file evidence | 650 |
+| 11 | `apps/runtime/tests/workspace_service.rs` | F5 default/readiness/stop compatibility | 100 |
+| 12 | `apps/runtime/tests/file_watching.rs` | F6 self-write/external-change evidence | 100 |
+| 13 | `apps/runtime/tests/persistent_cache.rs` | F7 cache failure/restart evidence | 100 |
+| 14 | `apps/runtime/tests/git_change_workspace.rs` | F8 explicit-input serialization | 100 |
 | 15 | `apps/runtime/tests/fixtures/workspace_service/README.md` | Exact fixture derivations/byte oracle | 45 |
-| 16 | `docs/codex/prompts/sprint-41-safe-edit-transactions/00-sprint-41-execution-loop.md` | Task 5 ledger | 5 |
-| 17 | `adapters/designer-xml/src/safe_edit.rs` | Pure complete Designer expected projection, count/emit and tests | 700 |
-| 18 | `adapters/designer-xml/src/semantic_graph.rs` | Shared canonical provenance helpers and compatibility tests | 300 |
-| 19 | `adapters/designer-xml/src/lib.rs` | Additive projection exports | 20 |
-| 20 | `adapters/edt/src/safe_edit.rs` | Pure complete EDT expected projection, count/emit and tests | 900 |
-| 21 | `adapters/edt/src/bsl_graph.rs` | Captured-byte analyzer/shared context producers and regression tests | 850 |
-| 22 | `adapters/edt/src/query_source_resolution.rs` | Canonical context reuse and request regression tests | 500 |
-| 23 | `adapters/edt/src/lib.rs` | Additive projection exports | 20 |
-| 24 | `crates/bsl/src/queries.rs` | Canonical public Query ID helper, shared use and tests | 190 |
-| 25 | `crates/bsl/src/lib.rs` | Query helper export | 20 |
+| 16 | `docs/codex/prompts/sprint-41-safe-edit-transactions/00-sprint-41-execution-loop.md` | Task 5 ledger | 15 |
+| 17 | `adapters/designer-xml/src/safe_edit.rs` | Pure complete Designer expected projection, count/emit and tests | 650 |
+| 18 | `adapters/designer-xml/src/semantic_graph.rs` | Shared canonical provenance helpers and compatibility tests | 120 |
+| 19 | `adapters/designer-xml/src/lib.rs` | Additive projection exports | 10 |
+| 20 | `adapters/edt/src/safe_edit.rs` | Pure complete EDT expected projection, count/emit and tests | 800 |
+| 21 | `adapters/edt/src/bsl_graph.rs` | Captured-byte analyzer/shared context producers and regression tests | 350 |
+| 22 | `adapters/edt/src/query_source_resolution.rs` | Canonical context reuse and request regression tests | 220 |
+| 23 | `adapters/edt/src/lib.rs` | Additive projection exports | 10 |
+| 24 | `crates/bsl/src/queries.rs` | Canonical public Query ID helper, shared use and tests | 80 |
+| 25 | `crates/bsl/src/lib.rs` | Query helper export | 10 |
 
 This estimate depends on table-driven faults/projections reusing production
-owners, not a promise of final line count. The original 16 allocations total
-5000; the nine additions total 3500, giving exactly 25 paths/8500 churn.
-Stop **before further work** at more than 32 unique paths, more than 10000 text
+owners, not a promise of final line count. Historically, the original 16
+allocations totalled 5000 and the nine producer additions 3500: 25 paths/8500.
+The current 25-path allocation above totals 12000, using the complete audited
+remaining-work estimate and the later 24-path/9369-churn pause inventory. It
+redistributes space to actual implementation and the remaining constructor,
+producer, lifecycle, I/O, public, formatting and ledger evidence; no row or
+requirement is removed. On 2026-09-08 the user explicitly authorized a 20000
+hard cap, superseding the proposed 14000 and previous 10000. This changes only
+numeric budget; the mechanism gate at f25388cd8073bcd228c8eaa951ef1c0178907431
+remains valid and requires no new architecture gate or pass claim.
+Stop **before further work** at more than 32 unique paths, more than 20000 text
 additions plus deletions, or any binary path. This explicitly tighter cap
-overrides the general 2x rule on the new estimate; do not derive 50/17000 caps.
+overrides the general 2x rule on the new estimate; do not derive 50/24000 caps.
 
 Implementation accounting retains original Task 5 baseline
 `93661837df8d63bfed10c9b70d1986c4e0d12aa5`. The new design pass is a resume

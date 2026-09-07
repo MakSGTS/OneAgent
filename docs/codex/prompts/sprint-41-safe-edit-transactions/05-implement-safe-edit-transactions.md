@@ -47,7 +47,7 @@ required Core/Workflow modules; permanent rules remain in those owners.
 
 ## Prerequisites / required gate
 
-Require the unique committed `Approve Sprint 41 constructor-boundary test design` boundary in this sprint ancestry,
+Require the unique committed `Approve Sprint 41 complete invariant evidence design` boundary in this sprint ancestry,
 all preceding manifest criteria, and a clean task-owned tree. Dispatcher supplies
 its full commit ID, current HEAD, branch, and status. Resolve commit/push mode from
 the current launch instruction; this run authorizes one commit per completed
@@ -59,6 +59,13 @@ with the corrected matrix and new committed pass, using that commit as the
 new task-start baseline. Preserve all reachable Runtime same-ID negative cases;
 place private-field mutants in Analysis owner-local unit tests and document
 type-unrepresentable cases separately. Do not add a public forging seam.
+
+The user subsequently agreed to the full T01-T35 representability audit after
+the T17 marker defect. Follow the corrected matrix's complete audit for every
+row: retain all reachable negative Runtime cases, exact owner-local comparator
+tests and separately labelled closed-type/constructor evidence. T20-T23 must
+use constructor-valid semantic/whole-report substitutions; never invent a
+nonexistent marker or claim constructor rejection as Runtime test execution.
 
 ## Task
 

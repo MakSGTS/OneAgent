@@ -36,8 +36,8 @@ historical subject. The initial modified/staged/untracked inventory is empty.
 | 1 | [01-investigate-safe-edit-transactions.md](01-investigate-safe-edit-transactions.md) | Plan Sprint 41 Safe Edit Transactions | Repository-backed transaction readiness and boundary investigation. | Non-mutating planner, paired-source, lifecycle, and policy evidence; documentation validation. | `Investigate Sprint 41 Safe Edit Transactions` |
 | 2 | [02-define-safe-edit-transactions.md](02-define-safe-edit-transactions.md) | Investigate Sprint 41 Safe Edit Transactions | Accepted bounded transaction ADR and compatibility contract. | ADR/authority consistency, affected consumer inventory, Markdown links. | `Define Sprint 41 Safe Edit Transactions` |
 | 3 | [03-map-safe-edit-transaction-invariants.md](03-map-safe-edit-transaction-invariants.md) | Define Sprint 41 Safe Edit Transactions | Complete accepted-ADR production invariant matrix. | Every applicable ADR invariant mapped to location, ordering, negative oracle, and focused command. | `Map Sprint 41 Safe Edit Transaction Invariants` |
-| 4 | [04-review-safe-edit-transaction-design.md](04-review-safe-edit-transaction-design.md) | Refine Sprint 41 constructor-boundary test ownership | Independent targeted design gate, recorded only after pass. | Fresh read-only design review and primary documentation checks; no full production gate. | `Approve Sprint 41 constructor-boundary test design` |
-| 5 | [05-implement-safe-edit-transactions.md](05-implement-safe-edit-transactions.md) | Approve Sprint 41 constructor-boundary test design | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | 12 focused checks defined by the corrected matrix; one stable canonical full workspace gate. | `Implement Sprint 41 Safe Edit Transactions` |
+| 4 | [04-review-safe-edit-transaction-design.md](04-review-safe-edit-transaction-design.md) | Clarify Sprint 41 complete invariant evidence placement | Independent targeted design gate, recorded only after pass. | Fresh read-only design review and primary documentation checks; no full production gate. | `Approve Sprint 41 complete invariant evidence design` |
+| 5 | [05-implement-safe-edit-transactions.md](05-implement-safe-edit-transactions.md) | Approve Sprint 41 complete invariant evidence design | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | 12 focused checks defined by the corrected matrix; one stable canonical full workspace gate. | `Implement Sprint 41 Safe Edit Transactions` |
 | 6 | [06-complete-safe-edit-transaction-evidence.md](06-complete-safe-edit-transaction-evidence.md) | Implement Sprint 41 Safe Edit Transactions | Exact final implementation evidence, consumer audit, and immutable review handoff. | Stable-head test/log reconciliation, API/dependency/Coverage audit, documentation checks. | `Document Sprint 41 Safe Edit Transaction Evidence` |
 | 7 | [07-sprint-41-integration-review.md](07-sprint-41-integration-review.md) | Document Sprint 41 Safe Edit Transaction Evidence | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Independent reviewer and primary focused/full gates, artifact consistency, exact retirement audit. | `Complete Sprint 41 Safe Edit Transactions Review` |
 
@@ -85,6 +85,23 @@ unique commit subject below before resuming Task 5. Preserve both decisions in
 the same design artifact when recording the new pass. Resolve the resumed Task 5
 start to that new committed pass; its initial blocked attempt had zero churn.
 
+## Complete audit and renewed agreement
+
+The independent review of the constructor-boundary correction at
+`d2dc6fdb772f04cb15cc38029b7494d262cae9af` accepted T03 but blocked
+T17's impossible changed `SourceEvidenceCompleteness` marker. A complete
+T01-T35 representability/constructor/privacy audit then distinguished reachable
+Runtime cases, owner-local mutants, constructor rejection and closed-type
+evidence. No other confirmed defect remained. The user explicitly agreed to
+the consolidated revised plan before this further remediation.
+
+The new prerequisite `Clarify Sprint 41 complete invariant evidence placement`
+records that full audit, replaces only the impossible T17 marker with exact
+type evidence, preserves every reachable negative case, and clarifies valid
+producer-based T20-T23 substitutions. The transaction mechanism, ADR and
+16-path/5000-churn/12-group budget remain unchanged. The new gate below must
+pass and be committed before Task 5 resumes; prior passes remain historical.
+
 ## Initial audit additions
 
 Validate this master plus all children with
@@ -98,7 +115,7 @@ Effective context window/telemetry may be unknown; estimates are admission-only.
 ```text
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
-design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Refine Sprint 41 constructor-boundary test ownership|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 constructor-boundary test design
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Clarify Sprint 41 complete invariant evidence placement|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 complete invariant evidence design
 implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|16|5000|none|12|1
 ```
 

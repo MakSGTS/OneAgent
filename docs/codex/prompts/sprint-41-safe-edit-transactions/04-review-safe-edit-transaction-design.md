@@ -45,7 +45,7 @@ required Core/Workflow modules; permanent rules remain in those owners.
 
 ## Prerequisites / required gate
 
-Require the unique committed `Refine Sprint 41 constructor-boundary test ownership` boundary in this sprint ancestry,
+Require the unique committed `Clarify Sprint 41 complete invariant evidence placement` boundary in this sprint ancestry,
 all preceding manifest criteria, and a clean task-owned tree. Dispatcher supplies
 its full commit ID, current HEAD, branch, and status. Resolve commit/push mode from
 the current launch instruction; this run authorizes one commit per completed
@@ -59,7 +59,7 @@ Independent targeted design gate, recorded only after pass.
 
 ### Included
 
-Review the exact immutable planning/ADR/corrected-matrix range. After a complete pass result, the primary alone updates `docs/reviews/sprint-41-safe-edit-transactions-design.md` with the exact range, reviewer identity, matrix coverage, findings, missing evidence, residual risks, and decision. Preserve the original EOF blocker, its correction/pass and the later zero-change Task 5 constructor-boundary blocker as historical evidence. Check T03's reachable Runtime cases, owner-local representable mutants and explicit unrepresentable type evidence; no public forging API or weakened comparison is admitted.
+Review the exact immutable planning/ADR/corrected-matrix range. After a complete pass result, the primary alone updates `docs/reviews/sprint-41-safe-edit-transactions-design.md` with the exact range, reviewer identity, matrix coverage, findings, missing evidence, residual risks, and decision. Preserve the original EOF blocker, its correction/pass and the later zero-change Task 5 constructor-boundary blocker as historical evidence. Check T03's reachable Runtime cases, owner-local representable mutants and explicit unrepresentable type evidence; no public forging API or weakened comparison is admitted. Preserve the later T17 blocked range and the user's renewed agreement after the full T01-T35 audit. Verify every row's reachable/owner-local/constructor/type classification, T17's exact closed-type evidence and retained executable incompleteness cases, and constructor-valid T20-T23 substitutions. The prior design pass cannot admit this new mapping.
 
 ### Excluded
 
@@ -115,7 +115,7 @@ Only the predeclared design artifact after pass; Sprint 41 remains active.
 ## Suggested commit message
 
 ```text
-Approve Sprint 41 constructor-boundary test design
+Approve Sprint 41 complete invariant evidence design
 ```
 
 ## Final report additions

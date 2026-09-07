@@ -15,7 +15,7 @@ private helpers specify roles; they do not add public transaction surfaces.
 | Key | Exact production path and existing or planned symbols/roles |
 |---|---|
 | A | **Planned** `crates/analysis/src/safe_edit.rs`: `compare_plan` compares complete borrowed `RefactoringPlan` values; `replacement_bytes` validates/transforms one borrowed document and operation slice; `SafeEditProjection` maps only the accepted target and raw ranges; `SafeEditEvidence<'a>` borrows Graph/source/reference/validation/rule/diagnostic evidence per Configuration; `validate_postconditions` exhaustively compares before/after evidence with closed `SafeEditError`. Export through existing `crates/analysis/src/lib.rs`; no disk, policy or Runtime dependency. |
-| AP | Existing `crates/analysis/src/refactoring.rs`: `RefactoringRequest`, `RefactoringPlan`, `RefactoringTarget`, `SourceEvidenceSet`, `SourceDocument`, `SourceOccurrence`, `SourceContentVersion`, `raw_range_to_source_span`, `raw_offset_to_source_position`. **Planned** change only to the last two helpers' crate visibility so A reuses canonical BOM/CRLF/Unicode conversion. |
+| AP | Existing `crates/analysis/src/refactoring.rs`: `RefactoringRequest`, `RefactoringPlan`, `RefactoringTarget`, `SourceEvidenceSet`, `SourceDocument`, `SourceOccurrence`, `SourceContentVersion`, `raw_range_to_source_span`, `raw_offset_to_source_position`. **Planned** production change only to the last two helpers' crate visibility so A reuses canonical BOM/CRLF/Unicode conversion. Also add module-local `#[cfg(test)] safe_edit_tests` for representable private-field mutants calling the real A comparator; expose no forge/reconstruction API or cross-crate test capability. |
 | E | **Planned** `apps/runtime/src/workspace/edit.rs`: public `WorkspaceEditHandle::{prepare_apply,prepare_reversal,checked_apply,checked_reversal}`, `WorkspaceEditChallenge::confirm(self)`, `WorkspaceEditAuthorization`, `WorkspaceEditReceipt`, `WorkspaceEditCancellation::{new,request}`, `WorkspaceEditOwnership::ExclusiveCooperative`, `WorkspaceEditOutcome`; private `EditCoordinator::{reserve_attempt,prepare,submit,run_attempt,commit,recover,quarantine,shutdown}`, `EditAdmission`, `EditAttempt`, `EditUndo`, `EditPolicyGate`, `EditServiceIdentity`. Own service binding, bounded retention, policy admission and transaction state. |
 | I | **Planned** `apps/runtime/src/workspace/edit_io.rs`: private `EditBaseline::capture` (bounded complete scan), `EditIo::{validate_path,read_checked,stage_all,replace_checked,restore_checked,cleanup_owned,verify_tree}`, `EditIoBudget` (checked preallocation reservations), `OwnedEditFile` (exact created path/identity). Standard-library I/O; deterministic test seams wrap these real operations, never an alternative transaction. |
 | W | Existing `apps/runtime/src/workspace/mod.rs`: `WorkspaceService::start`, `initialize_workspace`, `run_workspace_updates`, `rebuild_workspace`, `compose_change_impact`, `finish_workspace_updates`, `WorkspaceSnapshot::{publication_id,plan_refactoring}`, `WorkspaceConfigurationSnapshot` getters and `WorkspaceSnapshotObserver`. **Planned** `WorkspaceService::{with_edit_policy,edit_handle}` and E/I integration into these lifecycle owners. Startup/update `send_replace(Some(..))` and shutdown `send_replace(None)` are all coordinated; E quarantine/commit add no independent sender owner. |
@@ -29,6 +29,8 @@ private helpers specify roles; they do not add public transaction surfaces.
 
 All matrix oracle identifiers are planned test functions unless marked existing.
 `A::<name>` is in planned `crates/analysis/tests/safe_edit.rs` under F1;
+`AP::<name>` is in planned `crates/analysis/src/refactoring.rs::safe_edit_tests`
+under F1's library target, with access only through the owning module's privacy;
 `R::<name>` in planned `apps/runtime/tests/safe_edit_transactions.rs` under F2;
 `E::<name>` in planned `apps/runtime/src/workspace/edit.rs::tests` under F3;
 `I::<name>` in planned `apps/runtime/src/workspace/edit_io.rs::tests` under F4.
@@ -47,7 +49,7 @@ rejection also asserts zero source replacement attempts.
 |---|---|---|---|---|
 | T01 Local API, authorization and lifetime | W configuration/start; E `reserve_attempt`, `EditServiceIdentity`; U exports | Default disabled, explicit cooperative ownership and immutable policy before startup; unavailable handle cannot reserve before readiness or after stop/poison. Platform eligibility precedes writes. | `R::disabled_unready_stopped_and_foreign_services_reject`: a second service at numeric publication 1 and unconfigured/new/stopped handles cannot reach I. | F2 |
 | T02 Local API, authorization and lifetime; Complete publication baseline and bounds before retention | E `reserve_attempt`, `EditAdmission`, `EditAttempt` | Nonblocking sole prepared/queued/running slot before retaining input, plan construction or scan; checked attempt increment never wraps/reuses; release on drop/terminal path. | `E::attempt_lifetime_and_bounds`: second request while prepared/queued/running returns `Busy`; injected exhausted counter never reuses; dropped challenge/authorization releases exactly one slot. | F3 |
-| T03 Local API, authorization and lifetime | E `prepare`, `submit`; W `plan_refactoring`; A `compare_plan` | Prepare and submit regenerate from same current Arc; compare complete request, target, preconditions, ordered operations (paths/ranges/tokens/versions/IDs/replacements), dependencies, completeness and summary before authorization retention/staging. | `E::structured_plan_and_capability_tampering_reject`: preserve PlanId but alter each structured component at private seam; zero writes. `A::complete_plan_comparison_rejects_each_changed_field` exercises same pure comparator. | F3, F1 |
+| T03 Local API, authorization and lifetime | E `prepare`, `submit`; W `plan_refactoring`; A `compare_plan`; AP owning-module tests and closed constructors/types | Prepare and submit regenerate from same current Arc; compare complete request, target, preconditions, ordered operations (paths/ranges/tokens/versions/IDs/replacements), dependencies, completeness and summary before authorization retention/staging. Hash equality never substitutes for complete equality. Respect the reachability split below; no public forging API. | `E::structured_plan_and_capability_tampering_reject` passes every constructor-reachable same-ID structural difference (including duplicate summaries and LocalCall/QualifiedCall categories), whole-plan substitutions and Runtime-private capability mutants through the real coordinator; zero writes. `AP::complete_plan_comparison_rejects_each_representable_private_field` preserves the plan ID while changing each representable private component and calls the real A comparator. Single-variant/type-unrepresentable states use explicit type/constructor evidence, not fabricated runtime tests. | F3, F1 |
 | T04 Local API, authorization and lifetime | E `EditAttempt`, `submit`; P | Bind private Arc service identity, attempt, direction, predecessor Arc/ID, plan, baseline and immutable policy evaluation; irreversibly consume submission identity before revalidation. Capability fields private, non-cloneable, no constructor/deserializer; IDs/snapshots/receipts cannot confer authority. | `E::structured_plan_and_capability_tampering_reject`: actor/request/service, direction/baseline/Arc substitution, double submission and replay each reject; `R::disabled_unready_stopped_and_foreign_services_reject` submits foreign public capability. | F3, F2 |
 | T05 Local API, authorization and lifetime | E `prepare`, `EditPolicyGate`, `submit`; P | Reserve bounded length-delimited arguments before allocation; exact apply/reverse ToolId, `LocalMutation`, actor/request/revision/effects/bytes. Only confirmed `RequireConfirmation` passes. Completed `execute_tool` precedes mutation queue/spawn/stage; executor performs none of those. | `E::policy_gate_is_exact_confirmed_and_side_effect_free`: Deny, bare Allow, missing/changed/reused confirmation, changed arguments/revision/effects and gate cancellation; no I event or mutation worker. | F3, F9 |
 | T06 Complete publication baseline and bounds before retention | I `EditBaseline::capture`; E `prepare`; W `initialize_workspace`, `rebuild_workspace`; B | Before eligibility capture all directory/entry kinds and exact bytes before/after build or validated cache acceptance; require equal scans and full root/document agreement. Custom detector coverage must be provable. Never replace saved publication baseline with two later scans. | `R::complete_baseline_staleness_rejects`: alter untouched call/module, metadata, roots or unknown input after preview; two equal later scans still reject. `E::publication_baseline_admission` injects missing captured document/custom root. | F2, F3 |
@@ -81,6 +83,28 @@ rejection also asserts zero source replacement attempts.
 | T34 Compatibility and affected consumers; Owners and dependency direction | U; W/B/AP read-only owners; existing `apps/runtime/src/mcp_tools.rs`, `main.rs`, `bin/oneagent-mcp.rs`, `bin/oneagent-lsp.rs` | Additive opt-in Rust API only; no planner authority/new counter; preserve impact alias, eight-tool catalog, protocols/GraphQuery/diagnostics/adapter semantics/cache format. No product entry point enables edits. Pure A uses public G/L/D owners, no second planner/graph facts. | **Planned** `apps/runtime/tests/workspace_service.rs::default_service_remains_read_only_with_edit_api` denies mutation; existing public consumer/paired planner suites reject unsupported/stale input and preserve observations. | F5, F10, F11, F12 |
 | T35 Complete publication baseline and bounds before retention; Local API, authorization and lifetime | W `initialize_workspace`, `rebuild_workspace`, `run_workspace_updates`; E `EditAttempt`, `EditUndo`; I `capture` | Edit-enabled initial instability fails startup; unstable successor retains predecessor/no increment. An unprovable or over-bound edit baseline never permits preparation; otherwise valid read-only evidence remains read-only. Every accepted nontransaction successor invalidates prepared challenge/authorization/undo; no time-based or cross-process credential exists. | `E::publication_baseline_admission`: unstable before/after startup, rebuild and validated cache hit cannot become edit-eligible; over-bound baseline denies preparation; a watcher/explicit-input successor expires retained challenge and undo. Existing default read-only lifecycle remains valid. | F3, F5, F7 |
 
+## Constructor-boundary evidence correction
+
+Task 5 admission at `b2f89c86012e71190afed077f42b5af82d552b42`
+found that the original T03 oracle crossed Analysis-private fields from Runtime
+and an integration test. `RefactoringPlan::new` validates relationships and
+recomputes the ID; there is no public reconstruction/deserialization seam.
+`RefactoringCompleteness` has only `Complete`, so an incomplete enum value is
+not representable in safe Rust. This is an evidence-placement defect, not a
+production vulnerability or a change to ADR-0064's transaction mechanism.
+
+Runtime still proves all reachable same-ID differences through production
+admission, particularly constructor-produced duplicate-summary differences and
+LocalCall/QualifiedCall category differences. Analysis owner-local unit tests
+exercise full structural comparison for every safely representable private
+component, preserving the old ID without making those values public. Record
+the closed enum/constructor definitions for unrepresentable states separately;
+do not use unsafe values, weaken constructor invariants, add a public forge
+API, or count an impossible mutation as an executed test. Type evidence does
+not replace reachable negative tests. All other T rows and semantic/failure
+oracles remain unchanged. The corrected mapping requires a new committed
+targeted design pass before Task 5 resumes.
+
 ## Concrete focused validation commands
 
 Task 5 runs these **12 checks**, sequentially, after implementing planned tests.
@@ -92,7 +116,7 @@ Record per-target counts and zero-match filters separately.
 
 | Key | Concrete command |
 |---|---|
-| F1 | `cargo test -p oneagent-analysis --test safe_edit` |
+| F1 | `cargo test -p oneagent-analysis --lib --test safe_edit` |
 | F2 | `cargo test -p oneagent-runtime --test safe_edit_transactions` |
 | F3 | `cargo test -p oneagent-runtime --lib workspace::edit::tests::` |
 | F4 | `cargo test -p oneagent-runtime --lib workspace::edit_io::tests::` |
@@ -105,7 +129,10 @@ Record per-target counts and zero-match filters separately.
 | F11 | `cargo test -p oneagent-designer-xml --test conformance` |
 | F12 | `cargo test -p oneagent-runtime --test mcp_process --test mcp_semantic_tools --test lsp_stdio --test graph_query_api` |
 
-F1 covers each pure comparator mutant. F3 must pass the same candidate mutants
+F1 covers each representable pure comparator mutant at its admitted owner.
+T03 follows the constructor-boundary split above; it does not require Runtime
+to forge Analysis-private or type-unrepresentable values. For T16-T23 semantic
+candidate evidence, F3 must pass the same candidate mutants
 through `EditCoordinator::run_attempt` after the real production build and before
 the real comparator/commit. That seam changes candidate evidence only; it cannot
 bypass production admission, use a test-only validator or directly publish a
@@ -143,13 +170,13 @@ adapter semantic rule or protocol change is required.
 |---:|---|---|---:|
 | 1 | `crates/analysis/src/safe_edit.rs` | Pure plan/range/semantic comparison | 800 |
 | 2 | `crates/analysis/src/lib.rs` | Additive export | 10 |
-| 3 | `crates/analysis/src/refactoring.rs` | Internal coordinate helper reuse | 20 |
+| 3 | `crates/analysis/src/refactoring.rs` | Internal coordinate helper reuse and private-field comparator unit tests | 160 |
 | 4 | `apps/runtime/src/workspace/edit.rs` | API/coordinator/policy/state and F3 tests | 1250 |
 | 5 | `apps/runtime/src/workspace/edit_io.rs` | Confined bounded I/O/shared seams and F4 tests | 1000 |
 | 6 | `apps/runtime/src/workspace/mod.rs` | Writer/baseline/builder integration | 430 |
 | 7 | `apps/runtime/src/workspace/cache.rs` | Private namespace preparation | 60 |
 | 8 | `apps/runtime/src/lib.rs` | Additive local exports | 20 |
-| 9 | `crates/analysis/tests/safe_edit.rs` | F1 complete comparison mutants | 490 |
+| 9 | `crates/analysis/tests/safe_edit.rs` | F1 public/semantic comparison mutants; private mutants move to owner-local unit tests | 350 |
 | 10 | `apps/runtime/tests/safe_edit_transactions.rs` | F2 public paired/multi-file evidence | 630 |
 | 11 | `apps/runtime/tests/workspace_service.rs` | F5 default/readiness/stop compatibility | 60 |
 | 12 | `apps/runtime/tests/file_watching.rs` | F6 self-write/external-change evidence | 60 |

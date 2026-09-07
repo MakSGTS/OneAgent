@@ -8576,7 +8576,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | completed |
 | Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | completed |
-| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | next |
+| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | active |
 
 ##### Sprint 36 Diagnostics Engine execution plan
 
@@ -10219,6 +10219,219 @@ Suggested planning commit message:
 ```text
 Plan Sprint 40.1 Refactoring Planner remediation
 ```
+
+##### Sprint 41 Safe Edit Transactions execution plan
+
+Planning starts from clean version head
+`ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7` after the
+committed non-blocking Sprint 40.1 review. Sprint 41 became `active` when Task 1
+started from committed planning boundary
+`078b258e150842da0a79da96ea09395887080cfc`. No production transaction or
+design-review pass is claimed by the investigation.
+
+###### Task 1 investigation result
+
+The [transaction investigation](architecture/safe-edit-transactions-investigation.md)
+is ready for Task 2 architecture. It traces all three production snapshot
+writers, watcher/explicit-input rebuilds, cache timing, planner consumers,
+confirmation/cancellation behavior and confinement primitives. Operation-only
+source preconditions do not cover semantically relevant changes to untouched
+modules or metadata; Runtime must bind a complete stable publication source
+baseline. Existing rebuild instability checks skip cache writes but do not
+themselves prevent publication. The paired three-operation oracle, complete
+Runtime builders and controlled lifecycle/I/O harness primitives are available;
+transaction recovery/undo tests and exact ownership mechanisms remain pending.
+No essential source-format oracle is missing. Task 1 adds no production behavior,
+API, dependency, test or Coverage claim. Exact validation is recorded in its
+investigation and master ledger. Task 2 architecture acceptance is recorded
+below; Task 3 mapping is recorded after it, and Tasks 4-7 remain `not_started`.
+
+###### Task 2 architecture result
+
+Task 2 accepts [ADR-0064](adr/0064-safe-edit-transactions.md). Analysis owns pure
+plan/replacement/semantic equivalence; Runtime owns the opt-in local Rust API,
+service-bound one-use policy confirmation, complete publication source baseline,
+bounded attempt/undo retention and one coordinator for every publication writer.
+Private Runtime I/O owns staged result/original backups, confined per-file rename,
+checked restoration and cleanup. The complete source baseline closes untouched
+module, metadata and discovery freshness gaps and reconciles scan exclusions.
+
+The accepted order guards authorization, full plan/source/path identity and
+budgets before writes, then requires a complete production rebuild and exhaustive
+renamed-target/call plus unaffected semantic evidence equivalence before one
+successor publication. Cache update follows commit. Failed recovery clears
+current observation and disables further publication; separate confirmed reversal
+requires the exact applied successor. Old snapshots and canonical publication
+identity remain unchanged. Cooperative exclusive source ownership and macOS/Linux
+file-identity guards are explicit prerequisites; no multi-file disk atomicity,
+hostile-writer exclusion, durable undo or crash-recovery guarantee is claimed.
+
+Architecture sections and affected consumer inventory are synchronized. No Rust,
+dependency, source Coverage, protocol/UI or supported-capability change occurs.
+The ADR leaves no transaction mechanism for Task 3 to choose: that task must map
+the accepted owners, guard/retention order and complete negative oracles, followed
+by Task 4's independent design gate. Sprint 41 remains `active`. Documentation
+validation and the one local task commit are recorded in the master ledger;
+push remains deferred to sprint end.
+
+###### Task 3 invariant mapping result
+
+The [accepted-ADR production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+now maps 35 production obligations to exact existing/planned owners, guarded
+operations and retention points, negative production-path tests and 12 concrete
+focused commands. It separates full plan/authorization binding, complete bounded
+source observation, every staging/replacement/restoration/cleanup boundary, all
+publication/cache writers and every complete semantic oracle component. Explicit
+provenance comparison avoids Graph edge equality's narrower semantics; canonical
+coordinate and identity constructors remain their existing owners.
+
+All new symbols/tests are planned; this documentation gate claims no production
+test execution or design-review pass. The live design is allocated across 16
+exact implementation paths and 5000 estimated text additions/deletions, including
+the ledger, with no binary/dependency changes, 12 focused checks and one stable
+full gate. Task 4 independently evaluates the committed mapping and scope before
+Task 5. Sprint 41 remains `active`; push remains deferred to sprint end.
+
+###### Objective, evidence, and bounded scope
+
+Apply and reverse the existing complete `bsl_callable_rename_v1` plans through
+a checked local runtime Rust API for EDT and Designer XML, with explicit bound
+authorization, source freshness, confined writes, failure recovery, and complete
+post-edit semantic validation before successful publication. ADR-0064 now accepts
+the transaction algorithm, owners, concurrency model, atomicity boundary, undo
+contract and honest crash limits; implementation remains gated by Tasks 3-4.
+
+Data/readiness passes at planning: ADR-0063, Analysis source/plan contracts,
+Runtime immutable publications/builders/watchers/cache, Tool Policy one-use
+confirmation, and the tracked paired Sprint 14 adapter corpus exist. The corpus
+has a declaration, local call and qualified call over semantically equivalent
+EDT LF and Designer BOM/CRLF sources. Exact-byte apply/reversal comparison plus
+a complete production Workspace rebuild provide independent source and semantic
+oracles. Task 1 verifies the mutation failure/concurrency harness and inventories
+every publication writer before accepting a mechanism. Missing essential
+evidence is a blocker, not an invitation to invent a source format.
+
+The existing Refactoring and Safe Edits Profile, Workflow and Template cover
+confinement, conflict recheck, authorization phases, atomicity, rollback,
+reversibility, semantic rebuild and compatibility. The existing architecture,
+investigation, review and sequential execution modules cover the other tasks;
+no reusable framework modification is required. Coverage registries remain
+semantic-source support evidence; planning changes no Supported claim.
+
+Other families, metadata/file/path renames, multi-Configuration/cross-Workspace
+edits, Git/remote mutation, new MCP/HTTP/CLI/LSP/IDE edit surfaces, third-party or
+internal production dependency additions without approval, persisted
+cross-process plans/undo history, broad performance/security guarantees, and
+release execution are excluded. Runtime API additions must enumerate consumers
+and migration impact before implementation; existing public contracts remain
+compatible.
+
+###### Context preflight and branch contract
+
+Effective context window and measured token telemetry: unknown/unavailable.
+Planning uses bounded section/symbol queries, not whole large authorities.
+Admission decision: warning, with further reading narrowed to exact selectors;
+this is a conservative admission judgement, not measured token usage. Child
+contexts must perform their own preflight against the canonical 15% static,
+20% authorities, 35% normal pre-work, 50% hard-stop, 35% working and 15% reserve
+allocations.
+
+Create `codex/v0.7-sprint-41` from the starting version head. The current user
+explicitly authorizes one commit per completed task and push at sprint end;
+that timing overrides the repository's immediate-push default for this run.
+After Tasks 1-6 and validation, no-ff merge into `codex/v0.7`, create
+`codex/v0.7-sprint-41-review`, execute Task 7, then no-ff merge a successful
+review back into `codex/v0.7` and push only that current version branch. This
+publishes the reachable implementation and review commits together. Do not
+merge to main, tag, or run the release review as part of this sprint. A failed
+push stops further work.
+
+Each child and independent reviewer needs a guaranteed fresh context. Resolve
+authorization under the current user instruction and higher-priority runtime
+rules; stored launch text cannot override runtime restrictions. The dispatcher
+coordinates review agents so child runners do not delegate. If the runtime
+requires explicit additional authorization or cannot guarantee fresh context,
+stop at the concrete child boundary with its committed prerequisite.
+
+###### Ordered Sprint 41 task manifest
+
+| Order | Prompt | Kind / Profile | Outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | [01-investigate-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/01-investigate-safe-edit-transactions.md) | investigation / investigation | Repository-backed transaction readiness and boundary investigation. | Plan Sprint 41 Safe Edit Transactions | `Investigate Sprint 41 Safe Edit Transactions` |
+| 2 | [02-define-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/02-define-safe-edit-transactions.md) | architecture / architecture | Accepted bounded transaction ADR and compatibility contract. | Investigate Sprint 41 Safe Edit Transactions | `Define Sprint 41 Safe Edit Transactions` |
+| 3 | [03-map-safe-edit-transaction-invariants.md](codex/prompts/sprint-41-safe-edit-transactions/03-map-safe-edit-transaction-invariants.md) | architecture / architecture | Complete accepted-ADR production invariant matrix. | Define Sprint 41 Safe Edit Transactions | `Map Sprint 41 Safe Edit Transaction Invariants` |
+| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Map Sprint 41 Safe Edit Transaction Invariants | `Approve Sprint 41 Safe Edit Transaction Design` |
+| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 Safe Edit Transaction Design | `Implement Sprint 41 Safe Edit Transactions` |
+| 6 | [06-complete-safe-edit-transaction-evidence.md](codex/prompts/sprint-41-safe-edit-transactions/06-complete-safe-edit-transaction-evidence.md) | architecture / architecture | Exact final implementation evidence, consumer audit, and immutable review handoff. | Implement Sprint 41 Safe Edit Transactions | `Document Sprint 41 Safe Edit Transaction Evidence` |
+| 7 | [07-sprint-41-integration-review.md](codex/prompts/sprint-41-safe-edit-transactions/07-sprint-41-integration-review.md) | review / review | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Document Sprint 41 Safe Edit Transaction Evidence | `Complete Sprint 41 Safe Edit Transactions Review` |
+
+The master prompt is
+`docs/codex/prompts/sprint-41-safe-edit-transactions/00-sprint-41-execution-loop.md`.
+It records task-specific validation additions and the durable task ledger.
+Every child uses Prompt Contract v2 and `fresh_context: required`. Each future
+prerequisite subject must resolve uniquely in this sprint ancestry to a full
+commit ID before dispatch.
+
+###### Sprint 41 invariant and design gates
+
+The completed Task 3
+[production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+maps accepted ADR-0064 production invariants to exact existing/planned paths and
+symbols, guard ordering, negative production oracles and concrete focused
+commands. Documentation/governance and deferred guarantees are separate. Task 4
+independently reviews this complete committed mapping before production changes;
+only its separate committed pass artifact unlocks Task 5.
+
+###### Sprint efficiency contract
+
+```text
+sprint_efficiency_contract: v1
+adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Map Sprint 41 Safe Edit Transaction Invariants|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 Safe Edit Transaction Design
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|16|5000|none|12|1
+```
+
+Task 5's expected path count is 16, expected text additions plus deletions 5000,
+binary inventory none, focused validation budget 12 checks, and stable full gate
+budget 1. Task 3 binds all 12 focused checks to exact production oracles and
+allocates the 16 paths in the matrix. Task 5 counts its master-ledger update in
+actual scope. Apply the sequential workflow's 2x scope/binary stop-loss and two-architecture-blocker
+remediation rule. Independent reviewer and primary completion gates remain
+separate required evidence.
+
+###### State, validation, review and retirement gates
+
+Validate the master and all seven children explicitly with
+`scripts/validate-codex-prompts.sh`, its shell syntax, the repository-wide
+prompt set, Markdown links/selectors, contiguous numbering, prerequisites,
+commit messages, efficiency-record equality, initial clean-state preservation,
+and `git diff --check`. Documentation-only planning does not trigger Rust
+production checks; production and review validation use the canonical
+`docs/codex/core/validation.md` matrix. Keep full logs only under
+`local-artifacts/codex-runs/sprint-41/`.
+
+Task 6 records final exact-head counts, validation outcomes, scope/consumer
+audits and an immutable review handoff; it cannot fix implementation or complete
+the sprint. Task 7 requires the independent fresh read-only review, primary
+independent focused/full checks, reconciliation and same-reviewer artifact
+consistency before state transition or retirement. A blocker preserves all
+later `not_started` tasks and current evidence. No empty or partial task commit.
+
+The immediately preceding suite is exactly these four tracked paths:
+
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/00-sprint-40-1-execution-loop.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/01-review-refactoring-planner-remediation-design.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/02-remediate-refactoring-planner-contract.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/03-sprint-40-1-integration-review.md`
+
+Only a successful Task 7 may retire that unchanged inventory in its single
+review commit after re-enumeration and artifact consistency. Preserve the
+Sprint 40 suite and all current Sprint 41 prompts. A non-blocking final review
+marks Sprint 41 completed and makes the v0.7 release integration review eligible;
+Sprint 42 stays planned pending the release gate.
+
+Suggested planning commit message: `Plan Sprint 41 Safe Edit Transactions`.
+
 
 The v0.7 release integration review follows Sprint 41.
 

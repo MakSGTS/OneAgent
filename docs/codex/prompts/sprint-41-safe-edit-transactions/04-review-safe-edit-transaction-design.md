@@ -123,4 +123,3 @@ Approve Sprint 41 Safe Edit Transaction Design
 Return status, exact start/end HEAD, changed paths, validation command outcomes,
 commit, push state, measured telemetry or unavailable, retained-log paths, and
 blocker. Do not send an implementation transcript to the dispatcher.
-

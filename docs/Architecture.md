@@ -263,7 +263,11 @@ and independent design/integration gates remain pending.
 Rust API for checked apply and separately confirmed reversal of complete
 `bsl_callable_rename_v1` plans over EDT and Designer XML. Analysis owns pure
 plan equivalence, exact replacement/range mapping and complete semantic
-postconditions. Runtime owns service-bound one-use capabilities, private complete
+postconditions and complete typed producer-projection admission. EDT/Designer
+own pure canonical expected provenance generation before staging/candidate build;
+BSL owns the compatible Query identity helper. The sole dependent identity
+closure is the selected callable's directly owned format-supported Query nodes,
+with Query text/binding and all other facts preserved. Runtime owns service-bound one-use capabilities, private complete
 publication source baselines, bounded retention and the sole lifecycle
 coordinator; its private I/O module owns staging, backups and checked recovery.
 Existing Tool Policy confirmation gates admission without owning mutation.

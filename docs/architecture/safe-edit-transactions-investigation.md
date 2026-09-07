@@ -67,6 +67,51 @@ are additional Rust consumers. No consumer should need migration for an
 additive Runtime transaction handle. Standalone snapshots/builders must not
 gain authority to mutate a running service.
 
+## Producer-owned projection correction evidence
+
+The user-approved correction follows Task 5's incomplete attempt at
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`; this evidence is from committed
+production source, not the preserved floating implementation. The earlier
+investigation's owner candidates did not establish a complete provenance oracle.
+
+- `adapters/designer-xml/src/semantic_graph.rs::emit_module_and_declarations`
+  obtains module provenance through `source_id(path, raw, fact)`, whose canonical
+  source identity includes the entire raw module SHA256. Each declaration embeds
+  that module source ID. Renaming one token changes even unchanged declarations'
+  provenance in that module. Private canonical helpers must be shared by the
+  builder and new pure adapter projector; Analysis must not copy the encoding.
+- `crates/bsl/src/queries.rs::query_id` derives Query ID from owning callable and
+  exact binding. Extracting compatible public `bsl_query_id` preserves encoding.
+  The only extra identity closure is the selected callable's directly owned
+  producer Query nodes; no other callable, metadata or descendant is renamed.
+- `adapters/edt/src/bsl_graph.rs::analyze_module_internal` separates captured raw
+  bytes from its file-read fallback. Extract a shared pure captured-byte analyzer.
+  `insert_queries` emits Query/Contains before `insert_query_reads` handles parser
+  failures, so unsupported/malformed Query text does not remove these nodes.
+  Designer currently emits no such Query nodes; its typed QueryFact inventory
+  must remain empty, with unchanged Query text protected by exact source bytes.
+- EDT `query_context`, `query_request_projection_provenance`,
+  `query_diagnostic_provenance` and
+  `query_source_resolution.rs::{query_source_collection_provenance,query_source_resolver_provenance}`
+  contain nested dependent IDs, request IDs, candidates and raw ranges. Reuse
+  their exact producer encoders and canonical terminal/diagnostic constructors;
+  generic hashing, string replacement and candidate-as-expected are insufficient.
+- `crates/bsl/src/query_language.rs::{tokenize,Parser::parse_program}` retain
+  borrowed token spellings with at most raw-byte-count plus one tokens; the
+  current parser returns one source with up to four owned strings or one static-
+  message diagnostic. This work remains the existing scoped parser heap;
+  projection must not retain it uncharged. A nonallocating borrowed count pass
+  then reserves exact new record/context/scratch capacities before emission or
+  retention. No universal byte-times-identity reserve or reduced document limit
+  is introduced. Existing parser encodings/signatures are unchanged.
+
+Existing adapters-to-Analysis, Runtime-to-adapters and Analysis-to-BSL/Graph
+dependencies suffice. The accepted [ADR correction](../adr/0064-safe-edit-transactions.md#producer-owned-expected-projection)
+defines complete typed keys, before-only projection, admission arithmetic and
+freeze-before-staging. The [matrix](safe-edit-transactions-invariants.md#producer-projection-correction-and-complete-audit-disposition)
+preserves the full 35-row audit and adds exact producer tests. New owner symbols
+and executable evidence remain pending independent design review/implementation.
+
 ## Freshness and publication gaps
 
 **Confirmed:** `initialize_workspace` observes around cache acceptance/build;

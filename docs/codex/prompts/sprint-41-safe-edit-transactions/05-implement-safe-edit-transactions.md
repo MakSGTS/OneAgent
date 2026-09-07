@@ -26,10 +26,11 @@ required Core/Workflow modules; permanent rules remain in those owners.
 - `AGENTS.md` — repository boundary and branch/review workflow.
 - `docs/Roadmap.md` — sections: Sprint 41 Safe Edit Transactions execution plan and Sprint efficiency contract within that plan.
 - `docs/adr/0064-safe-edit-transactions.md` — accepted Decision and Deferred scope.
-- `docs/architecture/safe-edit-transactions-invariants.md` — section: Sprint 41 ADR invariant matrix.
+- `docs/architecture/safe-edit-transactions-invariants.md` — sections: Sprint 41 ADR invariant matrix, Complete matrix representability audit, Producer projection correction and complete audit disposition, Implementation scope and validation budget.
 - `docs/reviews/sprint-41-safe-edit-transactions-design.md` — committed pass decision and exact reviewed range.
 - `apps/runtime/src/workspace/mod.rs` — WorkspaceService, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver, and ADR-selected publication paths.
 - `crates/analysis/src/refactoring.rs` — RefactoringPlan, RefactoringOperation, SourceEvidenceSet.
+- `adapters/designer-xml/src/semantic_graph.rs` — emit_module_and_declarations and source_id; `adapters/edt/src/bsl_graph.rs` — analyze_module_internal and Query context producers; `adapters/edt/src/query_source_resolution.rs` — collection/resolver provenance; `crates/bsl/src/queries.rs` — query_id and captured query extraction.
 - `crates/tool-policy/src/execution.rs` and `confirmation.rs` — execute_tool and confirmation binding.
 
 ### Lookup on demand
@@ -47,16 +48,18 @@ required Core/Workflow modules; permanent rules remain in those owners.
 
 ## Prerequisites / required gate
 
-Require the unique committed `Approve Sprint 41 complete invariant evidence design` boundary in this sprint ancestry,
-all preceding manifest criteria, and a clean task-owned tree. Dispatcher supplies
+Require the unique committed `Approve Sprint 41 producer-owned semantic projection design` boundary in this sprint ancestry,
+all preceding manifest criteria, and a clean tree before the dispatcher restores
+the preserved Task 5 work. Dispatcher supplies
 its full commit ID, current HEAD, branch, and status. Resolve commit/push mode from
 the current launch instruction; this run authorizes one commit per completed
 task and defers push until sprint end. Never create an empty commit.
 
 The initial admission at b2f89c86012e71190afed077f42b5af82d552b42 stopped
 without changes on the original T03 evidence-placement conflict. Resume only
-with the corrected matrix and new committed pass, using that commit as the
-new task-start baseline. Preserve all reachable Runtime same-ID negative cases;
+with the corrected matrix and new committed pass. The historical zero-change
+attempt reset accounting only then; it does not authorize resetting the later
+93661837df8d63bfed10c9b70d1986c4e0d12aa5 implementation baseline now. Preserve all reachable Runtime same-ID negative cases;
 place private-field mutants in Analysis owner-local unit tests and document
 type-unrepresentable cases separately. Do not add a public forging seam.
 
@@ -67,6 +70,18 @@ tests and separately labelled closed-type/constructor evidence. T20-T23 must
 use constructor-valid semantic/whole-report substitutions; never invent a
 nonexistent marker or claim constructor rejection as Runtime test execution.
 
+The subsequent attempt at 93661837df8d63bfed10c9b70d1986c4e0d12aa5 stopped
+on producer-owned provenance/Query identity, with 9 files/1593 churn preserved
+by the dispatcher (stash ff2a1d29683197438c304496804ff430bec7c682). Do not
+resume until the new producer-projection design pass is committed. The dispatcher
+must explicitly restore/verify that inventory; it is Task 5 work, never unrelated
+pre-existing churn. Earlier check outcomes are partial historical evidence:
+Analysis package check passed, Runtime all-targets check passed before later
+uncovered edits, integration exit 101 with 1 passed/1 failed and
+SemanticMismatch/Recovered/0 retained files. Remaining focused/full gates did
+not run. Resume keeps the original implementation accounting baseline while
+excluding separately committed prerequisite documentation/review deltas only.
+
 ## Task
 
 Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication.
@@ -75,7 +90,7 @@ Checked apply/reversal with confined writes, recovery, authorization, and atomic
 
 ### Included
 
-Implement only the accepted bounded transaction slice and meaningful negative/positive production tests. Expected areas are `apps/runtime/src/workspace/`, Runtime exports as needed, and `apps/runtime/tests/`; pure Analysis or Tool Policy changes require the ADR's exact owner/consumer justification. Prefer new cohesive modules over spreading filesystem operations into transport. State exact files before edits. Use tracked paired-source fixtures through repository-local temporary copies.
+Implement only the accepted bounded transaction slice and meaningful negative/positive production tests. The exact 25-path allocation in the accepted matrix includes Runtime/Analysis plus pure adapter projectors, shared canonical Designer/EDT helpers and the BSL Query ID helper. No Tool Policy production change or other owner is admitted. Prefer new cohesive modules over spreading filesystem operations into transport. State exact files before edits. Use tracked paired-source fixtures through repository-local temporary copies.
 
 ### Excluded
 
@@ -126,7 +141,20 @@ Implement the exact accepted filesystem/concurrency model, failure precedence, r
 
 ## Post-edit production rebuild and semantic validation
 
-Rebuild with accepted source adapters and complete Workspace semantics before publishing success.
+Produce expected typed mappings through the canonical pure DP/EP APIs from
+complete before evidence and exact result bytes; validate every key/domain,
+complete consumption and allowed callable/directly-owned-format-supported-Query
+identity closure. Preserve binding/text, all provenance, full terminal ledger
+and diagnostics. Designer has no new Query Graph facts. Keep existing canonical
+parser work scoped to its existing heap/admission; a nonallocating borrowed count
+pass must reserve all new output/nested strings/maps/sorting and growth-overlap
+capacities before emission/retention within the shared allowance. No uncharged
+parser result escapes to attempt/undo; preserve the exact 1MiB positive and avoid
+a universal worst-case parser reserve or hidden document-size restriction.
+Freeze expected projection before staging and candidate rebuild. Candidate
+faults reach the real comparator/run_attempt after the full production build;
+no copied producer encoding, candidate-as-expected or Query eligibility restriction.
+Rebuild with complete Workspace semantics before publishing success.
 
 ## Runtime, policy, protocol, client, cache, and watcher impact
 
@@ -138,7 +166,20 @@ Use the paired Sprint 14 corpus and existing Workspace/policy evidence identifie
 
 ## Scope and validation baseline
 
-expected_path_count: 16; expected_text_line_churn: 5000; expected binary paths: none; focused-check-count: 12; full-gate-count: 1. Dispatcher supplies exact task-start commit, initial untracked inventory, matrix commit, and design pass commit. Apply the sequential workflow's scope accounting and stop-loss.
+expected_path_count: 25; expected_text_line_churn: 8500; expected binary paths: none; focused-check-count: 12; full-gate-count: 1. Dispatcher supplies original implementation baseline
+93661837df8d63bfed10c9b70d1986c4e0d12aa5, exact restored 9-file/1593-churn
+inventory, correction commit and new unique design pass. Count cumulative
+implementation, task-owned untracked text, formatting and Task 5 ledger from
+that original baseline. Exclude separately committed prerequisite documentation/
+review deltas by exact ranges only; do not subtract entire shared paths or reset
+the budget at the new pass. Do not double-count overlapping snapshots.
+
+Explicit tighter stop-loss: more than 32 paths, more than 10000 text additions
+plus deletions, or any binary path. This overrides the general 2x rule for the
+new 25/8500 baseline. F10 is
+`cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 is
+`cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`. Keep F1-F9/F12
+as committed, 12 groups total and one full gate after the stable complete diff.
 
 ## Suggested commit message
 

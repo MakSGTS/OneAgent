@@ -36,8 +36,8 @@ historical subject. The initial modified/staged/untracked inventory is empty.
 | 1 | [01-investigate-safe-edit-transactions.md](01-investigate-safe-edit-transactions.md) | Plan Sprint 41 Safe Edit Transactions | Repository-backed transaction readiness and boundary investigation. | Non-mutating planner, paired-source, lifecycle, and policy evidence; documentation validation. | `Investigate Sprint 41 Safe Edit Transactions` |
 | 2 | [02-define-safe-edit-transactions.md](02-define-safe-edit-transactions.md) | Investigate Sprint 41 Safe Edit Transactions | Accepted bounded transaction ADR and compatibility contract. | ADR/authority consistency, affected consumer inventory, Markdown links. | `Define Sprint 41 Safe Edit Transactions` |
 | 3 | [03-map-safe-edit-transaction-invariants.md](03-map-safe-edit-transaction-invariants.md) | Define Sprint 41 Safe Edit Transactions | Complete accepted-ADR production invariant matrix. | Every applicable ADR invariant mapped to location, ordering, negative oracle, and focused command. | `Map Sprint 41 Safe Edit Transaction Invariants` |
-| 4 | [04-review-safe-edit-transaction-design.md](04-review-safe-edit-transaction-design.md) | Map Sprint 41 Safe Edit Transaction Invariants | Independent targeted design gate, recorded only after pass. | Fresh read-only design review and primary documentation checks; no full production gate. | `Approve Sprint 41 Safe Edit Transaction Design` |
-| 5 | [05-implement-safe-edit-transactions.md](05-implement-safe-edit-transactions.md) | Approve Sprint 41 Safe Edit Transaction Design | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | 12 focused checks defined by Task 3; one stable canonical full workspace gate. | `Implement Sprint 41 Safe Edit Transactions` |
+| 4 | [04-review-safe-edit-transaction-design.md](04-review-safe-edit-transaction-design.md) | Refine Sprint 41 constructor-boundary test ownership | Independent targeted design gate, recorded only after pass. | Fresh read-only design review and primary documentation checks; no full production gate. | `Approve Sprint 41 constructor-boundary test design` |
+| 5 | [05-implement-safe-edit-transactions.md](05-implement-safe-edit-transactions.md) | Approve Sprint 41 constructor-boundary test design | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | 12 focused checks defined by the corrected matrix; one stable canonical full workspace gate. | `Implement Sprint 41 Safe Edit Transactions` |
 | 6 | [06-complete-safe-edit-transaction-evidence.md](06-complete-safe-edit-transaction-evidence.md) | Implement Sprint 41 Safe Edit Transactions | Exact final implementation evidence, consumer audit, and immutable review handoff. | Stable-head test/log reconciliation, API/dependency/Coverage audit, documentation checks. | `Document Sprint 41 Safe Edit Transaction Evidence` |
 | 7 | [07-sprint-41-integration-review.md](07-sprint-41-integration-review.md) | Document Sprint 41 Safe Edit Transaction Evidence | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Independent reviewer and primary focused/full gates, artifact consistency, exact retirement audit. | `Complete Sprint 41 Safe Edit Transactions Review` |
 
@@ -67,6 +67,24 @@ override a runtime prohibition. If authorization or guaranteed fresh context is
 unavailable, stop at the exact child and report its prompt and committed
 prerequisite instead of executing it in this accumulated dispatcher context.
 
+## Constructor-boundary corrective prerequisite
+
+Task 5 admission at `b2f89c86012e71190afed077f42b5af82d552b42` stopped
+with zero source changes: the original T03 required Runtime and an integration
+test to forge Analysis-private fields and a type-unrepresentable completeness
+value. The corrective commit `Refine Sprint 41 constructor-boundary test ownership`
+changes only evidence placement. Runtime tests all reachable same-ID structural
+differences; Analysis owner-local unit tests call the real comparator for
+representable private mutants; closed-type/constructor evidence covers
+unrepresentable states. No public forge API, unsafe code or transaction change.
+F1 gains the Analysis library target; 16 paths/5000 churn/12 groups remain.
+
+The original Task 4 pass and ledger row remain historical evidence for their
+reviewed range, but do not admit the corrected matrix. Require the new gate and
+unique commit subject below before resuming Task 5. Preserve both decisions in
+the same design artifact when recording the new pass. Resolve the resumed Task 5
+start to that new committed pass; its initial blocked attempt had zero churn.
+
 ## Initial audit additions
 
 Validate this master plus all children with
@@ -80,7 +98,7 @@ Effective context window/telemetry may be unknown; estimates are admission-only.
 ```text
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
-design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Map Sprint 41 Safe Edit Transaction Invariants|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 Safe Edit Transaction Design
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Refine Sprint 41 constructor-boundary test ownership|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 constructor-boundary test design
 implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|16|5000|none|12|1
 ```
 
@@ -149,8 +167,8 @@ file edits only, and include retirement in the single Task 7 review commit.
 | 1 | 01-investigate-safe-edit-transactions.md | completed | 078b258e150842da0a79da96ea09395887080cfc | commit subject: Investigate Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | Analysis plan 17; paired conformance 4; Runtime public 9; Runtime Workspace unit 75 (49 filtered); Tool Policy 26+7; 0 policy doc-tests separately; prompt syntax pass, explicit suite 8 and repository 22 pass; Markdown/selector/efficiency checks and diff-check pass | Investigate Sprint 41 Safe Edit Transactions; local, push deferred to sprint end | unavailable; preflight warning | local-artifacts/codex-runs/sprint-41/task-1/ |
 | 2 | 02-define-safe-edit-transactions.md | completed | 9471c34e2b151ca4fd52609eb73c24b036930230 | commit subject: Define Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | ADR/authority/consumer/oracle review pass; 5 changed Markdown links and 11 ADR sections pass; 4 efficiency records equal; 7 manifest tasks contiguous; prompt syntax pass, explicit suite 8 and repository 22 pass; diff-check pass; Rust gates not applicable; zero matched test filters not applicable | Define Sprint 41 Safe Edit Transactions; local, push deferred to sprint end | unavailable; effective window unknown; estimated admission pass | local-artifacts/codex-runs/sprint-41/task-2/ |
 | 3 | 03-map-safe-edit-transaction-invariants.md | completed | 7de36516d283a810ec5ec01b09980b07b6e634dc | commit subject: Map Sprint 41 Safe Edit Transaction Invariants (resolve in sprint ancestry) | 35 production obligations, 12 focused commands, 16 paths/5000 estimated churn/no binaries mapped; 38 paths, 36 owner selectors, 20 Markdown links/selectors pass; 4 efficiency records equal and 7 manifest tasks contiguous; prompt syntax, explicit suite 8 and repository 22 pass; diff-check pass; Rust gates and zero matched test filters not applicable | Map Sprint 41 Safe Edit Transaction Invariants; local, push deferred to sprint end | unavailable; effective window unknown; preflight warning with narrowed selectors | local-artifacts/codex-runs/sprint-41/task-3/ |
-| 4 | 04-review-safe-edit-transaction-design.md | not_started | pending | pending | pending | pending | unavailable | none |
-| 5 | 05-implement-safe-edit-transactions.md | not_started | pending | pending | pending | pending | unavailable | none |
+| 4 | 04-review-safe-edit-transaction-design.md | completed | f8b3009a5cab05c40158ee16d9d10b263def1dcd | commit subject: Approve Sprint 41 Safe Edit Transaction Design (resolve in sprint ancestry) | Independent and primary replacement-range pass; original EOF-only blocked gate preserved; T01-T35/12 commands, 451 baseline Markdown references pass; prompt syntax, explicit suite 8 and repository 22 pass; full-range and working diff-check pass; production gates deferred to implementation | Approve Sprint 41 Safe Edit Transaction Design; local, push deferred to sprint end | unavailable; effective window unknown; preflight warning with narrowed selectors | none |
+| 5 | 05-implement-safe-edit-transactions.md | blocked | b2f89c86012e71190afed077f42b5af82d552b42 | b2f89c86012e71190afed077f42b5af82d552b42 | T03 constructor-boundary oracle mismatch at admission; no production tests or edits; corrected mapping awaits a new design pass | no task commit; push deferred | unavailable; preflight warning | none |
 | 6 | 06-complete-safe-edit-transaction-evidence.md | not_started | pending | pending | pending | pending | unavailable | none |
 | 7 | 07-sprint-41-integration-review.md | not_started | pending | pending | pending | pending | unavailable | none |
 

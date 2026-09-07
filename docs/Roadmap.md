@@ -10244,7 +10244,7 @@ transaction recovery/undo tests and exact ownership mechanisms remain pending.
 No essential source-format oracle is missing. Task 1 adds no production behavior,
 API, dependency, test or Coverage claim. Exact validation is recorded in its
 investigation and master ledger. Task 2 architecture acceptance is recorded
-below; Tasks 3-7 remain `not_started`.
+below; Task 3 mapping is recorded after it, and Tasks 4-7 remain `not_started`.
 
 ###### Task 2 architecture result
 
@@ -10273,6 +10273,24 @@ the accepted owners, guard/retention order and complete negative oracles, follow
 by Task 4's independent design gate. Sprint 41 remains `active`. Documentation
 validation and the one local task commit are recorded in the master ledger;
 push remains deferred to sprint end.
+
+###### Task 3 invariant mapping result
+
+The [accepted-ADR production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+now maps 35 production obligations to exact existing/planned owners, guarded
+operations and retention points, negative production-path tests and 12 concrete
+focused commands. It separates full plan/authorization binding, complete bounded
+source observation, every staging/replacement/restoration/cleanup boundary, all
+publication/cache writers and every complete semantic oracle component. Explicit
+provenance comparison avoids Graph edge equality's narrower semantics; canonical
+coordinate and identity constructors remain their existing owners.
+
+All new symbols/tests are planned; this documentation gate claims no production
+test execution or design-review pass. The live design is allocated across 16
+exact implementation paths and 5000 estimated text additions/deletions, including
+the ledger, with no binary/dependency changes, 12 focused checks and one stable
+full gate. Task 4 independently evaluates the committed mapping and scope before
+Task 5. Sprint 41 remains `active`; push remains deferred to sprint end.
 
 ###### Objective, evidence, and bounded scope
 
@@ -10356,15 +10374,13 @@ commit ID before dispatch.
 
 ###### Sprint 41 invariant and design gates
 
-The planning-created
+The completed Task 3
 [production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
-is provisional. Task 2 accepts ADR-0064; Task 3 maps every applicable production
-invariant to the exact existing/planned owner, production path/symbol, guard
-ordering before its operation or retention point, one negative production
-oracle, and a concrete focused command. Documentation/governance and deferred
-requirements are recorded separately. Task 4 independently reviews that complete
-committed mapping before production changes. Only its separate committed pass
-artifact unlocks Task 5.
+maps accepted ADR-0064 production invariants to exact existing/planned paths and
+symbols, guard ordering, negative production oracles and concrete focused
+commands. Documentation/governance and deferred guarantees are separate. Task 4
+independently reviews this complete committed mapping before production changes;
+only its separate committed pass artifact unlocks Task 5.
 
 ###### Sprint efficiency contract
 
@@ -10377,9 +10393,9 @@ implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-
 
 Task 5's expected path count is 16, expected text additions plus deletions 5000,
 binary inventory none, focused validation budget 12 checks, and stable full gate
-budget 1. Task 3 binds those focused checks to exact production oracles before
-design review. Task 5 counts its master-ledger update in actual scope. Apply
-the sequential workflow's 2x scope/binary stop-loss and two-architecture-blocker
+budget 1. Task 3 binds all 12 focused checks to exact production oracles and
+allocates the 16 paths in the matrix. Task 5 counts its master-ledger update in
+actual scope. Apply the sequential workflow's 2x scope/binary stop-loss and two-architecture-blocker
 remediation rule. Independent reviewer and primary completion gates remain
 separate required evidence.
 

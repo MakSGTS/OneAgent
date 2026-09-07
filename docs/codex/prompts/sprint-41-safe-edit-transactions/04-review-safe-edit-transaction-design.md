@@ -45,7 +45,7 @@ required Core/Workflow modules; permanent rules remain in those owners.
 
 ## Prerequisites / required gate
 
-Require the unique committed `Map Sprint 41 Safe Edit Transaction Invariants` boundary in this sprint ancestry,
+Require the unique committed `Refine Sprint 41 constructor-boundary test ownership` boundary in this sprint ancestry,
 all preceding manifest criteria, and a clean task-owned tree. Dispatcher supplies
 its full commit ID, current HEAD, branch, and status. Resolve commit/push mode from
 the current launch instruction; this run authorizes one commit per completed
@@ -59,7 +59,7 @@ Independent targeted design gate, recorded only after pass.
 
 ### Included
 
-Review the exact immutable planning/ADR/matrix range. After a complete pass result, the primary alone creates `docs/reviews/sprint-41-safe-edit-transactions-design.md` with the exact range, reviewer identity, matrix coverage, findings, missing evidence, residual risks, and decision.
+Review the exact immutable planning/ADR/corrected-matrix range. After a complete pass result, the primary alone updates `docs/reviews/sprint-41-safe-edit-transactions-design.md` with the exact range, reviewer identity, matrix coverage, findings, missing evidence, residual risks, and decision. Preserve the original EOF blocker, its correction/pass and the later zero-change Task 5 constructor-boundary blocker as historical evidence. Check T03's reachable Runtime cases, owner-local representable mutants and explicit unrepresentable type evidence; no public forging API or weakened comparison is admitted.
 
 ### Excluded
 
@@ -86,7 +86,7 @@ Accepted ADR-0064 and its complete production invariant matrix, before implement
 
 ## Reviewed baseline / commit or diff range
 
-Dispatcher supplies immutable full IDs: planning start ceb3a91da70afde202cab84f7ea42846cdd734bd through the Task 3 commit. Neither endpoint may move during review.
+Dispatcher supplies immutable full IDs: planning start ceb3a91da70afde202cab84f7ea42846cdd734bd through the committed constructor-boundary correction endpoint. Neither endpoint may move during review.
 
 ## Review Criteria
 
@@ -115,7 +115,7 @@ Only the predeclared design artifact after pass; Sprint 41 remains active.
 ## Suggested commit message
 
 ```text
-Approve Sprint 41 Safe Edit Transaction Design
+Approve Sprint 41 constructor-boundary test design
 ```
 
 ## Final report additions

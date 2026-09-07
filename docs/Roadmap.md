@@ -10292,6 +10292,33 @@ the ledger, with no binary/dependency changes, 12 focused checks and one stable
 full gate. Task 4 independently evaluates the committed mapping and scope before
 Task 5. Sprint 41 remains `active`; push remains deferred to sprint end.
 
+###### Constructor-boundary oracle correction
+
+Task 4's original pass was committed at
+`b2f89c86012e71190afed077f42b5af82d552b42` after correcting seven prompt
+EOF defects. Task 5 then stopped during admission with zero changed paths:
+T03 incorrectly required Runtime and an integration test to mutate every
+Analysis-private plan field while preserving its ID. The canonical constructor
+recomputes IDs, and `RefactoringCompleteness` has only `Complete`; arbitrary
+foreign-field and incomplete-enum mutants are not safely representable through
+that boundary. This is a mapping/evidence defect, not a production vulnerability.
+
+The separate corrective prerequisite is
+`Refine Sprint 41 constructor-boundary test ownership`. It keeps every
+constructor-reachable same-ID difference, whole-plan replacement and private
+capability case in the real Runtime gate. Representable private-field mutants
+move to `refactoring.rs::safe_edit_tests` and call the real Analysis comparator;
+closed-type/constructor evidence covers unrepresentable states without unsafe
+values or a public forging API. F1 adds `--lib`; there are still 12 groups.
+The existing 16-file/5000-line estimate is redistributed by moving 140 test
+lines from the integration-test allocation to the already included owner file.
+ADR-0064, transaction behavior, dependencies and other invariants are unchanged.
+
+The original design pass remains historical, but does not unlock the corrected
+mapping. The updated Task 4 gate below must pass at a new immutable endpoint
+and be committed separately before Task 5 resumes from that new baseline.
+Tasks 6-7 have not started. Sprint 41 remains active, with push at sprint end.
+
 ###### Objective, evidence, and bounded scope
 
 Apply and reverse the existing complete `bsl_callable_rename_v1` plans through
@@ -10360,8 +10387,8 @@ stop at the concrete child boundary with its committed prerequisite.
 | 1 | [01-investigate-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/01-investigate-safe-edit-transactions.md) | investigation / investigation | Repository-backed transaction readiness and boundary investigation. | Plan Sprint 41 Safe Edit Transactions | `Investigate Sprint 41 Safe Edit Transactions` |
 | 2 | [02-define-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/02-define-safe-edit-transactions.md) | architecture / architecture | Accepted bounded transaction ADR and compatibility contract. | Investigate Sprint 41 Safe Edit Transactions | `Define Sprint 41 Safe Edit Transactions` |
 | 3 | [03-map-safe-edit-transaction-invariants.md](codex/prompts/sprint-41-safe-edit-transactions/03-map-safe-edit-transaction-invariants.md) | architecture / architecture | Complete accepted-ADR production invariant matrix. | Define Sprint 41 Safe Edit Transactions | `Map Sprint 41 Safe Edit Transaction Invariants` |
-| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Map Sprint 41 Safe Edit Transaction Invariants | `Approve Sprint 41 Safe Edit Transaction Design` |
-| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 Safe Edit Transaction Design | `Implement Sprint 41 Safe Edit Transactions` |
+| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Refine Sprint 41 constructor-boundary test ownership | `Approve Sprint 41 constructor-boundary test design` |
+| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 constructor-boundary test design | `Implement Sprint 41 Safe Edit Transactions` |
 | 6 | [06-complete-safe-edit-transaction-evidence.md](codex/prompts/sprint-41-safe-edit-transactions/06-complete-safe-edit-transaction-evidence.md) | architecture / architecture | Exact final implementation evidence, consumer audit, and immutable review handoff. | Implement Sprint 41 Safe Edit Transactions | `Document Sprint 41 Safe Edit Transaction Evidence` |
 | 7 | [07-sprint-41-integration-review.md](codex/prompts/sprint-41-safe-edit-transactions/07-sprint-41-integration-review.md) | review / review | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Document Sprint 41 Safe Edit Transaction Evidence | `Complete Sprint 41 Safe Edit Transactions Review` |
 
@@ -10387,7 +10414,7 @@ only its separate committed pass artifact unlocks Task 5.
 ```text
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
-design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Map Sprint 41 Safe Edit Transaction Invariants|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 Safe Edit Transaction Design
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Refine Sprint 41 constructor-boundary test ownership|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 constructor-boundary test design
 implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|16|5000|none|12|1
 ```
 

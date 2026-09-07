@@ -47,11 +47,18 @@ required Core/Workflow modules; permanent rules remain in those owners.
 
 ## Prerequisites / required gate
 
-Require the unique committed `Approve Sprint 41 Safe Edit Transaction Design` boundary in this sprint ancestry,
+Require the unique committed `Approve Sprint 41 constructor-boundary test design` boundary in this sprint ancestry,
 all preceding manifest criteria, and a clean task-owned tree. Dispatcher supplies
 its full commit ID, current HEAD, branch, and status. Resolve commit/push mode from
 the current launch instruction; this run authorizes one commit per completed
 task and defers push until sprint end. Never create an empty commit.
+
+The initial admission at b2f89c86012e71190afed077f42b5af82d552b42 stopped
+without changes on the original T03 evidence-placement conflict. Resume only
+with the corrected matrix and new committed pass, using that commit as the
+new task-start baseline. Preserve all reachable Runtime same-ID negative cases;
+place private-field mutants in Analysis owner-local unit tests and document
+type-unrepresentable cases separately. Do not add a public forging seam.
 
 ## Task
 

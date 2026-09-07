@@ -10220,6 +10220,157 @@ Suggested planning commit message:
 Plan Sprint 40.1 Refactoring Planner remediation
 ```
 
+##### Sprint 41 Safe Edit Transactions execution plan
+
+Planning starts from clean version head
+`ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7` after the
+committed non-blocking Sprint 40.1 review. Sprint 41 remains `next` during
+planning and becomes `active` when Task 1 starts. No production transaction
+or design-review pass is claimed by this plan.
+
+###### Objective, evidence, and bounded scope
+
+Apply and reverse the existing complete `bsl_callable_rename_v1` plans through
+a checked local runtime Rust API for EDT and Designer XML, with explicit bound
+authorization, source freshness, confined writes, failure recovery, and complete
+post-edit semantic validation before successful publication. The transaction
+algorithm, owners, concurrency model, atomicity boundary, undo contract, and
+honest crash limits remain Task 2 decisions.
+
+Data/readiness passes at planning: ADR-0063, Analysis source/plan contracts,
+Runtime immutable publications/builders/watchers/cache, Tool Policy one-use
+confirmation, and the tracked paired Sprint 14 adapter corpus exist. The corpus
+has a declaration, local call and qualified call over semantically equivalent
+EDT LF and Designer BOM/CRLF sources. Exact-byte apply/reversal comparison plus
+a complete production Workspace rebuild provide independent source and semantic
+oracles. Task 1 verifies the mutation failure/concurrency harness and inventories
+every publication writer before accepting a mechanism. Missing essential
+evidence is a blocker, not an invitation to invent a source format.
+
+The existing Refactoring and Safe Edits Profile, Workflow and Template cover
+confinement, conflict recheck, authorization phases, atomicity, rollback,
+reversibility, semantic rebuild and compatibility. The existing architecture,
+investigation, review and sequential execution modules cover the other tasks;
+no reusable framework modification is required. Coverage registries remain
+semantic-source support evidence; planning changes no Supported claim.
+
+Other families, metadata/file/path renames, multi-Configuration/cross-Workspace
+edits, Git/remote mutation, new MCP/HTTP/CLI/LSP/IDE edit surfaces, third-party or
+internal production dependency additions without approval, persisted
+cross-process plans/undo history, broad performance/security guarantees, and
+release execution are excluded. Runtime API additions must enumerate consumers
+and migration impact before implementation; existing public contracts remain
+compatible.
+
+###### Context preflight and branch contract
+
+Effective context window and measured token telemetry: unknown/unavailable.
+Planning uses bounded section/symbol queries, not whole large authorities.
+Admission decision: warning, with further reading narrowed to exact selectors;
+this is a conservative admission judgement, not measured token usage. Child
+contexts must perform their own preflight against the canonical 15% static,
+20% authorities, 35% normal pre-work, 50% hard-stop, 35% working and 15% reserve
+allocations.
+
+Create `codex/v0.7-sprint-41` from the starting version head. The current user
+explicitly authorizes one commit per completed task and push at sprint end;
+that timing overrides the repository's immediate-push default for this run.
+After Tasks 1-6 and validation, no-ff merge into `codex/v0.7`, create
+`codex/v0.7-sprint-41-review`, execute Task 7, then no-ff merge a successful
+review back into `codex/v0.7` and push only that current version branch. This
+publishes the reachable implementation and review commits together. Do not
+merge to main, tag, or run the release review as part of this sprint. A failed
+push stops further work.
+
+Each child and independent reviewer needs a guaranteed fresh context. Resolve
+authorization under the current user instruction and higher-priority runtime
+rules; stored launch text cannot override runtime restrictions. The dispatcher
+coordinates review agents so child runners do not delegate. If the runtime
+requires explicit additional authorization or cannot guarantee fresh context,
+stop at the concrete child boundary with its committed prerequisite.
+
+###### Ordered Sprint 41 task manifest
+
+| Order | Prompt | Kind / Profile | Outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | [01-investigate-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/01-investigate-safe-edit-transactions.md) | investigation / investigation | Repository-backed transaction readiness and boundary investigation. | Plan Sprint 41 Safe Edit Transactions | `Investigate Sprint 41 Safe Edit Transactions` |
+| 2 | [02-define-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/02-define-safe-edit-transactions.md) | architecture / architecture | Accepted bounded transaction ADR and compatibility contract. | Investigate Sprint 41 Safe Edit Transactions | `Define Sprint 41 Safe Edit Transactions` |
+| 3 | [03-map-safe-edit-transaction-invariants.md](codex/prompts/sprint-41-safe-edit-transactions/03-map-safe-edit-transaction-invariants.md) | architecture / architecture | Complete accepted-ADR production invariant matrix. | Define Sprint 41 Safe Edit Transactions | `Map Sprint 41 Safe Edit Transaction Invariants` |
+| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Map Sprint 41 Safe Edit Transaction Invariants | `Approve Sprint 41 Safe Edit Transaction Design` |
+| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 Safe Edit Transaction Design | `Implement Sprint 41 Safe Edit Transactions` |
+| 6 | [06-complete-safe-edit-transaction-evidence.md](codex/prompts/sprint-41-safe-edit-transactions/06-complete-safe-edit-transaction-evidence.md) | architecture / architecture | Exact final implementation evidence, consumer audit, and immutable review handoff. | Implement Sprint 41 Safe Edit Transactions | `Document Sprint 41 Safe Edit Transaction Evidence` |
+| 7 | [07-sprint-41-integration-review.md](codex/prompts/sprint-41-safe-edit-transactions/07-sprint-41-integration-review.md) | review / review | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Document Sprint 41 Safe Edit Transaction Evidence | `Complete Sprint 41 Safe Edit Transactions Review` |
+
+The master prompt is
+`docs/codex/prompts/sprint-41-safe-edit-transactions/00-sprint-41-execution-loop.md`.
+It records task-specific validation additions and the durable task ledger.
+Every child uses Prompt Contract v2 and `fresh_context: required`. Each future
+prerequisite subject must resolve uniquely in this sprint ancestry to a full
+commit ID before dispatch.
+
+###### Sprint 41 invariant and design gates
+
+The planning-created
+[production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+is provisional. Task 2 accepts ADR-0064; Task 3 maps every applicable production
+invariant to the exact existing/planned owner, production path/symbol, guard
+ordering before its operation or retention point, one negative production
+oracle, and a concrete focused command. Documentation/governance and deferred
+requirements are recorded separately. Task 4 independently reviews that complete
+committed mapping before production changes. Only its separate committed pass
+artifact unlocks Task 5.
+
+###### Sprint efficiency contract
+
+```text
+sprint_efficiency_contract: v1
+adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Map Sprint 41 Safe Edit Transaction Invariants|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 Safe Edit Transaction Design
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|16|5000|none|12|1
+```
+
+Task 5's expected path count is 16, expected text additions plus deletions 5000,
+binary inventory none, focused validation budget 12 checks, and stable full gate
+budget 1. Task 3 binds those focused checks to exact production oracles before
+design review. Task 5 counts its master-ledger update in actual scope. Apply
+the sequential workflow's 2x scope/binary stop-loss and two-architecture-blocker
+remediation rule. Independent reviewer and primary completion gates remain
+separate required evidence.
+
+###### State, validation, review and retirement gates
+
+Validate the master and all seven children explicitly with
+`scripts/validate-codex-prompts.sh`, its shell syntax, the repository-wide
+prompt set, Markdown links/selectors, contiguous numbering, prerequisites,
+commit messages, efficiency-record equality, initial clean-state preservation,
+and `git diff --check`. Documentation-only planning does not trigger Rust
+production checks; production and review validation use the canonical
+`docs/codex/core/validation.md` matrix. Keep full logs only under
+`local-artifacts/codex-runs/sprint-41/`.
+
+Task 6 records final exact-head counts, validation outcomes, scope/consumer
+audits and an immutable review handoff; it cannot fix implementation or complete
+the sprint. Task 7 requires the independent fresh read-only review, primary
+independent focused/full checks, reconciliation and same-reviewer artifact
+consistency before state transition or retirement. A blocker preserves all
+later `not_started` tasks and current evidence. No empty or partial task commit.
+
+The immediately preceding suite is exactly these four tracked paths:
+
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/00-sprint-40-1-execution-loop.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/01-review-refactoring-planner-remediation-design.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/02-remediate-refactoring-planner-contract.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/03-sprint-40-1-integration-review.md`
+
+Only a successful Task 7 may retire that unchanged inventory in its single
+review commit after re-enumeration and artifact consistency. Preserve the
+Sprint 40 suite and all current Sprint 41 prompts. A non-blocking final review
+marks Sprint 41 completed and makes the v0.7 release integration review eligible;
+Sprint 42 stays planned pending the release gate.
+
+Suggested planning commit message: `Plan Sprint 41 Safe Edit Transactions`.
+
+
 The v0.7 release integration review follows Sprint 41.
 
 #### v0.8 — Designer XML Structure

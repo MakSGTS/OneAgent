@@ -1625,10 +1625,43 @@ invocation. The complete executable matrix and limitations are recorded in the
 Sprint 40 is administratively completed. The
 [Sprint 40.1 remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
 records `pass` and completes the publication-owner and stale-evidence
-corrections. Sprint 41 is the unique `next` target. Source mutation, apply authorization,
-transactions, atomicity, rollback, reversibility, recovery, post-edit semantic
-validation, other refactoring families, and new UI remain Sprint 41 or later
-scope.
+corrections. Sprint 41 is `active`; its accepted transaction contract follows.
+
+## Safe Edit Transactions
+
+[ADR-0064](../adr/0064-safe-edit-transactions.md) accepts the architecture for
+checked local apply/reversal of the existing complete callable-rename family.
+Implementation and independent design/integration evidence remain pending.
+Graph identity, BSL name semantics, immutable Analysis planning and adapter
+source capture remain their existing owners. Analysis adds a pure exhaustive
+before/after semantic comparison; Runtime owns the policy-gated service
+capability, complete source baseline, serialized lifecycle and confined I/O.
+
+Success requires the complete production Workspace builder, including Designer
+`Complete`, Graph validation, reference ledger, rules and diagnostics. Exact
+planned byte replacements must produce only the expected target identity/name
+substitution and mechanically shifted source anchors. All planned declaration
+and call occurrences must resolve to the renamed target; every other node, edge, payload,
+occurrence, reference disposition and rule/diagnostic record must be equivalent
+under that explicit mapping. Designer's complete occurrence evidence does not
+invent unsupported Graph `Calls` edges. Other Configurations remain unchanged.
+Parsing, counts or selected target lookups alone cannot satisfy this oracle.
+
+Every source/discovery input, including untouched modules, metadata and entry
+inventory, is checked against the original publication baseline before writing.
+The single validated successor publication and adjacent impact retain the
+canonical publication sequence. Cache update follows commit. Failures recover
+exact original bytes without publishing; failed recovery clears current
+observation and quarantines the service while retained Arcs remain immutable.
+Reversal needs separate confirmation and freshness against the exact applied
+successor, then publishes a new ID after the same complete validation.
+
+The ADR bounds preparation, source capture, operations, staging and one retained
+undo record before allocation/write. It accepts explicit cooperative exclusive
+source ownership, with per-file replacement and honest multi-file visibility,
+platform and crash limits. No semantic cache/schema migration, source Coverage
+upgrade, new refactoring family, Graph fact, wire endpoint or UI follows from
+architecture acceptance; existing read-only service composition stays compatible.
 
 ## Incremental indexing
 

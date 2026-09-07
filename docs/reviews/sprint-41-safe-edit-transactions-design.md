@@ -1,8 +1,124 @@
 # Sprint 41 Safe Edit Transaction Design Review
 
-## Decision and reviewed baseline
+## Current complete-audit decision
 
-Decision: **pass** for the targeted pre-implementation design gate only.
+Current decision: **pass**, independently reconciled for the exact immutable
+range `ceb3a91da70afde202cab84f7ea42846cdd734bd..ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f`.
+Primary `/root/s41_task4` and the same independent reviewer
+`/root/s41_design_reviewer` both observed initial/final review HEAD
+`ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f`, branch
+`codex/v0.7-sprint-41`, and a clean tree. Neither role mutated files, created
+logs, staged, committed, delegated, or moved endpoints during this review.
+The dispatcher supplied the complete independent result before these authorized
+artifact/ledger updates. No remaining blocking or non-blocking finding and no
+missing design-owner evidence remain on this range.
+
+The new prerequisite is `3cdd67f7df47311f2b7a9936ab2afc5eb6515f06`
+(`Clarify Sprint 41 complete invariant evidence placement`). The associated
+no-ff merges are `22e38a3b65e800c866139a33f7515529c51e7119`,
+`4ecf05972c13da237d8dffa8fc057fba33c75431`, and the current reviewed endpoint.
+The delta from `d2dc6fdb772f04cb15cc38029b7494d262cae9af` is exactly five
+documentation paths, 116 additions and 17 deletions. Production, ADR-0064,
+architecture mechanism, dependencies and reusable framework remain unchanged.
+
+### Preserved intervening blockers and renewed agreement
+
+The first pass below was committed as
+`b2f89c86012e71190afed077f42b5af82d552b42`. Task 5 admission at that same
+HEAD then stopped with zero production edits or tests: original T03 required
+Runtime and an integration test to forge Analysis-private fields and a
+type-unrepresentable `RefactoringCompleteness` alternative. That was an
+evidence-placement defect, not a demonstrated production vulnerability.
+
+Correction `b918ed50ee556c6a235a36fb2268785941c3a801`
+(`Refine Sprint 41 constructor-boundary test ownership`) used no-ff merges
+`37a608fa351617bc1159b1347cac4d9cc30e0809`,
+`34cc85682110b028670452c2cc37952e54417e8c`, and
+`d2dc6fdb772f04cb15cc38029b7494d262cae9af`. The complete independent
+T01-T35 audit of `ceb3a91da70afde202cab84f7ea42846cdd734bd..d2dc6fdb772f04cb15cc38029b7494d262cae9af`
+accepted corrected T03 but returned **blocked** for one confirmed P2: matrix
+line 66 still demanded a changed `SourceEvidenceCompleteness` marker and lines
+133-138 propagated that impossible value through F3. The only variant at
+`crates/analysis/src/refactoring.rs:652` is `BslCallableRenameV1`;
+`SourceDocument`'s private field at line 667, constructor at line 681 and getter
+at line 793 cannot provide an alternative in safe Rust. Primary reconciliation
+accepted this finding; no pass artifact or commit was created for that range.
+There were no other confirmed defects in that full audit.
+
+After that complete audit, the user explicitly agreed to the consolidated
+evidence-placement correction. The current review evaluates that correction;
+neither the earlier pass nor agreement alone substitutes for this new gate.
+All previous ranges, findings and decisions remain historical evidence.
+
+### Current matrix coverage and reconciliation
+
+Both roles independently evaluated all T01-T35 owner, guard, retention,
+ordering and negative-oracle obligations and the complete R/L/C/T audit in the
+[current matrix](../architecture/safe-edit-transactions-invariants.md#complete-matrix-representability-audit).
+R denotes reachable production evidence, L owner-local private tests, C
+constructor rejection and T unavailable safe-Rust states. Every row is classified
+exactly once; C/T evidence never receives Runtime comparator-test credit.
+
+| Rows | Current evidence placement and accepted result |
+|---|---|
+| T03 | pass: Runtime exercises all constructor-reachable same-ID structural differences, including duplicate summaries and LocalCall/QualifiedCall categories. AP owner-local unit tests call the real comparator for safely representable private mutants; closed constructors/types separately prove impossible states. No public forge API, unsafe value or weakened equality. |
+| T17 | pass: the exact sole completeness variant is type evidence. Comparison of the actual field and every reachable missing document/occurrence, inventory, role/path/root/Configuration difference remains mandatory through the real production path. |
+| T20-T21 | pass: source-constructor-valid semantic differences and canonical coordinate/provenance mappings reach the comparator. Invalid raw-byte/version/range combinations are constructor evidence only. |
+| T22 | pass: canonical `reconstruct_terminal` whole-record substitutions cover structural/identity/provenance changes; no isolated private derived-ID corruption is required. |
+| T23 | pass: canonical diagnostic/validation/rule producers supply actual records, fields, statuses, counts and complete collections; no absent incomplete marker or omission-counter field is invented. All real evidence losses remain negative production cases. |
+| T01-T02, T04-T16, T18-T19, T24-T35 | pass: the remaining 29 rows retain their exact owners, ordered guards and real production/private-owner oracles. No accepted transaction invariant or executable negative case is weakened. |
+
+The mapping retains 35 obligations, 12 focused command groups, F1's
+`cargo test -p oneagent-analysis --lib --test safe_edit`, and the estimated
+16-path/5000-text-churn/no-binary scope. For T16-T23 every reachable safely
+constructed candidate still traverses the real coordinator after production
+build and before the real comparator/commit. Source constructors cannot be
+bypassed by a test-only validator or publication writer.
+
+### Current independently executed documentation checks
+
+Each role ran its own checks; all results below completed successfully.
+
+| Check | Independent reviewer | Primary |
+|---|---|---|
+| `git diff --check ceb3a91da70afde202cab84f7ea42846cdd734bd..ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f` | exit 0 | exit 0 |
+| `git diff --check d2dc6fdb772f04cb15cc38029b7494d262cae9af..ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f` | exit 0 | exit 0 |
+| Unchanged production/ADR/framework and exact correction delta | pass | pass |
+| `bash -n scripts/validate-codex-prompts.sh` | exit 0 | exit 0 |
+| `scripts/validate-codex-prompts.sh docs/codex/prompts/sprint-41-safe-edit-transactions/*.md` | exit 0; 8 files | exit 0; 8 files |
+| `scripts/validate-codex-prompts.sh` | exit 0; 22 files | exit 0; 22 files |
+| Markdown paths/anchors | 15 files; 455 references; 0 errors | 15 files; 455 references; 0 errors |
+| Matrix/classification/scope/efficiency/prerequisite/state | pass; 35 rows exactly once, 12 groups | pass; 35 rows exactly once, 12 groups, 4 matching efficiency records, 7 contiguous manifest tasks |
+| Working diff and final review state | exit 0; unchanged clean HEAD | exit 0; unchanged clean HEAD |
+
+The same reviewer subsequently returned **artifact consistency: pass** on the
+two-document draft, with no required correction. It confirmed the exact new
+range/prerequisite, all T01-T35 evidence placements, separate validation,
+historical decisions and pending production evidence/risks. HEAD remained
+`ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f`; only the authorized primary-owned
+artifact and Task 4 ledger changes were present, and draft diff-check exited 0.
+
+Missing future production evidence remains separate from design evidence:
+F1-F12 and full Rust validation were not run in this documentation gate. Complete
+paired multi-file Runtime acceptance, fault ordinals, exact bounds and lifecycle
+barriers remain mandatory implementation evidence. No zero-match search is
+credited as a passing test. No production test or capability is implemented.
+
+All residual risks below remain applicable: estimated scope, cooperative source
+ownership without hostile-writer exclusion, non-atomic multi-file disk changes,
+no crash recovery/durable undo, richer metadata deferred, and potentially
+unbounded shutdown delay for stalled OS I/O. Effective context window and token
+telemetry are unavailable; bounded selectors and the exact correction delta
+were used. No logs were created. Sprint 41 remains active and push is deferred.
+
+Recommended next action: commit this current pass and the Task 4 ledger with the
+unique subject `Approve Sprint 41 complete invariant evidence design`; only that
+committed prerequisite admits a fresh Task 5 attempt. The earlier zero-change
+Task 5 blocker remains historical evidence.
+
+## First pass decision and reviewed baseline (historical)
+
+Historical decision: **pass** for the targeted pre-implementation design gate only.
 Sprint 41 remains active. Production transaction conformance and integration
 completion are not claimed; Task 5 requires this separately committed artifact.
 

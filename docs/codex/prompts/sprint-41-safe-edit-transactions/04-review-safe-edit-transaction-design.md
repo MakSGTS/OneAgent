@@ -26,7 +26,7 @@ required Core/Workflow modules; permanent rules remain in those owners.
 - `AGENTS.md` — repository boundary and branch/review workflow.
 - `docs/Roadmap.md` — sections: Sprint 41 Safe Edit Transactions execution plan and Sprint efficiency contract within that plan.
 - `docs/adr/0064-safe-edit-transactions.md` — accepted Decision and Deferred scope.
-- `docs/architecture/safe-edit-transactions-invariants.md` — section: Sprint 41 ADR invariant matrix.
+- `docs/architecture/safe-edit-transactions-invariants.md` — sections: Sprint 41 ADR invariant matrix, Complete matrix representability audit, Producer projection correction and complete audit disposition, Implementation scope and validation budget.
 - `docs/architecture/safe-edit-transactions-investigation.md` — unresolved questions and decision-readiness evidence.
 - `docs/codex/workflows/review.md` — section: Targeted pre-implementation design review.
 
@@ -45,7 +45,7 @@ required Core/Workflow modules; permanent rules remain in those owners.
 
 ## Prerequisites / required gate
 
-Require the unique committed `Clarify Sprint 41 complete invariant evidence placement` boundary in this sprint ancestry,
+Require the unique committed `Define Sprint 41 producer-owned semantic projection` boundary in this sprint ancestry,
 all preceding manifest criteria, and a clean task-owned tree. Dispatcher supplies
 its full commit ID, current HEAD, branch, and status. Resolve commit/push mode from
 the current launch instruction; this run authorizes one commit per completed
@@ -59,7 +59,7 @@ Independent targeted design gate, recorded only after pass.
 
 ### Included
 
-Review the exact immutable planning/ADR/corrected-matrix range. After a complete pass result, the primary alone updates `docs/reviews/sprint-41-safe-edit-transactions-design.md` with the exact range, reviewer identity, matrix coverage, findings, missing evidence, residual risks, and decision. Preserve the original EOF blocker, its correction/pass and the later zero-change Task 5 constructor-boundary blocker as historical evidence. Check T03's reachable Runtime cases, owner-local representable mutants and explicit unrepresentable type evidence; no public forging API or weakened comparison is admitted. Preserve the later T17 blocked range and the user's renewed agreement after the full T01-T35 audit. Verify every row's reachable/owner-local/constructor/type classification, T17's exact closed-type evidence and retained executable incompleteness cases, and constructor-valid T20-T23 substitutions. The prior design pass cannot admit this new mapping.
+Review the exact immutable planning/ADR/corrected-matrix range. After a complete pass result, the primary alone updates `docs/reviews/sprint-41-safe-edit-transactions-design.md` with the exact range, reviewer identity, matrix coverage, findings, missing evidence, residual risks, and decision. Preserve the original EOF blocker, its correction/pass and the later zero-change Task 5 constructor-boundary blocker as historical evidence. Check T03's reachable Runtime cases, owner-local representable mutants and explicit unrepresentable type evidence; no public forging API or weakened comparison is admitted. Preserve the later T17 blocked range and the user's renewed agreement after the full T01-T35 audit. Verify every row's reachable/owner-local/constructor/type classification, T17's exact closed-type evidence and retained executable incompleteness cases, and constructor-valid T20-T23 substitutions. The prior design pass cannot admit this new mapping. Preserve the later incomplete Task 5 attempt at 93661837df8d63bfed10c9b70d1986c4e0d12aa5 (9 paths/1593 churn, producer blocker and executed check outcomes). Review only the committed documentation correction; do not inspect or use the preserved floating implementation.
 
 ### Excluded
 
@@ -86,7 +86,7 @@ Accepted ADR-0064 and its complete production invariant matrix, before implement
 
 ## Reviewed baseline / commit or diff range
 
-Dispatcher supplies immutable full IDs: planning start ceb3a91da70afde202cab84f7ea42846cdd734bd through the committed constructor-boundary correction endpoint. Neither endpoint may move during review.
+Dispatcher supplies immutable full IDs: planning start ceb3a91da70afde202cab84f7ea42846cdd734bd through the committed producer-projection correction endpoint. Neither endpoint may move during review.
 
 ## Review Criteria
 
@@ -94,7 +94,31 @@ The targeted design gate in the selected Review workflow, including runtime seri
 
 ## Acceptance evidence matrix
 
-Evaluate every production invariant independently.
+Evaluate all T01-T35 independently, preserving the full representability/type
+classification and every reachable negative test. Additionally verify typed
+NodeIdentity/NodeFact/EdgeFact/RequestFact/DiagnosticFact/QueryFact keys, complete
+before-derived inventories and exactly-once consumption. Check canonical shared
+DP/EP APIs and BSL Query IDs, only directly-owned format-supported Query closure,
+Designer unchanged-declaration provenance and EDT nested contexts, complete
+ledger/diagnostics and unchanged Query binding/text. Expected projection must
+freeze before staging/candidate, with no copied encoding or candidate-as-expected.
+
+Verify the explicit boundary between existing scoped canonical parser internals
+and new transaction-owned producer output/scratch. The borrowed count pass must
+not allocate or invoke more parsers; exact nested capacity, sort/bitset and
+simultaneous old/new reallocation reserves precede emission/retention within
+268435456. No uncharged parser result may escape to attempt/undo. Preserve the
+exact 1MiB simple-rename positive, without a universal parser reserve or hidden
+document-size cap. Review allocation source evidence and failure ordering.
+Check all 25 allocated paths sum to 8500; >32 paths, >10000 churn or any binary
+are the explicit tighter caps overriding 2x of the revised estimate. F10/F11
+expand to the admitted Analysis+BSL and Designer+EDT all-targets commands; other
+groups stay unchanged, total 12 and one stable full gate.
+
+Confirm Task 5 resumes only after this new unique pass, while cumulative
+implementation accounting retains baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5
+and the preserved 9 files/1593 churn, excluding separately committed prerequisite
+documentation/review deltas only. No previous pass admits the new mechanism.
 
 ## Independent reviewer contract and output
 
@@ -115,7 +139,7 @@ Only the predeclared design artifact after pass; Sprint 41 remains active.
 ## Suggested commit message
 
 ```text
-Approve Sprint 41 complete invariant evidence design
+Approve Sprint 41 producer-owned semantic projection design
 ```
 
 ## Final report additions

@@ -254,9 +254,37 @@ recorded in the [Sprint 40 evidence](architecture/refactoring-planner-evidence.m
 and [Sprint 40.1 remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md).
 Sprint 40 is administratively completed, and Sprint 40.1 records `pass`,
 resolves the publication-identity and stale-evidence blockers, and is completed.
-Sprint 41 is the unique `next` target. Source mutation, apply
-authorization, transaction staging, atomicity, rollback, reversibility,
-recovery, and post-edit validation remain Sprint 41 scope.
+Sprint 41 is `active`; its architecture is accepted below, while implementation
+and independent design/integration gates remain pending.
+
+## Accepted Safe Edit Transactions boundary
+
+[ADR-0064](adr/0064-safe-edit-transactions.md) accepts one opt-in local Runtime
+Rust API for checked apply and separately confirmed reversal of complete
+`bsl_callable_rename_v1` plans over EDT and Designer XML. Analysis owns pure
+plan equivalence, exact replacement/range mapping and complete semantic
+postconditions. Runtime owns service-bound one-use capabilities, private complete
+publication source baselines, bounded retention and the sole lifecycle
+coordinator; its private I/O module owns staging, backups and checked recovery.
+Existing Tool Policy confirmation gates admission without owning mutation.
+
+Startup, watcher and explicit rebuilds, transaction, cache decisions and shutdown
+serialize through the same coordinator. Guards cover service identity, complete
+structured plan, current predecessor Arc, all source/discovery inputs, path and
+alias confinement and pre-allocation budgets. Complete production rebuild and
+exact renamed target/calls plus unaffected graph/source/reference/rule/diagnostic
+equivalence precede the single successor publication. Cache write follows
+commit; failed recovery clears current observation and prevents new publication.
+Old snapshots remain immutable, and the existing publication ID/impact alias
+remains canonical. Undo is one bounded in-memory record, never durable history.
+
+The first write slice requires explicit cooperative exclusive source ownership
+and macOS/Linux file-identity guards. Per-file staged rename does not provide
+multi-file disk atomicity, hostile-writer exclusion or crash durability. Default
+services remain edit-disabled. Existing read-only APIs, eight MCP tools, UI,
+Graph semantics, cache format and Coverage claims remain unchanged. This is an
+accepted contract, not implemented capability; the invariant matrix and
+independent design gate must precede production changes.
 
 ## Planned boundaries
 

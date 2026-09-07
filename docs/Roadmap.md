@@ -10243,16 +10243,45 @@ Runtime builders and controlled lifecycle/I/O harness primitives are available;
 transaction recovery/undo tests and exact ownership mechanisms remain pending.
 No essential source-format oracle is missing. Task 1 adds no production behavior,
 API, dependency, test or Coverage claim. Exact validation is recorded in its
-investigation and master ledger; Tasks 2-7 remain `not_started`.
+investigation and master ledger. Task 2 architecture acceptance is recorded
+below; Tasks 3-7 remain `not_started`.
+
+###### Task 2 architecture result
+
+Task 2 accepts [ADR-0064](adr/0064-safe-edit-transactions.md). Analysis owns pure
+plan/replacement/semantic equivalence; Runtime owns the opt-in local Rust API,
+service-bound one-use policy confirmation, complete publication source baseline,
+bounded attempt/undo retention and one coordinator for every publication writer.
+Private Runtime I/O owns staged result/original backups, confined per-file rename,
+checked restoration and cleanup. The complete source baseline closes untouched
+module, metadata and discovery freshness gaps and reconciles scan exclusions.
+
+The accepted order guards authorization, full plan/source/path identity and
+budgets before writes, then requires a complete production rebuild and exhaustive
+renamed-target/call plus unaffected semantic evidence equivalence before one
+successor publication. Cache update follows commit. Failed recovery clears
+current observation and disables further publication; separate confirmed reversal
+requires the exact applied successor. Old snapshots and canonical publication
+identity remain unchanged. Cooperative exclusive source ownership and macOS/Linux
+file-identity guards are explicit prerequisites; no multi-file disk atomicity,
+hostile-writer exclusion, durable undo or crash-recovery guarantee is claimed.
+
+Architecture sections and affected consumer inventory are synchronized. No Rust,
+dependency, source Coverage, protocol/UI or supported-capability change occurs.
+The ADR leaves no transaction mechanism for Task 3 to choose: that task must map
+the accepted owners, guard/retention order and complete negative oracles, followed
+by Task 4's independent design gate. Sprint 41 remains `active`. Documentation
+validation and the one local task commit are recorded in the master ledger;
+push remains deferred to sprint end.
 
 ###### Objective, evidence, and bounded scope
 
 Apply and reverse the existing complete `bsl_callable_rename_v1` plans through
 a checked local runtime Rust API for EDT and Designer XML, with explicit bound
 authorization, source freshness, confined writes, failure recovery, and complete
-post-edit semantic validation before successful publication. The transaction
-algorithm, owners, concurrency model, atomicity boundary, undo contract, and
-honest crash limits remain Task 2 decisions.
+post-edit semantic validation before successful publication. ADR-0064 now accepts
+the transaction algorithm, owners, concurrency model, atomicity boundary, undo
+contract and honest crash limits; implementation remains gated by Tasks 3-4.
 
 Data/readiness passes at planning: ADR-0063, Analysis source/plan contracts,
 Runtime immutable publications/builders/watchers/cache, Tool Policy one-use

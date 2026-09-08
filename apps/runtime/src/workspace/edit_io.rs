@@ -51,6 +51,9 @@ pub(super) mod faults {
     pub(in crate::workspace) fn events() -> Vec<&'static str> {
         STATE.with(|state| state.borrow().events.clone())
     }
+    pub(in crate::workspace) fn record(name: &'static str) {
+        STATE.with(|state| state.borrow_mut().events.push(name));
+    }
     pub(in crate::workspace) fn action(at: &'static str, action: impl FnOnce() + 'static) {
         STATE.with(|state| state.borrow_mut().action = Some((at, Box::new(action))));
     }
@@ -555,7 +558,15 @@ impl EditIo {
             options.mode(0o600);
         }
         checkpoint("create")?;
-        let mut file = io(options.open(self.baseline.root.join(&path)))?;
+        let opened = options.open(self.baseline.root.join(&path));
+        #[cfg(test)]
+        if opened
+            .as_ref()
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists)
+        {
+            faults::record("create_already_exists");
+        }
+        let mut file = io(opened)?;
         let entry_identity = identity(&io(file.metadata())?)?;
         let index = self.owned.len();
         self.owned.push(OwnedEditFile {
@@ -981,6 +992,52 @@ mod tests {
     }
 
     #[test]
+    fn original_one_over_document_bound_rejects_admissible_result() {
+        // SourceDocument constructors already reject this size; the private
+        // filesystem owner can independently exercise its original-byte guard
+        // without forging a semantic document or an executable planner result.
+        for original_length in [MAX_DOCUMENT, MAX_DOCUMENT + 1] {
+            let (root, _) = fixture();
+            let path = PathBuf::from("a.bsl");
+            let mut original = fs::read(root.path().join(&path)).unwrap();
+            original.extend_from_slice(b"\n//");
+            original.resize(original_length, b' ');
+            let result = String::from_utf8(original.clone())
+                .unwrap()
+                .replace("FillSecurityCollection", "X")
+                .into_bytes();
+            assert_eq!(original.len(), original_length);
+            assert!(result.len() < MAX_DOCUMENT);
+            assert!(original.len() < MAX_EDITED && result.len() < MAX_EDITED);
+            fs::write(root.path().join(&path), &original).unwrap();
+            let baseline = EditBaseline::capture(root.path(), &[]).unwrap();
+            assert!(baseline.raw_bytes() < MAX_BASELINE);
+            assert_eq!(baseline.bytes(&path).unwrap().as_ref(), original);
+            let results = BTreeMap::from([(path.clone(), Arc::from(result))]);
+            assert_eq!(results.len(), 1);
+            let admission = EditIo::admission(&baseline).unwrap();
+            faults::set(Vec::new());
+            let admitted = EditIo::with_admission(baseline.clone(), results, 42, admission);
+            if original_length == MAX_DOCUMENT {
+                let mut io = admitted.unwrap();
+                io.stage_all().unwrap();
+                assert_eq!(io.retained_files(), 2);
+                assert!(!io.attempted());
+                io.cleanup_owned().unwrap();
+                assert_eq!(io.retained_files(), 0);
+            } else {
+                assert!(matches!(admitted, Err(EditIoError::Bounds)));
+                assert!(
+                    faults::events().is_empty(),
+                    "no stage, write or replacement was entered"
+                );
+            }
+            assert_eq!(fs::read(root.path().join(&path)).unwrap(), original);
+            assert!(baseline.equals(&EditBaseline::capture(root.path(), &[]).unwrap()));
+        }
+    }
+
+    #[test]
     fn buffer_and_disk_bounds_precede_allocation() {
         for (count, original_extra, result_extra) in
             [(64, 0, 0), (65, 0, 0), (64, 1, 0), (64, 0, 1)]
@@ -1144,14 +1201,42 @@ mod tests {
                 assert_eq!(io.retained_files(), 0);
             }
         }
-        let (root, mut io) = fixture();
-        fs::write(root.path().join(".oneagent-edit-7-0-result"), b"unknown").unwrap();
-        assert!(io.stage_all().is_err());
-        io.cleanup_owned().unwrap();
-        assert_eq!(
-            fs::read(root.path().join(".oneagent-edit-7-0-result")).unwrap(),
-            b"unknown"
-        );
+        for (name, creates) in [("result", 1), ("backup", 2)] {
+            let (root, previous) = fixture();
+            let collision = root.path().join(format!(".oneagent-edit-7-0-{name}"));
+            fs::write(&collision, b"unowned collision sentinel").unwrap();
+            let identity_before = identity(&fs::metadata(&collision).unwrap()).unwrap();
+            // The occupied name belongs to the complete before inventory, so
+            // the staging baseline check must pass before create_new rejects it.
+            let baseline = EditBaseline::capture(root.path(), &[]).unwrap();
+            let mut io = EditIo::new(baseline.clone(), previous.results(), 7).unwrap();
+            faults::set(Vec::new());
+            assert_eq!(io.stage_all(), Err(EditIoError::Io));
+            assert_eq!(
+                faults::events()
+                    .iter()
+                    .filter(|e| **e == "create_already_exists")
+                    .count(),
+                1
+            );
+            assert_eq!(
+                faults::events().iter().filter(|e| **e == "create").count(),
+                creates
+            );
+            assert_eq!(io.retained_files(), creates - 1);
+            assert!(!io.attempted());
+            assert!(!faults::events().contains(&"replace_before"));
+            // One occupied-name attempt exhausts this algorithm: no retry,
+            // alternate name, truncation or adoption of the unowned file.
+            io.cleanup_owned().unwrap();
+            assert_eq!(io.retained_files(), 0);
+            assert_eq!(fs::read(&collision).unwrap(), b"unowned collision sentinel");
+            assert_eq!(
+                identity(&fs::metadata(&collision).unwrap()).unwrap(),
+                identity_before
+            );
+            assert!(baseline.equals(&EditBaseline::capture(root.path(), &[]).unwrap()));
+        }
     }
 
     #[test]

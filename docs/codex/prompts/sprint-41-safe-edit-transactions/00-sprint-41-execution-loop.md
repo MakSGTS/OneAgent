@@ -253,7 +253,7 @@ Re-enumerate immediately before retirement; refuse extra/untracked targets.
 Preserve every Sprint 40 file and this entire Sprint 41 suite. Use explicit
 file edits only, and include retirement in the single Task 7 review commit.
 
-## Blocked integration and remediation evidence follow-on
+## First blocked integration and remediation evidence follow-on (historical)
 
 Original Task 5 `f2813d2eff5fa78efe3f0d4a705e3bc51de13979` and Task 6
 `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4` remain unique committed
@@ -298,6 +298,50 @@ Keep Sprint 41 active, all previous/current prompts, push deferred to sprint end
 and release review ineligible until that gate passes. No merge/push/tag/main or
 completion operation is part of this documentation follow-on.
 
+## Second blocked review and boundary-oracle evidence follow-on
+
+After evidence `9c98e2ce9abd205bb93a79f7177649ff1c7acbdf`, both fresh
+Task 7 reviewers audited all 35 at
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..fc146d8802bbb82e9557a63d6c535f584a270b04`
+and returned blocked for missing oracle M1-M5 without a demonstrated production
+bypass. Independent F1/F2 exited0 with 82/6 tests, then deliberate runner exit 75
+at STOP_AFTER_CURRENT stopped before F3; remaining Rust gates were unexecuted.
+Primary ran no Rust gate. Both finished all 35/documentation audits with clean
+unchanged endpoints; neither produced a pass/artifact-consistency/completion.
+This history and the first R1-R5/M1-M4 blocked review remain intact.
+
+Current code is `a78568b250201fbab35bb36928d82b3b8fb9f414`; the exact
+new range from `fc146d8802bbb82e9557a63d6c535f584a270b04` changes three
+existing Runtime paths/+507/-9 = 516. Current all 18 commands passed:
+F1-F12 82/8/31/8/18/11/13/12/33/222/401/37; canonical1461/83 nonempty targets
+plus four empty targets. All 243 committed input hashes and 44 log hashes match.
+The current evidence records35 rows/56 named functions and five real boundary
+routes: outside-Workspace alias, actual AlreadyExists, existing second-Configuration
+comparator, oversized original at reachable I/O owner (public constructor rejects),
+and `.oneagent` Configuration baseline with Missing/Failed cache and rebuild.
+Latest development public-fixture/lint failures and stable attempt 1 watcher
+helper timeout `file_watching.rs:256` remain; exact caller/cause is unknown.
+Focused watcher retry plus full cycle 2 passed without source changes. Old
+Git-fixture/F8 failures and 1435/1447 results are not new validation credit.
+
+Budget baseline stays `93661837df8d63bfed10c9b70d1986c4e0d12aa5`:
+net cumulative 25/+13471/-234 = 13705/no binaries, above estimate 12000 and below
+hard caps 32/20000. Include24 original source/fixture paths and exact original
+Task 5 shared-master delta `f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite 10/823, original Task 6 five/438, prior follow-on five/553 and current
+docs remain separate; full unpartitioned code-head history 35/15249 is not the
+implementation subtotal. No overlap double-count or shared-master exclusion.
+
+This fresh Task 6 follow-on starts at clean `a78568b2` and uses distinct subject
+`Update Sprint 41 boundary oracle evidence`, preserving original Task 5/6 uniqueness.
+It edits only five existing documentation paths and runs no Rust gate. Compact
+checks are in `local-artifacts/codex-runs/sprint-41/oracle-evidence/`; telemetry
+is unavailable. After this local documentation commit, dispatcher owns any
+integration and fresh independent/primary Task 7 on the immutable endpoint with
+its own validation and artifact consistency. Keep Sprint 41 active and every
+old/current prompt suite; no retirement, completion, release/main/tag/merge/push
+is included here. Push remains deferred to sprint end.
+
 ## Ledger
 
 | Order | Prompt | Status | Start HEAD | End HEAD | Validation | Commit/push | Tokens | Logs |
@@ -328,3 +372,13 @@ Report starting/ending state, exact HEAD and branch, verified task outcomes and
 commits, end-of-sprint push, review identities/reconciliation/consistency,
 retirement, measured telemetry or unavailable, logs, remaining changes, and
 the exact next action. Never describe planning as implemented transactions.
+
+Boundary-oracle follow-on ledger: start `a78568b250201fbab35bb36928d82b3b8fb9f414`;
+end subject `Update Sprint 41 boundary oracle evidence` (resolve uniquely in
+sprint ancestry). Independent documentation reconciliation:243 source/44 log
+hashes,35 rows/56 named oracles, cumulative 25/13705 and distinct three-path/516
+code delta. Syntax, explicit suite 8/repository 22, current references/anchors,
+four budget records/seven manifest tasks and working/staged/committed diff checks
+are recorded in `oracle-evidence/`. No new Rust run; both blocked reviews stay
+blocked and the next immutable Task 7 gate stays pending. Local commit only,
+push deferred; context effective window unknown and measured telemetry unavailable.

@@ -290,26 +290,37 @@ services remain edit-disabled. Existing read-only APIs, eight MCP tools, UI,
 Graph semantics, cache format and Coverage claims remain unchanged.
 
 Current implementation evidence qualifies
-`aaeacbfa675bd1a321f5e5c160950c6c661052d0`, following original Task 5
-`f2813d2eff5fa78efe3f0d4a705e3bc51de13979`, original Task 6
-`e99a6ac14494f9b00fc2f144b01b84e402c9f7d4` and the blocked review at
-`33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0`. The accepted producer design
-and constructor/type evidence split remain unchanged. The
-[current evidence](architecture/safe-edit-transactions-evidence.md#remediation-closure-and-new-direct-evidence)
-maps all 35 requirements and 52 named oracles, including service-revocable
-caller/queued payloads, prepaid nested producer records, one shared lease through
-I/O and undo, ordinary-cache Busy and completed policy before queue admission.
-Allocation-owner observations and the Unicode capacity probe do not measure
-whole-process heap or every canonical-helper internal reallocation overlap.
+`a78568b250201fbab35bb36928d82b3b8fb9f414` after original Task 5
+`f2813d2eff5fa78efe3f0d4a705e3bc51de13979`, Task 6
+`e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`, remediation `aaeacbfa`
+and evidence `9c98e2ce`. Both integration reviews remain **blocked**:
+`33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` for R1-R5 and missing evidence M1-M4,
+and `fc146d8802bbb82e9557a63d6c535f584a270b04` for missing oracles M1-M5
+without a demonstrated production bypass. Second independent F1/F2 passed,
+then deliberate exit 75 stopped before F3; primary ran no Rust gate.
 
-All 18 retained current commands exited 0; canonical test passed 1447 tests in
-83 nonzero targets, with four zero-test harnesses separately reported. The
-historical 1435-test result, Git-fixture failure/repeat and remediation attempt-1
-F8 lifecycle-test failure remain separate. Net cumulative implementation is
-25 paths/13207 churn/no binaries, above the 12000 estimate and within the
-32-path/20000 caps. Validation ran on macOS only. R1-R5/M1-M4 closure remains
-an implementation claim awaiting fresh independent and primary Task 7 review;
-no completion or release eligibility follows.
+The [current evidence](architecture/safe-edit-transactions-evidence.md#boundary-oracle-closure-and-reachability)
+maps all 35 requirements and 56 named oracles, retaining the first remediation's
+revocable payloads, prepaid producers/shared lease, cache Busy and policy-before-queue.
+New routes prove actual external alias rejection, OS AlreadyExists, existing
+second-Configuration equivalence rejection, original one-over at the I/O owner
+(public construction is unavailable), and actual `.oneagent` source/baseline
+with Missing/Failed cache compatibility and complete rebuild. No cache Hit or
+write success is claimed there. Production semantics/APIs/dependencies stay intact.
+Allocation observations do not measure whole-process heap or every canonical
+helper internal reallocation overlap; the accepted producer/type split remains.
+
+All 18 retained current commands exited 0: canonical test **1461/83 nonempty
+targets**, four empty targets separately. The latest watcher timeout at unchanged
+`file_watching.rs:256` has unknown exact caller/cause; focused retry and full
+cycle 2 passed on identical source. Public-fixture/lint corrections, earlier
+1435/1447 results and Git-fixture/F8 failures remain separate histories.
+243 committed source hashes/44 retained log hashes reconcile independently.
+Net implementation is 25/+13471/-234 = 13705 churn/no binaries, above estimate 12000
+and within 32/20000 caps without resetting baseline 93661837 or excluding the
+original shared-master delta. Only macOS ran. Sprint 41 remains active; closure
+claims await a fresh immutable independent/primary Task 7 gate and artifact
+consistency. Neither completion nor release eligibility follows.
 
 ## Planned boundaries
 

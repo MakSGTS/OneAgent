@@ -298,7 +298,7 @@ Keep Sprint 41 active, all previous/current prompts, push deferred to sprint end
 and release review ineligible until that gate passes. No merge/push/tag/main or
 completion operation is part of this documentation follow-on.
 
-## Second blocked review and boundary-oracle evidence follow-on
+## Second blocked review and boundary-oracle evidence follow-on (historical)
 
 After evidence `9c98e2ce9abd205bb93a79f7177649ff1c7acbdf`, both fresh
 Task 7 reviewers audited all 35 at
@@ -342,6 +342,62 @@ its own validation and artifact consistency. Keep Sprint 41 active and every
 old/current prompt suite; no retirement, completion, release/main/tag/merge/push
 is included here. Push remains deferred to sprint end.
 
+## Third blocked review and semantic-comparator evidence follow-on
+
+The third independent Task 7 audit of all 35 rows at
+`de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for
+T18 target identity, T19 pure Analysis edge evidence, T20 consistent occurrences,
+T21 span-only provenance and T23 same-registry status evidence; no production
+bypass was demonstrated. Independent F1-F6 passed 82/8/31/8/18/11, then deliberate
+runner exit 75 stopped before F7. F7-F12/G1-G6 were unexecuted. Primary launch
+was denied twice by the agent thread limit; no primary review or pass occurred.
+All three blocked reviews and every historical failure remain preserved.
+
+Current implementation `32ffd52e485e7b04c72bf51e77c4e25d69325d0e` has
+exact delta `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5..32ffd52e485e7b04c72bf51e77c4e25d69325d0e`:
+two test-bearing paths/+563/-5 = 568, with production APIs, dependencies,
+Graph/Coverage, cache schema and protocol/client catalog unchanged. The
+[semantic comparator evidence](../../../architecture/safe-edit-transactions-evidence.md#semantic-comparator-oracle-closure-and-reachability)
+reconciles all 35 rows/56 named oracles: same-count whole-Graph target identity
+reaches actual A target lookup; Analysis edge-only provenance/endpoints now
+have independent F1 evidence; consistent constructor-valid occurrences and
+untouched Unique retarget reach A/E; canonical span-only changes preserve
+path/producer/count. Analysis RuleEngine proves all six status transitions with
+one identical nonempty registry/RuleId/count and positive controls. Runtime's
+real empty registry remains a separate boundary; no nonempty same-count Runtime
+status evidence or constructor-unreachable comparator case is claimed.
+
+All 18 stable commands exited 0; F1-F12 counts remain
+82/8/31/8/18/11/13/12/33/222/401/37, G3 **1461/83 nonempty plus four empty
+targets**, zero failed/ignored. Independent documentation reconciliation verifies
+243 source and 836 committed all-input hashes, 25 retained log hashes and all
+18 command hashes/counts in `comparator-oracles/`. Current development dependency
+compile/lint failures and corrected selector are retained; the stable cycle
+passed. The prior unchanged watcher timeout's exact caller/cause stays unknown.
+No Rust rerun belongs to this documentation task; only macOS is qualified.
+
+Net implementation is **25/+14029/-234 = 14263**, no binaries, above estimate
+12000 and within hard caps 32/20000. Baseline remains
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: count 24 original source/fixture
+paths plus only exact original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite/Task 6/evidence follow-ons stay separately accounted; never reset
+the baseline, blanket-exclude the master or sum overlapping diffs. Full
+unpartitioned history is 35/+15809/-329 = 16138, not the implementation subtotal.
+
+This fresh Task 6 follow-on starts at clean `32ffd52e485e7b04c72bf51e77c4e25d69325d0e`
+and uses distinct subject `Update Sprint 41 semantic oracle evidence`, preserving
+unique original Task 5 `f2813d2eff5fa78efe3f0d4a705e3bc51de13979`, original
+Task 6 `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4` and design gate
+`f25388cd8073bcd228c8eaa951ef1c0178907431`. Only five existing documents change;
+no Rust rerun, source fix, formal review artifact, retirement, completion, merge
+or push belongs here. Logs are in `local-artifacts/codex-runs/sprint-41/comparator-evidence/`.
+The dispatcher owns later integration and final push. Sprint 41 remains active,
+Task 7 pending and release ineligible; keep all 11 Sprint 40, four Sprint 40.1
+and eight Sprint 41 prompts. The next independent and primary review must each
+qualify the immutable integrated endpoint including this separate evidence commit,
+then perform required artifact consistency. Measured telemetry is unavailable.
+
 ## Ledger
 
 | Order | Prompt | Status | Start HEAD | End HEAD | Validation | Commit/push | Tokens | Logs |
@@ -382,3 +438,14 @@ four budget records/seven manifest tasks and working/staged/committed diff check
 are recorded in `oracle-evidence/`. No new Rust run; both blocked reviews stay
 blocked and the next immutable Task 7 gate stays pending. Local commit only,
 push deferred; context effective window unknown and measured telemetry unavailable.
+
+Semantic-comparator follow-on ledger: start `32ffd52e485e7b04c72bf51e77c4e25d69325d0e`;
+end subject `Update Sprint 41 semantic oracle evidence` (resolve uniquely in
+sprint ancestry). Reconciliation verifies 243 source/836 committed all-input,
+25 log and 18 command hashes, all 35 rows/56 names, two-path/568 delta and
+cumulative 25/14263. Documentation links/anchors/source locations, four budget
+records/seven manifest tasks, syntax, explicit suite 8/repository 22 and diff
+checks are retained in `comparator-evidence/`. All three historical reviews
+remain blocked; no primary third-review launch or pass is claimed. No Rust
+rerun or prompt retirement; local documentation commit, dispatcher final push.
+Context window unknown and measured telemetry unavailable.

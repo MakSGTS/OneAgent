@@ -10472,7 +10472,7 @@ The next gate is a fresh Task 7 after the required remediation integration;
 Sprint 41 remains `active`, all old/current prompts remain, and v0.7 release
 review is not yet eligible. Push remains deferred to sprint end.
 
-###### Second blocked review and current boundary-oracle evidence
+###### Second blocked review and historical boundary-oracle evidence
 
 Both fresh Task 7 reviewers completed all 35 source obligations at
 `ceb3a91da70afde202cab84f7ea42846cdd734bd..fc146d8802bbb82e9557a63d6c535f584a270b04`
@@ -10520,6 +10520,58 @@ on the immutable integrated endpoint including this evidence, with their own
 validation and artifact consistency. Preserve every old/current prompt suite.
 No release eligibility or review pass follows from implementation success;
 push stays deferred to sprint end. Telemetry is unavailable, macOS only.
+
+###### Third blocked review and current semantic-comparator evidence
+
+The third independent Task 7 audit of all 35 rows at
+`de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for
+T18 target identity, T19 pure Analysis edge evidence, T20 consistent occurrences,
+T21 span-only provenance and T23 same-registry status evidence; no production
+bypass was demonstrated. Independent F1-F6 passed 82/8/31/8/18/11, then deliberate
+runner exit 75 stopped before F7. F7-F12/G1-G6 were unexecuted. Primary launch
+was denied twice by the agent thread limit; no primary review or pass occurred.
+All three blocked reviews and every historical failure remain preserved.
+
+Current implementation `32ffd52e485e7b04c72bf51e77c4e25d69325d0e` has
+exact delta `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5..32ffd52e485e7b04c72bf51e77c4e25d69325d0e`:
+two test-bearing paths/+563/-5 = 568, with production APIs, dependencies,
+Graph/Coverage, cache schema and protocol/client catalog unchanged. The
+[semantic comparator evidence](architecture/safe-edit-transactions-evidence.md#semantic-comparator-oracle-closure-and-reachability)
+reconciles all 35 rows/56 named oracles: same-count whole-Graph target identity
+reaches actual A target lookup; Analysis edge-only provenance/endpoints now
+have independent F1 evidence; consistent constructor-valid occurrences and
+untouched Unique retarget reach A/E; canonical span-only changes preserve
+path/producer/count. Analysis RuleEngine proves all six status transitions with
+one identical nonempty registry/RuleId/count and positive controls. Runtime's
+real empty registry remains a separate boundary; no nonempty same-count Runtime
+status evidence or constructor-unreachable comparator case is claimed.
+
+All 18 stable commands exited 0; F1-F12 counts remain
+82/8/31/8/18/11/13/12/33/222/401/37, G3 **1461/83 nonempty plus four empty
+targets**, zero failed/ignored. Independent documentation reconciliation verifies
+243 source and 836 committed all-input hashes, 25 retained log hashes and all
+18 command hashes/counts in `comparator-oracles/`. Current development dependency
+compile/lint failures and corrected selector are retained; the stable cycle
+passed. The prior unchanged watcher timeout's exact caller/cause stays unknown.
+No Rust rerun belongs to this documentation task; only macOS is qualified.
+
+Net implementation is **25/+14029/-234 = 14263**, no binaries, above estimate
+12000 and within hard caps 32/20000. Baseline remains
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: count 24 original source/fixture
+paths plus only exact original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite/Task 6/evidence follow-ons stay separately accounted; never reset
+the baseline, blanket-exclude the master or sum overlapping diffs. Full
+unpartitioned history is 35/+15809/-329 = 16138, not the implementation subtotal.
+
+This distinct five-document follow-on uses `Update Sprint 41 semantic oracle evidence`;
+checks live under `local-artifacts/codex-runs/sprint-41/comparator-evidence/`.
+Original Task 5/6 and design subjects remain unique. Sprint 41 stays `active`,
+Task 7 awaits a fresh immutable independent/primary gate and artifact consistency,
+and v0.7 release remains ineligible. Preserve all 11 Sprint 40, four Sprint 40.1
+and eight Sprint 41 prompts. No source change, review artifact, retirement,
+completion, merge or push is part of this documentation task; dispatcher owns
+later integration and final push. Telemetry is unavailable.
 
 ###### Objective, evidence, and bounded scope
 
@@ -10633,7 +10685,7 @@ original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
 carried work and the eventual Task 5 ledger delta; only exact separately
 committed prerequisite documentation ranges are excluded. That pause made no
 accounting reset or completion claim; the original 25-path/11259-churn result
-and current net 25-path/13705-churn remediation aggregate are recorded above.
+and current net 25-path/14263-churn remediation aggregate are recorded above.
 The latter exceeds the 12000 estimate but stays below the 20000 hard cap.
 The matrix allocates all 25 paths exactly. F10 becomes
 `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes

@@ -1641,8 +1641,8 @@ was blocked for R1-R5/M1-M4. After remediation `aaeacbfa` and evidence
 oracles M1-M5, with no demonstrated production bypass. Independent F1/F2 passed
 before deliberate runner exit 75 stopped before F3; primary ran no Rust commands.
 The [current evidence](safe-edit-transactions-evidence.md) qualifies
-`a78568b250201fbab35bb36928d82b3b8fb9f414`, all 35/current owners and
-56 named oracles. Both blocked reviews remain historical; closure still needs
+`32ffd52e485e7b04c72bf51e77c4e25d69325d0e`, all 35/current owners and
+56 named oracles. All three blocked reviews remain historical; closure still needs
 fresh independent/primary Task 7 validation and artifact consistency.
 Graph identity, BSL name semantics, immutable Analysis planning and adapter
 source capture remain their existing owners. Analysis adds a pure exhaustive
@@ -1703,7 +1703,7 @@ ordinary cache scanning/codec retain Missing/Failed outcomes and complete rebuil
 fallback. Apply/undo work despite Failed cache writes; later source mutation
 rejects without publication. No successful Hit/write is claimed for that case.
 
-Current stable canonical result: **1461 passed/83 nonempty targets**, four
+Historical boundary-cycle canonical result: **1461 passed/83 nonempty targets**, four
 empty harnesses separately. All 18 commands passed with 243 committed source and 44
 log hashes reconciled. Latest attempt 1's unchanged watcher helper timeout at
 `file_watching.rs:256` has unknown exact caller/cause; exact focused retry and
@@ -1715,6 +1715,54 @@ rerun for docs. Cumulative 25/+13471/-234 = 13705 stays within 32/20000 hard cap
 using original baseline and original Task 5 master delta. Only macOS is qualified.
 No durable undo, hostile-writer exclusion, multi-file disk atomicity or crash
 recovery guarantee follows. Sprint 41 remains `active`.
+
+The third independent Task 7 audit of all 35 rows at
+`de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for
+T18 target identity, T19 pure Analysis edge evidence, T20 consistent occurrences,
+T21 span-only provenance and T23 same-registry status evidence; no production
+bypass was demonstrated. Independent F1-F6 passed 82/8/31/8/18/11, then deliberate
+runner exit 75 stopped before F7. F7-F12/G1-G6 were unexecuted. Primary launch
+was denied twice by the agent thread limit; no primary review or pass occurred.
+All three blocked reviews and every historical failure remain preserved.
+
+Current implementation `32ffd52e485e7b04c72bf51e77c4e25d69325d0e` has
+exact delta `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5..32ffd52e485e7b04c72bf51e77c4e25d69325d0e`:
+two test-bearing paths/+563/-5 = 568, with production APIs, dependencies,
+Graph/Coverage, cache schema and protocol/client catalog unchanged. The
+[semantic comparator evidence](safe-edit-transactions-evidence.md#semantic-comparator-oracle-closure-and-reachability)
+reconciles all 35 rows/56 named oracles: same-count whole-Graph target identity
+reaches actual A target lookup; Analysis edge-only provenance/endpoints now
+have independent F1 evidence; consistent constructor-valid occurrences and
+untouched Unique retarget reach A/E; canonical span-only changes preserve
+path/producer/count. Analysis RuleEngine proves all six status transitions with
+one identical nonempty registry/RuleId/count and positive controls. Runtime's
+real empty registry remains a separate boundary; no nonempty same-count Runtime
+status evidence or constructor-unreachable comparator case is claimed.
+
+All 18 stable commands exited 0; F1-F12 counts remain
+82/8/31/8/18/11/13/12/33/222/401/37, G3 **1461/83 nonempty plus four empty
+targets**, zero failed/ignored. Independent documentation reconciliation verifies
+243 source and 836 committed all-input hashes, 25 retained log hashes and all
+18 command hashes/counts in `comparator-oracles/`. Current development dependency
+compile/lint failures and corrected selector are retained; the stable cycle
+passed. The prior unchanged watcher timeout's exact caller/cause stays unknown.
+No Rust rerun belongs to this documentation task; only macOS is qualified.
+
+Net implementation is **25/+14029/-234 = 14263**, no binaries, above estimate
+12000 and within hard caps 32/20000. Baseline remains
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: count 24 original source/fixture
+paths plus only exact original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite/Task 6/evidence follow-ons stay separately accounted; never reset
+the baseline, blanket-exclude the master or sum overlapping diffs. Full
+unpartitioned history is 35/+15809/-329 = 16138, not the implementation subtotal.
+
+The current evidence retains the accepted source/Graph/producer boundaries and
+all historical limitations. Documentation checks live in
+`local-artifacts/codex-runs/sprint-41/comparator-evidence/`; telemetry is unavailable.
+Sprint 41 stays active, all old/current prompt suites remain and the immutable
+independent/primary Task 7 gate with artifact consistency is pending. No release
+eligibility, durable undo, crash guarantee or completion claim follows.
 
 ## Incremental indexing
 

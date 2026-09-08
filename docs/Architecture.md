@@ -254,8 +254,8 @@ recorded in the [Sprint 40 evidence](architecture/refactoring-planner-evidence.m
 and [Sprint 40.1 remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md).
 Sprint 40 is administratively completed, and Sprint 40.1 records `pass`,
 resolves the publication-identity and stale-evidence blockers, and is completed.
-Sprint 41 is `active`; its architecture is accepted below, while implementation
-and independent design/integration gates remain pending.
+Sprint 41 is `active`; Task 5 implementation and Task 6 evidence are committed
+below. The independent integration gate remains pending.
 
 ## Accepted Safe Edit Transactions boundary
 
@@ -286,9 +286,17 @@ The first write slice requires explicit cooperative exclusive source ownership
 and macOS/Linux file-identity guards. Per-file staged rename does not provide
 multi-file disk atomicity, hostile-writer exclusion or crash durability. Default
 services remain edit-disabled. Existing read-only APIs, eight MCP tools, UI,
-Graph semantics, cache format and Coverage claims remain unchanged. This is an
-accepted contract, not implemented capability; the invariant matrix and
-independent design gate must precede production changes.
+Graph semantics, cache format and Coverage claims remain unchanged.
+
+The implementation at `f2813d2eff5fa78efe3f0d4a705e3bc51de13979` follows
+the producer design pass `f25388cd8073bcd228c8eaa951ef1c0178907431`.
+The [Task 6 evidence](architecture/safe-edit-transactions-evidence.md) maps all
+35 invariants to committed owners and forty executed named oracles. Twelve
+focused groups and the canonical gate passed; the full test command ran 1435
+tests in 83 nonzero targets, with four zero-test harnesses separately reported.
+The initial temporary-Git environment failure and unchanged-source repeat remain
+explicit. Validation ran on macOS; Linux and other-platform execution is not
+claimed. Independent Task 7 review and its completion gates remain pending.
 
 ## Planned boundaries
 

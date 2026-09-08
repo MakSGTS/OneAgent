@@ -10244,8 +10244,9 @@ transaction recovery/undo tests and exact ownership mechanisms remain pending.
 No essential source-format oracle is missing. Task 1 adds no production behavior,
 API, dependency, test or Coverage claim. Exact validation is recorded in its
 investigation and master ledger. Task 2 architecture acceptance is recorded
-below; Task 3 mapping and subsequent gate/blocker history follow. The current
-producer correction leaves Task 5 blocked and Tasks 6-7 `not_started`.
+below; Task 3 mapping and subsequent gate/blocker history follow. The historical
+producer-correction blocker is resolved by the Task 5/6 evidence recorded below;
+Task 7 remains `not_started`.
 
 ###### Task 2 architecture result
 
@@ -10351,7 +10352,7 @@ attempt and new producer-projection prerequisite are recorded below.
 The user explicitly approved the revised producer plan after Task 5 started at
 `93661837df8d63bfed10c9b70d1986c4e0d12aa5` and exposed Designer whole-module
 SHA/declaration provenance and EDT callable-owned Query identity dependencies.
-The incomplete attempt has 9 task-owned paths/1593 text churn/no binary paths,
+At that historical pause the incomplete attempt had 9 task-owned paths/1593 text churn/no binary paths,
 no implementation commit and no push. Analysis package checking passed; Runtime
 all-targets checking passed before later uncovered edits. Runtime integration
 exited 101 with 1 passed and 1 failed test (SemanticMismatch, Recovered, zero
@@ -10369,9 +10370,10 @@ and diagnostics remain required. Designer gains no Query Graph semantics.
 
 The complete T01-T35 representability audit, all reachable negative cases and
 accepted eligibility remain. Filesystem/recovery/undo/coordinator mechanisms do
-not change. Prior review decisions remain historical. The next unique gate is
-`Approve Sprint 41 producer-owned semantic projection design`; review is pending,
-and this correction does not self-approve or resume production work.
+not change. Prior review decisions remain historical. At that correction the
+next unique gate was `Approve Sprint 41 producer-owned semantic projection design`;
+review was pending and the correction did not self-approve or resume production
+work. The later pass is `f25388cd8073bcd228c8eaa951ef1c0178907431`.
 
 The new pass is the resume prerequisite, not a new implementation budget start.
 Keep `93661837df8d63bfed10c9b70d1986c4e0d12aa5` as Task 5's original
@@ -10380,7 +10382,44 @@ task-owned change, untracked text, formatting and ledger update. Exclude only
 separately committed prerequisite documentation/review deltas by exact range;
 never classify the preserved work as unrelated or subtract whole shared paths.
 Reconcile the cumulative diff without double-counting overlapping snapshots.
-Sprint 41 remains active; Task 5 blocked, Tasks 6-7 not started, push at sprint end.
+At that pause Sprint 41 remained active, Task 5 blocked and Tasks 6-7 not started.
+The completed implementation and evidence boundary follows; push stays deferred.
+
+###### Task 5 implementation and Task 6 evidence
+
+Task 5 is committed as `f2813d2eff5fa78efe3f0d4a705e3bc51de13979`
+(`Implement Sprint 41 Safe Edit Transactions`). The
+[Task 6 evidence](architecture/safe-edit-transactions-evidence.md) reconciles the
+exact implementation delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`,
+all 35 invariants, forty named executed oracles, full log paths, public consumers,
+dependencies, Graph/Coverage, cache, protocols and redaction. The unique next
+task is Task 7 integration review after the required no-ff implementation merge;
+Sprint 41 remains `active` and no review pass or release eligibility is claimed.
+
+Cumulative implementation accounting keeps original baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5` and includes all carried work.
+Only the exact separately committed prerequisite documentation range through
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510` is excluded. The final delta
+is 25 paths, +11067/-192 = 11259 text churn, seven new/eighteen modified files,
+no binaries, within the authorized 32-path/20000-churn caps. The shared Task 5
+ledger delta is included; intermediate totals are not added again.
+
+F1-F12 all exited 0 with nonzero tests, followed by the successful canonical
+fmt/check/test/clippy/doc/diff cycle. The workspace test result is 1435 passed
+tests in 83 nonzero targets and four separate empty harnesses. The first G3
+attempt failed in unchanged Git-reader fixture discovery under repository-local
+TMPDIR; the exact target then passed 8/8 with `GIT_CEILING_DIRECTORIES=$TMPDIR`,
+and the canonical cycle repeated successfully on unchanged source. Historical
+development failures and the environment attempt remain recorded, not summed
+into stable counts. All production validation reproductions require the exact
+environment documented in Task 6 evidence. Linux/Windows execution, GUI tests,
+durable undo, crash recovery and hostile-writer exclusion are not claimed.
+
+Default product services remain edit-disabled; only the opt-in Rust API is
+implemented. No new dependency, Graph fact, source Coverage claim, cache schema,
+protocol catalog or UI edit surface changed. Task 7 owns separate independent
+and primary validation, the integration decision and any completion transition.
 
 ###### Objective, evidence, and bounded scope
 
@@ -10389,7 +10428,8 @@ a checked local runtime Rust API for EDT and Designer XML, with explicit bound
 authorization, source freshness, confined writes, failure recovery, and complete
 post-edit semantic validation before successful publication. ADR-0064 now accepts
 the transaction algorithm, owners, concurrency model, atomicity boundary, undo
-contract and honest crash limits; implementation remains gated by Tasks 3-4.
+contract and honest crash limits. The required Tasks 3-4 gates preceded the
+implementation recorded above; final integration remains gated by Task 7.
 
 Data/readiness passes at planning: ADR-0063, Analysis source/plan contracts,
 Runtime immutable publications/builders/watchers/cache, Tool Policy one-use
@@ -10488,11 +10528,12 @@ the proposed 14000 and former 10000. The complete audited remaining-work estimat
 sets the final estimate at 12000; this numeric-only override changes no owner,
 architecture, requirement or gate. The existing design pass
 f25388cd8073bcd228c8eaa951ef1c0178907431 remains the mechanism gate. The
-24-path/9369-churn paused implementation remains incomplete and counted from
+24-path/9369-churn historical pause was incomplete and counted from
 original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
 carried work and the eventual Task 5 ledger delta; only exact separately
-committed prerequisite documentation ranges are excluded. No accounting reset
-or completion claim follows. The matrix allocates all 25 paths exactly. F10 becomes
+committed prerequisite documentation ranges are excluded. That pause made no
+accounting reset or completion claim; the final 25-path/11259-churn result is
+recorded above. The matrix allocates all 25 paths exactly. F10 becomes
 `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes
 `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`.
 F1-F9/F12 remain unchanged. Explicitly stop before further work at more than

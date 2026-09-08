@@ -10425,7 +10425,7 @@ implemented. No new dependency, Graph fact, source Coverage claim, cache schema,
 protocol catalog or UI edit surface changed. Task 7 owns separate independent
 and primary validation, the integration decision and any completion transition.
 
-###### Blocked integration review and remediation evidence
+###### First blocked integration review and remediation evidence (historical)
 
 Original Task 6 committed as `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`.
 The review endpoint `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` was
@@ -10471,6 +10471,55 @@ This fresh evidence follow-on uses commit subject
 The next gate is a fresh Task 7 after the required remediation integration;
 Sprint 41 remains `active`, all old/current prompts remain, and v0.7 release
 review is not yet eligible. Push remains deferred to sprint end.
+
+###### Second blocked review and current boundary-oracle evidence
+
+Both fresh Task 7 reviewers completed all 35 source obligations at
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..fc146d8802bbb82e9557a63d6c535f584a270b04`
+and returned **blocked** for five missing oracles M1-M5, with no demonstrated
+production protection bypass. This follows remediation `aaeacbfa` and evidence
+`9c98e2ce9abd205bb93a79f7177649ff1c7acbdf`. Independent F1/F2 passed
+82/6 tests, then the dispatcher deliberately stopped the runner with exit 75
+before F3; remaining Rust gates were unexecuted. Primary ran no Rust commands.
+Both all-35 audits and documentation checks finished; no pass artifact,
+artifact-consistency gate, prompt retirement or completion occurred.
+
+Current code `a78568b250201fbab35bb36928d82b3b8fb9f414` adds the exact
+three-path/+507/-9 = 516 delta from `fc146d8802bbb82e9557a63d6c535f584a270b04`.
+The [boundary evidence](architecture/safe-edit-transactions-evidence.md#boundary-oracle-closure-and-reachability)
+reconciles all 35 rows and **56** named oracles: actual outside-Workspace alias,
+OS AlreadyExists collision, real existing second-Configuration comparator,
+original 1 MiB + 1 at its reachable I/O owner, and production `.oneagent`
+Configurations with bound baseline, Missing/Failed cache outcomes and rebuild.
+The public oversized source is constructor-unreachable; no forged semantic
+publication or successful `.oneagent` cache Hit/write is claimed.
+
+All 18 stable-attempt-2 commands exited 0. F1-F12 counts are
+82/8/31/8/18/11/13/12/33/222/401/37; canonical test is **1461/83 nonempty targets
+plus four empty targets**, zero failed/ignored. All 243 committed input hashes
+and 44 retained log hashes independently reconcile. Latest attempt 1 failed in
+the unchanged generic watcher update timeout at `file_watching.rs:256`
+(1293 passed/one failed); exact caller/cause is unknown. Focused retry and full
+cycle 2 passed on unchanged source. New public-fixture and clippy failures,
+earlier F8/Git-fixture failures and both blocked reviews remain historical.
+No Rust rerun belongs to this documentation task.
+
+Cumulative implementation remains rooted at
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: **25/+13471/-234 = 13705**,
+no binaries, above estimate 12000 and within hard caps 32/20000. Count the
+24 original source/fixture paths plus exact original Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Keep prerequisite 10/823, original Task 6 five/438, prior evidence five/553 and
+this documentation follow-on separate; never blanket-exclude the master or
+sum overlapping diffs. Full unpartitioned code-head history is 35/15249.
+
+This distinct documentation commit uses `Update Sprint 41 boundary oracle evidence`;
+compact checks are retained in `local-artifacts/codex-runs/sprint-41/oracle-evidence/`.
+Sprint 41 stays `active`; the next gate is fresh independent and primary Task 7
+on the immutable integrated endpoint including this evidence, with their own
+validation and artifact consistency. Preserve every old/current prompt suite.
+No release eligibility or review pass follows from implementation success;
+push stays deferred to sprint end. Telemetry is unavailable, macOS only.
 
 ###### Objective, evidence, and bounded scope
 
@@ -10584,7 +10633,7 @@ original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
 carried work and the eventual Task 5 ledger delta; only exact separately
 committed prerequisite documentation ranges are excluded. That pause made no
 accounting reset or completion claim; the original 25-path/11259-churn result
-and current net 25-path/13207-churn remediation aggregate are recorded above.
+and current net 25-path/13705-churn remediation aggregate are recorded above.
 The latter exceeds the 12000 estimate but stays below the 20000 hard cap.
 The matrix allocates all 25 paths exactly. F10 becomes
 `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes

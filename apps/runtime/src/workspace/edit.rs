@@ -1081,8 +1081,12 @@ fn compare_snapshot(
             validate_postconditions(plan, &evidence(before), &evidence(after), projection)
                 .map_err(|_| WorkspaceEditCause::SemanticMismatch)?;
         } else {
+            #[cfg(test)]
+            super::edit_io::faults::record("compare_unedited_configuration");
             validate_equivalence(&evidence(before), &evidence(after))
                 .map_err(|_| WorkspaceEditCause::SemanticMismatch)?;
+            #[cfg(test)]
+            super::edit_io::faults::record("compared_unedited_configuration");
         }
     }
     Ok(())
@@ -3384,6 +3388,168 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn existing_second_configuration_semantic_change_recovers() {
+        use oneagent_analysis::refactoring::{BslModuleRole, SourceDocument, SourceEvidenceSet};
+        for change in [false, true] {
+            let root = fixtures::fixture("edt");
+            fixtures::nest_fixture(root.path(), "first");
+            let second = fixtures::fixture("edt");
+            let descriptor = second.path().join("src/Configuration/Configuration.mdo");
+            let contents = fs::read_to_string(&descriptor)
+                .unwrap()
+                .replace(
+                    "408a41e7-907a-4fb3-8999-83d1e8b6e093",
+                    "508a41e7-907a-4fb3-8999-83d1e8b6e093",
+                )
+                .replace("DNSWorldEdition", "SecondaryConfiguration");
+            fs::write(descriptor, contents).unwrap();
+            fs::rename(second.path(), root.path().join("second")).unwrap();
+            let built = WorkspaceSnapshotBuilder::new().build(root.path()).unwrap();
+            assert_eq!(built.len(), 2);
+            assert_ne!(
+                built.configurations()[0].configuration_id(),
+                built.configurations()[1].configuration_id()
+            );
+            let io_events = Arc::new(Mutex::new(Vec::new()));
+            let reached = Arc::new(Mutex::new(false));
+            let observed_build = Arc::clone(&reached);
+            let mut service = WorkspaceService::new().with_edit_policy(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            service.edits.test_hooks.io_observed = Arc::clone(&io_events);
+            service.edits.test_hooks.candidate = Some(Box::new(move |candidate| {
+                assert_eq!(candidate.len(), 2);
+                assert!(
+                    candidate.configurations()[0]
+                        .source_evidence()
+                        .documents()
+                        .iter()
+                        .flat_map(SourceDocument::occurrences)
+                        .any(|occurrence| occurrence.token() == "Changed")
+                );
+                let original = &built.configurations()[1];
+                let after = &mut candidate.configurations[1];
+                assert_eq!(original.configuration_id(), after.configuration_id());
+                assert_eq!(original.configuration_name(), after.configuration_name());
+                assert_eq!(original.format(), after.format());
+                assert_eq!(original.root_path(), after.root_path());
+                validate_equivalence(&evidence(original), &evidence(after)).unwrap();
+                if change {
+                    let mut documents = after.source_evidence.documents().to_vec();
+                    let old = &documents[0];
+                    let role = if old.module_role() == BslModuleRole::Object {
+                        BslModuleRole::Manager
+                    } else {
+                        BslModuleRole::Object
+                    };
+                    documents[0] = SourceDocument::new(
+                        old.id().clone(),
+                        old.format(),
+                        role,
+                        old.path().clone(),
+                        old.raw_content().to_vec(),
+                        old.occurrences().to_vec(),
+                        old.completeness(),
+                    )
+                    .unwrap();
+                    after.source_evidence =
+                        SourceEvidenceSet::new(after.configuration_id.clone(), documents).unwrap();
+                    assert_ne!(original.source_evidence(), after.source_evidence());
+                    assert_eq!(
+                        original.source_evidence().documents().len(),
+                        after.source_evidence().documents().len()
+                    );
+                }
+                *observed_build.lock().unwrap() = true;
+            }));
+            let (handle, observer, stop, task) =
+                fixtures::start_service(root.path(), service).await;
+            let before = observer.snapshot().unwrap();
+            let originals: Vec<_> = before
+                .configurations()
+                .iter()
+                .map(|configuration| configuration.source_evidence().clone())
+                .collect();
+            let (challenge, _) = handle
+                .prepare_apply(
+                    fixtures::request(&before, "Changed"),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                )
+                .await
+                .unwrap();
+            let outcome = handle
+                .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+                .await;
+            assert!(
+                *reached.lock().unwrap(),
+                "the mutation follows the real candidate build"
+            );
+            let events = io_events.lock().unwrap().clone();
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|event| **event == "compare_unedited_configuration")
+                    .count(),
+                1
+            );
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|event| **event == "compared_unedited_configuration")
+                    .count(),
+                usize::from(!change)
+            );
+            if change {
+                assert!(
+                    matches!(
+                        outcome,
+                        WorkspaceEditOutcome::Failed {
+                            cause: WorkspaceEditCause::SemanticMismatch,
+                            secondary: None,
+                            recovery: WorkspaceEditRecovery::Recovered,
+                            retained_files: 0,
+                            ..
+                        }
+                    ),
+                    "{outcome:?}"
+                );
+                assert!(events.contains(&"replace_after") && events.contains(&"restore_after"));
+                assert!(Arc::ptr_eq(&before, &observer.snapshot().unwrap()));
+            } else {
+                assert!(
+                    matches!(outcome, WorkspaceEditOutcome::Applied { .. }),
+                    "{outcome:?}"
+                );
+                let after = observer.snapshot().unwrap();
+                assert_eq!(
+                    after.publication_id().get(),
+                    before.publication_id().get() + 1
+                );
+                validate_equivalence(
+                    &evidence(&before.configurations()[1]),
+                    &evidence(&after.configurations()[1]),
+                )
+                .unwrap();
+            }
+            for (index, sources) in originals.iter().enumerate() {
+                assert_eq!(before.configurations()[index].source_evidence(), sources);
+                if change || index == 1 {
+                    for document in sources.documents() {
+                        assert_eq!(
+                            fs::read(root.path().join(document.path().path().as_str())).unwrap(),
+                            document.raw_content()
+                        );
+                    }
+                }
+            }
+            stop.send(()).unwrap();
+            task.await.unwrap().unwrap();
+        }
+    }
+
+    #[tokio::test]
     async fn semantic_candidate_faults_recover() {
         for kind in [
             "extra_configuration",
@@ -4624,6 +4790,52 @@ mod tests {
 
     #[tokio::test]
     async fn cache_namespace_and_scan_exclusions() {
+        for format in ["edt", "designer"] {
+            let root = fixtures::fixture(format);
+            fixtures::nest_fixture(root.path(), ".oneagent/configuration");
+            let service = WorkspaceService::new().with_edit_policy(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            let (handle, observer, stop, task) =
+                fixtures::start_service(root.path(), service).await;
+            let before = observer.snapshot().unwrap();
+            let (challenge, _) = handle
+                .prepare_apply(
+                    fixtures::request(&before, "Changed"),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                )
+                .await
+                .unwrap();
+            {
+                let payload = challenge.attempt.lock().unwrap();
+                let baseline = &payload.as_ref().unwrap().baseline;
+                assert_eq!(before.len(), 1);
+                assert!(baseline.contains_directory(Path::new(".oneagent/configuration")));
+                for document in before.configurations()[0].source_evidence().documents() {
+                    assert_eq!(
+                        baseline
+                            .bytes(Path::new(document.path().path().as_str()))
+                            .unwrap()
+                            .as_ref(),
+                        document.raw_content()
+                    );
+                }
+                let descriptor = if format == "edt" {
+                    ".oneagent/configuration/src/Configuration/Configuration.mdo"
+                } else {
+                    ".oneagent/configuration/Configuration.xml"
+                };
+                assert_eq!(
+                    baseline.bytes(Path::new(descriptor)).unwrap().as_ref(),
+                    fs::read(root.path().join(descriptor)).unwrap()
+                );
+            }
+            drop(challenge);
+            stop.send(()).unwrap();
+            task.await.unwrap().unwrap();
+        }
         for mutate_load in [true, false] {
             let root = fixtures::fixture("edt");
             let (_, _, stop, task) =

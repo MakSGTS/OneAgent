@@ -1633,12 +1633,17 @@ corrections. Sprint 41 is `active`; its accepted transaction contract follows.
 checked local apply/reversal of the existing complete callable-rename family.
 Task 5 implements this boundary at
 `f2813d2eff5fa78efe3f0d4a705e3bc51de13979` after the producer design pass.
-Original Task 6 is `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`; the
-integration review at `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` was blocked.
-The [current evidence](safe-edit-transactions-evidence.md) qualifies remediation
-`aaeacbfa675bd1a321f5e5c160950c6c661052d0`, all 35 invariants, current owners,
-52 named oracles, exact command outcomes and consumer audit. R1-R5/M1-M4 closure
-is an implementation claim; fresh independent and primary review remain pending.
+Original Task 6 is `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`.
+The first integration at `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0`
+was blocked for R1-R5/M1-M4. After remediation `aaeacbfa` and evidence
+`9c98e2ce`, both complete all-35 audits at
+`fc146d8802bbb82e9557a63d6c535f584a270b04` were blocked for missing
+oracles M1-M5, with no demonstrated production bypass. Independent F1/F2 passed
+before deliberate runner exit 75 stopped before F3; primary ran no Rust commands.
+The [current evidence](safe-edit-transactions-evidence.md) qualifies
+`a78568b250201fbab35bb36928d82b3b8fb9f414`, all 35/current owners and
+56 named oracles. Both blocked reviews remain historical; closure still needs
+fresh independent/primary Task 7 validation and artifact consistency.
 Graph identity, BSL name semantics, immutable Analysis planning and adapter
 source capture remain their existing owners. Analysis adds a pure exhaustive
 before/after semantic comparison; Runtime owns the policy-gated service
@@ -1687,12 +1692,27 @@ internals remain under the accepted scoped exclusion; the U+0130 capacity probe
 (input 2/output 3/capacity 8/reservation 8) is not proof of every internal
 reallocation overlap.
 
-The current stable canonical result is 1447 passed tests in 83 nonzero targets,
-with four empty harnesses separately recorded. The old 1435 result, first
-Git-fixture environment failure/repeat and remediation attempt-1 F8 failure are
-historical. Current evidence includes 66 read and 360 reversal-read failure cases,
-a real 128-level scanner, exact causes and actual worker tracing; it does not
-claim capture of all process stdout/stderr. Only macOS execution is qualified.
+Boundary oracles now exercise a real outside-Workspace hard link and sentinel,
+actual create_new AlreadyExists after baseline equality, and a constructor-valid
+role mutation of an existing second Configuration after real rebuild through
+its actual equivalence comparator with recovery. Exact/one-over original bytes
+are tested at the I/O guard; public constructors forbid the oversized source,
+so no impossible Runtime semantic publication receives credit. Actual EDT and
+Designer Configurations under `.oneagent` are included in the prepared baseline;
+ordinary cache scanning/codec retain Missing/Failed outcomes and complete rebuild
+fallback. Apply/undo work despite Failed cache writes; later source mutation
+rejects without publication. No successful Hit/write is claimed for that case.
+
+Current stable canonical result: **1461 passed/83 nonempty targets**, four
+empty harnesses separately. All 18 commands passed with 243 committed source and 44
+log hashes reconciled. Latest attempt 1's unchanged watcher helper timeout at
+`file_watching.rs:256` has unknown exact caller/cause; exact focused retry and
+full cycle 2 passed on identical source. Public fixture/lint failures, historical
+1435/1447, original Git-fixture retry and prior F8 failure remain recorded.
+Current evidence retains 66 read/360 reversal-read cases, 128-level scanner, exact
+causes and actual worker tracing without all-process-output claims. No Rust
+rerun for docs. Cumulative 25/+13471/-234 = 13705 stays within 32/20000 hard caps,
+using original baseline and original Task 5 master delta. Only macOS is qualified.
 No durable undo, hostile-writer exclusion, multi-file disk atomicity or crash
 recovery guarantee follows. Sprint 41 remains `active`.
 

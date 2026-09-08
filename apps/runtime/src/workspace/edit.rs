@@ -23,7 +23,7 @@ use oneagent_workspace::WorkspaceDetector;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use tokio::sync::{mpsc, oneshot, watch};
 
 /// Explicit caller commitment to exclude external writers and linked aliases.
@@ -188,6 +188,7 @@ struct Shared {
     identity: Arc<EditServiceIdentity>,
     admission: Mutex<Admission>,
     commands: mpsc::Sender<EditCommand>,
+    policy: Mutex<Option<ToolPolicy>>,
 }
 
 pub(super) struct Reservation {
@@ -217,6 +218,22 @@ impl Debug for WorkspaceEditHandle {
 }
 
 impl WorkspaceEditHandle {
+    fn availability(&self) -> Option<WorkspaceEditCause> {
+        let Ok(state) = self.shared.admission.lock() else {
+            return Some(WorkspaceEditCause::Unavailable);
+        };
+        if state.poisoned {
+            Some(WorkspaceEditCause::RecoveryRequired)
+        } else if state.stopped {
+            Some(WorkspaceEditCause::Stopped)
+        } else if !state.ready {
+            Some(WorkspaceEditCause::Unavailable)
+        } else if state.writer {
+            Some(WorkspaceEditCause::Busy)
+        } else {
+            None
+        }
+    }
     fn reserve_attempt(&self) -> Result<Reservation> {
         let mut state = self
             .shared
@@ -321,19 +338,73 @@ impl WorkspaceEditHandle {
         cancellation: WorkspaceEditCancellation,
         direction: Direction,
     ) -> WorkspaceEditOutcome {
-        if !Arc::ptr_eq(
-            &self.shared.identity,
-            &authorization.attempt.reservation.shared.identity,
-        ) || authorization.attempt.direction != direction
-        {
-            return WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch);
+        if let Some(cause) = self.availability() {
+            return WorkspaceEditOutcome::failure(cause);
+        }
+        let policy = {
+            let mut payload = authorization.attempt.lock().expect("capability mutex");
+            let Some(attempt) = payload.as_mut() else {
+                return WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch);
+            };
+            if !Arc::ptr_eq(&self.shared.identity, &attempt.reservation.shared.identity)
+                || attempt.direction != direction
+            {
+                return WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch);
+            }
+            {
+                if let Some(cause) = self.availability() {
+                    return WorkspaceEditOutcome::failure(cause);
+                }
+                let admission = self.shared.admission.lock().expect("admission mutex");
+                let cause = if admission.poisoned {
+                    Some(WorkspaceEditCause::RecoveryRequired)
+                } else if admission.stopped {
+                    Some(WorkspaceEditCause::Stopped)
+                } else if admission.slot != Some(attempt.reservation.id) {
+                    Some(WorkspaceEditCause::AuthorizationMismatch)
+                } else {
+                    None
+                };
+                if let Some(cause) = cause {
+                    return WorkspaceEditOutcome::failure(cause);
+                }
+            }
+            let Some(policy) = attempt.policy.take() else {
+                return WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch);
+            };
+            if !policy_matches(
+                attempt,
+                &policy,
+                self.shared.policy.lock().expect("policy mutex").as_ref(),
+            ) {
+                return WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch);
+            }
+            policy
+        };
+        // This executor completes immediately without transferring source payload.
+        // Only its confirmed terminal outcome may enter the mutation queue.
+        let gate = execute_tool(
+            policy,
+            Some(authorization.confirmation),
+            &EditPolicyGate,
+            &cancellation,
+        )
+        .await;
+        if gate.audit().terminal_outcome() != ToolTerminalOutcome::Completed {
+            return WorkspaceEditOutcome::failure(
+                if gate.audit().terminal_outcome() == ToolTerminalOutcome::Cancelled {
+                    WorkspaceEditCause::Cancelled
+                } else {
+                    WorkspaceEditCause::ConfirmationRequired
+                },
+            );
         }
         let (response, receive) = oneshot::channel();
         if self
             .shared
             .commands
             .try_send(EditCommand::Submit {
-                authorization,
+                attempt: authorization.attempt,
                 cancellation,
                 response,
             })
@@ -347,7 +418,7 @@ impl WorkspaceEditHandle {
     }
 }
 
-struct EditAttempt {
+pub(super) struct EditAttempt {
     actor: String,
     request_id: String,
     reservation: Reservation,
@@ -362,7 +433,7 @@ struct EditAttempt {
 
 /// Non-cloneable explicit confirmation opportunity; drop releases its reservation.
 pub struct WorkspaceEditChallenge {
-    attempt: EditAttempt,
+    attempt: Arc<Mutex<Option<EditAttempt>>>,
     confirmation: ToolConfirmationChallenge,
 }
 impl WorkspaceEditChallenge {
@@ -377,7 +448,7 @@ impl WorkspaceEditChallenge {
 }
 /// Non-cloneable, exact one-use service authorization.
 pub struct WorkspaceEditAuthorization {
-    attempt: EditAttempt,
+    attempt: Arc<Mutex<Option<EditAttempt>>>,
     confirmation: ToolConfirmation,
 }
 /// Opaque receipt for the sole retained successful apply; never authorization.
@@ -404,6 +475,7 @@ struct EditUndo {
     baseline: EditBaseline,
     plan: RefactoringPlan,
     originals: BTreeMap<PathBuf, Arc<[u8]>>,
+    admission: Option<SafeEditProjectionAdmission>,
 }
 pub(super) enum PrepareInput {
     Apply(RefactoringRequest),
@@ -421,7 +493,7 @@ pub(super) enum EditCommand {
         response: oneshot::Sender<Result<(WorkspaceEditChallenge, RefactoringPreview)>>,
     },
     Submit {
-        authorization: WorkspaceEditAuthorization,
+        attempt: Arc<Mutex<Option<EditAttempt>>>,
         cancellation: WorkspaceEditCancellation,
         response: oneshot::Sender<WorkspaceEditOutcome>,
     },
@@ -445,6 +517,38 @@ impl oneagent_tool_policy::ToolExecutor for EditPolicyGate {
 
 type PreparedEdit = Result<(WorkspaceEditChallenge, RefactoringPreview)>;
 type PendingPreparation = (oneshot::Sender<PreparedEdit>, PreparedEdit);
+#[cfg(test)]
+fn emit_worker_entry_calibration() {
+    struct Entry;
+    impl tracing::callsite::Callsite for Entry {
+        fn set_interest(&self, _: tracing::subscriber::Interest) {}
+        fn metadata(&self) -> &tracing::Metadata<'_> {
+            &METADATA
+        }
+    }
+    static ENTRY: Entry = Entry;
+    static METADATA: tracing::Metadata<'static> = tracing::Metadata::new(
+        "safe edit worker entry",
+        "safe_edit_test",
+        tracing::Level::INFO,
+        None,
+        None,
+        None,
+        tracing::field::FieldSet::new(&["message"], tracing::callsite::Identifier(&ENTRY)),
+        tracing::metadata::Kind::EVENT,
+    );
+    let message = "safe edit worker entered";
+    let field = METADATA.fields().field("message").unwrap();
+    let values = [(&field, Some(&message as &dyn tracing::field::Value))];
+    // Calibrate the actual worker's selected dispatcher directly. The global
+    // macro callsite interest cache is shared by concurrently running tests.
+    tracing::dispatcher::get_default(|dispatch| {
+        dispatch.event(&tracing::Event::new(
+            &METADATA,
+            &METADATA.fields().value_set(&values),
+        ));
+    });
+}
 /// Owned by the Workspace lifecycle; workers cannot publish.
 pub(super) struct EditCoordinator {
     handle: WorkspaceEditHandle,
@@ -455,6 +559,7 @@ pub(super) struct EditCoordinator {
     recovery: Option<EditIo>,
     terminal: Option<(oneshot::Sender<WorkspaceEditOutcome>, WorkspaceEditOutcome)>,
     prepared: Option<PendingPreparation>,
+    capability: Weak<Mutex<Option<EditAttempt>>>,
     #[cfg(test)]
     test_hooks: TestHooks,
 }
@@ -464,9 +569,17 @@ type PhaseGate = (&'static str, Box<dyn FnOnce() + Send + Sync>);
 #[cfg(test)]
 type CandidateMutation = Box<dyn FnOnce(&mut WorkspaceSnapshot) + Send + Sync>;
 #[cfg(test)]
+type SubmissionMutation = Box<dyn FnOnce(&mut EditAttempt, &crate::Cancellation) + Send + Sync>;
+#[cfg(test)]
+type LeaseObservation = (&'static str, usize, usize);
+#[cfg(test)]
 #[derive(Default)]
 #[allow(clippy::struct_excessive_bools)] // Independent fault axes, not production states.
 struct TestHooks {
+    trace: Option<tracing::Dispatch>,
+    lease_observations: Arc<Mutex<Vec<LeaseObservation>>>,
+    io_observed: Arc<Mutex<Vec<&'static str>>>,
+    before_submission: Option<SubmissionMutation>,
     reversal_io_failures: Vec<(&'static str, usize)>,
     external_after_cleanup: bool,
     wrong_impact: bool,
@@ -507,6 +620,7 @@ impl EditCoordinator {
                 slot: None,
             }),
             commands,
+            policy: Mutex::new(None),
         });
         Self {
             handle: WorkspaceEditHandle { shared },
@@ -517,11 +631,13 @@ impl EditCoordinator {
             recovery: None,
             terminal: None,
             prepared: None,
+            capability: Weak::new(),
             #[cfg(test)]
             test_hooks: TestHooks::default(),
         }
     }
     pub(super) fn configure(&mut self, policy: ToolPolicy, _ownership: WorkspaceEditOwnership) {
+        *self.handle.shared.policy.lock().expect("policy mutex") = Some(policy.clone());
         self.policy = Some(policy);
     }
     pub(super) fn enabled(&self) -> bool {
@@ -542,6 +658,7 @@ impl EditCoordinator {
             .writer = busy;
     }
     pub(super) fn publish_baseline(&mut self, baseline: Option<EditBaseline>) {
+        self.expire_capability();
         self.undo = None;
         self.baseline = baseline;
         let mut admission = self
@@ -552,9 +669,16 @@ impl EditCoordinator {
             .expect("admission mutex");
         admission.ready = self.enabled() && self.baseline.is_some();
         admission.slot = None;
-        admission.writer = false;
+    }
+    fn expire_capability(&mut self) {
+        if let Some(capability) = self.capability.upgrade() {
+            // Drop outside admission's mutex: Reservation::drop also locks it.
+            capability.lock().expect("capability mutex").take();
+        }
+        self.capability = Weak::new();
     }
     pub(super) fn shutdown(&mut self) {
+        self.expire_capability();
         self.commands.close();
         self.undo = None;
         self.baseline = None;
@@ -687,20 +811,22 @@ impl EditCoordinator {
         let confirmation = policy
             .take_confirmation_challenge()
             .map_err(|_| WorkspaceEditCause::ConfirmationRequired)?;
+        let attempt = Arc::new(Mutex::new(Some(EditAttempt {
+            actor: actor_binding,
+            request_id: request_binding,
+            reservation,
+            direction,
+            previous,
+            baseline,
+            plan,
+            policy: Some(policy),
+            undo,
+            projection: None,
+        })));
+        self.capability = Arc::downgrade(&attempt);
         Ok((
             WorkspaceEditChallenge {
-                attempt: EditAttempt {
-                    actor: actor_binding,
-                    request_id: request_binding,
-                    reservation,
-                    direction,
-                    previous,
-                    baseline,
-                    plan,
-                    policy: Some(policy),
-                    undo,
-                    projection: None,
-                },
+                attempt,
                 confirmation,
             },
             preview,
@@ -971,19 +1097,14 @@ pub(super) struct EditCommit {
     response: oneshot::Sender<WorkspaceEditOutcome>,
 }
 
-struct GateCancellation<'a> {
-    service: &'a crate::Cancellation,
-    edit: &'a WorkspaceEditCancellation,
-}
-impl oneagent_tool_policy::ToolCancellationSignal for GateCancellation<'_> {
+impl oneagent_tool_policy::ToolCancellationSignal for WorkspaceEditCancellation {
     fn is_cancelled(&self) -> bool {
-        self.service.is_requested() || self.edit.requested()
+        self.requested()
     }
     fn cancelled(&self) -> oneagent_tool_policy::ToolFuture<'_, ()> {
         Box::pin(async {
-            let mut service = self.service.clone();
-            let mut edit = self.edit.signal.subscribe();
-            tokio::select! { () = service.cancelled() => {}, _ = edit.changed() => {} }
+            let mut edit = self.signal.subscribe();
+            let _ = edit.changed().await;
         })
     }
 }
@@ -1016,10 +1137,38 @@ impl EditCoordinator {
                 None
             }
             EditCommand::Submit {
-                mut authorization,
+                attempt,
                 cancellation,
                 response,
             } => {
+                let unavailable = {
+                    let admission = self
+                        .handle
+                        .shared
+                        .admission
+                        .lock()
+                        .expect("admission mutex");
+                    if admission.poisoned {
+                        Some(WorkspaceEditCause::RecoveryRequired)
+                    } else if admission.stopped {
+                        Some(WorkspaceEditCause::Stopped)
+                    } else if !admission.ready {
+                        Some(WorkspaceEditCause::Unavailable)
+                    } else {
+                        None
+                    }
+                };
+                if let Some(cause) = unavailable {
+                    self.terminal = Some((response, WorkspaceEditOutcome::failure(cause)));
+                    return None;
+                }
+                let Some(mut attempt) = attempt.lock().expect("capability mutex").take() else {
+                    self.terminal = Some((
+                        response,
+                        WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch),
+                    ));
+                    return None;
+                };
                 let guard = (|| {
                     let admission = self
                         .handle
@@ -1033,10 +1182,10 @@ impl EditCoordinator {
                     if admission.stopped {
                         return Err(WorkspaceEditCause::Stopped);
                     }
-                    if admission.slot != Some(authorization.attempt.reservation.id)
+                    if admission.slot != Some(attempt.reservation.id)
                         || !Arc::ptr_eq(
                             &self.handle.shared.identity,
-                            &authorization.attempt.reservation.shared.identity,
+                            &attempt.reservation.shared.identity,
                         )
                     {
                         return Err(WorkspaceEditCause::AuthorizationMismatch);
@@ -1047,43 +1196,20 @@ impl EditCoordinator {
                     self.terminal = Some((response, WorkspaceEditOutcome::failure(cause)));
                     return None;
                 }
-                let Some(policy) = authorization.attempt.policy.take() else {
-                    self.terminal = Some((
-                        response,
-                        WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch),
-                    ));
-                    return None;
-                };
-                let gate_cancellation = GateCancellation {
-                    service,
-                    edit: &cancellation,
-                };
-                if !policy_matches(&authorization.attempt, &policy, self.policy.as_ref()) {
-                    self.terminal = Some((
-                        response,
-                        WorkspaceEditOutcome::failure(WorkspaceEditCause::AuthorizationMismatch),
-                    ));
-                    return None;
+                #[cfg(test)]
+                if let Some(mutate) = self.test_hooks.before_submission.take() {
+                    mutate(&mut attempt, service);
                 }
-                let gate = tokio::runtime::Handle::current().block_on(execute_tool(
-                    policy,
-                    Some(authorization.confirmation),
-                    &EditPolicyGate,
-                    &gate_cancellation,
-                ));
-                if gate.audit().terminal_outcome() != ToolTerminalOutcome::Completed {
-                    let cause = if gate.audit().terminal_outcome() == ToolTerminalOutcome::Cancelled
-                    {
-                        WorkspaceEditCause::Cancelled
-                    } else {
-                        WorkspaceEditCause::ConfirmationRequired
-                    };
-                    self.terminal = Some((response, WorkspaceEditOutcome::failure(cause)));
+                if service.is_requested() || cancellation.requested() {
+                    self.terminal = Some((
+                        response,
+                        WorkspaceEditOutcome::failure(WorkspaceEditCause::Cancelled),
+                    ));
                     return None;
                 }
                 if !previous
                     .as_ref()
-                    .is_some_and(|current| Arc::ptr_eq(current, &authorization.attempt.previous))
+                    .is_some_and(|current| Arc::ptr_eq(current, &attempt.previous))
                 {
                     self.terminal = Some((
                         response,
@@ -1091,13 +1217,7 @@ impl EditCoordinator {
                     ));
                     return None;
                 }
-                match self.run_attempt(
-                    &mut authorization.attempt,
-                    &cancellation,
-                    service,
-                    builder,
-                    root,
-                ) {
+                match self.run_attempt(&mut attempt, &cancellation, service, builder, root) {
                     Ok((candidate, baseline, io)) => {
                         #[cfg(test)]
                         let candidate = {
@@ -1109,14 +1229,13 @@ impl EditCoordinator {
                                     };
                             }
                             if std::mem::take(&mut self.test_hooks.stale_predecessor) {
-                                authorization.attempt.previous =
-                                    Arc::new((*authorization.attempt.previous).clone());
+                                attempt.previous = Arc::new((*attempt.previous).clone());
                             }
                             candidate
                         };
                         Some(EditCommit {
                             cancellation: cancellation.clone(),
-                            attempt: authorization.attempt,
+                            attempt,
                             candidate: Arc::new(candidate),
                             baseline,
                             io,
@@ -1142,15 +1261,22 @@ impl EditCoordinator {
         root: &Path,
     ) -> std::result::Result<(WorkspaceSnapshot, EditBaseline, EditIo), WorkspaceEditOutcome> {
         #[cfg(test)]
-        struct ClearFaults;
+        struct ClearFaults(Arc<Mutex<Vec<&'static str>>>);
         #[cfg(test)]
         impl Drop for ClearFaults {
             fn drop(&mut self) {
+                *self.0.lock().unwrap() = super::edit_io::faults::events();
                 super::edit_io::faults::set(Vec::new());
             }
         }
         #[cfg(test)]
-        let _clear_faults = ClearFaults;
+        let trace = self.test_hooks.trace.clone();
+        #[cfg(test)]
+        let _trace_guard = trace.as_ref().map(tracing::dispatcher::set_default);
+        #[cfg(test)]
+        emit_worker_entry_calibration();
+        #[cfg(test)]
+        let _clear_faults = ClearFaults(Arc::clone(&self.test_hooks.io_observed));
         let cancelled = || service.is_requested() || cancellation.requested();
         let mut edit_io = None;
         #[cfg(test)]
@@ -1193,6 +1319,19 @@ impl EditCoordinator {
                 return Err(WorkspaceEditCause::SourceChanged);
             }
             drop(observed);
+            let mut admission = if let Some(undo) = &mut attempt.undo {
+                undo.admission
+                    .take()
+                    .ok_or(WorkspaceEditCause::BoundsExceeded)?
+            } else {
+                EditIo::admission(&attempt.baseline)?
+            };
+            #[cfg(test)]
+            self.test_hooks.lease_observations.lock().unwrap().push((
+                "raw",
+                admission.retained_bytes(),
+                admission.peak_bytes(),
+            ));
             let results = if let Some(undo) = &attempt.undo {
                 undo.originals.clone()
             } else {
@@ -1202,12 +1341,7 @@ impl EditCoordinator {
                     .ok_or(WorkspaceEditCause::PlanMismatch)?;
                 let mut results = BTreeMap::new();
                 let mut aggregate = 0usize;
-                // Reserve the entire worst-case result allowance before creating buffers.
-                EditIoBudget::buffers(&[
-                    attempt.baseline.raw_bytes(),
-                    MAX_BASELINE * 2,
-                    MAX_EDITED * 2,
-                ])?;
+                // Result and recovery capacities belong to the shared live lease.
                 for document in configuration.source_evidence().documents() {
                     let operations: Vec<_> = attempt
                         .plan
@@ -1234,16 +1368,9 @@ impl EditCoordinator {
                 results
             };
             if attempt.direction == Direction::Apply {
-                let reserved = attempt
-                    .baseline
-                    .raw_bytes()
-                    .checked_add(MAX_BASELINE * 2)
-                    .and_then(|n| n.checked_add(MAX_EDITED * 2))
-                    .ok_or(WorkspaceEditCause::BoundsExceeded)?;
-                let mut admission = SafeEditProjectionAdmission::new(reserved)
-                    .map_err(|_| WorkspaceEditCause::BoundsExceeded)?;
                 #[cfg(test)]
                 if std::mem::take(&mut self.test_hooks.projection_overflow) {
+                    let reserved = admission.retained_bytes();
                     admission
                         .reserve(
                             oneagent_analysis::safe_edit::MAX_SAFE_EDIT_BUFFER_BYTES - reserved,
@@ -1259,12 +1386,19 @@ impl EditCoordinator {
             }
             #[cfg(test)]
             self.test_phase("projection_frozen")?;
-            edit_io = Some(EditIo::new(
+            edit_io = Some(EditIo::with_admission(
                 attempt.baseline.clone(),
                 results,
                 attempt.reservation.id,
+                admission,
             )?);
             let io = edit_io.as_mut().expect("created edit I/O");
+            #[cfg(test)]
+            self.test_hooks.lease_observations.lock().unwrap().push((
+                "frozen",
+                io.admission.retained_bytes(),
+                io.admission.peak_bytes(),
+            ));
             io.stage_all()?;
             #[cfg(test)]
             self.test_phase("staged")?;
@@ -1312,6 +1446,12 @@ impl EditCoordinator {
             if cancelled() {
                 return Err(WorkspaceEditCause::Cancelled);
             }
+            #[cfg(test)]
+            self.test_hooks.lease_observations.lock().unwrap().push((
+                "compared",
+                io.admission.retained_bytes(),
+                io.admission.peak_bytes(),
+            ));
             #[cfg(test)]
             self.test_phase("compared")?;
             compose_change_impact(&attempt.previous, &mut candidate, service)
@@ -1386,6 +1526,7 @@ impl EditCoordinator {
 
     #[cfg(test)]
     fn test_phase(&mut self, phase: &'static str) -> Result<()> {
+        tracing::info!(phase, "safe edit test route reached");
         self.test_hooks.events.push(phase);
         self.test_hooks.observed.lock().unwrap().push(phase);
         if self
@@ -1429,6 +1570,7 @@ impl EditCoordinator {
                 baseline: commit.attempt.baseline,
                 plan: commit.attempt.plan,
                 originals,
+                admission: Some(commit.io.admission),
             });
             Some(WorkspaceEditReceipt {
                 identity: Arc::clone(&self.handle.shared.identity),
@@ -1633,6 +1775,17 @@ mod tests {
     }
 
     async fn rejected(mut hooks: TestHooks, recovery: WorkspaceEditRecovery) {
+        #[derive(Clone)]
+        struct CapturedLog(Arc<Mutex<Vec<u8>>>);
+        impl std::io::Write for CapturedLog {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
         fn material(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
             let mut result = BTreeMap::new();
             for entry in fs::read_dir(root).unwrap() {
@@ -1650,6 +1803,27 @@ mod tests {
             }
             result
         }
+        let logs = Arc::new(Mutex::new(Vec::new()));
+        let captured = CapturedLog(Arc::clone(&logs));
+        hooks.trace = Some(tracing::Dispatch::new(
+            tracing_subscriber::fmt()
+                .without_time()
+                .with_ansi(false)
+                .with_max_level(tracing::Level::TRACE)
+                .with_writer(move || captured.clone())
+                .finish(),
+        ));
+        let expected_cause = if hooks.projection_overflow || hooks.publication_overflow {
+            WorkspaceEditCause::BoundsExceeded
+        } else if hooks.wrong_impact || hooks.stale_predecessor {
+            WorkspaceEditCause::PublicationMismatch
+        } else if hooks.external_after_cleanup || hooks.external_bytes.is_some() {
+            WorkspaceEditCause::SourceChanged
+        } else if hooks.fail.is_none() && !hooks.io_failures.is_empty() {
+            WorkspaceEditCause::IoFailed
+        } else {
+            WorkspaceEditCause::SemanticMismatch
+        };
         let external_bytes = hooks.external_bytes;
         let producer_rejection = hooks.projection_overflow || hooks.publication_overflow;
         let root = fixtures::fixture("edt");
@@ -1711,16 +1885,37 @@ mod tests {
             matches!(outcome, WorkspaceEditOutcome::Failed { recovery: actual, .. } if actual == recovery),
             "{outcome:?}"
         );
+        let (primary, secondary) = if recovery == WorkspaceEditRecovery::Required {
+            (WorkspaceEditCause::RecoveryRequired, Some(expected_cause))
+        } else {
+            (expected_cause, None)
+        };
+        assert!(
+            matches!(outcome, WorkspaceEditOutcome::Failed { cause, secondary: actual, .. }
+            if cause == primary && actual == secondary),
+            "exact closed causes: {outcome:?}"
+        );
+        let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+        assert!(
+            logs.contains("safe edit worker entered"),
+            "capture did not observe worker entry"
+        );
         let rendered = format!("{outcome:?}");
         for secret in [
             "SECRET_BUILD_ERROR",
+            "SECRET_IO_ERROR",
             "SECRET_SOURCE_TOKEN",
             "/absolute/private/path",
             "FillSecurityCollection",
         ] {
+            assert!(
+                !logs.contains(secret),
+                "nested build/I/O route leaked {secret}"
+            );
             assert!(!rendered.contains(secret));
         }
         assert!(!rendered.contains(root.path().to_str().unwrap()));
+        assert!(!logs.contains(root.path().to_str().unwrap()));
         {
             let phases = recorded.lock().unwrap();
             if producer_rejection {
@@ -1882,7 +2077,18 @@ mod tests {
                 .await;
             if count == MAX_OPERATIONS {
                 let (challenge, _) = prepared.unwrap();
-                assert_eq!(challenge.attempt.plan.operations().len(), count);
+                assert_eq!(
+                    challenge
+                        .attempt
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .plan
+                        .operations()
+                        .len(),
+                    count
+                );
                 drop(challenge);
             } else {
                 assert_eq!(prepared.unwrap_err(), WorkspaceEditCause::BoundsExceeded);
@@ -2311,6 +2517,133 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reversal_read_ordinals_fail_closed() {
+        async fn run(
+            format: &str,
+            phase: Option<&'static str>,
+            fault: Option<(&'static str, usize)>,
+        ) -> (WorkspaceEditOutcome, Vec<&'static str>) {
+            let root = fixtures::fixture(format);
+            let mut service = WorkspaceService::new().with_edit_policy(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            service.edits.test_hooks.reversal_fail = phase;
+            service.edits.test_hooks.reversal_io_failures = fault.into_iter().collect();
+            let events = Arc::clone(&service.edits.test_hooks.io_observed);
+            let (handle, observer, stop, task) =
+                fixtures::start_service(root.path(), service).await;
+            let before = observer.snapshot().unwrap();
+            let challenge = handle
+                .prepare_apply(
+                    fixtures::request(&before, "Changed"),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                )
+                .await
+                .unwrap()
+                .0;
+            let result = handle
+                .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+                .await;
+            let WorkspaceEditOutcome::Applied {
+                reversal: Some(receipt),
+                ..
+            } = result
+            else {
+                panic!("apply prerequisite: {result:?}")
+            };
+            let applied = observer.snapshot().unwrap();
+            let challenge = handle
+                .prepare_reversal(receipt, fixtures::actor(), fixtures::request_id())
+                .await
+                .unwrap()
+                .0;
+            let outcome = handle
+                .checked_reversal(challenge.confirm(), WorkspaceEditCancellation::new())
+                .await;
+            if let WorkspaceEditOutcome::Failed { recovery, .. } = &outcome {
+                if *recovery == WorkspaceEditRecovery::Required {
+                    assert!(observer.snapshot().is_none());
+                } else {
+                    assert!(Arc::ptr_eq(&applied, &observer.snapshot().unwrap()));
+                    for doc in applied.configurations()[0].source_evidence().documents() {
+                        assert_eq!(
+                            fs::read(root.path().join(doc.path().path().as_str())).unwrap(),
+                            doc.raw_content()
+                        );
+                    }
+                }
+            }
+            let recorded = events.lock().unwrap().clone();
+            stop.send(()).unwrap();
+            task.await.unwrap().unwrap();
+            (outcome, recorded)
+        }
+        let mut count = 0;
+        for format in ["edt", "designer"] {
+            for phase in [None, Some("cleaned")] {
+                let (baseline, events) = run(format, phase, None).await;
+                assert!(
+                    matches!(baseline, WorkspaceEditOutcome::Applied { .. })
+                        || matches!(
+                            baseline,
+                            WorkspaceEditOutcome::Failed {
+                                cause: WorkspaceEditCause::SemanticMismatch,
+                                recovery: WorkspaceEditRecovery::Recovered,
+                                ..
+                            }
+                        )
+                );
+                let replaced = events
+                    .iter()
+                    .position(|event| *event == "replace_after")
+                    .unwrap();
+                let recovery = events
+                    .iter()
+                    .position(|event| *event == "restore_check")
+                    .unwrap_or(usize::MAX);
+                for point in ["read", "read_filled"] {
+                    let ordinals: Vec<_> = events
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, event)| **event == point)
+                        .map(|(index, _)| index)
+                        .collect();
+                    assert!(!ordinals.is_empty());
+                    for (ordinal, event_index) in ordinals.into_iter().enumerate() {
+                        let (outcome, actual) =
+                            run(format, phase, Some((point, ordinal + 1))).await;
+                        assert!(actual.iter().filter(|event| **event == point).count() > ordinal);
+                        let disposition = if event_index >= recovery {
+                            WorkspaceEditRecovery::Required
+                        } else if event_index < replaced {
+                            WorkspaceEditRecovery::NotNeeded
+                        } else {
+                            WorkspaceEditRecovery::Recovered
+                        };
+                        let (primary, secondary) = if disposition == WorkspaceEditRecovery::Required
+                        {
+                            (
+                                WorkspaceEditCause::RecoveryRequired,
+                                Some(WorkspaceEditCause::SemanticMismatch),
+                            )
+                        } else {
+                            (WorkspaceEditCause::IoFailed, None)
+                        };
+                        assert!(
+                            matches!(outcome, WorkspaceEditOutcome::Failed { cause, secondary: actual, recovery, .. } if cause == primary && actual == secondary && recovery == disposition),
+                            "{format}/{phase:?}/{point}/{ordinal}: {outcome:?}"
+                        );
+                        count += 1;
+                    }
+                }
+            }
+        }
+        eprintln!("reversal read ordinal cases: {count}");
+    }
+
+    #[tokio::test]
     async fn reversal_failures_restore_applied_state() {
         let mut cases = Vec::new();
         for phase in [
@@ -2420,8 +2753,19 @@ mod tests {
                 let outcome = handle
                     .checked_reversal(challenge.confirm(), WorkspaceEditCancellation::new())
                     .await;
+                let primary = if phase.is_some() {
+                    WorkspaceEditCause::SemanticMismatch
+                } else {
+                    WorkspaceEditCause::IoFailed
+                };
+                let (expected_cause, expected_secondary) =
+                    if *expected == WorkspaceEditRecovery::Required {
+                        (WorkspaceEditCause::RecoveryRequired, Some(primary))
+                    } else {
+                        (primary, None)
+                    };
                 assert!(
-                    matches!(outcome, WorkspaceEditOutcome::Failed { recovery, .. } if recovery == *expected),
+                    matches!(outcome, WorkspaceEditOutcome::Failed { cause, secondary, recovery, .. } if recovery == *expected && cause == expected_cause && secondary == expected_secondary),
                     "{format}/{phase:?}/{faults:?}: {outcome:?}"
                 );
                 assert_eq!(
@@ -3161,122 +3505,127 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            match kind {
-                "attempt_id" => challenge.attempt.reservation.id += 1,
-                "missing_policy" => {
-                    challenge.attempt.policy = None;
-                }
-                "expired_slot" => {
-                    handle.shared.admission.lock().unwrap().slot = None;
-                }
-                "policy_revision" | "policy_arguments" | "policy_effects" | "confirmation" => {
-                    use oneagent_tool_policy::*;
-                    let original = challenge.attempt.policy.as_ref().unwrap().request();
-                    let request = ToolRequest::new(
-                        original.id().clone(),
-                        original.actor().clone(),
-                        original.tool().clone(),
-                        ToolArguments::new(
-                            if kind == "policy_arguments" || kind == "confirmation" {
-                                "changed"
+            let payload = Arc::clone(&challenge.attempt);
+            {
+                let mut payload_guard = payload.lock().unwrap();
+                let attempt = payload_guard.as_mut().unwrap();
+                match kind {
+                    "attempt_id" => attempt.reservation.id += 1,
+                    "missing_policy" => {
+                        attempt.policy = None;
+                    }
+                    "expired_slot" => {
+                        handle.shared.admission.lock().unwrap().slot = None;
+                    }
+                    "policy_revision" | "policy_arguments" | "policy_effects" | "confirmation" => {
+                        use oneagent_tool_policy::*;
+                        let original = attempt.policy.as_ref().unwrap().request();
+                        let request = ToolRequest::new(
+                            original.id().clone(),
+                            original.actor().clone(),
+                            original.tool().clone(),
+                            ToolArguments::new(
+                                if kind == "policy_arguments" || kind == "confirmation" {
+                                    "changed"
+                                } else {
+                                    original.arguments().expose()
+                                },
+                            )
+                            .unwrap(),
+                            if kind == "policy_effects" {
+                                vec![ToolEffect::LocalMutation, ToolEffect::Destructive]
                             } else {
-                                original.arguments().expose()
+                                vec![ToolEffect::LocalMutation]
                             },
                         )
-                        .unwrap(),
-                        if kind == "policy_effects" {
-                            vec![ToolEffect::LocalMutation, ToolEffect::Destructive]
-                        } else {
-                            vec![ToolEffect::LocalMutation]
-                        },
-                    )
-                    .unwrap();
-                    let mut rules = fixtures::policy(RuleAction::RequireConfirmation)
-                        .rules()
-                        .to_vec();
-                    rules.push(ToolRule::new(
-                        ActorScope::Any,
-                        ToolScope::Any,
-                        ToolEffect::Destructive,
-                        RuleAction::RequireConfirmation,
-                    ));
-                    let policy = ToolPolicy::new(
-                        PolicyRevision::new(if kind == "policy_revision" {
-                            "other"
-                        } else {
-                            "edit-test-1"
-                        })
-                        .unwrap(),
-                        rules,
-                    )
-                    .unwrap();
-                    let mut evaluated = policy.evaluate(request);
-                    challenge.confirmation = evaluated.take_confirmation_challenge().unwrap();
-                    if kind != "confirmation" {
-                        challenge.attempt.policy = Some(evaluated);
+                        .unwrap();
+                        let mut rules = fixtures::policy(RuleAction::RequireConfirmation)
+                            .rules()
+                            .to_vec();
+                        rules.push(ToolRule::new(
+                            ActorScope::Any,
+                            ToolScope::Any,
+                            ToolEffect::Destructive,
+                            RuleAction::RequireConfirmation,
+                        ));
+                        let policy = ToolPolicy::new(
+                            PolicyRevision::new(if kind == "policy_revision" {
+                                "other"
+                            } else {
+                                "edit-test-1"
+                            })
+                            .unwrap(),
+                            rules,
+                        )
+                        .unwrap();
+                        let mut evaluated = policy.evaluate(request);
+                        challenge.confirmation = evaluated.take_confirmation_challenge().unwrap();
+                        if kind != "confirmation" {
+                            attempt.policy = Some(evaluated);
+                        }
                     }
-                }
-                "same_id_summary" | "same_id_category" => {
-                    use oneagent_analysis::refactoring::{
-                        RefactoringOperation, SourceOccurrenceKind,
-                    };
-                    let old = &challenge.attempt.plan;
-                    let mut operations = old.operations().to_vec();
-                    if kind == "same_id_summary" {
-                        operations.push(operations[0].clone());
-                    } else {
-                        let operation = operations
-                            .iter_mut()
-                            .find(|o| o.occurrence_kind() == SourceOccurrenceKind::LocalCall)
+                    "same_id_summary" | "same_id_category" => {
+                        use oneagent_analysis::refactoring::{
+                            RefactoringOperation, SourceOccurrenceKind,
+                        };
+                        let old = &attempt.plan;
+                        let mut operations = old.operations().to_vec();
+                        if kind == "same_id_summary" {
+                            operations.push(operations[0].clone());
+                        } else {
+                            let operation = operations
+                                .iter_mut()
+                                .find(|o| o.occurrence_kind() == SourceOccurrenceKind::LocalCall)
+                                .unwrap();
+                            *operation = RefactoringOperation::new(
+                                operation.kind(),
+                                SourceOccurrenceKind::QualifiedCall,
+                                operation.document_id().clone(),
+                                operation.content_version(),
+                                operation.range(),
+                                operation.expected(),
+                                operation.replacement(),
+                                operation.dependencies(),
+                            )
                             .unwrap();
-                        *operation = RefactoringOperation::new(
-                            operation.kind(),
-                            SourceOccurrenceKind::QualifiedCall,
-                            operation.document_id().clone(),
-                            operation.content_version(),
-                            operation.range(),
-                            operation.expected(),
-                            operation.replacement(),
-                            operation.dependencies(),
+                        }
+                        let changed = RefactoringPlan::new(
+                            old.request().clone(),
+                            old.target().clone(),
+                            old.preconditions().clone(),
+                            operations,
+                        )
+                        .unwrap();
+                        assert_eq!(old.id(), changed.id());
+                        assert_ne!(old, &changed);
+                        attempt.plan = changed;
+                    }
+                    "actor" => attempt.actor.push('x'),
+                    "request" => attempt.request_id.push('x'),
+                    "direction" => attempt.direction = Direction::Reverse,
+                    "plan" => {
+                        attempt.plan = before
+                            .plan_refactoring(
+                                &fixtures::request(&before, "Other"),
+                                &NeverCancelledRefactoring,
+                            )
+                            .unwrap()
+                            .into_parts()
+                            .0;
+                    }
+                    "arc" => {
+                        attempt.previous =
+                            Arc::new(WorkspaceSnapshotBuilder::new().build(root.path()).unwrap());
+                    }
+                    "baseline" => {
+                        attempt.baseline = EditBaseline::capture(
+                            &fixtures::fixture("edt").path().canonicalize().unwrap(),
+                            &[],
                         )
                         .unwrap();
                     }
-                    let changed = RefactoringPlan::new(
-                        old.request().clone(),
-                        old.target().clone(),
-                        old.preconditions().clone(),
-                        operations,
-                    )
-                    .unwrap();
-                    assert_eq!(old.id(), changed.id());
-                    assert_ne!(old, &changed);
-                    challenge.attempt.plan = changed;
+                    _ => unreachable!(),
                 }
-                "actor" => challenge.attempt.actor.push('x'),
-                "request" => challenge.attempt.request_id.push('x'),
-                "direction" => challenge.attempt.direction = Direction::Reverse,
-                "plan" => {
-                    challenge.attempt.plan = before
-                        .plan_refactoring(
-                            &fixtures::request(&before, "Other"),
-                            &NeverCancelledRefactoring,
-                        )
-                        .unwrap()
-                        .into_parts()
-                        .0;
-                }
-                "arc" => {
-                    challenge.attempt.previous =
-                        Arc::new(WorkspaceSnapshotBuilder::new().build(root.path()).unwrap());
-                }
-                "baseline" => {
-                    challenge.attempt.baseline = EditBaseline::capture(
-                        &fixtures::fixture("edt").path().canonicalize().unwrap(),
-                        &[],
-                    )
-                    .unwrap();
-                }
-                _ => unreachable!(),
             }
             let cancellation = WorkspaceEditCancellation::new();
             if cancelled {
@@ -3753,6 +4102,524 @@ mod tests {
             coordinator.handle.reserve_attempt(),
             Err(WorkspaceEditCause::Unavailable)
         ));
+    }
+
+    #[tokio::test]
+    async fn retained_capabilities_release_payload_on_successor_and_stop() {
+        let root = fixtures::fixture("edt");
+        let mut coordinator = EditCoordinator::new();
+        coordinator.configure(
+            fixtures::policy(RuleAction::RequireConfirmation),
+            WorkspaceEditOwnership::ExclusiveCooperative,
+        );
+        let mut retained = Vec::new();
+        for ordinal in 0..4 {
+            let baseline =
+                EditBaseline::capture(&root.path().canonicalize().unwrap(), &[]).unwrap();
+            let path = Path::new("src/CommonModules/DynamicSecurityOverridable/Module.bsl");
+            let raw = Arc::downgrade(&baseline.bytes(path).unwrap());
+            coordinator.publish_baseline(Some(baseline));
+            let previous = Arc::new(WorkspaceSnapshotBuilder::new().build(root.path()).unwrap());
+            let reservation = coordinator.handle.reserve_attempt().unwrap();
+            let challenge = coordinator
+                .prepare(
+                    reservation,
+                    PrepareInput::Apply(fixtures::request(&previous, "Changed")),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                    previous,
+                )
+                .unwrap()
+                .0;
+            retained.push(challenge.confirm());
+            assert!(raw.upgrade().is_some());
+            if ordinal == 3 {
+                coordinator.shutdown();
+            } else {
+                coordinator.publish_baseline(None);
+            }
+            assert!(
+                raw.upgrade().is_none(),
+                "expired raw baseline {ordinal} retained by caller"
+            );
+            assert!(
+                retained
+                    .iter()
+                    .all(|capability| capability.attempt.lock().unwrap().is_none())
+            );
+        }
+        // Reversal owns both original buffers and the prior complete baseline.
+        let service = WorkspaceService::new().with_edit_policy(
+            fixtures::policy(RuleAction::RequireConfirmation),
+            WorkspaceEditOwnership::ExclusiveCooperative,
+        );
+        let (handle, observer, stop, task) = fixtures::start_service(root.path(), service).await;
+        let before = observer.snapshot().unwrap();
+        let challenge = handle
+            .prepare_apply(
+                fixtures::request(&before, "Changed"),
+                fixtures::actor(),
+                fixtures::request_id(),
+            )
+            .await
+            .unwrap()
+            .0;
+        let outcome = handle
+            .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+            .await;
+        let WorkspaceEditOutcome::Applied {
+            reversal: Some(receipt),
+            ..
+        } = outcome
+        else {
+            panic!("{outcome:?}")
+        };
+        let challenge = handle
+            .prepare_reversal(receipt, fixtures::actor(), fixtures::request_id())
+            .await
+            .unwrap()
+            .0;
+        let original = {
+            let payload = challenge.attempt.lock().unwrap();
+            Arc::downgrade(
+                payload
+                    .as_ref()
+                    .unwrap()
+                    .undo
+                    .as_ref()
+                    .unwrap()
+                    .originals
+                    .values()
+                    .next()
+                    .unwrap(),
+            )
+        };
+        stop.send(()).unwrap();
+        task.await.unwrap().unwrap();
+        assert!(challenge.attempt.lock().unwrap().is_none());
+        assert!(
+            original.upgrade().is_none(),
+            "stopped reversal retained original raw payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn queued_cancellation_precedes_changed_predecessor() {
+        for service_stop in [false, true] {
+            let root = fixtures::fixture("edt");
+            let cancellation = WorkspaceEditCancellation::new();
+            let signal = cancellation.clone();
+            let stop_slot: Arc<Mutex<Option<oneshot::Sender<()>>>> = Arc::new(Mutex::new(None));
+            let stop_from_worker = Arc::clone(&stop_slot);
+            let mut service = WorkspaceService::new().with_edit_policy(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            let events = Arc::clone(&service.edits.test_hooks.io_observed);
+            service.edits.test_hooks.before_submission = Some(Box::new(move |attempt, service| {
+                attempt.previous = Arc::new((*attempt.previous).clone());
+                if service_stop {
+                    stop_from_worker
+                        .lock()
+                        .unwrap()
+                        .take()
+                        .unwrap()
+                        .send(())
+                        .unwrap();
+                    let mut service = service.clone();
+                    tokio::runtime::Handle::current().block_on(service.cancelled());
+                } else {
+                    signal.request();
+                }
+            }));
+            let (handle, observer, stop, task) =
+                fixtures::start_service(root.path(), service).await;
+            *stop_slot.lock().unwrap() = Some(stop);
+            let before = observer.snapshot().unwrap();
+            let challenge = handle
+                .prepare_apply(
+                    fixtures::request(&before, "Changed"),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                )
+                .await
+                .unwrap()
+                .0;
+            let outcome = handle
+                .checked_apply(challenge.confirm(), cancellation)
+                .await;
+            assert!(
+                matches!(
+                    outcome,
+                    WorkspaceEditOutcome::Failed {
+                        cause: WorkspaceEditCause::Cancelled,
+                        secondary: None,
+                        recovery: WorkspaceEditRecovery::NotNeeded,
+                        retained_files: 0
+                    }
+                ),
+                "{outcome:?}"
+            );
+            assert!(
+                events.lock().unwrap().is_empty(),
+                "cancelled queued submission reached transaction I/O"
+            );
+            if let Some(stop) = stop_slot.lock().unwrap().take() {
+                stop.send(()).unwrap();
+            }
+            task.await.unwrap().unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn submit_availability_precedes_expired_or_malformed_capability() {
+        for expected in [
+            WorkspaceEditCause::Stopped,
+            WorkspaceEditCause::RecoveryRequired,
+            WorkspaceEditCause::Unavailable,
+            WorkspaceEditCause::Busy,
+        ] {
+            let root = fixtures::fixture("edt");
+            let mut coordinator = EditCoordinator::new();
+            coordinator.configure(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            coordinator.publish_baseline(Some(
+                EditBaseline::capture(&root.path().canonicalize().unwrap(), &[]).unwrap(),
+            ));
+            let previous = Arc::new(WorkspaceSnapshotBuilder::new().build(root.path()).unwrap());
+            let reservation = coordinator.handle.reserve_attempt().unwrap();
+            let challenge = coordinator
+                .prepare(
+                    reservation,
+                    PrepareInput::Apply(fixtures::request(&previous, "Changed")),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                    previous,
+                )
+                .unwrap()
+                .0;
+            challenge
+                .attempt
+                .lock()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .actor
+                .push('x');
+            let authorization = challenge.confirm();
+            match expected {
+                WorkspaceEditCause::Stopped => coordinator.shutdown(),
+                WorkspaceEditCause::RecoveryRequired => {
+                    coordinator.shutdown();
+                    coordinator.handle.shared.admission.lock().unwrap().poisoned = true;
+                }
+                WorkspaceEditCause::Unavailable => coordinator.publish_baseline(None),
+                WorkspaceEditCause::Busy => coordinator.writer(true),
+                _ => unreachable!(),
+            }
+            let outcome = coordinator
+                .handle
+                .checked_apply(authorization, WorkspaceEditCancellation::new())
+                .await;
+            assert!(
+                matches!(outcome, WorkspaceEditOutcome::Failed { cause, secondary: None, recovery: WorkspaceEditRecovery::NotNeeded, retained_files: 0 } if cause == expected),
+                "{outcome:?}"
+            );
+            assert!(coordinator.commands.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn queued_payload_remains_revocable_until_worker_claim() {
+        for stop_service in [false, true] {
+            let root = fixtures::fixture("edt");
+            let mut coordinator = EditCoordinator::new();
+            coordinator.configure(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            let baseline =
+                EditBaseline::capture(&root.path().canonicalize().unwrap(), &[]).unwrap();
+            let raw = Arc::downgrade(
+                &baseline
+                    .bytes(Path::new(
+                        "src/CommonModules/DynamicSecurityOverridable/Module.bsl",
+                    ))
+                    .unwrap(),
+            );
+            coordinator.publish_baseline(Some(baseline));
+            let before = Arc::new(WorkspaceSnapshotBuilder::new().build(root.path()).unwrap());
+            let reservation = coordinator.handle.reserve_attempt().unwrap();
+            let challenge = coordinator
+                .prepare(
+                    reservation,
+                    PrepareInput::Apply(fixtures::request(&before, "Changed")),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                    before,
+                )
+                .unwrap()
+                .0;
+            let handle = coordinator.handle.clone();
+            let response = tokio::spawn(async move {
+                handle
+                    .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+                    .await
+            });
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                while coordinator.commands.is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(raw.upgrade().is_some());
+            if stop_service {
+                coordinator.shutdown();
+            } else {
+                coordinator.publish_baseline(None);
+            }
+            assert!(
+                raw.upgrade().is_none(),
+                "queued payload escaped service revocation"
+            );
+            let command = coordinator.commands.try_recv().unwrap();
+            assert!(
+                matches!(&command, EditCommand::Submit { attempt, .. } if attempt.lock().unwrap().is_none())
+            );
+            drop(command);
+            assert!(matches!(
+                response.await.unwrap(),
+                WorkspaceEditOutcome::Failed {
+                    cause: WorkspaceEditCause::Stopped,
+                    ..
+                }
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_raw_projection_lease_survives_io_and_undo() {
+        let root = fixtures::fixture("edt");
+        fixtures::add_query_fixture(root.path(), "edt", "missing");
+        let service = WorkspaceService::new().with_edit_policy(
+            fixtures::policy(RuleAction::RequireConfirmation),
+            WorkspaceEditOwnership::ExclusiveCooperative,
+        );
+        let observations = Arc::clone(&service.edits.test_hooks.lease_observations);
+        let (handle, observer, stop, task) = fixtures::start_service(root.path(), service).await;
+        let before = observer.snapshot().unwrap();
+        let challenge = handle
+            .prepare_apply(
+                fixtures::request(&before, "Changed"),
+                fixtures::actor(),
+                fixtures::request_id(),
+            )
+            .await
+            .unwrap()
+            .0;
+        let result = handle
+            .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+            .await;
+        let WorkspaceEditOutcome::Applied {
+            reversal: Some(receipt),
+            ..
+        } = result
+        else {
+            panic!("{result:?}")
+        };
+        let measured = observations.lock().unwrap().clone();
+        assert_eq!(measured.len(), 3);
+        assert_eq!(measured[0].0, "raw");
+        assert!(
+            measured[1].1 > measured[0].1,
+            "actual frozen producer outputs were not charged"
+        );
+        assert_eq!(
+            measured[1].1, measured[2].1,
+            "I/O or comparator dropped the projection reservation"
+        );
+        assert!(measured.iter().all(|(_, retained, peak)| *peak >= *retained
+            && *peak <= oneagent_analysis::safe_edit::MAX_SAFE_EDIT_BUFFER_BYTES));
+        let challenge = handle
+            .prepare_reversal(receipt, fixtures::actor(), fixtures::request_id())
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(
+            challenge
+                .attempt
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .undo
+                .as_ref()
+                .unwrap()
+                .admission
+                .as_ref()
+                .unwrap()
+                .retained_bytes(),
+            measured[1].1
+        );
+        let result = handle
+            .checked_reversal(challenge.confirm(), WorkspaceEditCancellation::new())
+            .await;
+        assert!(
+            matches!(result, WorkspaceEditOutcome::Applied { reversal: None, .. }),
+            "{result:?}"
+        );
+        stop.send(()).unwrap();
+        task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn policy_rejections_never_enter_mutation_queue() {
+        for cancel in [false, true] {
+            let root = fixtures::fixture("edt");
+            let mut coordinator = EditCoordinator::new();
+            coordinator.configure(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            coordinator.publish_baseline(Some(
+                EditBaseline::capture(&root.path().canonicalize().unwrap(), &[]).unwrap(),
+            ));
+            let before = Arc::new(WorkspaceSnapshotBuilder::new().build(root.path()).unwrap());
+            let reservation = coordinator.handle.reserve_attempt().unwrap();
+            let challenge = coordinator
+                .prepare(
+                    reservation,
+                    PrepareInput::Apply(fixtures::request(&before, "Changed")),
+                    fixtures::actor(),
+                    fixtures::request_id(),
+                    before,
+                )
+                .unwrap()
+                .0;
+            if !cancel {
+                challenge
+                    .attempt
+                    .lock()
+                    .unwrap()
+                    .as_mut()
+                    .unwrap()
+                    .actor
+                    .push('x');
+            }
+            let cancellation = WorkspaceEditCancellation::new();
+            if cancel {
+                cancellation.request();
+            }
+            // No worker drains this real command queue: a queued rejection would time out.
+            let outcome = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                coordinator
+                    .handle
+                    .checked_apply(challenge.confirm(), cancellation),
+            )
+            .await
+            .unwrap();
+            let expected = if cancel {
+                WorkspaceEditCause::Cancelled
+            } else {
+                WorkspaceEditCause::AuthorizationMismatch
+            };
+            assert!(
+                matches!(outcome, WorkspaceEditOutcome::Failed { cause, secondary: None, recovery: WorkspaceEditRecovery::NotNeeded, retained_files: 0 } if cause == expected)
+            );
+            assert!(matches!(
+                coordinator.commands.try_recv(),
+                Err(mpsc::error::TryRecvError::Empty)
+            ));
+            assert_eq!(
+                coordinator.handle.shared.admission.lock().unwrap().slot,
+                None
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn ordinary_rebuild_cache_keeps_admission_busy() {
+        let root = fixtures::fixture("edt");
+        let (_, _, stop, task) =
+            fixtures::start_service(root.path(), WorkspaceService::new()).await;
+        stop.send(()).unwrap();
+        task.await.unwrap().unwrap();
+        let cache = Arc::new(EditCacheProbe {
+            root: root.path().to_owned(),
+            store: super::super::cache::WorkspaceCacheStore::new(root.path().to_owned()),
+            mutate_load: false,
+            write_gate: Mutex::new(None),
+        });
+        let (ticks, receive) = mpsc::channel(1);
+        let service = WorkspaceService::new()
+            .with_edit_policy(
+                fixtures::policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            )
+            .with_cache_storage(cache.clone())
+            .with_controlled_change_ticks(receive);
+        let updates = service.update_observer();
+        let (handle, observer, stop, task) = fixtures::start_service(root.path(), service).await;
+        let before = observer.snapshot().unwrap();
+        let (entered, waiting) = oneshot::channel();
+        let (release, blocked) = oneshot::channel();
+        *cache.write_gate.lock().unwrap() = Some(Box::new(move || {
+            entered.send(()).unwrap();
+            blocked.blocking_recv().unwrap();
+        }));
+        let path = root
+            .path()
+            .join("src/CommonModules/SecondaryCaller/Module.bsl");
+        let mut bytes = fs::read(&path).unwrap();
+        bytes.extend_from_slice(b"\n// ordinary rebuild\n");
+        fs::write(path, bytes).unwrap();
+        let mut statuses = updates.subscribe();
+        let (tick_done, tick_acknowledgement) = oneshot::channel();
+        ticks.send(tick_done).await.unwrap();
+        tick_acknowledgement.await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(10), waiting)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            handle.reserve_attempt(),
+            Err(WorkspaceEditCause::Busy)
+        ));
+        assert_eq!(
+            observer.snapshot().unwrap().publication_id().get(),
+            before.publication_id().get() + 1
+        );
+        release.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while statuses.borrow().published() != 2 {
+                statuses.changed().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        let current = observer.snapshot().unwrap();
+        let challenge = handle
+            .prepare_apply(
+                fixtures::request(&current, "Changed"),
+                fixtures::actor(),
+                fixtures::request_id(),
+            )
+            .await
+            .unwrap()
+            .0;
+        let result = handle
+            .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+            .await;
+        assert!(
+            matches!(result, WorkspaceEditOutcome::Applied { .. }),
+            "{result:?}"
+        );
+        stop.send(()).unwrap();
+        task.await.unwrap().unwrap();
     }
 
     #[tokio::test]

@@ -16,6 +16,7 @@ async fn edit_serializes_explicit_change_input() {
         WorkspaceEditOwnership::ExclusiveCooperative,
     );
     let input = service.change_input_handle();
+    let mut update_changes = service.update_observer().subscribe();
     let (handle, observer, stop, task) = edit_fixture::start_service(root.path(), service).await;
     let before = observer.snapshot().unwrap();
     let (challenge, _) = handle
@@ -53,6 +54,12 @@ async fn edit_serializes_explicit_change_input() {
     .unwrap();
     let successor = observer.snapshot().unwrap();
     assert_eq!(successor.publication_id().get(), 2);
+    // Publication precedes completion of the serialized ordinary update. Edit
+    // admission remains Busy until the coordinator finishes its cache/status turn.
+    wait_for_update(&mut update_changes, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 2
+    })
+    .await;
     let result = handle
         .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
         .await;
@@ -60,8 +67,10 @@ async fn edit_serializes_explicit_change_input() {
         matches!(
             result,
             WorkspaceEditOutcome::Failed {
+                cause: oneagent_runtime::WorkspaceEditCause::AuthorizationMismatch,
+                secondary: None,
                 recovery: oneagent_runtime::WorkspaceEditRecovery::NotNeeded,
-                ..
+                retained_files: 0,
             }
         ),
         "{result:?}"
@@ -116,12 +125,17 @@ async fn edit_serializes_explicit_change_input() {
     .unwrap();
     let successor = observer.snapshot().unwrap();
     assert_eq!(successor.publication_id().get(), current.get() + 1);
-    assert!(
+    wait_for_update(&mut update_changes, |status| {
+        status.phase() == WorkspaceUpdatePhase::Watching
+            && status.published() == successor.publication_id().get()
+    })
+    .await;
+    assert!(matches!(
         handle
             .prepare_reversal(receipt, edit_fixture::actor(), edit_fixture::request_id())
-            .await
-            .is_err()
-    );
+            .await,
+        Err(oneagent_runtime::WorkspaceEditCause::AuthorizationMismatch)
+    ));
     assert!(Arc::ptr_eq(&successor, &observer.snapshot().unwrap()));
     stop.send(()).unwrap();
     task.await.unwrap().unwrap();

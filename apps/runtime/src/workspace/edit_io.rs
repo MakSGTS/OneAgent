@@ -1,5 +1,6 @@
 //! Bounded cooperative filesystem transaction primitives; no publication authority.
 
+use oneagent_analysis::safe_edit::SafeEditProjectionAdmission;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -63,7 +64,9 @@ pub(super) mod faults {
             }
             let ordinal = state.events.iter().filter(|event| **event == name).count();
             if state.failures.contains(&(name, ordinal)) {
-                Err(super::EditIoError::Io)
+                super::io(Err(std::io::Error::other(
+                    "SECRET_IO_ERROR /absolute/private/path SECRET_SOURCE_TOKEN",
+                )))
             } else {
                 Ok(())
             }
@@ -427,13 +430,35 @@ pub(super) struct EditIo {
     replacements: Vec<Replacement>,
     owned: Vec<OwnedEditFile>,
     attempt: u64,
+    pub(super) admission: SafeEditProjectionAdmission,
 }
 
 impl EditIo {
+    pub(super) fn admission(baseline: &EditBaseline) -> Result<SafeEditProjectionAdmission> {
+        let raw = baseline
+            .raw_bytes
+            .checked_add(MAX_BASELINE * 2)
+            .and_then(|bytes| bytes.checked_add(MAX_EDITED * 2))
+            .and_then(|bytes| bytes.checked_add(MAX_FILE))
+            .ok_or(EditIoError::Bounds)?;
+        SafeEditProjectionAdmission::new(raw).map_err(|_| EditIoError::Bounds)
+    }
+
+    #[cfg(test)]
     pub(super) fn new(
         baseline: EditBaseline,
         results: BTreeMap<PathBuf, Arc<[u8]>>,
         attempt: u64,
+    ) -> Result<Self> {
+        let admission = Self::admission(&baseline)?;
+        Self::with_admission(baseline, results, attempt, admission)
+    }
+
+    pub(super) fn with_admission(
+        baseline: EditBaseline,
+        results: BTreeMap<PathBuf, Arc<[u8]>>,
+        attempt: u64,
+        admission: SafeEditProjectionAdmission,
     ) -> Result<Self> {
         ensure(
             !results.is_empty() && results.len() <= MAX_FILES,
@@ -462,13 +487,12 @@ impl EditIo {
             originals <= MAX_EDITED && outputs <= MAX_EDITED,
             EditIoError::Bounds,
         )?;
-        EditIoBudget::buffers(&[
-            baseline.raw_bytes,
-            MAX_BASELINE * 2,
-            originals,
-            outputs,
-            MAX_FILE,
-        ])?;
+        // The same reservation already includes both verification scans,
+        // read scratch, result/recovery bytes and the live frozen projection.
+        ensure(
+            admission.retained_bytes() >= Self::admission(&baseline)?.retained_bytes(),
+            EditIoError::Bounds,
+        )?;
         let mut replacements = Vec::with_capacity(results.len());
         for (path, result) in results {
             let source = baseline
@@ -492,6 +516,7 @@ impl EditIo {
             replacements,
             owned: Vec::new(),
             attempt,
+            admission,
         })
     }
 
@@ -789,6 +814,41 @@ mod tests {
 
     #[test]
     fn scan_bounds_precede_retention() {
+        {
+            let root = tempfile::tempdir().unwrap();
+            let mut relative = PathBuf::new();
+            for _ in 0..128 {
+                relative.push("d");
+                fs::create_dir(root.path().join(&relative)).unwrap();
+            }
+            fs::write(root.path().join(&relative).join("leaf"), b"deep raw bytes").unwrap();
+            let baseline = EditBaseline::capture(root.path(), &[]).unwrap();
+            assert_eq!(baseline.entries.len(), 130);
+            assert_eq!(baseline.raw_bytes(), 14);
+            assert_eq!(
+                baseline.bytes(&relative.join("leaf")).unwrap().as_ref(),
+                b"deep raw bytes"
+            );
+            // Exercise the real recursive scanner with a nearly exhausted path
+            // reservation: the first rejected joined path is never retained.
+            let mut constrained = EditBaseline {
+                root: baseline.root.clone(),
+                entries: BTreeMap::new(),
+                raw_bytes: 0,
+            };
+            let mut budget = EditIoBudget {
+                paths: MAX_PATHS - 3,
+                ..Default::default()
+            };
+            budget.entry(Path::new("")).unwrap();
+            assert_eq!(
+                constrained.scan(Path::new(""), &[], &mut budget),
+                Err(EditIoError::Bounds)
+            );
+            assert_eq!(constrained.entries.len(), 2);
+            assert!(!constrained.entries.contains_key(Path::new("d/d")));
+            assert_eq!(budget.paths, MAX_PATHS - 2);
+        }
         for ignored in [".git", ".oneagent", "node_modules", "target"] {
             let (root, _) = fixture();
             fs::create_dir(root.path().join(ignored)).unwrap();
@@ -985,6 +1045,67 @@ mod tests {
             Err(EditIoError::Bounds)
         ));
         assert!(!faults::events().contains(&"create"));
+    }
+
+    #[test]
+    fn every_read_ordinal_fails_through_real_io_routes() {
+        fn run(io: &mut EditIo, phase: usize) -> Result<()> {
+            match phase {
+                0 => io.stage_all(),
+                1 => io.replace_checked(|| false),
+                2 | 4 => io.verify_results().map(|_| ()),
+                3 => io.restore_checked().map(|_| ()),
+                _ => unreachable!(),
+            }
+        }
+        fn prepared(phase: usize) -> (tempfile::TempDir, EditIo) {
+            let (root, mut io) = fixture();
+            if phase > 0 {
+                io.stage_all().unwrap();
+            }
+            if phase > 1 {
+                io.replace_checked(|| false).unwrap();
+            }
+            if phase >= 3 {
+                io.cleanup_owned().unwrap();
+            }
+            faults::set(vec![]);
+            (root, io)
+        }
+        let mut reached = 0;
+        for phase in 0..5 {
+            let (_root, mut io) = prepared(phase);
+            run(&mut io, phase).unwrap();
+            let events = faults::events();
+            for point in ["read", "read_filled"] {
+                let count = events.iter().filter(|event| **event == point).count();
+                assert!(count > 0, "unobserved read route {phase}/{point}");
+                for ordinal in 1..=count {
+                    let (root, mut io) = prepared(phase);
+                    faults::set(vec![(point, ordinal)]);
+                    assert_eq!(
+                        run(&mut io, phase),
+                        Err(EditIoError::Io),
+                        "{phase}/{point}/{ordinal}"
+                    );
+                    assert!(
+                        faults::events()
+                            .iter()
+                            .filter(|event| **event == point)
+                            .count()
+                            >= ordinal
+                    );
+                    assert_eq!(
+                        fs::read(root.path().join("sentinel")).unwrap(),
+                        b"untouched"
+                    );
+                    assert!(io.retained_files() <= 4);
+                    reached += 1;
+                }
+            }
+        }
+        eprintln!("safe-edit read ordinal cases: {reached}");
+        faults::set(vec![]);
     }
 
     #[test]

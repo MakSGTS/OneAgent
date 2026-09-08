@@ -3080,8 +3080,18 @@ mod safe_edit_tests {
             |p| p.target.target_kind = NodeKind::Function,
             |p| p.target.owner_module_id = id("other"),
             |p| p.target.expected_post_rename_node_id = id("other"),
+            |p| {
+                p.target.declaration.document_id =
+                    SourceDocumentId::new(id("configuration"), id("other")).unwrap();
+            },
+            |p| p.target.declaration.document_id.configuration_id = id("other"),
+            |p| p.target.declaration.content_version = SourceContentVersion::from_bytes(b"other"),
+            |p| p.target.declaration.kind = SourceOccurrenceKind::LocalCall,
+            |p| p.target.declaration.lexical_owner_token = Some("OtherOwner".into()),
             |p| p.target.declaration.token = "OtherName".into(),
             |p| p.target.declaration.range = SourceByteRange::new(0, 1).unwrap(),
+            |p| p.target.declaration.range.start_byte += 1,
+            |p| p.target.declaration.range.end_byte += 1,
             |p| p.target.declaration.mapped_target_id = Some(id("other")),
             |p| p.target.declaration.resolution = SourceOccurrenceResolution::Unsupported,
             |p| p.preconditions.publication_id = WorkspacePublicationId::new(2).unwrap(),
@@ -3090,6 +3100,19 @@ mod safe_edit_tests {
             |p| p.preconditions.target_kind = NodeKind::Function,
             |p| p.preconditions.owner_module_id = id("other"),
             |p| p.preconditions.documents = Arc::from([]),
+            |p| {
+                Arc::make_mut(&mut p.preconditions.documents)[0].document_id =
+                    SourceDocumentId::new(id("configuration"), id("other")).unwrap();
+            },
+            |p| {
+                Arc::make_mut(&mut p.preconditions.documents)[0]
+                    .document_id
+                    .configuration_id = id("other");
+            },
+            |p| {
+                Arc::make_mut(&mut p.preconditions.documents)[0].content_version =
+                    SourceContentVersion::from_bytes(b"other");
+            },
             |p| p.operations = Arc::from([]),
             |p| {
                 Arc::make_mut(&mut p.operations)[0].kind =
@@ -3107,7 +3130,14 @@ mod safe_edit_tests {
                 Arc::make_mut(&mut p.operations)[0].content_version =
                     SourceContentVersion::from_bytes(b"other");
             },
+            |p| {
+                Arc::make_mut(&mut p.operations)[0]
+                    .document_id
+                    .configuration_id = id("other");
+            },
             |p| Arc::make_mut(&mut p.operations)[0].range = SourceByteRange::new(0, 1).unwrap(),
+            |p| Arc::make_mut(&mut p.operations)[0].range.start_byte += 1,
+            |p| Arc::make_mut(&mut p.operations)[0].range.end_byte += 1,
             |p| Arc::make_mut(&mut p.operations)[0].expected = "Other".into(),
             |p| Arc::make_mut(&mut p.operations)[0].replacement = "Other".into(),
             |p| Arc::make_mut(&mut p.operations)[0].id = OperationId("other".into()),

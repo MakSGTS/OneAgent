@@ -76,6 +76,27 @@ pub struct SafeEditProjectionAdmission {
     peak: usize,
 }
 
+#[cfg(test)]
+mod allocation_audit {
+    #[derive(Default)]
+    pub(super) struct Audit {
+        pub(super) fail_at: Option<usize>,
+        pub(super) boundaries: Vec<(usize, usize, Option<usize>)>,
+    }
+    thread_local! {
+        pub(super) static CURRENT: std::cell::RefCell<Audit> = std::cell::RefCell::default();
+    }
+    pub(super) fn before(reserved: usize, bytes: usize) -> bool {
+        CURRENT.with_borrow_mut(|audit| {
+            audit.boundaries.push((reserved, bytes, None));
+            audit.fail_at == Some(audit.boundaries.len())
+        })
+    }
+    pub(super) fn allocated(bytes: usize) {
+        CURRENT.with_borrow_mut(|audit| audit.boundaries.last_mut().unwrap().2 = Some(bytes));
+    }
+}
+
 impl SafeEditProjectionAdmission {
     fn copy_transaction<T>(
         &mut self,
@@ -183,6 +204,11 @@ impl SafeEditProjectionAdmission {
     pub fn vector<T>(&mut self, capacity: usize) -> Result<Vec<T>, SafeEditError> {
         let bytes = Self::vector_bytes::<T>(capacity)?;
         self.reserve(bytes)?;
+        #[cfg(test)]
+        if allocation_audit::before(self.retained, bytes) {
+            self.release(bytes)?;
+            return Err(SafeEditError::ProjectionBounds);
+        }
         let mut output = Vec::new();
         if output.try_reserve_exact(capacity).is_err()
             || (std::mem::size_of::<T>() != 0 && output.capacity() != capacity)
@@ -191,6 +217,8 @@ impl SafeEditProjectionAdmission {
             self.release(bytes)?;
             return Err(SafeEditError::ProjectionBounds);
         }
+        #[cfg(test)]
+        allocation_audit::allocated(output.capacity().saturating_mul(std::mem::size_of::<T>()));
         Ok(output)
     }
 
@@ -697,6 +725,11 @@ pub struct SafeEditProvenance {
 }
 
 impl SafeEditProvenance {
+    /// Returns the canonical source key for prepaid producer ordering.
+    #[must_use]
+    pub const fn source(&self) -> Option<&EntityId> {
+        self.source.as_ref()
+    }
     /// Copies every canonical field after its exact allocation is admitted.
     ///
     /// # Errors
@@ -769,6 +802,114 @@ fn provenance_matches(expected: &[SafeEditProvenance], actual: &[Provenance]) ->
     expected.len() == actual.len() && expected.iter().zip(actual).all(|(a, b)| a.matches(b))
 }
 
+#[cfg(test)]
+mod allocation_tests {
+    use super::*;
+    use oneagent_graph::{
+        Confidence, FactOrigin, ProducerId, ResolutionState, SemanticDiagnosticCode,
+        SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticReferenceCategory,
+    };
+
+    #[test]
+    fn every_nested_copy_allocation_is_prepaid_and_releases_on_failure() {
+        let id = |value| EntityId::new(value).unwrap();
+        let provenance = |state| {
+            Provenance::new_with_location(
+                Some(id("nested.source")),
+                Some(oneagent_common::SourceLocation::new(
+                    SourcePath::new("nested/source.bsl").unwrap(),
+                    None,
+                )),
+                ProducerId::new("nested.producer"),
+                FactOrigin::Resolved,
+                Confidence::Exact,
+                state,
+            )
+        };
+        let reference = SemanticReference::Child {
+            owner: id("nested.owner"),
+            name: EntityName::new("NestedName").unwrap(),
+        };
+        let request = SemanticReferenceRequest::collected(
+            id("module"),
+            SemanticReferenceCategory::MetadataType,
+            reference.clone(),
+            [NodeKind::Module],
+            [provenance(ResolutionState::Unresolved)],
+        )
+        .unwrap()
+        .into_ambiguous_target(
+            [id("candidate.one"), id("candidate.two")],
+            [provenance(ResolutionState::Ambiguous)],
+        )
+        .unwrap();
+        let diagnostic = SemanticDiagnostic::new(
+            SemanticDiagnosticCode::ReferenceUnresolved,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::UnresolvedTarget,
+            "nested finding",
+            reference,
+        )
+        .with_source_node(id("module"))
+        .with_expected_kinds(vec![NodeKind::Module])
+        .with_candidates(vec![id("candidate.one"), id("candidate.two")])
+        .with_provenance(vec![provenance(ResolutionState::Unresolved)]);
+        for diagnostic_copy in [false, true] {
+            let copy = |admission: &mut SafeEditProjectionAdmission| {
+                if diagnostic_copy {
+                    SafeEditDiagnostic::copy(&diagnostic, admission).map(drop)
+                } else {
+                    SafeEditRequest::copy(&request, admission).map(drop)
+                }
+            };
+            allocation_audit::CURRENT
+                .with_borrow_mut(|audit| *audit = allocation_audit::Audit::default());
+            let mut admission = SafeEditProjectionAdmission::new(71).unwrap();
+            copy(&mut admission).unwrap();
+            let boundaries =
+                allocation_audit::CURRENT.with_borrow(|audit| audit.boundaries.clone());
+            assert!(boundaries.len() > 8);
+            let mut retained = 71;
+            for (reserved, requested, actual) in &boundaries {
+                retained += requested;
+                assert_eq!(*reserved, retained, "reservation must precede allocation");
+                assert_eq!(
+                    *actual,
+                    Some(*requested),
+                    "actual capacity exceeded prepaid storage"
+                );
+            }
+            assert_eq!(admission.retained_bytes(), retained);
+            for ordinal in 1..=boundaries.len() {
+                allocation_audit::CURRENT.with_borrow_mut(|audit| {
+                    *audit = allocation_audit::Audit {
+                        fail_at: Some(ordinal),
+                        ..Default::default()
+                    }
+                });
+                let mut admission = SafeEditProjectionAdmission::new(71).unwrap();
+                assert_eq!(copy(&mut admission), Err(SafeEditError::ProjectionBounds));
+                assert_eq!(admission.retained_bytes(), 71);
+                allocation_audit::CURRENT.with_borrow(|audit| {
+                    assert_eq!(audit.boundaries.len(), ordinal);
+                    assert!(audit.boundaries.last().unwrap().2.is_none());
+                    assert!(
+                        audit.boundaries[..ordinal - 1]
+                            .iter()
+                            .all(|(_, requested, actual)| *actual == Some(*requested))
+                    );
+                });
+            }
+            allocation_audit::CURRENT
+                .with_borrow_mut(|audit| *audit = allocation_audit::Audit::default());
+            eprintln!(
+                "nested copy allocation boundaries ({diagnostic_copy}): {}",
+                boundaries.len()
+            );
+        }
+    }
+}
+
 fn copy_reference(
     value: &SemanticReference,
     admission: &mut SafeEditProjectionAdmission,
@@ -835,6 +976,22 @@ pub struct SafeEditRequest {
 }
 
 impl SafeEditRequest {
+    /// Returns the canonical producer source identity.
+    #[must_use]
+    pub const fn source_node(&self) -> &EntityId {
+        &self.source
+    }
+
+    /// Compares the complete resolution payload independently of producer identity/context.
+    #[must_use]
+    pub fn same_resolution_as(&self, other: &Self) -> bool {
+        self.category == other.category
+            && self.reference == other.reference
+            && self.expected_kinds == other.expected_kinds
+            && self.candidates == other.candidates
+            && self.state == other.state
+            && self.outcome == other.outcome
+    }
     /// Copies a canonical terminal value; the original constructor remains its owner.
     ///
     /// # Errors
@@ -894,6 +1051,18 @@ pub struct SafeEditDiagnostic {
 }
 
 impl SafeEditDiagnostic {
+    /// Compares every payload field except the separately mapped source/provenance.
+    #[must_use]
+    pub fn same_payload_as(&self, other: &Self) -> bool {
+        self.code == other.code
+            && self.severity == other.severity
+            && self.kind == other.kind
+            && self.message == other.message
+            && self.reference == other.reference
+            && self.expected_kinds == other.expected_kinds
+            && self.actual_kind == other.actual_kind
+            && self.candidates == other.candidates
+    }
     /// Copies all fields from a canonical diagnostic without normalizing its contents.
     ///
     /// # Errors
@@ -1573,21 +1742,9 @@ pub fn validate_postconditions(
             SafeEditExpected::Expected(value) => provenance_matches(value, new.provenance()),
         };
         require(provenance_equal)?;
-        let expected_source = oneagent_graph::NodeId::new(source.as_str());
-        let expected_target = oneagent_graph::NodeId::new(target.as_str());
-        let actual_source = oneagent_graph::NodeId::new(new.source().as_str());
-        let actual_target = oneagent_graph::NodeId::new(new.target().as_str());
-        require(
-            oneagent_graph::SemanticGraphQuery::edge_id(
-                &expected_source,
-                &expected_target,
-                old.kind(),
-            ) == oneagent_graph::SemanticGraphQuery::edge_id(
-                &actual_source,
-                &actual_target,
-                new.kind(),
-            ),
-        )?;
+        // GraphEdge stores no independent ID. The lookup above compares every
+        // input to Graph's canonical edge-ID derivation, without allocating four
+        // duplicate NodeIds and two identical derived strings after source writes.
     }
     require(before.references.len() == after.references.len())?;
     for request in before.references.requests() {

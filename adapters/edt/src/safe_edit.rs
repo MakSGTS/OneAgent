@@ -3,7 +3,7 @@
 use crate::bsl_graph::{
     AnalyzedBslModule, CapturedQueryEvidence, EDT_BSL_GRAPH_PRODUCER, analyze_captured_module,
     captured_query_evidence, captured_unresolved_call_diagnostic, query_provenance_from_source,
-    write_query_source_id,
+    reserve_unresolved_call_inputs, write_query_source_id,
 };
 use crate::query_source_resolution::QuerySourceResolutionIndex;
 use oneagent_analysis::refactoring::{MAX_SOURCE_OCCURRENCES_PER_DOCUMENT, SourceFormat};
@@ -11,7 +11,6 @@ use oneagent_analysis::safe_edit::{
     SafeEditCountingSink, SafeEditDiagnostic, SafeEditError, SafeEditExpected, SafeEditFactKey,
     SafeEditFactValue, SafeEditProducerInput, SafeEditProducerProjection,
     SafeEditProjectionAdmission, SafeEditProjectionFact, SafeEditProvenance, SafeEditQueryFact,
-    SafeEditRequest,
 };
 use oneagent_bsl::BslQuery;
 use oneagent_common::EntityId;
@@ -92,7 +91,10 @@ fn project(
             )?)
             .ok_or(SafeEditError::ProjectionBounds)?;
         for call in before.calls() {
+            let scratch_start = admission.retained_bytes();
+            reserve_unresolved_call_inputs(&before, call, admission)?;
             let old = captured_unresolved_call_diagnostic(&before, call);
+            let mut scratch = admission.retained_bytes() - scratch_start;
             if input.diagnostics().contains(&old) {
                 let mut matches = after
                     .calls()
@@ -102,9 +104,16 @@ fn project(
                 if matches.next().is_some() {
                     return Err(SafeEditError::SemanticMismatch);
                 }
+                let start = admission.retained_bytes();
+                reserve_unresolved_call_inputs(&after, new_call, admission)?;
+                scratch = scratch
+                    .checked_add(admission.retained_bytes() - start)
+                    .ok_or(SafeEditError::ProjectionBounds)?;
                 let expected = captured_unresolved_call_diagnostic(&after, new_call);
                 map_diagnostic(&input, &mut facts, &old, &expected, admission)?;
             }
+            drop(old);
+            admission.release(scratch)?;
         }
     }
     if query_count
@@ -170,15 +179,14 @@ fn project_queries(
             &new_provenance,
             admission,
         )?;
-        let old_evidence = captured_query_evidence(before, query, input.graph(), index)
-            .map_err(|_| SafeEditError::SemanticMismatch)?;
-        let expected_evidence = captured_query_evidence(after, expected, input.graph(), index)
-            .map_err(|_| SafeEditError::SemanticMismatch)?;
+        let old_evidence = captured_query_evidence(before, query, input.graph(), index, admission)?;
+        let expected_evidence =
+            captured_query_evidence(after, expected, input.graph(), index, admission)?;
         map_nested_evidence(
             input,
             facts,
-            &old_evidence,
-            &expected_evidence,
+            old_evidence,
+            expected_evidence,
             expected,
             admission,
         )?;
@@ -194,8 +202,8 @@ fn project_queries(
 fn map_nested_evidence(
     input: &SafeEditProducerInput<'_>,
     facts: &mut [SafeEditProjectionFact],
-    before: &CapturedQueryEvidence,
-    expected: &CapturedQueryEvidence,
+    before: CapturedQueryEvidence,
+    mut expected: CapturedQueryEvidence,
     query: &BslQuery,
     admission: &mut SafeEditProjectionAdmission,
 ) -> Result<(), SafeEditError> {
@@ -205,71 +213,84 @@ fn map_nested_evidence(
     {
         return Err(SafeEditError::SemanticMismatch);
     }
-    for old in before.requests.requests() {
-        if !input.references().requests().contains(old) {
-            return Err(SafeEditError::SemanticMismatch);
-        }
-        let mut matches = expected.requests.requests().iter().filter(|new| {
-            new.source_node() == query.id()
-                && new.category() == old.category()
-                && new.reference() == old.reference()
-                && new.expected_kinds() == old.expected_kinds()
-        });
-        let new = matches.next().ok_or(SafeEditError::SemanticMismatch)?;
-        if matches.next().is_some()
-            || new.candidates() != old.candidates()
-            || new.state() != old.state()
-            || new.outcome() != old.outcome()
-        {
-            return Err(SafeEditError::SemanticMismatch);
-        }
-        let fact = facts.iter_mut().find(|fact| matches!(fact.key(), SafeEditFactKey::RequestFact { before } if before.matches(old.id())))
+    for (_, old) in &before.requests {
+        let original = input
+            .references()
+            .requests()
+            .iter()
+            .find(|value| old.matches(value))
             .ok_or(SafeEditError::SemanticMismatch)?;
-        if new != old {
-            fact.set_expected(SafeEditFactValue::Request(SafeEditExpected::Expected(
-                SafeEditRequest::copy(new, admission)?,
-            )))?;
+        let mut matches = expected
+            .requests
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, new))| new.source_node() == query.id() && new.same_resolution_as(old));
+        let index = matches.next().ok_or(SafeEditError::SemanticMismatch)?.0;
+        if matches.next().is_some() {
+            return Err(SafeEditError::SemanticMismatch);
+        }
+        let (bytes, new) = expected.requests.remove(index);
+        let fact = facts.iter_mut().find(|fact| matches!(fact.key(), SafeEditFactKey::RequestFact { before } if before.matches(original.id())))
+            .ok_or(SafeEditError::SemanticMismatch)?;
+        if new != *old {
+            expected.retained -= bytes;
+            fact.set_expected(SafeEditFactValue::Request(SafeEditExpected::Expected(new)))?;
         }
     }
-    for ((source, target, kind), old) in &before.edges {
+    for (_, (source, target, kind), old) in &before.edges {
         let edge = input
             .graph()
             .edges()
             .find(|edge| edge.source() == source && edge.target() == target && edge.kind() == *kind)
             .ok_or(SafeEditError::SemanticMismatch)?;
-        if edge.provenance() != old {
-            return Err(SafeEditError::SemanticMismatch);
-        }
-        let new = expected
-            .edges
-            .iter()
-            .find(|((new_source, new_target, new_kind), _)| {
-                new_source == query.id() && new_target == target && new_kind == kind
-            })
-            .map(|(_, values)| values)
-            .ok_or(SafeEditError::SemanticMismatch)?;
-        let fact = facts.iter_mut().find(|fact| matches!(fact.key(), SafeEditFactKey::EdgeFact { before_source, kind: k, before_target }
-            if before_source == source && before_target == target && k == kind)).ok_or(SafeEditError::SemanticMismatch)?;
-        if new != old {
-            fact.set_expected(SafeEditFactValue::Provenance(SafeEditExpected::Expected(
-                SafeEditProvenance::copy_all(new, admission)?,
-            )))?;
-        }
-    }
-    for (old, new) in before.diagnostics.iter().zip(&expected.diagnostics) {
-        if old.code() != new.code()
-            || old.kind() != new.kind()
-            || old.severity() != new.severity()
-            || old.message() != new.message()
-            || old.reference() != new.reference()
-            || old.candidates() != new.candidates()
-            || old.expected_kinds() != new.expected_kinds()
-            || old.actual_kind() != new.actual_kind()
+        if edge.provenance().len() != old.len()
+            || !old
+                .iter()
+                .zip(edge.provenance())
+                .all(|(old, actual)| old.matches(actual))
         {
             return Err(SafeEditError::SemanticMismatch);
         }
-        map_diagnostic(input, facts, old, new, admission)?;
+        let index = expected
+            .edges
+            .iter()
+            .position(|(_, (new_source, new_target, new_kind), _)| {
+                new_source == query.id() && new_target == target && new_kind == kind
+            })
+            .ok_or(SafeEditError::SemanticMismatch)?;
+        let (bytes, key, new) = expected.edges.remove(index);
+        let fact = facts.iter_mut().find(|fact| matches!(fact.key(), SafeEditFactKey::EdgeFact { before_source, kind: k, before_target }
+            if before_source == source && before_target == target && k == kind)).ok_or(SafeEditError::SemanticMismatch)?;
+        if new != *old {
+            expected.retained -= bytes - key.0.as_str().len() - key.1.as_str().len();
+            fact.set_expected(SafeEditFactValue::Provenance(SafeEditExpected::Expected(
+                new,
+            )))?;
+        }
     }
+    for ((_, old), (bytes, new)) in before
+        .diagnostics
+        .iter()
+        .zip(expected.diagnostics.drain(..))
+    {
+        if !old.same_payload_as(&new) {
+            return Err(SafeEditError::SemanticMismatch);
+        }
+        let ordinal = input
+            .diagnostics()
+            .iter()
+            .position(|value| old.matches(value))
+            .ok_or(SafeEditError::SemanticMismatch)?;
+        let fact = facts.iter_mut().find(|fact| matches!(fact.key(), SafeEditFactKey::DiagnosticFact { before_ordinal } if *before_ordinal == ordinal)).ok_or(SafeEditError::SemanticMismatch)?;
+        if new != *old {
+            expected.retained -= bytes;
+            fact.set_expected(SafeEditFactValue::Diagnostic(SafeEditExpected::Expected(
+                new,
+            )))?;
+        }
+    }
+    before.release(admission)?;
+    expected.release(admission)?;
     Ok(())
 }
 
@@ -416,6 +437,76 @@ fn map_query_provenance(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn nested_projection_allocations_are_prepaid_and_partial_failures_release() {
+        use crate::EdtSemanticGraphBuilder;
+        use oneagent_common::EntityName;
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let root = workspace.join("adapters/edt/tests/fixtures/reads_project");
+        let built = crate::FileSystemEdtSemanticGraphBuilder
+            .build_graph_with_source_evidence(workspace, &root)
+            .unwrap();
+        let index = QuerySourceResolutionIndex::new(built.graph());
+        let mut tested = 0;
+        for document in built.source_evidence().documents() {
+            let module = analyze_captured_module(
+                document.id().module_id(),
+                &EntityName::new("ObjectModule").unwrap(),
+                Path::new(document.path().path().as_str()),
+                document.raw_content(),
+                None,
+            )
+            .unwrap();
+            for query in module.queries() {
+                let mut admission = SafeEditProjectionAdmission::new(0).unwrap();
+                let output =
+                    captured_query_evidence(&module, query, built.graph(), &index, &mut admission)
+                        .unwrap();
+                let peak = admission.peak_bytes();
+                let retained = admission.retained_bytes();
+                assert!(peak >= retained && retained > 0);
+                output.release(&mut admission).unwrap();
+                assert_eq!(admission.retained_bytes(), 0);
+                for available in [0, 1, retained - 1, peak - 1, peak] {
+                    let reserved =
+                        oneagent_analysis::safe_edit::MAX_SAFE_EDIT_BUFFER_BYTES - available;
+                    let mut admission = SafeEditProjectionAdmission::new(reserved).unwrap();
+                    let output = captured_query_evidence(
+                        &module,
+                        query,
+                        built.graph(),
+                        &index,
+                        &mut admission,
+                    );
+                    if available < peak {
+                        assert!(
+                            matches!(output, Err(SafeEditError::ProjectionBounds)),
+                            "available {available}, required peak {peak}"
+                        );
+                    } else {
+                        output.unwrap().release(&mut admission).unwrap();
+                    }
+                    assert_eq!(
+                        admission.retained_bytes(),
+                        reserved,
+                        "partial construction retained a lease"
+                    );
+                    assert!(
+                        admission.peak_bytes()
+                            <= oneagent_analysis::safe_edit::MAX_SAFE_EDIT_BUFFER_BYTES
+                    );
+                    tested += 1;
+                }
+            }
+        }
+        assert!(tested > 0);
+        assert_eq!(tested, 15);
+        eprintln!("nested producer quota attempts: {tested}");
+    }
     #[test]
     #[allow(clippy::too_many_lines)]
     fn edt_projection_preserves_nested_query_evidence() {

@@ -1631,7 +1631,11 @@ corrections. Sprint 41 is `active`; its accepted transaction contract follows.
 
 [ADR-0064](../adr/0064-safe-edit-transactions.md) accepts the architecture for
 checked local apply/reversal of the existing complete callable-rename family.
-Implementation and independent design/integration evidence remain pending.
+Task 5 implements this boundary at
+`f2813d2eff5fa78efe3f0d4a705e3bc51de13979` after the producer design pass.
+The [Task 6 evidence](safe-edit-transactions-evidence.md) records all 35
+invariants, committed owners, exact command outcomes and consumer audit;
+independent integration review remains pending.
 Graph identity, BSL name semantics, immutable Analysis planning and adapter
 source capture remain their existing owners. Analysis adds a pure exhaustive
 before/after semantic comparison; Runtime owns the policy-gated service
@@ -1665,8 +1669,14 @@ The ADR bounds preparation, source capture, operations, staging and one retained
 undo record before allocation/write. It accepts explicit cooperative exclusive
 source ownership, with per-file replacement and honest multi-file visibility,
 platform and crash limits. No semantic cache/schema migration, source Coverage
-upgrade, new refactoring family, Graph fact, wire endpoint or UI follows from
-architecture acceptance; existing read-only service composition stays compatible.
+upgrade, new refactoring family, Graph fact, wire endpoint or UI accompanies
+this implementation; existing read-only service composition stays compatible.
+The stable canonical test result is 1435 passed tests in 83 nonzero targets,
+with four empty harnesses separately recorded. The evidence preserves the first
+environment failure and successful unchanged-source repeat, exact-byte paired
+oracles, constructor-versus-Runtime evidence and macOS-only executed platform
+qualification. No durable undo, hostile-writer exclusion, multi-file disk
+atomicity or crash recovery guarantee follows. Sprint 41 remains `active`.
 
 ## Incremental indexing
 

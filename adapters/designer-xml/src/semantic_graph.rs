@@ -25,8 +25,8 @@ use crate::{
 };
 
 const CONFIGURATION_FILE: &str = "Configuration.xml";
-const GRAPH_PRODUCER: &str = "oneagent.designer-xml.semantic-graph-builder";
-const BSL_PRODUCER: &str = "oneagent.designer-xml.bsl-declarations";
+pub(crate) const GRAPH_PRODUCER: &str = "oneagent.designer-xml.semantic-graph-builder";
+pub(crate) const BSL_PRODUCER: &str = "oneagent.designer-xml.bsl-declarations";
 
 /// Builds the accepted source-independent semantic graph slice from Designer XML.
 pub trait DesignerXmlSemanticGraphBuilder {
@@ -215,18 +215,14 @@ fn emit_module_and_declarations(
     module: &DesignerXmlModuleDescriptor,
     capture_source_evidence: bool,
 ) -> Result<(), DesignerXmlGraphError> {
-    let module_source = source_id(
+    let module_source = module_source_id(
         module.source().artifact_path(),
         module.source().raw_source(),
-        &format!(
-            "module={};role={}",
-            module.id().as_str(),
-            module.kind().as_str()
-        ),
+        module.id(),
+        module.kind(),
     )?;
-    let module_location = file_location(module.source().artifact_path())?;
-    let module_provenance = parsed_provenance(module_source.clone(), GRAPH_PRODUCER)
-        .with_location(module_location.clone());
+    let module_provenance =
+        module_provenance_from_source(module.source().artifact_path(), module_source.clone())?;
     insert_unique_node(
         graph,
         GraphNode::new_with_provenance(
@@ -253,16 +249,12 @@ fn emit_module_and_declarations(
         LineBslDeclarationExtractor.extract(module.id(), module.source_text())?
     };
     for symbol in symbols {
-        let symbol_source = EntityId::new(format!(
-            "{};declaration={};line={}",
-            module_source.as_str(),
-            symbol.id().as_str(),
-            symbol.line()
-        ))
-        .map_err(|_| DesignerXmlGraphError::InvalidSourceIdentifier)?;
-        let provenance = parsed_provenance(symbol_source, BSL_PRODUCER).with_location(
-            declaration_location(module.source().artifact_path(), symbol.line())?,
-        );
+        let provenance = declaration_provenance(
+            module.source().artifact_path(),
+            &module_source,
+            symbol.id(),
+            symbol.line(),
+        )?;
         let kind = match symbol.kind() {
             BslSymbolKind::Procedure => NodeKind::Procedure,
             BslSymbolKind::Function => NodeKind::Function,
@@ -337,6 +329,85 @@ fn provenance_from_file(
         source,
     })?;
     Ok(parsed_provenance(source_id(path, &raw, fact)?, producer))
+}
+
+/// The same encoder serves production emission and the nonallocating projection count pass.
+pub(crate) fn write_module_source_id(
+    output: &mut (impl std::fmt::Write + ?Sized),
+    path: &str,
+    digest: &str,
+    module_id: &EntityId,
+    role: crate::DesignerXmlModuleKind,
+) -> std::fmt::Result {
+    for character in path.chars() {
+        output.write_char(if character == '\\' { '/' } else { character })?;
+    }
+    write!(
+        output,
+        "#sha256={digest};module={};role={}",
+        module_id.as_str(),
+        role.as_str()
+    )
+}
+
+pub(crate) fn module_source_id(
+    path: &Path,
+    raw: &[u8],
+    module_id: &EntityId,
+    role: crate::DesignerXmlModuleKind,
+) -> Result<EntityId, DesignerXmlGraphError> {
+    let mut value = String::new();
+    write_module_source_id(
+        &mut value,
+        &path.to_string_lossy(),
+        &sha256_hex(raw),
+        module_id,
+        role,
+    )
+    .map_err(|_| DesignerXmlGraphError::InvalidSourceIdentifier)?;
+    EntityId::new(value).map_err(|_| DesignerXmlGraphError::InvalidSourceIdentifier)
+}
+
+pub(crate) fn write_declaration_source_id(
+    output: &mut (impl std::fmt::Write + ?Sized),
+    module_source: &str,
+    declaration: &EntityId,
+    line: usize,
+) -> std::fmt::Result {
+    write!(
+        output,
+        "{module_source};declaration={};line={line}",
+        declaration.as_str()
+    )
+}
+
+pub(crate) fn declaration_provenance(
+    path: &Path,
+    module_source: &EntityId,
+    declaration: &EntityId,
+    line: usize,
+) -> Result<Provenance, DesignerXmlGraphError> {
+    let mut value = String::new();
+    write_declaration_source_id(&mut value, module_source.as_str(), declaration, line)
+        .map_err(|_| DesignerXmlGraphError::InvalidSourceIdentifier)?;
+    let source =
+        EntityId::new(value).map_err(|_| DesignerXmlGraphError::InvalidSourceIdentifier)?;
+    declaration_provenance_from_source(path, source, line)
+}
+
+pub(crate) fn module_provenance_from_source(
+    path: &Path,
+    source: EntityId,
+) -> Result<Provenance, DesignerXmlGraphError> {
+    Ok(parsed_provenance(source, GRAPH_PRODUCER).with_location(file_location(path)?))
+}
+
+pub(crate) fn declaration_provenance_from_source(
+    path: &Path,
+    source: EntityId,
+    line: usize,
+) -> Result<Provenance, DesignerXmlGraphError> {
+    Ok(parsed_provenance(source, BSL_PRODUCER).with_location(declaration_location(path, line)?))
 }
 
 fn source_id(path: &Path, raw: &[u8], fact: &str) -> Result<EntityId, DesignerXmlGraphError> {

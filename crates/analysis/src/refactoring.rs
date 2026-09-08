@@ -804,6 +804,16 @@ pub struct SourceEvidenceSet {
 }
 
 impl SourceEvidenceSet {
+    pub(crate) fn copy_for_safe_edit(
+        &self,
+        admission: &mut crate::safe_edit::SafeEditProjectionAdmission,
+    ) -> Result<Self, crate::safe_edit::SafeEditError> {
+        Ok(Self {
+            configuration_id: admission.copy_id(&self.configuration_id)?,
+            documents: Arc::clone(&self.documents),
+            total_raw_bytes: self.total_raw_bytes,
+        })
+    }
     /// Validates bounded documents, aggregate bytes, identities, and path aliases.
     ///
     /// Duplicate document identities and paths fail even when the complete
@@ -1814,6 +1824,65 @@ pub struct RefactoringPlan {
 }
 
 impl RefactoringPlan {
+    pub(crate) fn copy_for_safe_edit(
+        &self,
+        admission: &mut crate::safe_edit::SafeEditProjectionAdmission,
+    ) -> Result<Self, crate::safe_edit::SafeEditError> {
+        let old = &self.target.declaration;
+        let declaration = SourceOccurrence {
+            document_id: SourceDocumentId {
+                configuration_id: admission.copy_id(&old.document_id.configuration_id)?,
+                module_id: admission.copy_id(&old.document_id.module_id)?,
+            },
+            content_version: old.content_version,
+            range: old.range,
+            kind: old.kind,
+            token: admission.copy_string(&old.token)?.into_boxed_str(),
+            lexical_owner_token: old
+                .lexical_owner_token
+                .as_ref()
+                .map(|value| admission.copy_string(value).map(String::into_boxed_str))
+                .transpose()?,
+            mapped_target_id: old
+                .mapped_target_id
+                .as_ref()
+                .map(|id| admission.copy_id(id))
+                .transpose()?,
+            resolution: old.resolution,
+        };
+        Ok(Self {
+            id: PlanId(admission.copy_string(self.id.as_str())?.into_boxed_str()),
+            request: RefactoringRequest {
+                family: self.request.family,
+                expected_publication_id: self.request.expected_publication_id,
+                configuration_id: admission.copy_id(&self.request.configuration_id)?,
+                target_node_id: admission.copy_id(&self.request.target_node_id)?,
+                desired_name: admission
+                    .copy_string(&self.request.desired_name)?
+                    .into_boxed_str(),
+            },
+            target: RefactoringTarget {
+                configuration_id: admission.copy_id(&self.target.configuration_id)?,
+                target_node_id: admission.copy_id(&self.target.target_node_id)?,
+                target_kind: self.target.target_kind,
+                owner_module_id: admission.copy_id(&self.target.owner_module_id)?,
+                declaration,
+                expected_post_rename_node_id: admission
+                    .copy_id(&self.target.expected_post_rename_node_id)?,
+            },
+            preconditions: RefactoringPreconditionSet {
+                publication_id: self.preconditions.publication_id,
+                configuration_id: admission.copy_id(&self.preconditions.configuration_id)?,
+                target_node_id: admission.copy_id(&self.preconditions.target_node_id)?,
+                target_kind: self.preconditions.target_kind,
+                owner_module_id: admission.copy_id(&self.preconditions.owner_module_id)?,
+                documents: Arc::clone(&self.preconditions.documents),
+            },
+            operations: Arc::clone(&self.operations),
+            summary: self.summary,
+            completeness: self.completeness,
+        })
+    }
     /// Validates, normalizes, reconciles, and identifies one complete plan.
     ///
     /// Exact duplicates collapse. Version conflicts, same-range conflicts,
@@ -2555,7 +2624,7 @@ fn build_refactoring_preview(
     RefactoringPreview::new(plan, entries)
 }
 
-fn raw_range_to_source_span(
+pub(crate) fn raw_range_to_source_span(
     raw: &[u8],
     range: SourceByteRange,
 ) -> Result<SourceSpan, RefactoringError> {
@@ -2575,7 +2644,7 @@ fn raw_range_to_source_span(
         .map_err(|_| RefactoringError::closed(RefactoringErrorKind::InvalidOccurrence))
 }
 
-fn raw_offset_to_source_position(
+pub(crate) fn raw_offset_to_source_position(
     raw: &[u8],
     offset: usize,
 ) -> Result<SourcePosition, RefactoringError> {
@@ -2928,4 +2997,147 @@ fn encode_usize(output: &mut Vec<u8>, value: usize) -> Result<(), RefactoringErr
         .map_err(|_| RefactoringError::closed(RefactoringErrorKind::ArithmeticOverflow))?;
     output.extend_from_slice(&value.to_be_bytes());
     Ok(())
+}
+
+#[cfg(test)]
+mod safe_edit_tests {
+    use super::*;
+    use crate::safe_edit::{SafeEditError, compare_plan};
+
+    fn id(value: &str) -> EntityId {
+        EntityId::new(value).unwrap()
+    }
+
+    fn plan() -> RefactoringPlan {
+        let document = SourceDocumentId::new(id("configuration"), id("module")).unwrap();
+        let version = SourceContentVersion::from_bytes(b"Procedure OldName()\nEndProcedure\n");
+        let target_id =
+            bsl_callable_id(&id("module"), BslSymbolKind::Procedure, "OldName").unwrap();
+        let range = SourceByteRange::new(10, 17).unwrap();
+        let declaration = SourceOccurrence::new(
+            document.clone(),
+            version,
+            range,
+            SourceOccurrenceKind::Declaration,
+            "OldName",
+            Some(target_id.clone()),
+            SourceOccurrenceResolution::Unique,
+        )
+        .unwrap();
+        let request = RefactoringRequest::new(
+            RefactoringFamily::BslCallableRenameV1,
+            WorkspacePublicationId::initial(),
+            id("configuration"),
+            target_id.clone(),
+            "NewName",
+        )
+        .unwrap();
+        let target = RefactoringTarget::new(
+            id("configuration"),
+            target_id.clone(),
+            NodeKind::Procedure,
+            id("module"),
+            declaration,
+            "NewName",
+        )
+        .unwrap();
+        let conditions = RefactoringPreconditionSet::new(
+            WorkspacePublicationId::initial(),
+            id("configuration"),
+            target_id,
+            NodeKind::Procedure,
+            id("module"),
+            vec![RefactoringSourcePrecondition::new(
+                document.clone(),
+                version,
+            )],
+        )
+        .unwrap();
+        let operation = RefactoringOperation::new(
+            RefactoringOperationKind::ReplaceDeclarationIdentifier,
+            SourceOccurrenceKind::Declaration,
+            document,
+            version,
+            range,
+            "OldName",
+            "NewName",
+            &[],
+        )
+        .unwrap();
+        RefactoringPlan::new(request, target, conditions, vec![operation]).unwrap()
+    }
+
+    #[test]
+    fn complete_plan_comparison_rejects_each_representable_private_field() {
+        let original = plan();
+        let mutations: &[fn(&mut RefactoringPlan)] = &[
+            |p| p.request.expected_publication_id = WorkspacePublicationId::new(2).unwrap(),
+            |p| p.request.configuration_id = id("other"),
+            |p| p.request.target_node_id = id("other"),
+            |p| p.request.desired_name = "OtherName".into(),
+            |p| p.target.configuration_id = id("other"),
+            |p| p.target.target_node_id = id("other"),
+            |p| p.target.target_kind = NodeKind::Function,
+            |p| p.target.owner_module_id = id("other"),
+            |p| p.target.expected_post_rename_node_id = id("other"),
+            |p| p.target.declaration.token = "OtherName".into(),
+            |p| p.target.declaration.range = SourceByteRange::new(0, 1).unwrap(),
+            |p| p.target.declaration.mapped_target_id = Some(id("other")),
+            |p| p.target.declaration.resolution = SourceOccurrenceResolution::Unsupported,
+            |p| p.preconditions.publication_id = WorkspacePublicationId::new(2).unwrap(),
+            |p| p.preconditions.configuration_id = id("other"),
+            |p| p.preconditions.target_node_id = id("other"),
+            |p| p.preconditions.target_kind = NodeKind::Function,
+            |p| p.preconditions.owner_module_id = id("other"),
+            |p| p.preconditions.documents = Arc::from([]),
+            |p| p.operations = Arc::from([]),
+            |p| {
+                Arc::make_mut(&mut p.operations)[0].kind =
+                    RefactoringOperationKind::ReplaceDirectCallIdentifier;
+            },
+            |p| {
+                Arc::make_mut(&mut p.operations)[0].occurrence_kind =
+                    SourceOccurrenceKind::LocalCall;
+            },
+            |p| {
+                Arc::make_mut(&mut p.operations)[0].document_id =
+                    SourceDocumentId::new(id("configuration"), id("other")).unwrap();
+            },
+            |p| {
+                Arc::make_mut(&mut p.operations)[0].content_version =
+                    SourceContentVersion::from_bytes(b"other");
+            },
+            |p| Arc::make_mut(&mut p.operations)[0].range = SourceByteRange::new(0, 1).unwrap(),
+            |p| Arc::make_mut(&mut p.operations)[0].expected = "Other".into(),
+            |p| Arc::make_mut(&mut p.operations)[0].replacement = "Other".into(),
+            |p| Arc::make_mut(&mut p.operations)[0].id = OperationId("other".into()),
+            |p| p.summary.requested_targets += 1,
+            |p| p.summary.planned_targets += 1,
+            |p| p.summary.conflicted_targets += 1,
+            |p| p.summary.rejected_targets += 1,
+            |p| p.summary.documents += 1,
+            |p| p.summary.candidate_occurrences += 1,
+            |p| p.summary.exact_duplicates_collapsed += 1,
+            |p| p.summary.declaration_operations += 1,
+            |p| p.summary.local_call_operations += 1,
+            |p| p.summary.qualified_call_operations += 1,
+            |p| p.summary.planned_operations += 1,
+            |p| p.summary.omitted_operations += 1,
+            |p| p.summary.returned_operations += 1,
+        ];
+        for change in mutations {
+            let mut changed = original.clone();
+            change(&mut changed);
+            assert_eq!(changed.id(), original.id());
+            assert_eq!(
+                compare_plan(&original, &changed),
+                Err(SafeEditError::PlanMismatch)
+            );
+        }
+        assert_eq!(compare_plan(&original, &original.clone()), Ok(()));
+        // Closed-type evidence: no second family/completeness/dependency variant exists.
+        let RefactoringCompleteness::Complete = original.completeness();
+        let RefactoringFamily::BslCallableRenameV1 = original.request().family();
+        assert!(original.operations()[0].dependencies().is_empty());
+    }
 }

@@ -1,8 +1,132 @@
 # Sprint 41 Safe Edit Transaction Design Review
 
-## Current complete-audit decision
+## Current producer-owned projection decision
 
-Current decision: **pass**, independently reconciled for the exact immutable
+Current decision: **pass** for the targeted design gate on the exact immutable
+range `ceb3a91da70afde202cab84f7ea42846cdd734bd..cb1a25ea70e395dbfa87eb51923686b28d09d94e`.
+Primary `/root/s41_task4` and independent reviewer `/root/s41_design_reviewer`
+each observed initial/final review HEAD
+`cb1a25ea70e395dbfa87eb51923686b28d09d94e`, clean branch
+`codex/v0.7-sprint-41`. Both independently returned pass, with no blocking or
+non-blocking findings and no missing design-owner evidence. The dispatcher
+delivered the complete independent result before these documentation updates.
+Neither review role mutated files, created logs, staged, committed, delegated,
+inspected the preserved stash/floating implementation, or ran Cargo during review.
+
+The unique prerequisite is `d849ebb50d83393b7aad6f34a1e6a43775a22af4`
+(`Define Sprint 41 producer-owned semantic projection`). The correction used
+no-ff merges `b2f1bdcfb9591ba24a1da9ef79c4a388083bac7f`,
+`5b1fc2e301201cf48d63909d5ab9666df9a44ff7`, and the current reviewed endpoint.
+The exact delta from `93661837df8d63bfed10c9b70d1986c4e0d12aa5` contains
+nine documentation paths, 543 additions and 70 deletions. Production code,
+manifests, dependencies and reusable framework are unchanged. The accepted
+producer/identity correction is now part of ADR-0064; earlier passes below
+remain historical and do not themselves approve this revised mechanism.
+
+### Incomplete Task 5 attempt and current authorization
+
+The prior complete-audit pass was committed as
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`. Its Task 5 attempt remains
+incomplete: nine task-owned paths and 1593 text additions/deletions, no binaries
+and no implementation commit/push. Designer whole-module digest/declaration
+provenance and EDT directly owned Query identities exposed the producer-boundary
+blocker. The user explicitly approved the resulting producer-owned correction.
+All earlier EOF, T03 and T17 findings and decisions are retained below.
+
+Historical executed results come only from the committed Task 5 ledger:
+Analysis package checking passed; Runtime all-targets checking passed before
+later uncovered edits; the integration run exited 101 with one passed and one
+failed test (`SemanticMismatch`, `Recovered`, zero retained files). Remaining
+focused groups and the stable full gate were not run. Existing evidence paths
+are `local-artifacts/codex-runs/sprint-41/task-5/analysis-check.log`,
+`runtime-check.log`, and `F2-development.log` in that same directory. Neither
+design-review role reexecuted those checks or inspected the preserved floating
+implementation/stash. These historical results do not qualify the new design's
+future implementation.
+
+### Complete matrix, ownership and allocation assessment
+
+Both roles evaluated the complete T01-T35 matrix, its 35 exactly-once R/L/C/T
+classifications, and the [producer correction disposition](../architecture/safe-edit-transactions-invariants.md#producer-projection-correction-and-complete-audit-disposition).
+Every original owner, ordering guard and reachable negative oracle remains
+required. T03's owner-local/constructor split and T17's exact closed-type
+evidence are preserved; neither constructor rejection nor an impossible state
+is credited as a Runtime comparator test.
+
+| Review domain | Independent and primary assessment |
+|---|---|
+| Typed expected evidence | pass: NodeIdentity, NodeFact, EdgeFact, RequestFact, DiagnosticFact and QueryFact use complete independently before-derived inventories, checked full publication/plan/document binding and exactly-once consumption. Diagnostic ordinals bind the exact full before record. Duplicate, missing, extra, conflicting, reused or unconsumed mappings reject. |
+| Identity closure and complete semantics | pass: only the selected callable and its directly owned format-supported Query identities may change. Canonical BSL IDs, Contains ownership, exact Query binding/text and all unaffected facts remain mandatory. EDT includes malformed/unsupported Query; Designer emits no Query facts and gains no new Query semantics. |
+| Canonical producer ownership | pass: DP owns whole-module SHA and all dependent declaration provenance; EP owns captured-byte analysis and nested Query/collection/resolver/request/diagnostic contexts; Q extracts the existing canonical Query-ID helper. Shared producer helpers preserve builder encodings without copying them into Analysis or Runtime. |
+| Freeze and independent oracle | pass: before evidence is reproduced and checked, then expected projection freezes before staging and candidate build. Candidate evidence cannot fill missing keys or become its own expected value. Undo retains exact original evidence. All reachable candidate mutants traverse the real coordinator and comparator after production rebuild. |
+| Allocation and lifetime | pass: borrowed counting neither allocates nor invokes another parser. Nested output/string/storage, key inventory, sorting, bitsets and simultaneous old/new growth reserve before emission/retention within the same 268435456-byte allowance. Existing scoped canonical parser internals remain excluded; no uncharged parser result escapes into attempt/undo. The exact 1MiB simple-rename positive remains required without a hidden smaller document cap. |
+| Complete original protections | pass: full source freshness, policy binding, confinement, staging, recovery, quarantine, publication/cache serialization, cancellation, shutdown, redaction and old-snapshot compatibility remain intact across all 35 rows. |
+
+Independent source inspection confirmed Designer digest/declaration production
+in `adapters/designer-xml/src/semantic_graph.rs`, EDT Query/Contains emission
+before query-language failure handling and shared nested contexts in
+`adapters/edt/src/bsl_graph.rs`/`query_source_resolution.rs`, and canonical
+`query_id` in `crates/bsl/src/queries.rs`. The captured-byte analyzer can be
+separated from the existing disk fallback. Existing dependency directions and
+nonallocating Graph iterators support the planned owners/counting boundary.
+New producer test owners are exact DP/EP/Q, A and E locations in the matrix.
+
+The allocation is exactly 25 unique paths totaling 8500 estimated text churn,
+no binaries, 12 focused groups and one stable full gate. Only F10 broadens to
+Analysis plus BSL all-targets and F11 to Designer plus EDT all-targets; F1's
+library target and other groups remain intact. Stop before further work above
+32 paths, 10000 text additions/deletions or any binary, overriding the revised
+estimate's general 2x calculation. Resume retains implementation baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5` and the preserved nine paths/1593
+churn. Exclude separately committed prerequisite documentation/review deltas
+by exact range only; do not reset the budget, subtract entire shared paths or
+double-count overlapping snapshots.
+
+### Independently executed producer-gate checks
+
+Each role executed its own checks on the reviewed committed range.
+
+| Check | Independent reviewer | Primary |
+|---|---|---|
+| Full-range and `93661837df8d63bfed10c9b70d1986c4e0d12aa5..cb1a25ea70e395dbfa87eb51923686b28d09d94e` correction `git diff --check` | exit 0 | exit 0 |
+| Unchanged production/manifests/framework, prerequisite and final clean state | pass | pass |
+| `bash -n scripts/validate-codex-prompts.sh` | exit 0 | exit 0 |
+| `scripts/validate-codex-prompts.sh docs/codex/prompts/sprint-41-safe-edit-transactions/*.md` | exit 0; 8 files | exit 0; 8 files |
+| `scripts/validate-codex-prompts.sh` | exit 0; 22 files | exit 0; 22 files |
+| Markdown path/anchor checks | 15 files; 458 references; 0 errors | 15 files; 458 references; 0 errors |
+| Matrix/classification/allocation/efficiency/accounting | pass: 35/35, 25 paths/8500, 12 groups and explicit caps | pass: 35/35, 25 paths/8500, 12 groups and four matching efficiency records |
+
+Both initial enumeration probes included supplemental T rows and asserted;
+corrected selectors limited to the primary matrix passed. This was a probe
+error, not a documentation defect. The reviewer's new production-projector
+symbol search returned zero matches (exit 1), reported separately as absence
+evidence. No F1-F12 or full production gate ran in this design review.
+
+No design-owner evidence is missing. Future allocation instrumentation,
+exact/one-over limits and 1MiB positive, shared-helper/canonical producer
+regressions, all candidate mutants, complete paired multi-file fixtures and
+lifecycle/I/O evidence remain mandatory. The 8500 allocation is an estimate;
+capacity and compatibility claims require those implementation tests. Parser
+heap exclusion does not imply a whole-process memory bound. Original cooperative
+ownership, hostile-writer, multi-file disk atomicity, crash/durable-undo, richer
+metadata and stalled-I/O shutdown limitations below remain unchanged.
+
+The same reviewer subsequently returned **artifact consistency: pass** on the
+two-document draft with no required correction. It confirmed the exact range
+and prerequisite, all 35 obligations, separate checks, zero-match/probe outcomes,
+complete historical/incomplete-attempt evidence, pending production evidence
+and risks without weakening. HEAD remained the reviewed endpoint, the index
+was empty, and the draft diff and target Markdown anchor checks exited 0.
+
+Effective context window and measured token telemetry are unavailable; bounded
+selectors were used. No new logs were retained. Sprint 41 remains active and
+push is deferred. Only the separately committed current pass with subject
+`Approve Sprint 41 producer-owned semantic projection design` admits Task 5
+resume; the dispatcher owns restoration of the preserved implementation.
+
+## Complete-audit decision (historical)
+
+Historical decision: **pass**, independently reconciled for the exact immutable
 range `ceb3a91da70afde202cab84f7ea42846cdd734bd..ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f`.
 Primary `/root/s41_task4` and the same independent reviewer
 `/root/s41_design_reviewer` both observed initial/final review HEAD

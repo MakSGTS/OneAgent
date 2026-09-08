@@ -13,8 +13,8 @@ use oneagent_metadata::MetadataKind;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
-const QUERY_SOURCE_COLLECTOR: &str = "oneagent.edt.query-source-collection";
-const QUERY_SOURCE_RESOLVER: &str = "oneagent.edt.query-source-resolution";
+pub(crate) const QUERY_SOURCE_COLLECTOR: &str = "oneagent.edt.query-source-collection";
+pub(crate) const QUERY_SOURCE_RESOLVER: &str = "oneagent.edt.query-source-resolution";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QuerySourceResolutionOutcome {
@@ -253,17 +253,20 @@ impl QuerySourceResolutionIndex {
             .map(|candidate| candidate.id.clone())
             .collect::<Vec<_>>();
 
-        match compatible.as_slice() {
-            [] => QuerySourceResolutionOutcome::IncompatibleTargetKind {
-                candidates: candidates
-                    .values()
-                    .map(|candidate| candidate.id.clone())
-                    .collect(),
+        match candidate_disposition(candidates.len(), compatible.len()) {
+            CandidateDisposition::Absent => absent_target_outcome(workspace_scope),
+            CandidateDisposition::Incompatible => {
+                QuerySourceResolutionOutcome::IncompatibleTargetKind {
+                    candidates: candidates
+                        .values()
+                        .map(|candidate| candidate.id.clone())
+                        .collect(),
+                }
+            }
+            CandidateDisposition::Resolved => QuerySourceResolutionOutcome::Resolved {
+                target_id: compatible[0].clone(),
             },
-            [target_id] => QuerySourceResolutionOutcome::Resolved {
-                target_id: target_id.clone(),
-            },
-            _ => QuerySourceResolutionOutcome::AmbiguousTarget {
+            CandidateDisposition::Ambiguous => QuerySourceResolutionOutcome::AmbiguousTarget {
                 candidates: compatible,
             },
         }
@@ -281,36 +284,9 @@ fn query_source_collection_provenance(
     query: &BslQuery,
     source: &QuerySourceOccurrence,
 ) -> Result<Provenance, QuerySourceRequestError> {
-    let mut context = module_source.map_or_else(
-        || query.id().as_str().to_owned(),
-        |source| source.as_str().to_owned(),
-    );
-    context.push_str("#query_source_request");
-    append_context(&mut context, "query", query.id().as_str());
-    append_context(&mut context, "owner", query.owner_id().as_str());
-    append_context(&mut context, "binding", query.binding_name().as_str());
-    append_context(&mut context, "declaration_line", &query.line().to_string());
-    append_context(&mut context, "raw_source", source.raw_spelling());
-    append_context(
-        &mut context,
-        "range",
-        &format!(
-            "{}..{}",
-            source.location().start_byte(),
-            source.location().end_byte()
-        ),
-    );
-    append_context(
-        &mut context,
-        "category",
-        query_source_category_name(source.category()),
-    );
-    append_context(&mut context, "namespace", source.namespace());
-    append_context(&mut context, "local_name", source.local_name());
-    if let Some(alias) = source.alias() {
-        append_context(&mut context, "alias", alias);
-    }
-
+    let mut context = String::new();
+    write_collection_context(&mut context, module_source, query, source)
+        .map_err(|_| QuerySourceRequestError::InvalidSourceIdentifier)?;
     request_provenance(
         context,
         QUERY_SOURCE_COLLECTOR,
@@ -325,33 +301,20 @@ fn query_source_resolver_provenance(
     workspace_scope: WorkspaceResolutionScope,
     outcome: &QuerySourceResolutionOutcome,
 ) -> Result<Provenance, QuerySourceRequestError> {
-    let mut context = request.source_node().as_str().to_owned();
-    context.push_str("#query_source_resolution");
-    append_context(&mut context, "request", request.id().as_str());
     let SemanticReference::Name(target_name) = request.reference() else {
         return Err(invalid_collected_request(request));
     };
-    append_context(&mut context, "target_name", target_name.as_str());
-    append_context(
+    let mut context = String::new();
+    write_resolver_context(
         &mut context,
-        "lookup_key",
+        request,
+        target_name.as_str(),
         &query_source_lookup_key(target_name.as_str()),
-    );
-    append_context(
-        &mut context,
-        "expected_kind",
-        query_target_kind_name(expected_kind),
-    );
-    append_context(
-        &mut context,
-        "workspace_scope",
-        workspace_scope_name(workspace_scope),
-    );
-    append_context(&mut context, "outcome", query_source_outcome_name(outcome));
-    for candidate in query_source_outcome_candidates(outcome) {
-        append_context(&mut context, "candidate", candidate.as_str());
-    }
-
+        expected_kind,
+        workspace_scope,
+        outcome,
+    )
+    .map_err(|_| QuerySourceRequestError::InvalidSourceIdentifier)?;
     request_provenance(
         context,
         QUERY_SOURCE_RESOLVER,
@@ -377,11 +340,78 @@ fn request_provenance(
     ))
 }
 
-fn append_context(context: &mut String, key: &str, value: &str) {
-    use std::fmt::Write as _;
+pub(crate) fn write_collection_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    module_source: Option<&EntityId>,
+    query: &BslQuery,
+    source: &QuerySourceOccurrence,
+) -> std::fmt::Result {
+    use crate::bsl_graph::write_context_field;
+    write!(
+        context,
+        "{}#query_source_request",
+        module_source.unwrap_or(query.id()).as_str()
+    )?;
+    write_context_field(context, "query", query.id().as_str())?;
+    write_context_field(context, "owner", query.owner_id().as_str())?;
+    write_context_field(context, "binding", query.binding_name().as_str())?;
+    write_context_field(context, "declaration_line", query.line())?;
+    write_context_field(context, "raw_source", source.raw_spelling())?;
+    write_context_field(
+        context,
+        "range",
+        format_args!(
+            "{}..{}",
+            source.location().start_byte(),
+            source.location().end_byte()
+        ),
+    )?;
+    write_context_field(
+        context,
+        "category",
+        query_source_category_name(source.category()),
+    )?;
+    write_context_field(context, "namespace", source.namespace())?;
+    write_context_field(context, "local_name", source.local_name())?;
+    if let Some(alias) = source.alias() {
+        write_context_field(context, "alias", alias)?;
+    }
+    Ok(())
+}
 
-    write!(context, ";{key}#{}:{value}", value.len())
-        .expect("writing query source provenance context to a String must succeed");
+pub(crate) fn write_resolver_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    request: &SemanticReferenceRequest,
+    target_name: &str,
+    lookup_key: &str,
+    expected_kind: NodeKind,
+    workspace_scope: WorkspaceResolutionScope,
+    outcome: &QuerySourceResolutionOutcome,
+) -> std::fmt::Result {
+    use crate::bsl_graph::write_context_field;
+    write!(
+        context,
+        "{}#query_source_resolution",
+        request.source_node().as_str()
+    )?;
+    write_context_field(context, "request", request.id().as_str())?;
+    write_context_field(context, "target_name", target_name)?;
+    write_context_field(context, "lookup_key", lookup_key)?;
+    write_context_field(
+        context,
+        "expected_kind",
+        query_target_kind_name(expected_kind),
+    )?;
+    write_context_field(
+        context,
+        "workspace_scope",
+        workspace_scope_name(workspace_scope),
+    )?;
+    write_context_field(context, "outcome", query_source_outcome_name(outcome))?;
+    for candidate in query_source_outcome_candidates(outcome) {
+        write_context_field(context, "candidate", candidate.as_str())?;
+    }
+    Ok(())
 }
 
 const fn query_source_outcome_state(outcome: &QuerySourceResolutionOutcome) -> ResolutionState {
@@ -420,7 +450,24 @@ fn query_source_lookup_key(value: &str) -> String {
     value.to_lowercase()
 }
 
-const fn expected_metadata_kind(category: QuerySourceCategory) -> NodeKind {
+#[derive(Clone, Copy)]
+enum CandidateDisposition {
+    Absent,
+    Incompatible,
+    Resolved,
+    Ambiguous,
+}
+
+const fn candidate_disposition(matched: usize, compatible: usize) -> CandidateDisposition {
+    match (matched, compatible) {
+        (0, _) => CandidateDisposition::Absent,
+        (_, 0) => CandidateDisposition::Incompatible,
+        (_, 1) => CandidateDisposition::Resolved,
+        _ => CandidateDisposition::Ambiguous,
+    }
+}
+
+pub(crate) const fn expected_metadata_kind(category: QuerySourceCategory) -> NodeKind {
     match category {
         QuerySourceCategory::Catalog => NodeKind::Metadata(MetadataKind::Catalog),
         QuerySourceCategory::InformationRegister => {

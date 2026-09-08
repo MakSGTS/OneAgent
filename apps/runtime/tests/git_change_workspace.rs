@@ -1,4 +1,131 @@
 use oneagent_graph::SemanticGraphDiff;
+
+#[path = "safe_edit_transactions.rs"]
+mod edit_fixture;
+
+#[tokio::test]
+#[allow(clippy::too_many_lines)] // One ordered apply/input/reversal lifecycle oracle.
+async fn edit_serializes_explicit_change_input() {
+    use oneagent_runtime::{
+        GitChangeSet, GitCommitId, RepositoryChangePath, WorkspaceEditCancellation,
+        WorkspaceEditOutcome, WorkspaceEditOwnership,
+    };
+    let root = edit_fixture::fixture("edt");
+    let service = WorkspaceService::new().with_edit_policy(
+        edit_fixture::policy(oneagent_tool_policy::RuleAction::RequireConfirmation),
+        WorkspaceEditOwnership::ExclusiveCooperative,
+    );
+    let input = service.change_input_handle();
+    let (handle, observer, stop, task) = edit_fixture::start_service(root.path(), service).await;
+    let before = observer.snapshot().unwrap();
+    let (challenge, _) = handle
+        .prepare_apply(
+            edit_fixture::request(&before, "Changed"),
+            edit_fixture::actor(),
+            edit_fixture::request_id(),
+        )
+        .await
+        .unwrap();
+    let path = RepositoryChangePath::new("src/CommonModules/SecondaryCaller/Module.bsl").unwrap();
+    let change = RepositoryChange::new(
+        RepositoryChangeKind::Modified,
+        Some(path.clone()),
+        Some(path),
+    )
+    .unwrap();
+    let mut changes = observer.subscribe();
+    assert_eq!(
+        input.submit(
+            GitChangeSet::new(
+                GitCommitId::new("0123456789abcdef0123456789abcdef01234567").unwrap(),
+                [change]
+            )
+            .unwrap()
+        ),
+        WorkspaceChangeSubmissionOutcome::Accepted
+    );
+    timeout(TEST_TIMEOUT, async {
+        while changes.borrow().as_ref().unwrap().publication_id() == before.publication_id() {
+            changes.changed().await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+    let successor = observer.snapshot().unwrap();
+    assert_eq!(successor.publication_id().get(), 2);
+    let result = handle
+        .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+        .await;
+    assert!(
+        matches!(
+            result,
+            WorkspaceEditOutcome::Failed {
+                recovery: oneagent_runtime::WorkspaceEditRecovery::NotNeeded,
+                ..
+            }
+        ),
+        "{result:?}"
+    );
+    assert!(Arc::ptr_eq(&successor, &observer.snapshot().unwrap()));
+    for document in before.configurations()[0].source_evidence().documents() {
+        assert_eq!(
+            fs::read(root.path().join(document.path().path().as_str())).unwrap(),
+            document.raw_content()
+        );
+    }
+    let (challenge, _) = handle
+        .prepare_apply(
+            edit_fixture::request(&successor, "Changed"),
+            edit_fixture::actor(),
+            edit_fixture::request_id(),
+        )
+        .await
+        .unwrap();
+    let WorkspaceEditOutcome::Applied {
+        reversal: Some(receipt),
+        current,
+        ..
+    } = handle
+        .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+        .await
+    else {
+        panic!("apply before explicit successor");
+    };
+    let path = RepositoryChangePath::new("src/CommonModules/SecondaryCaller/Module.bsl").unwrap();
+    assert_eq!(
+        input.submit(
+            GitChangeSet::new(
+                GitCommitId::new("0123456789abcdef0123456789abcdef01234567").unwrap(),
+                [RepositoryChange::new(
+                    RepositoryChangeKind::Modified,
+                    Some(path.clone()),
+                    Some(path)
+                )
+                .unwrap()]
+            )
+            .unwrap()
+        ),
+        WorkspaceChangeSubmissionOutcome::Accepted
+    );
+    timeout(TEST_TIMEOUT, async {
+        while changes.borrow().as_ref().unwrap().publication_id() == current {
+            changes.changed().await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+    let successor = observer.snapshot().unwrap();
+    assert_eq!(successor.publication_id().get(), current.get() + 1);
+    assert!(
+        handle
+            .prepare_reversal(receipt, edit_fixture::actor(), edit_fixture::request_id())
+            .await
+            .is_err()
+    );
+    assert!(Arc::ptr_eq(&successor, &observer.snapshot().unwrap()));
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+}
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GitRepositoryReader, GraphQueryLimit,
     GraphQueryService, RepositoryChange, RepositoryChangeKind, RuntimeConfig,

@@ -1,4 +1,73 @@
 use std::collections::BTreeMap;
+
+#[path = "safe_edit_transactions.rs"]
+mod edit_fixture;
+
+#[tokio::test]
+async fn edit_self_write_noise_and_external_change() {
+    use oneagent_runtime::{
+        WorkspaceEditCancellation, WorkspaceEditOutcome, WorkspaceEditOwnership,
+    };
+    let root = edit_fixture::fixture("edt");
+    let service = WorkspaceService::new().with_edit_policy(
+        edit_fixture::policy(oneagent_tool_policy::RuleAction::RequireConfirmation),
+        WorkspaceEditOwnership::ExclusiveCooperative,
+    );
+    let (handle, observer, stop, task) = edit_fixture::start_service(root.path(), service).await;
+    let before = observer.snapshot().unwrap();
+    let (challenge, _) = handle
+        .prepare_apply(
+            edit_fixture::request(&before, "Changed"),
+            edit_fixture::actor(),
+            edit_fixture::request_id(),
+        )
+        .await
+        .unwrap();
+    let result = handle
+        .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+        .await;
+    assert!(
+        matches!(result, WorkspaceEditOutcome::Applied { .. }),
+        "{result:?}"
+    );
+    let applied = observer.snapshot().unwrap();
+    let mut changes = observer.subscribe();
+    changes.borrow_and_update();
+    assert!(
+        timeout(Duration::from_millis(500), changes.changed())
+            .await
+            .is_err(),
+        "self-write observation must not allocate another publication"
+    );
+    assert!(Arc::ptr_eq(&applied, &observer.snapshot().unwrap()));
+    let path = root
+        .path()
+        .join("src/CommonModules/SecondaryCaller/Module.bsl");
+    let original = fs::read(&path).unwrap();
+    let mut external = original.clone();
+    external.extend_from_slice(b"\n// external input\n");
+    fs::write(&path, &external).unwrap();
+    timeout(Duration::from_secs(10), async {
+        while changes.borrow().as_ref().unwrap().publication_id() == applied.publication_id() {
+            changes.changed().await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        observer.snapshot().unwrap().publication_id().get(),
+        applied.publication_id().get() + 1
+    );
+    assert_eq!(fs::read(&path).unwrap(), external);
+    assert!(
+        before.configurations()[0]
+            .graph()
+            .nodes()
+            .any(|n| n.name().as_str() == "FillSecurityCollection")
+    );
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+}
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};

@@ -42,8 +42,10 @@ pub use workspace::{
     RepositoryChangePathErrorKind, WorkspaceBuildError, WorkspaceBuildErrorKind,
     WorkspaceCacheLoadOutcome, WorkspaceCacheObserver, WorkspaceCacheStatus,
     WorkspaceCacheWriteOutcome, WorkspaceChangeImpact, WorkspaceChangeInputHandle,
-    WorkspaceChangeSubmissionOutcome, WorkspaceConfigurationSnapshot, WorkspaceService,
-    WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
+    WorkspaceChangeSubmissionOutcome, WorkspaceConfigurationSnapshot, WorkspaceEditAuthorization,
+    WorkspaceEditCancellation, WorkspaceEditCause, WorkspaceEditChallenge, WorkspaceEditHandle,
+    WorkspaceEditOutcome, WorkspaceEditOwnership, WorkspaceEditReceipt, WorkspaceEditRecovery,
+    WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
     WorkspaceUpdateFailureKind, WorkspaceUpdateObserver, WorkspaceUpdatePhase,
     WorkspaceUpdateStatus,
 };

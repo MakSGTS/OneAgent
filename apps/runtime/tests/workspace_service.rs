@@ -1,4 +1,29 @@
 use std::convert::Infallible;
+
+#[path = "safe_edit_transactions.rs"]
+mod edit_fixture;
+
+#[tokio::test]
+async fn default_service_remains_read_only_with_edit_api() {
+    let root = edit_fixture::fixture("edt");
+    let (handle, observer, stop, task) =
+        edit_fixture::start_service(root.path(), WorkspaceService::new()).await;
+    let before = observer.snapshot().unwrap();
+    assert_eq!(
+        handle
+            .prepare_apply(
+                edit_fixture::request(&before, "Changed"),
+                edit_fixture::actor(),
+                edit_fixture::request_id()
+            )
+            .await
+            .unwrap_err(),
+        oneagent_runtime::WorkspaceEditCause::Unavailable
+    );
+    assert!(Arc::ptr_eq(&before, &observer.snapshot().unwrap()));
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+}
 use std::fs;
 use std::future::pending;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

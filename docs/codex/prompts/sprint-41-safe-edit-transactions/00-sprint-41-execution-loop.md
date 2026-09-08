@@ -133,7 +133,8 @@ adapter APIs and checked preallocation before producer scratch/retention. Expect
 projection freezes before staging/candidate; the only identity closure adds
 format-supported directly owned Query. The full T01-T35 audit and eligibility
 remain; write/recovery/undo/coordinator, dependencies and wire/UI stay unchanged.
-The matrix allocates exactly 25 paths/8500 estimated churn, expands only F10/F11,
+At that producer correction the matrix allocated 25 paths/8500 estimated churn,
+expanded only F10/F11,
 and retains 12 focused groups/one stable full gate.
 
 Resume must retain original implementation accounting baseline
@@ -145,8 +146,35 @@ cumulative implementation diff, including all task-owned untracked text,
 formatting and Task 5 ledger, against that baseline. Exclude separately committed
 prerequisite documentation corrections/review deltas by exact commit/range only;
 never subtract entire shared paths or double-count overlapping snapshots.
-Stop before further work above 32 unique paths, 10000 additions/deletions or any
-binary path, overriding the general 2x calculation for the new baseline.
+The producer correction originally capped 32 paths/10000 additions plus
+deletions/no binaries. The explicit user override below supersedes only its
+text estimate/cap; the cumulative accounting rule remains unchanged.
+
+## User-authorized completion budget increase
+
+On 2026-09-08 the user explicitly authorized raising the completion hard cap to
+20000 text additions plus deletions and continuing. The complete audited
+remaining-work estimate sets the final estimate at 12000. The user chose 20000,
+not the proposed 14000; the previous 10000 cap and historical 25/8500 estimate
+are superseded. Keep exactly 25 planned paths, a hard path cap of 32, no binary
+paths, all T01-T35 requirements, 12 focused groups and one stable full gate.
+This is a numeric execution-budget override, not architecture/remediation scope.
+The existing targeted design pass f25388cd8073bcd228c8eaa951ef1c0178907431
+remains the mechanism gate; no new gate or pass claim is required.
+
+The pause inventory is 24 implementation paths/9369 churn/no binaries, including
+all carried work, with no Task 5 completion or stable full-gate claim. Evidence:
+`local-artifacts/codex-runs/sprint-41/task-5/producer-resume/completion-budget-estimate.md`,
+`budget-pause-summary.md` and `budget-pause-state.json` in that same directory.
+Keep original cumulative baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5;
+f25388cd8073bcd228c8eaa951ef1c0178907431 is a resume/mechanism checkpoint,
+not a reset. Exclude only exact separately committed prerequisite documentation
+ranges, including this four-document budget commit; count all implementation
+work and the eventual Task 5 ledger delta, even in the shared master path.
+Historical Task 4 passes and incomplete Task 5 ledger state are preserved.
+Stop before further work above 32 paths, 20000 churn or any binary; do not
+substitute the general 2x baseline rule. Commit completed tasks and push only
+at sprint end under the current user instruction.
 
 ## Initial audit additions
 
@@ -162,20 +190,20 @@ Effective context window/telemetry may be unknown; estimates are admission-only.
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
 design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 producer-owned semantic projection|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 producer-owned semantic projection design
-implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|8500|none|12|1
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|12000|none|12|1
 ```
 
 The matrix is provisional during planning. Task 3 maps all applicable accepted
 production invariants after ADR-0064 is committed. Task 4 is a pending design
 gate, not a claimed pass. Before Task 5, supply the exact matrix commit, design
 pass artifact/commit, task-start commit, and initial untracked inventory.
-The revised numerical baseline admits 25 paths and 8500 text additions/deletions, no
+The revised numerical baseline admits 25 paths and 12000 text additions/deletions, no
 binary paths, 12 focused checks and one stable full implementation gate.
 The focused commands are fixed by the accepted matrix before design review.
 Independent reviewer and primary completion gates are separate evidence.
 Use the cumulative implementation accounting below. Explicitly stop at more than
-32 paths, more than 10000 text churn or any binary path; these tighter caps
-override twice the new 25/8500 baseline. The canonical full gate remains one.
+32 paths, more than 20000 text churn or any binary path; these tighter caps
+override twice the new 25/12000 baseline. The canonical full gate remains one.
 
 ## Task-loop additions
 
@@ -232,9 +260,9 @@ file edits only, and include retirement in the single Task 7 review commit.
 | 1 | 01-investigate-safe-edit-transactions.md | completed | 078b258e150842da0a79da96ea09395887080cfc | commit subject: Investigate Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | Analysis plan 17; paired conformance 4; Runtime public 9; Runtime Workspace unit 75 (49 filtered); Tool Policy 26+7; 0 policy doc-tests separately; prompt syntax pass, explicit suite 8 and repository 22 pass; Markdown/selector/efficiency checks and diff-check pass | Investigate Sprint 41 Safe Edit Transactions; local, push deferred to sprint end | unavailable; preflight warning | local-artifacts/codex-runs/sprint-41/task-1/ |
 | 2 | 02-define-safe-edit-transactions.md | completed | 9471c34e2b151ca4fd52609eb73c24b036930230 | commit subject: Define Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | ADR/authority/consumer/oracle review pass; 5 changed Markdown links and 11 ADR sections pass; 4 efficiency records equal; 7 manifest tasks contiguous; prompt syntax pass, explicit suite 8 and repository 22 pass; diff-check pass; Rust gates not applicable; zero matched test filters not applicable | Define Sprint 41 Safe Edit Transactions; local, push deferred to sprint end | unavailable; effective window unknown; estimated admission pass | local-artifacts/codex-runs/sprint-41/task-2/ |
 | 3 | 03-map-safe-edit-transaction-invariants.md | completed | 7de36516d283a810ec5ec01b09980b07b6e634dc | commit subject: Map Sprint 41 Safe Edit Transaction Invariants (resolve in sprint ancestry) | 35 production obligations, 12 focused commands, 16 paths/5000 estimated churn/no binaries mapped; 38 paths, 36 owner selectors, 20 Markdown links/selectors pass; 4 efficiency records equal and 7 manifest tasks contiguous; prompt syntax, explicit suite 8 and repository 22 pass; diff-check pass; Rust gates and zero matched test filters not applicable | Map Sprint 41 Safe Edit Transaction Invariants; local, push deferred to sprint end | unavailable; effective window unknown; preflight warning with narrowed selectors | local-artifacts/codex-runs/sprint-41/task-3/ |
-| 4 | 04-review-safe-edit-transaction-design.md | completed | ca385c5bcb0f5eb4ce4b26da32b41bfa54f0b28f | commit subject: Approve Sprint 41 complete invariant evidence design (resolve in sprint ancestry) | Independent and primary complete-audit pass; historical EOF blocked/pass, zero-change Task 5 blocker, T17 blocked range and renewed agreement preserved in design artifact; T01-T35 classified exactly once/12 groups, 455 baseline Markdown references pass; prompt syntax, explicit suite 8 and repository 22 pass; full/correction/working diff-check pass; production gates deferred | Approve Sprint 41 complete invariant evidence design; prior pass b2f89c86012e71190afed077f42b5af82d552b42 remains historical; local, push deferred to sprint end | unavailable; effective window unknown; preflight warning with narrowed selectors | none |
-| 5 | 05-implement-safe-edit-transactions.md | blocked | 93661837df8d63bfed10c9b70d1986c4e0d12aa5 | 93661837df8d63bfed10c9b70d1986c4e0d12aa5 | Producer-owned Designer provenance / EDT dependent Query identity blocker; Analysis package check passed; Runtime all-targets check passed before later uncovered edits; Runtime integration exit 101, 1 passed/1 failed (SemanticMismatch, Recovered, 0 retained files); remaining focused/full gates not run | No implementation commit; 9 files/1593 churn preserved; new producer design pass required; initial zero-change T03 attempt retained in history above; push deferred | unavailable | local-artifacts/codex-runs/sprint-41/task-5/ |
-| 6 | 06-complete-safe-edit-transaction-evidence.md | not_started | pending | pending | pending | pending | unavailable | none |
+| 4 | 04-review-safe-edit-transaction-design.md | completed | cb1a25ea70e395dbfa87eb51923686b28d09d94e | commit subject: Approve Sprint 41 producer-owned semantic projection design (resolve in sprint ancestry) | Independent and primary producer-gate pass; full35/classification35, typed complete frozen projection and allocation admission, exact25/8500 and caps32/10000, F12; 458 baseline Markdown references, syntax, explicit suite8/repository22 and full/correction/working diff-check pass; all historical gates and incomplete Task5 evidence preserved; production checks pending | Approve Sprint 41 producer-owned semantic projection design; prior passes b2f89c86012e71190afed077f42b5af82d552b42 and 93661837df8d63bfed10c9b70d1986c4e0d12aa5 remain historical; local, push deferred to sprint end | unavailable; effective window unknown; preflight warning with bounded selectors | none |
+| 5 | 05-implement-safe-edit-transactions.md | completed | 93661837df8d63bfed10c9b70d1986c4e0d12aa5 | commit subject: Implement Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | F1 74+7; F2 6; F3 20 (130 filtered); F4 6 (144 filtered); F5 16; F6 9; F7 11; F8 10; F9 26+7; F10 221/12 targets; F11 399/23 targets; F12 37/4 targets; all command exits 0, 40 named oracles/full35 mapping; canonical fmt/check/test/clippy/doc/diff pass, 1435 tests across 83 nonzero targets and 4 separate zero-test harnesses; initial G3 repo-local TMPDIR/Git-discovery failure and 8/8 focused environment retry retained, canonical repeat passed with GIT_CEILING_DIRECTORIES=$TMPDIR on unchanged source manifest | Implement Sprint 41 Safe Edit Transactions; all carried work included, cumulative 25 paths/11259 churn/no binaries; local, push deferred to sprint end | unavailable; effective window unknown | local-artifacts/codex-runs/sprint-41/task-5/producer-resume/ |
+| 6 | 06-complete-safe-edit-transaction-evidence.md | completed | f2813d2eff5fa78efe3f0d4a705e3bc51de13979 | commit subject: Document Sprint 41 Safe Edit Transaction Evidence (resolve in sprint ancestry) | Exact 25-path/11259-churn range and prerequisite exclusion, 24 committed source hashes, 35 invariant rows/40 named oracles and 18 retained command logs reconciled; G3 1435 tests/83 nonzero targets/4 separate zero harnesses, initial environment failure and 8/8 retry preserved; API/dependency/Graph/Coverage/cache/catalog/redaction audit; changed/new Markdown links, four efficiency records/seven tasks, prompt syntax/explicit suite8/repository22 and diff-check pass; documentation-only, no new Rust gate | Document Sprint 41 Safe Edit Transaction Evidence; local, push deferred to sprint end; Task 7 pending, Sprint 41 active | unavailable; effective window unknown; preflight warning with bounded selectors | local-artifacts/codex-runs/sprint-41/task-6/; Task 5 producer-resume logs retained |
 | 7 | 07-sprint-41-integration-review.md | not_started | pending | pending | pending | pending | unavailable | none |
 
 ## Final report additions

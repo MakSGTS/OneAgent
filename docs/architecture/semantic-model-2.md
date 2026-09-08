@@ -1633,9 +1633,12 @@ corrections. Sprint 41 is `active`; its accepted transaction contract follows.
 checked local apply/reversal of the existing complete callable-rename family.
 Task 5 implements this boundary at
 `f2813d2eff5fa78efe3f0d4a705e3bc51de13979` after the producer design pass.
-The [Task 6 evidence](safe-edit-transactions-evidence.md) records all 35
-invariants, committed owners, exact command outcomes and consumer audit;
-independent integration review remains pending.
+Original Task 6 is `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`; the
+integration review at `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` was blocked.
+The [current evidence](safe-edit-transactions-evidence.md) qualifies remediation
+`aaeacbfa675bd1a321f5e5c160950c6c661052d0`, all 35 invariants, current owners,
+52 named oracles, exact command outcomes and consumer audit. R1-R5/M1-M4 closure
+is an implementation claim; fresh independent and primary review remain pending.
 Graph identity, BSL name semantics, immutable Analysis planning and adapter
 source capture remain their existing owners. Analysis adds a pure exhaustive
 before/after semantic comparison; Runtime owns the policy-gated service
@@ -1671,12 +1674,27 @@ source ownership, with per-file replacement and honest multi-file visibility,
 platform and crash limits. No semantic cache/schema migration, source Coverage
 upgrade, new refactoring family, Graph fact, wire endpoint or UI accompanies
 this implementation; existing read-only service composition stays compatible.
-The stable canonical test result is 1435 passed tests in 83 nonzero targets,
-with four empty harnesses separately recorded. The evidence preserves the first
-environment failure and successful unchanged-source repeat, exact-byte paired
-oracles, constructor-versus-Runtime evidence and macOS-only executed platform
-qualification. No durable undo, hostile-writer exclusion, multi-file disk
-atomicity or crash recovery guarantee follows. Sprint 41 remains `active`.
+Service-controlled expiry now drops caller-held and queued payloads before worker
+claim. New retained producer records and constructor arguments are prepaid; one
+lease transfers through frozen projection, I/O/recovery and undo. Ordinary rebuild
+cache completion retains Busy, and policy completes before mutation queue entry.
+Exact canonical edge-ID inputs and full provenance are compared without duplicate
+owning identity scratch. Constructor/type rejection remains distinct from reachable
+Runtime and owner-local negative tests. Allocation evidence observes 15 request +
+12 diagnostic owner boundaries, separately from 15 EDT quota attempts and shared
+lease transfer. It is not total-process heap measurement. Canonical Graph/helper
+internals remain under the accepted scoped exclusion; the U+0130 capacity probe
+(input 2/output 3/capacity 8/reservation 8) is not proof of every internal
+reallocation overlap.
+
+The current stable canonical result is 1447 passed tests in 83 nonzero targets,
+with four empty harnesses separately recorded. The old 1435 result, first
+Git-fixture environment failure/repeat and remediation attempt-1 F8 failure are
+historical. Current evidence includes 66 read and 360 reversal-read failure cases,
+a real 128-level scanner, exact causes and actual worker tracing; it does not
+claim capture of all process stdout/stderr. Only macOS execution is qualified.
+No durable undo, hostile-writer exclusion, multi-file disk atomicity or crash
+recovery guarantee follows. Sprint 41 remains `active`.
 
 ## Incremental indexing
 

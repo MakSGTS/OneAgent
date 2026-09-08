@@ -10387,6 +10387,10 @@ The completed implementation and evidence boundary follows; push stays deferred.
 
 ###### Task 5 implementation and Task 6 evidence
 
+The paragraphs below preserve original Task 5/6 evidence. The subsequent blocked
+review and current remediation evidence are recorded immediately afterwards;
+the historical 1435 result does not validate remediation.
+
 Task 5 is committed as `f2813d2eff5fa78efe3f0d4a705e3bc51de13979`
 (`Implement Sprint 41 Safe Edit Transactions`). The
 [Task 6 evidence](architecture/safe-edit-transactions-evidence.md) reconciles the
@@ -10420,6 +10424,53 @@ Default product services remain edit-disabled; only the opt-in Rust API is
 implemented. No new dependency, Graph fact, source Coverage claim, cache schema,
 protocol catalog or UI edit surface changed. Task 7 owns separate independent
 and primary validation, the integration decision and any completion transition.
+
+###### Blocked integration review and remediation evidence
+
+Original Task 6 committed as `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`.
+The review endpoint `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` was
+**blocked**: primary found R3-R5 (P2), while independent found R1/R2 (P1),
+R3 (P2) and missing evidence M1-M4. Primary ran documentation checks but no
+Cargo completion gate; independent completed only F1-F10 on that old tree.
+Neither is a successful review. Isolated baseline
+`fa031100ac19a98b17e676687a498bcce4e7280e` has an identical tree.
+
+Remediation `aaeacbfa675bd1a321f5e5c160950c6c661052d0` corrects revocable
+caller/queued payload lifetime, prepaid nested producer records/arguments,
+ordinary rebuild cache Busy, shared projection/I/O/undo reservation and policy
+before queue entry. Its [current evidence](architecture/safe-edit-transactions-evidence.md#current-stable-validation-and-immutable-handoff)
+reconciles all 35 requirements and 52 named oracles, including 66 read/360
+reversal-read cases, real deep-128 scanner, exact causes and actual worker
+tracing. Allocation-owner boundaries (15 request + 12 diagnostic), 15 EDT quota
+attempts, and shared lease transfer are separate evidence; none measures the
+whole-process heap. The Unicode capacity probe does not prove every canonical
+helper internal reallocation overlap. Accepted ADR/matrix and R/L/C/T split
+remain unchanged; R1-R5/M1-M4 closure awaits fresh independent review.
+
+All 18 current commands exited 0: F1-F12 counts are
+82/6/28/7/16/9/11/10/33/222/401/37; canonical test passed 1447 tests across
+83 nonzero targets plus four separate empty harnesses. fmt/check/clippy/doc/diff
+passed. All 243 input hashes match the stable manifest. The remediation first
+stable attempt's F8 9/1 failure and development corrections remain historical,
+alongside the original 1435 result and Git-fixture environment retry. This
+documentation follow-on reconciles retained logs without rerunning Cargo.
+
+Scope remains based on `93661837df8d63bfed10c9b70d1986c4e0d12aa5`:
+original Task 5 25 paths/+11067/-192 = 11259; remediation 8/+2257/-393 = 2650;
+net cumulative implementation **25/+12973/-234 = 13207**, no binaries. It
+exceeds the 12000 estimate and remains within 32/20000 hard caps. The exact
+prerequisite ten-document range through `f3c1f8c087378b78c50f7fd97499b2c2d7e5f510`
+is 823 churn; original Task 6's five-document 438 churn is separate. The
+original Task 5 master delta remains included. Full unpartitioned history
+35 paths/14446 churn at `aaeacbfa` is separate from implementation accounting;
+no carried work or shared path is blanket-excluded. Reproduction is retained in
+`local-artifacts/codex-runs/sprint-41/remediation/scope.json` and `audit-scope.py`.
+
+This fresh evidence follow-on uses commit subject
+`Update Sprint 41 remediation evidence`, preserving the unique original Task 6.
+The next gate is a fresh Task 7 after the required remediation integration;
+Sprint 41 remains `active`, all old/current prompts remain, and v0.7 release
+review is not yet eligible. Push remains deferred to sprint end.
 
 ###### Objective, evidence, and bounded scope
 
@@ -10532,8 +10583,10 @@ f25388cd8073bcd228c8eaa951ef1c0178907431 remains the mechanism gate. The
 original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
 carried work and the eventual Task 5 ledger delta; only exact separately
 committed prerequisite documentation ranges are excluded. That pause made no
-accounting reset or completion claim; the final 25-path/11259-churn result is
-recorded above. The matrix allocates all 25 paths exactly. F10 becomes
+accounting reset or completion claim; the original 25-path/11259-churn result
+and current net 25-path/13207-churn remediation aggregate are recorded above.
+The latter exceeds the 12000 estimate but stays below the 20000 hard cap.
+The matrix allocates all 25 paths exactly. F10 becomes
 `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes
 `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`.
 F1-F9/F12 remain unchanged. Explicitly stop before further work at more than

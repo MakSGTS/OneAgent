@@ -21,6 +21,7 @@ mod query_source_resolution;
 mod report_data_composition;
 mod report_data_composition_emission;
 mod role_rights;
+mod safe_edit;
 mod service_descriptor;
 mod source_evidence;
 mod subsystem_content;
@@ -102,6 +103,7 @@ pub use bsl_graph::{
 };
 pub use coverage::{EdtSemanticCoverageRegistry, EdtSemanticCoverageReport};
 pub use form_navigation_emission::EdtFormNavigationEmissionError;
+pub use safe_edit::project_safe_edit_provenance;
 pub use source_evidence::EdtSourceEvidenceError;
 
 use oneagent_analysis::refactoring::SourceEvidenceSet;

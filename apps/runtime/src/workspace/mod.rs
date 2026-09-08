@@ -2,11 +2,20 @@
 
 mod cache;
 mod change;
+mod edit;
+mod edit_io;
 mod git;
 mod graph_query;
 mod repository_change;
 
 pub use cache::{WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome};
+use edit::EditCoordinator;
+pub use edit::{
+    WorkspaceEditAuthorization, WorkspaceEditCancellation, WorkspaceEditCause,
+    WorkspaceEditChallenge, WorkspaceEditHandle, WorkspaceEditOutcome, WorkspaceEditOwnership,
+    WorkspaceEditReceipt, WorkspaceEditRecovery,
+};
+use edit_io::EditBaseline;
 
 pub use graph_query::{
     GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
@@ -623,6 +632,7 @@ impl std::fmt::Debug for WorkspaceCacheBackend {
 #[derive(Debug)]
 pub struct WorkspaceService<D = FileSystemWorkspaceDetector> {
     builder: WorkspaceSnapshotBuilder<D>,
+    edits: EditCoordinator,
     cache_backend: WorkspaceCacheBackend,
     change_input: WorkspaceChangeInputHandle,
     change_requests: mpsc::Receiver<WorkspaceChangeRequest>,
@@ -649,6 +659,7 @@ impl<D> WorkspaceService<D> {
         let (change_sender, change_requests) = mpsc::channel(1);
         Self {
             builder,
+            edits: EditCoordinator::new(),
             cache_backend: WorkspaceCacheBackend::Production,
             change_input: WorkspaceChangeInputHandle {
                 sender: change_sender,
@@ -668,6 +679,23 @@ impl<D> WorkspaceService<D> {
         WorkspaceCacheObserver {
             status: self.cache_status.subscribe(),
         }
+    }
+
+    /// Enables the bounded local edit API under immutable policy and cooperative ownership.
+    #[must_use]
+    pub fn with_edit_policy(
+        mut self,
+        policy: oneagent_tool_policy::ToolPolicy,
+        ownership: WorkspaceEditOwnership,
+    ) -> Self {
+        self.edits.configure(policy, ownership);
+        self
+    }
+
+    /// Returns an endpoint whose edit authority begins only after stable startup.
+    #[must_use]
+    pub fn edit_handle(&self) -> WorkspaceEditHandle {
+        self.edits.handle()
     }
 
     /// Creates a cloneable observer before this service is registered.
@@ -727,6 +755,7 @@ where
                 .to_path_buf();
             let WorkspaceService {
                 builder,
+                mut edits,
                 cache_backend,
                 change_input,
                 change_requests,
@@ -750,13 +779,18 @@ where
             let initial_cache = Arc::clone(&cache);
             let initial_cache_status = cache_status.clone();
             let error_root = root_path.clone();
+            let edit_enabled = edits.enabled();
             let initial = tokio::task::spawn_blocking(move || {
-                initialize_workspace(
+                let before =
+                    prepare_edit_baseline(edit_enabled, &initial_root, initial_cache.as_ref());
+                let initialized = initialize_workspace(
                     &initial_builder,
                     &initial_root,
                     initial_cache.as_ref(),
                     &initial_cache_status,
-                )
+                )?;
+                let baseline = finish_edit_baseline(before, &initial_root)?;
+                Ok::<_, WorkspaceBuildError>((initialized, baseline))
             })
             .await
             .map_err(|source| WorkspaceBuildError::BuildTask {
@@ -764,6 +798,8 @@ where
                 source,
             })?
             .map_err(|error| Box::new(error) as BoxError)?;
+            let (initial, baseline) = initial;
+            edits.publish_baseline(baseline);
             snapshot.send_replace(Some(Arc::new(initial.snapshot)));
             updates.send_replace(WorkspaceUpdateStatus {
                 attempt: 1,
@@ -802,6 +838,7 @@ where
                     cancellation,
                     source,
                     change_requests,
+                    edits,
                 )
                 .await
                 .map_err(|error| Box::new(error) as BoxError)
@@ -815,6 +852,54 @@ struct WorkspaceInitialization {
     snapshot: WorkspaceSnapshot,
     source_state: WorkspaceFileState,
     follow_up_required: bool,
+}
+
+fn prepare_edit_baseline(
+    enabled: bool,
+    root: &Path,
+    cache: &dyn WorkspaceCacheStorage,
+) -> Option<EditBaseline> {
+    if !enabled || cache.prepare_edit_namespace().is_err() {
+        return None;
+    }
+    EditBaseline::capture(root, &[]).ok()
+}
+
+fn finish_edit_baseline(
+    before: Option<EditBaseline>,
+    root: &Path,
+) -> Result<Option<EditBaseline>, WorkspaceBuildError> {
+    let Some(before) = before else {
+        return Ok(None);
+    };
+    let after = EditBaseline::capture(root, &[]);
+    if !after.as_ref().is_ok_and(|after| before.equals(after)) {
+        return Err(WorkspaceBuildError::Observation {
+            root_path: root.to_owned(),
+            source: Box::new(std::io::Error::other("edit publication source changed")),
+        });
+    }
+    Ok(Some(before))
+}
+
+fn rebuild_edit_workspace<D: WorkspaceDetector>(
+    builder: &WorkspaceSnapshotBuilder<D>,
+    root: &Path,
+    cache: &dyn WorkspaceCacheStorage,
+    previous: &WorkspaceSnapshot,
+    cancellation: &dyn ChangeImpactCancellationSignal,
+) -> Result<(WorkspaceRebuild, Option<EditBaseline>), WorkspaceRebuildError> {
+    let before = prepare_edit_baseline(true, root, cache);
+    let mut snapshot = builder.build(root)?;
+    let baseline = finish_edit_baseline(before, root)?;
+    compose_change_impact(previous, &mut snapshot, cancellation)?;
+    Ok((
+        WorkspaceRebuild {
+            snapshot,
+            write: WorkspaceCacheWriteOutcome::SkippedUnstableSource,
+        },
+        baseline,
+    ))
 }
 
 fn initialize_workspace<D>(
@@ -936,6 +1021,7 @@ async fn run_workspace_updates<D>(
     mut cancellation: crate::Cancellation,
     source: RunningWorkspaceChangeSource,
     mut change_requests: mpsc::Receiver<WorkspaceChangeRequest>,
+    mut edits: EditCoordinator,
 ) -> Result<(), WorkspaceUpdateRuntimeError>
 where
     D: WorkspaceDetector + Clone + Send + 'static,
@@ -948,6 +1034,7 @@ where
 
     loop {
         let mut rebuild_requested = explicit_rebuild_pending;
+        let explicit_request = explicit_rebuild_pending;
         explicit_rebuild_pending = false;
         let observation = *observations.borrow_and_update();
         if !rebuild_requested && observation.revision() > processed_revision {
@@ -966,7 +1053,14 @@ where
             }
         }
 
+        if edits.poisoned() {
+            rebuild_requested = false;
+        }
         if rebuild_requested {
+            if edits.enabled() && !explicit_request && edits.unchanged().await {
+                continue;
+            }
+            edits.writer(true);
             status.attempt = status
                 .attempt
                 .checked_add(1)
@@ -984,18 +1078,31 @@ where
                 .ok_or(WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
             let build_previous = Arc::clone(&previous);
             let build_cancellation = cancellation.clone();
+            let edit_enabled = edits.enabled();
             let mut build = tokio::task::spawn_blocking(move || {
-                rebuild_workspace(
-                    &build_builder,
-                    &build_root,
-                    build_cache.as_ref(),
-                    &build_previous,
-                    &build_cancellation,
-                )
+                if edit_enabled {
+                    rebuild_edit_workspace(
+                        &build_builder,
+                        &build_root,
+                        build_cache.as_ref(),
+                        &build_previous,
+                        &build_cancellation,
+                    )
+                } else {
+                    rebuild_workspace(
+                        &build_builder,
+                        &build_root,
+                        build_cache.as_ref(),
+                        &build_previous,
+                        &build_cancellation,
+                    )
+                    .map(|rebuilt| (rebuilt, None))
+                }
             });
             let build_result = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => {
+                    edits.shutdown();
                     change_requests.close();
                     let _ = (&mut build).await;
                     let source_result = source_task.await;
@@ -1007,6 +1114,7 @@ where
                     );
                 }
                 source_result = &mut source_task => {
+                    edits.shutdown();
                     change_requests.close();
                     let _ = (&mut build).await;
                     return finish_workspace_updates(
@@ -1020,7 +1128,7 @@ where
             };
 
             match build_result {
-                Ok(Ok(rebuilt)) => {
+                Ok(Ok((rebuilt, baseline))) => {
                     let predecessor_is_current = snapshot
                         .borrow()
                         .as_ref()
@@ -1034,6 +1142,21 @@ where
                     {
                         publish_cache_write(&cache_status, rebuilt.write);
                         snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
+                        edits.publish_baseline(baseline);
+                        if edit_enabled {
+                            let accepted = snapshot.borrow().clone().expect("just published");
+                            let store = Arc::clone(&cache);
+                            let root = root_path.clone();
+                            let write = tokio::task::spawn_blocking(move || {
+                                observe_workspace(&root)
+                                    .map_or(WorkspaceCacheWriteOutcome::Failed, |state| {
+                                        store.write(&state, &accepted)
+                                    })
+                            })
+                            .await
+                            .unwrap_or(WorkspaceCacheWriteOutcome::Failed);
+                            publish_cache_write(&cache_status, write);
+                        }
                         status.published = next_published;
                         status.phase = WorkspaceUpdatePhase::Watching;
                         status.failure = None;
@@ -1051,6 +1174,7 @@ where
                     status.failure = Some(WorkspaceUpdateFailureKind::BuildTask);
                 }
             }
+            edits.writer(false);
             updates.send_replace(status);
             continue;
         }
@@ -1058,11 +1182,13 @@ where
         tokio::select! {
             biased;
             () = cancellation.cancelled() => {
+                edits.shutdown();
                 change_requests.close();
                 let source_result = source_task.await;
                 return finish_workspace_updates(&snapshot, &updates, source_result, true);
             }
             source_result = &mut source_task => {
+                edits.shutdown();
                 change_requests.close();
                 return finish_workspace_updates(
                     &snapshot,
@@ -1073,6 +1199,7 @@ where
             }
             changed = observations.changed() => {
                 if changed.is_err() {
+                    edits.shutdown();
                     change_requests.close();
                     let source_result = source_task.await;
                     return finish_workspace_updates(
@@ -1088,6 +1215,50 @@ where
                     explicit_rebuild_pending = true;
                 } else {
                     change_input_open = false;
+                }
+            }
+            command = edits.commands.recv() => {
+                if let Some(command) = command {
+                    edits.writer(true);
+                    let previous = snapshot.borrow().clone();
+                    let edit_builder = builder.clone();
+                    let edit_root = root_path.clone();
+                    let edit_cancellation = cancellation.clone();
+                    let (returned, commit) = tokio::task::spawn_blocking(move || {
+                        let commit = edits.execute(command, previous, &edit_builder, &edit_root, &edit_cancellation);
+                        (edits, commit)
+                    }).await.map_err(|_| WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
+                    edits = returned;
+                    if edits.poisoned() { snapshot.send_replace(None); }
+                    if commit.is_none() { edits.writer(false); edits.deliver_terminal(); }
+                    if let Some(commit) = commit {
+                        let failure = if cancellation.is_requested() || EditCoordinator::precommit_cancelled(&commit) { Some(WorkspaceEditCause::Cancelled) }
+                            else if !EditCoordinator::predecessor_matches(&commit, snapshot.borrow().as_ref()) { Some(WorkspaceEditCause::PublicationMismatch) }
+                            else { None };
+                        if let Some(cause) = failure {
+                            edits = tokio::task::spawn_blocking(move || { edits.abandon_commit(commit, cause); edits })
+                                .await.map_err(|_| WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
+                            if edits.poisoned() { snapshot.send_replace(None); }
+                            edits.writer(false);
+                            edits.deliver_terminal();
+                            continue;
+                        }
+                        let accepted = Arc::clone(&commit.candidate);
+                        status.published = accepted.publication_id().get();
+                        // The sole semantic commit. The joined worker completed cleanup and all source guards.
+                        snapshot.send_replace(Some(Arc::clone(&accepted)));
+                        let (response, outcome) = edits.commit(commit);
+                        let store = Arc::clone(&cache);
+                        let root = root_path.clone();
+                        let write = tokio::task::spawn_blocking(move || {
+                            observe_workspace(&root).map_or(WorkspaceCacheWriteOutcome::Failed, |state| store.write(&state, &accepted))
+                        }).await.unwrap_or(WorkspaceCacheWriteOutcome::Failed);
+                        publish_cache_write(&cache_status, write);
+                        edits.writer(false);
+                        let _ = response.send(outcome);
+                        updates.send_replace(status);
+                    }
+                    edits.writer(false);
                 }
             }
         }

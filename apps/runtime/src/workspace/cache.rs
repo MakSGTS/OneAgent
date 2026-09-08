@@ -281,6 +281,13 @@ pub enum WorkspaceCacheWriteOutcome {
 }
 
 pub(super) trait WorkspaceCacheStorage: Send + Sync {
+    fn prepare_edit_namespace(&self) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "edit namespace unavailable",
+        ))
+    }
+
     fn load(&self, state: &WorkspaceFileState) -> WorkspaceCacheLoad;
 
     fn write(
@@ -467,6 +474,12 @@ impl WorkspaceCacheStore {
 }
 
 impl WorkspaceCacheStorage for WorkspaceCacheStore {
+    fn prepare_edit_namespace(&self) -> io::Result<()> {
+        let owner = self.workspace_root.join(CACHE_OWNER_DIRECTORY);
+        ensure_real_directory(&owner)?;
+        ensure_real_directory(&owner.join(CACHE_DIRECTORY))
+    }
+
     fn load(&self, state: &WorkspaceFileState) -> WorkspaceCacheLoad {
         Self::load(self, state)
     }

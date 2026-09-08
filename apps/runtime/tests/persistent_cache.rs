@@ -1,4 +1,66 @@
 use std::collections::BTreeMap;
+
+#[path = "safe_edit_transactions.rs"]
+mod edit_fixture;
+
+#[tokio::test]
+async fn edit_commit_cache_failure_preserves_success() {
+    use oneagent_runtime::{
+        WorkspaceEditCancellation, WorkspaceEditOutcome, WorkspaceEditOwnership,
+    };
+    let root = edit_fixture::fixture("edt");
+    fs::create_dir_all(root.path().join(CACHE_TEMPORARY_RELATIVE_PATH)).unwrap();
+    let service = WorkspaceService::new().with_edit_policy(
+        edit_fixture::policy(oneagent_tool_policy::RuleAction::RequireConfirmation),
+        WorkspaceEditOwnership::ExclusiveCooperative,
+    );
+    let cache = service.cache_observer();
+    let (handle, observer, stop, task) = edit_fixture::start_service(root.path(), service).await;
+    let before = observer.snapshot().unwrap();
+    let (challenge, _) = handle
+        .prepare_apply(
+            edit_fixture::request(&before, "Changed"),
+            edit_fixture::actor(),
+            edit_fixture::request_id(),
+        )
+        .await
+        .unwrap();
+    let result = handle
+        .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+        .await;
+    assert!(
+        matches!(result, WorkspaceEditOutcome::Applied { .. }),
+        "{result:?}"
+    );
+    assert_eq!(observer.snapshot().unwrap().publication_id().get(), 2);
+    assert_ne!(
+        cache.status().write(),
+        WorkspaceCacheWriteOutcome::Succeeded
+    );
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+    let (cold, observer, stop, task) =
+        edit_fixture::start_service(root.path(), WorkspaceService::new()).await;
+    assert_eq!(observer.snapshot().unwrap().publication_id().get(), 1);
+    assert!(
+        observer.snapshot().unwrap().configurations()[0]
+            .graph()
+            .nodes()
+            .any(|n| n.name().as_str() == "Changed")
+    );
+    assert_eq!(
+        cold.prepare_apply(
+            edit_fixture::request(&before, "Other"),
+            edit_fixture::actor(),
+            edit_fixture::request_id()
+        )
+        .await
+        .unwrap_err(),
+        oneagent_runtime::WorkspaceEditCause::Unavailable
+    );
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+}
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};

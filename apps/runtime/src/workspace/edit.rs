@@ -1829,6 +1829,7 @@ mod tests {
             WorkspaceEditCause::SemanticMismatch
         };
         let external_bytes = hooks.external_bytes;
+        let candidate_rejection = hooks.candidate.is_some();
         let producer_rejection = hooks.projection_overflow || hooks.publication_overflow;
         let root = fixtures::fixture("edt");
         if hooks.external_after_cleanup {
@@ -1933,6 +1934,10 @@ mod tests {
                         < phases.iter().position(|p| *p == "built")
                 );
             }
+            if candidate_rejection {
+                assert!(phases.contains(&"built"));
+                assert!(!phases.contains(&"compared"));
+            }
         }
         if recovery == WorkspaceEditRecovery::Required {
             if let Some(path) = external_bytes {
@@ -1977,6 +1982,13 @@ mod tests {
                 "poisoned watcher/explicit input cannot republish"
             );
         } else {
+            assert!(matches!(
+                outcome,
+                WorkspaceEditOutcome::Failed {
+                    retained_files: 0,
+                    ..
+                }
+            ));
             assert!(Arc::ptr_eq(&before, &observer.snapshot().unwrap()));
             for document in before.configurations()[0].source_evidence().documents() {
                 assert_eq!(
@@ -2802,6 +2814,105 @@ mod tests {
             return;
         }
         let configuration = &mut candidate.configurations[0];
+        if kind.starts_with("occurrence_") {
+            use oneagent_analysis::refactoring::*;
+            let replacement = configuration
+                .graph
+                .nodes()
+                .find(|n| n.name().as_str() == "Changed")
+                .unwrap()
+                .id()
+                .clone();
+            let mut documents = configuration.source_evidence.documents().to_vec();
+            let (document_index, occurrence_index) = documents
+                .iter()
+                .enumerate()
+                .find_map(|(di, d)| {
+                    d.occurrences()
+                        .iter()
+                        .position(|o| {
+                            if kind == "occurrence_owner_range_token" {
+                                o.kind() == SourceOccurrenceKind::QualifiedCall
+                            } else {
+                                o.resolution() == SourceOccurrenceResolution::Unique
+                                    && o.mapped_target_id() != Some(&replacement)
+                                    && o.kind() == SourceOccurrenceKind::Declaration
+                            }
+                        })
+                        .map(|oi| (di, oi))
+                })
+                .unwrap();
+            let old = &documents[document_index];
+            let mut occurrences = old.occurrences().to_vec();
+            let o = &occurrences[occurrence_index];
+            let (range, token) = if kind == "occurrence_owner_range_token" {
+                let owner = o.lexical_owner_token().unwrap();
+                let prefix =
+                    std::str::from_utf8(&old.raw_content()[..o.range().start_byte()]).unwrap();
+                let start = prefix.rfind(owner).unwrap();
+                (
+                    SourceByteRange::new(start, start + owner.len()).unwrap(),
+                    owner,
+                )
+            } else {
+                (o.range(), o.token())
+            };
+            let changed = SourceOccurrence::new_with_lexical_owner(
+                o.document_id().clone(),
+                o.content_version(),
+                range,
+                if kind == "occurrence_retarget" {
+                    o.kind()
+                } else {
+                    SourceOccurrenceKind::LocalCall
+                },
+                token,
+                if kind == "occurrence_retarget" {
+                    o.lexical_owner_token().map(str::to_owned)
+                } else {
+                    None
+                },
+                if kind == "occurrence_retarget" {
+                    Some(replacement)
+                } else {
+                    o.mapped_target_id().cloned()
+                },
+                o.resolution(),
+            )
+            .unwrap();
+            assert_ne!(&changed, o);
+            if kind == "occurrence_retarget" {
+                assert!(
+                    configuration
+                        .graph
+                        .node(changed.mapped_target_id().unwrap())
+                        .is_some()
+                );
+                assert_eq!(changed.range(), o.range());
+                assert_eq!(changed.token(), o.token());
+                assert_eq!(changed.kind(), o.kind());
+                assert_eq!(changed.lexical_owner_token(), o.lexical_owner_token());
+                assert_eq!(changed.resolution(), o.resolution());
+            }
+            occurrences[occurrence_index] = changed;
+            let changed = SourceDocument::new(
+                old.id().clone(),
+                old.format(),
+                old.module_role(),
+                old.path().clone(),
+                old.raw_content().to_vec(),
+                occurrences,
+                old.completeness(),
+            )
+            .unwrap();
+            assert_eq!(changed.raw_content(), old.raw_content());
+            assert_eq!(changed.content_version(), old.content_version());
+            assert_eq!(changed.occurrences().len(), old.occurrences().len());
+            documents[document_index] = changed;
+            configuration.source_evidence =
+                SourceEvidenceSet::new(configuration.configuration_id.clone(), documents).unwrap();
+            return;
+        }
         if kind.starts_with("source_") {
             use oneagent_analysis::refactoring::*;
             let mut documents = configuration.source_evidence.documents().to_vec();
@@ -2910,6 +3021,9 @@ mod tests {
                     }
                 }
             }
+            // This production boundary has an empty registry. Equal-count status
+            // substitutions belong to the nonempty RuleEngine oracle in Analysis.
+            assert!(configuration.rule_execution_report.results().is_empty());
             let action = match kind {
                 "rule_failed" => "failed",
                 "rule_completed" => "completed",
@@ -3191,6 +3305,80 @@ mod tests {
             .unwrap()
             .id()
             .clone();
+        if matches!(kind, "target_retained_old" | "target_wrong_new") {
+            use oneagent_analysis::refactoring::{
+                RefactoringTarget, SourceDocument, SourceOccurrenceKind,
+            };
+            let module = configuration
+                .graph
+                .edges()
+                .find(|e| e.kind() == EdgeKind::Contains && e.target() == &target)
+                .unwrap()
+                .source();
+            let declaration = configuration
+                .source_evidence
+                .documents()
+                .iter()
+                .flat_map(SourceDocument::occurrences)
+                .find(|o| {
+                    o.kind() == SourceOccurrenceKind::Declaration
+                        && o.mapped_target_id() == Some(&target)
+                })
+                .unwrap();
+            let replacement = RefactoringTarget::new(
+                configuration.configuration_id.clone(),
+                target.clone(),
+                configuration.graph.node(&target).unwrap().kind(),
+                module.clone(),
+                declaration.clone(),
+                if kind == "target_retained_old" {
+                    "FillSecurityCollection"
+                } else {
+                    "WrongName"
+                },
+            )
+            .unwrap()
+            .expected_post_rename_node_id()
+            .clone();
+            assert_ne!(replacement, target);
+            assert!(configuration.graph.node(&replacement).is_none());
+            let map = |id: &EntityId| {
+                if id == &target {
+                    replacement.clone()
+                } else {
+                    id.clone()
+                }
+            };
+            for node in configuration.graph.nodes() {
+                graph.insert_node(
+                    GraphNode::new_with_payload_and_provenance(
+                        map(node.id()),
+                        node.name().clone(),
+                        node.kind(),
+                        node.payload().clone(),
+                        node.provenance().to_vec(),
+                    )
+                    .unwrap(),
+                );
+            }
+            for edge in configuration.graph.edges() {
+                graph
+                    .insert_edge(GraphEdge::new_with_provenance(
+                        map(edge.source()),
+                        map(edge.target()),
+                        edge.kind(),
+                        edge.provenance().to_vec(),
+                    ))
+                    .unwrap();
+            }
+            assert_eq!(graph.nodes().count(), configuration.graph.nodes().count());
+            assert_eq!(graph.edges().count(), configuration.graph.edges().count());
+            assert!(graph.node(&target).is_none());
+            assert!(graph.node(&replacement).is_some());
+            // No source/report/count field changes: the real expected-target lookup rejects.
+            configuration.graph = Arc::new(graph);
+            return;
+        }
         let query = configuration
             .graph
             .nodes()
@@ -3219,14 +3407,33 @@ mod tests {
                 use oneagent_graph::*;
                 let mut provenance = node.provenance().to_vec();
                 assert!(!provenance.is_empty());
-                let p = &provenance[0];
+                let p = provenance[0].clone();
                 provenance[0] = Provenance::new_with_location(
                     if kind == "fact_source" {
                         Some(EntityId::new("different.source").unwrap())
                     } else {
                         p.source().cloned()
                     },
-                    if kind == "fact_location" {
+                    if kind == "fact_span" {
+                        use oneagent_common::{SourceLocation, SourcePosition, SourceSpan};
+                        let old = p.location().unwrap();
+                        let span = old.span().unwrap();
+                        Some(SourceLocation::new(
+                            old.path().clone(),
+                            Some(
+                                SourceSpan::new(
+                                    SourcePosition::new(
+                                        span.start().line(),
+                                        span.start().column() + 1,
+                                    )
+                                    .unwrap(),
+                                    SourcePosition::new(span.end().line(), span.end().column() + 1)
+                                        .unwrap(),
+                                )
+                                .unwrap(),
+                            ),
+                        ))
+                    } else if kind == "fact_location" {
                         Some(oneagent_common::SourceLocation::new(
                             oneagent_common::SourcePath::new("different.bsl").unwrap(),
                             None,
@@ -3255,6 +3462,18 @@ mod tests {
                         p.resolution()
                     },
                 );
+                if kind == "fact_span" {
+                    assert_eq!(provenance.len(), node.provenance().len());
+                    assert_eq!(
+                        p.clone()
+                            .with_location(provenance[0].location().unwrap().clone()),
+                        provenance[0]
+                    );
+                    assert_eq!(
+                        p.location().unwrap().path(),
+                        provenance[0].location().unwrap().path()
+                    );
+                }
                 assert_ne!(provenance, node.provenance());
                 Some(
                     GraphNode::new_with_payload_and_provenance(
@@ -3374,7 +3593,11 @@ mod tests {
                             edge.target().clone()
                         },
                         edge.kind(),
-                        Vec::new(),
+                        if kind.ends_with("_target") {
+                            edge.provenance().to_vec()
+                        } else {
+                            Vec::new()
+                        },
                     ))
                     .unwrap();
             } else {
@@ -3560,8 +3783,12 @@ mod tests {
             "source_bytes",
             "source_omission",
             "source_ambiguity",
+            "occurrence_retarget",
+            "occurrence_kind",
+            "occurrence_owner_range_token",
             "fact_source",
             "fact_location",
+            "fact_span",
             "fact_producer",
             "fact_origin",
             "fact_confidence",
@@ -3604,6 +3831,8 @@ mod tests {
             "configuration",
             "documents",
             "missing_target",
+            "target_retained_old",
+            "target_wrong_new",
             "name",
             "kind",
             "provenance",

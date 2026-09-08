@@ -7,7 +7,9 @@ use oneagent_analysis::safe_edit::{
 };
 use oneagent_bsl::{BslQuery, BslQueryExtractor, LineBslQueryExtractor, bsl_query_id};
 use oneagent_bsl::{BslSymbolKind, bsl_callable_id};
-use oneagent_common::{EntityId, EntityName, SourcePath};
+use oneagent_common::{
+    EntityId, EntityName, SourceLocation, SourcePath, SourcePosition, SourceSpan,
+};
 use oneagent_graph::*;
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -418,7 +420,10 @@ fn reject(mutator: impl FnOnce(&mut Evidence)) {
     let expected = projection(&before, &plan, &original);
     let mut candidate = original;
     mutator(&mut candidate);
-    assert!(validate_postconditions(&plan, &before.view(), &candidate.view(), &expected).is_err());
+    assert_eq!(
+        validate_postconditions(&plan, &before.view(), &candidate.view(), &expected),
+        Err(SafeEditError::SemanticMismatch)
+    );
 }
 
 #[test]
@@ -495,6 +500,106 @@ fn inventory_and_untouched_evidence_mismatch_rejects() {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn node_and_edge_projection_rejects_unrelated_changes() {
+    for replacement in [callable("OldName"), callable("WrongName")] {
+        reject(|value| {
+            let original = Arc::clone(&value.graph);
+            let expected = callable("NewName");
+            let map = |entity: &EntityId| {
+                if entity == &expected {
+                    replacement.clone()
+                } else {
+                    entity.clone()
+                }
+            };
+            let mut graph = SemanticGraph::new();
+            for node in original.nodes() {
+                graph.insert_node(
+                    GraphNode::new_with_payload_and_provenance(
+                        map(node.id()),
+                        node.name().clone(),
+                        node.kind(),
+                        node.payload().clone(),
+                        node.provenance().to_vec(),
+                    )
+                    .unwrap(),
+                );
+            }
+            for edge in original.edges() {
+                graph
+                    .insert_edge(GraphEdge::new_with_provenance(
+                        map(edge.source()),
+                        map(edge.target()),
+                        edge.kind(),
+                        edge.provenance().to_vec(),
+                    ))
+                    .unwrap();
+            }
+            assert_eq!(graph.nodes().count(), original.nodes().count());
+            assert_eq!(graph.edges().count(), original.edges().count());
+            assert!(graph.node(&expected).is_none());
+            assert!(graph.node(&replacement).is_some());
+            // All earlier source/report/validation guards see identical evidence.
+            // The renamed target's actual expected-ID lookup must fail.
+            value.graph = Arc::new(graph);
+        });
+    }
+    for field in ["endpoint", "provenance"] {
+        reject(|value| {
+            let original = Arc::clone(&value.graph);
+            let mut graph = SemanticGraph::new();
+            for node in original.nodes() {
+                graph.insert_node(node.clone());
+            }
+            for edge in original.edges() {
+                let changed = if edge.kind() == EdgeKind::Calls {
+                    GraphEdge::new_with_provenance(
+                        edge.source().clone(),
+                        if field == "endpoint" {
+                            callable("Caller")
+                        } else {
+                            edge.target().clone()
+                        },
+                        edge.kind(),
+                        if field == "provenance" {
+                            edge.provenance()
+                                .iter()
+                                .cloned()
+                                .map(|p| {
+                                    p.with_location(SourceLocation::new(
+                                        SourcePath::new("configuration/Main.bsl").unwrap(),
+                                        None,
+                                    ))
+                                })
+                                .collect()
+                        } else {
+                            edge.provenance().to_vec()
+                        },
+                    )
+                } else {
+                    edge.clone()
+                };
+                if edge.kind() == EdgeKind::Calls {
+                    assert_eq!(changed.provenance().len(), edge.provenance().len());
+                    if field == "provenance" {
+                        assert_eq!(
+                            &changed, edge,
+                            "GraphEdge equality intentionally ignores provenance"
+                        );
+                        assert_ne!(changed.provenance(), edge.provenance());
+                    } else {
+                        assert_eq!(changed.provenance(), edge.provenance());
+                    }
+                }
+                graph.insert_edge(changed).unwrap();
+            }
+            assert_eq!(
+                graph.nodes().collect::<Vec<_>>(),
+                original.nodes().collect::<Vec<_>>()
+            );
+            assert_eq!(graph.edges().count(), original.edges().count());
+            value.graph = Arc::new(graph);
+        });
+    }
     for kind in [
         "missing_query",
         "extra_query",
@@ -666,7 +771,83 @@ fn node_and_edge_projection_rejects_unrelated_changes() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn occurrence_projection_rejects_omission_and_ambiguity() {
+    for kind in ["retarget", "kind", "range_token", "qualified_owner"] {
+        reject(|value| {
+            let old = &value.sources.documents()[0];
+            let mut occurrences = old.occurrences().to_vec();
+            let index = occurrences
+                .iter()
+                .position(|o| o.token() == "Caller")
+                .unwrap();
+            let o = &occurrences[index];
+            let raw = std::str::from_utf8(old.raw_content()).unwrap();
+            let token = match kind {
+                "range_token" => "Query",
+                "qualified_owner" => "Missing",
+                _ => o.token(),
+            };
+            let range = if token == o.token() {
+                o.range()
+            } else {
+                let start = raw.rfind(token).unwrap();
+                SourceByteRange::new(start, start + token.len()).unwrap()
+            };
+            let changed = SourceOccurrence::new_with_lexical_owner(
+                o.document_id().clone(),
+                o.content_version(),
+                range,
+                match kind {
+                    "kind" | "range_token" => SourceOccurrenceKind::LocalCall,
+                    "qualified_owner" => SourceOccurrenceKind::QualifiedCall,
+                    _ => o.kind(),
+                },
+                token,
+                if kind == "qualified_owner" {
+                    Some("Catalog".into())
+                } else {
+                    o.lexical_owner_token().map(str::to_owned)
+                },
+                if kind == "retarget" {
+                    Some(callable("NewName"))
+                } else {
+                    o.mapped_target_id().cloned()
+                },
+                o.resolution(),
+            )
+            .unwrap();
+            if kind == "retarget" {
+                assert!(
+                    value
+                        .graph
+                        .node(changed.mapped_target_id().unwrap())
+                        .is_some()
+                );
+                assert_eq!(changed.range(), o.range());
+                assert_eq!(changed.token(), o.token());
+                assert_eq!(changed.kind(), o.kind());
+                assert_eq!(changed.lexical_owner_token(), o.lexical_owner_token());
+            }
+            assert_ne!(&changed, o);
+            occurrences[index] = changed;
+            let document = SourceDocument::new(
+                old.id().clone(),
+                old.format(),
+                old.module_role(),
+                old.path().clone(),
+                old.raw_content().to_vec(),
+                occurrences,
+                old.completeness(),
+            )
+            .unwrap();
+            assert_eq!(document.raw_content(), old.raw_content());
+            assert_eq!(document.content_version(), old.content_version());
+            assert_eq!(document.occurrences().len(), old.occurrences().len());
+            value.sources =
+                SourceEvidenceSet::new(id("configuration.main"), vec![document]).unwrap();
+        });
+    }
     reject(|value| {
         let old = &value.sources.documents()[0];
         let source = SourceDocument::new(
@@ -794,6 +975,7 @@ fn replacement_rejects_invalid_ranges_versions_and_tokens() {
 
 #[test]
 fn anchor_and_reference_projection_rejects_loss() {
+    span_only_provenance_changes_reject();
     reject(|value| value.references = Arc::new(SemanticReferenceRequestLedger::new()));
     for candidate in ["canonical.candidate.a", "canonical.candidate.b"] {
         reject(|value| {
@@ -869,6 +1051,79 @@ fn anchor_and_reference_projection_rejects_loss() {
     }
 }
 
+fn span_only_provenance_changes_reject() {
+    let location = |column| {
+        SourceLocation::new(
+            SourcePath::new("configuration/Main.bsl").unwrap(),
+            Some(
+                SourceSpan::new(
+                    SourcePosition::new(4, column).unwrap(),
+                    SourcePosition::new(4, column + 6).unwrap(),
+                )
+                .unwrap(),
+            ),
+        )
+    };
+    let with_span = |value: &mut Evidence, column| {
+        let mut graph = SemanticGraph::new();
+        for node in value.graph.nodes() {
+            let provenance = if node.id() == &callable("Caller") {
+                node.provenance()
+                    .iter()
+                    .cloned()
+                    .map(|p| p.with_location(location(column)))
+                    .collect()
+            } else {
+                node.provenance().to_vec()
+            };
+            graph.insert_node(
+                GraphNode::new_with_payload_and_provenance(
+                    node.id().clone(),
+                    node.name().clone(),
+                    node.kind(),
+                    node.payload().clone(),
+                    provenance,
+                )
+                .unwrap(),
+            );
+        }
+        for edge in value.graph.edges() {
+            graph.insert_edge(edge.clone()).unwrap();
+        }
+        value.graph = Arc::new(graph);
+    };
+    let mut before = evidence("OldName");
+    let mut after = evidence("NewName");
+    with_span(&mut before, 11);
+    with_span(&mut after, 11);
+    let plan = plan(&before);
+    let expected = projection(&before, &plan, &after);
+    validate_postconditions(&plan, &before.view(), &after.view(), &expected).unwrap();
+    let expected = projection(&before, &plan, &after);
+    let original = Arc::clone(&after.graph);
+    with_span(&mut after, 12);
+    let old = &original.node(&callable("Caller")).unwrap().provenance()[0];
+    let new = &after.graph.node(&callable("Caller")).unwrap().provenance()[0];
+    assert_eq!(
+        old.location().unwrap().path(),
+        new.location().unwrap().path()
+    );
+    assert_ne!(
+        old.location().unwrap().span(),
+        new.location().unwrap().span()
+    );
+    assert_eq!(
+        old.clone().with_location(new.location().unwrap().clone()),
+        *new
+    );
+    assert_eq!(original.nodes().count(), after.graph.nodes().count());
+    assert_eq!(original.edges().count(), after.graph.edges().count());
+    assert_eq!(
+        validate_postconditions(&plan, &before.view(), &after.view(), &expected),
+        Err(SafeEditError::SemanticMismatch)
+    );
+}
+
 #[test]
 fn diagnostic_and_rule_projection_rejects_non_equivalence() {
     struct DifferentRule(RuleDefinition, bool);
@@ -886,6 +1141,7 @@ fn diagnostic_and_rule_projection_rejects_non_equivalence() {
             }
         }
     }
+    same_registry_rule_status_changes_reject();
     reject(|value| {
         value.findings = DiagnosticEngine
             .build(
@@ -919,6 +1175,79 @@ fn diagnostic_and_rule_projection_rejects_non_equivalence() {
                 )
                 .unwrap();
         });
+    }
+}
+
+fn same_registry_rule_status_changes_reject() {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    struct StatusRule(RuleDefinition, Arc<AtomicU8>);
+    impl RuleRegistration for StatusRule {
+        fn definition(&self) -> &RuleDefinition {
+            &self.0
+        }
+    }
+    impl Rule for StatusRule {
+        fn evaluate(&self, _: &RuleContext<'_>, _: &dyn RuleCancellationSignal) -> RuleEvaluation {
+            match self.1.load(Ordering::Relaxed) {
+                0 => RuleEvaluation::Completed(vec![]),
+                1 => RuleEvaluation::NotApplicable,
+                _ => RuleEvaluation::Failed(RuleFailureCode::new("fixture.failure").unwrap()),
+            }
+        }
+    }
+    let status = Arc::new(AtomicU8::new(0));
+    let rule: Arc<dyn Rule> = Arc::new(StatusRule(
+        RuleDefinition::new(RuleId::new("fixture.status").unwrap(), []).unwrap(),
+        Arc::clone(&status),
+    ));
+    let registry = RuleRegistry::new([rule]).unwrap();
+    let configuration = RuleConfiguration::default();
+    let rule_plan = RulePlan::new(&registry, &configuration).unwrap();
+    let execute = |value: &Evidence| {
+        RuleEngine
+            .execute(
+                &registry,
+                &rule_plan,
+                &configuration,
+                &RuleContext::new(&value.graph, &value.validation, &value.findings),
+                &NeverCancelled,
+            )
+            .unwrap()
+    };
+    // One identical nonempty registry, RuleId and plan; only producer outcomes vary.
+    // Runtime's canonical builder deliberately retains its empty registry.
+    for original in 0..3 {
+        for changed in 0..3 {
+            if original == changed {
+                continue;
+            }
+            let mut before = evidence("OldName");
+            let mut after = evidence("NewName");
+            status.store(original, Ordering::Relaxed);
+            before.rules = execute(&before);
+            after.rules = execute(&after);
+            let plan = plan(&before);
+            let expected = projection(&before, &plan, &after);
+            validate_postconditions(&plan, &before.view(), &after.view(), &expected).unwrap();
+            let expected = projection(&before, &plan, &after);
+            status.store(changed, Ordering::Relaxed);
+            after.rules = execute(&after);
+            assert_eq!(before.rules.results().len(), 1);
+            assert_eq!(after.rules.results().len(), 1);
+            assert_eq!(
+                before.rules.results()[0].rule_id(),
+                after.rules.results()[0].rule_id()
+            );
+            assert_ne!(
+                before.rules.results()[0].status(),
+                after.rules.results()[0].status()
+            );
+            assert_eq!(before.rules.diagnostics(), after.rules.diagnostics());
+            assert_eq!(
+                validate_postconditions(&plan, &before.view(), &after.view(), &expected),
+                Err(SafeEditError::SemanticMismatch)
+            );
+        }
     }
 }
 

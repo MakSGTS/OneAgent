@@ -166,7 +166,7 @@ Use the paired Sprint 14 corpus and existing Workspace/policy evidence identifie
 
 ## Scope and validation baseline
 
-expected_path_count: 25; expected_text_line_churn: 8500; expected binary paths: none; focused-check-count: 12; full-gate-count: 1. Dispatcher supplies original implementation baseline
+expected_path_count: 25; expected_text_line_churn: 12000; expected binary paths: none; focused-check-count: 12; full-gate-count: 1. Dispatcher supplies original implementation baseline
 93661837df8d63bfed10c9b70d1986c4e0d12aa5, exact restored 9-file/1593-churn
 inventory, correction commit and new unique design pass. Count cumulative
 implementation, task-owned untracked text, formatting and Task 5 ledger from
@@ -174,12 +174,23 @@ that original baseline. Exclude separately committed prerequisite documentation/
 review deltas by exact ranges only; do not subtract entire shared paths or reset
 the budget at the new pass. Do not double-count overlapping snapshots.
 
-Explicit tighter stop-loss: more than 32 paths, more than 10000 text additions
+Explicit tighter stop-loss: more than 32 paths, more than 20000 text additions
 plus deletions, or any binary path. This overrides the general 2x rule for the
-new 25/8500 baseline. F10 is
+new 25/12000 baseline. F10 is
 `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 is
 `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`. Keep F1-F9/F12
 as committed, 12 groups total and one full gate after the stable complete diff.
+
+The user explicitly authorized the 20000 hard cap on 2026-09-08; it replaces
+the former 10000 and proposed 14000. The complete remaining-work estimate is
+12000, not an additional allowance above existing work. The pause inventory
+24 paths/9369 churn remains included in cumulative accounting. The existing
+f25388cd8073bcd228c8eaa951ef1c0178907431 design pass is still the mechanism
+gate, not a new accounting baseline. This numeric-only override changes no
+architecture, owner, requirement, planned path or focused/full-gate count and
+requires no additional architecture gate. Exclude this separately committed
+four-document prerequisite delta by its exact range only; retain the eventual
+Task 5 ledger delta in implementation accounting.
 
 ## Suggested commit message
 

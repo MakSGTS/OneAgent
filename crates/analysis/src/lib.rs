@@ -11,6 +11,7 @@ pub mod diagnostics;
 pub mod publication;
 pub mod refactoring;
 pub mod rules;
+pub mod safe_edit;
 
 use oneagent_bsl::{
     BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor, BslModuleSymbols,

@@ -3,6 +3,7 @@
 mod coverage;
 mod metadata_object;
 mod module_reader;
+mod safe_edit;
 mod semantic_graph;
 mod source_evidence;
 
@@ -16,6 +17,7 @@ pub use module_reader::{
     DesignerXmlModuleDescriptor, DesignerXmlModuleError, DesignerXmlModuleKind,
     DesignerXmlModuleReader, DesignerXmlModuleSourceEvidence, FileSystemDesignerXmlModuleReader,
 };
+pub use safe_edit::project_safe_edit_provenance;
 pub use semantic_graph::{
     DesignerXmlGraphError, DesignerXmlSemanticGraphBuildResult, DesignerXmlSemanticGraphBuilder,
     FileSystemDesignerXmlSemanticGraphBuilder,

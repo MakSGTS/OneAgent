@@ -15,7 +15,9 @@ pub use cross_module_resolution::{
     BslModuleSymbols, CrossModuleCallResolution, CrossModuleCallResolver, QualifiedBslCallResolver,
     ResolvedCrossModuleCall, UnresolvedCrossModuleCall, UnresolvedCrossModuleCallReason,
 };
-pub use queries::{BslQuery, BslQueryError, BslQueryExtractor, LineBslQueryExtractor};
+pub use queries::{
+    BslQuery, BslQueryError, BslQueryExtractor, LineBslQueryExtractor, bsl_query_id,
+};
 pub use query_language::{
     ParsedQueryProgram, QueryLanguageDiagnostic, QueryLanguageDiagnosticKind,
     QueryLanguageParseResult, QueryLanguageParser, QuerySourceCategory, QuerySourceOccurrence,

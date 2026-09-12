@@ -1629,6 +1629,23 @@ corrections. Sprint 41 is `active`; its accepted transaction contract follows.
 
 ## Safe Edit Transactions
 
+The [controlled-unwind amendment](../adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+is the current planned owner-lifetime contract, subject to the new unique
+`Define Sprint 41 controlled unwind recovery` prerequisite and separate
+`Approve Sprint 41 controlled unwind recovery design` pass before source edits.
+Its [all-35 audit](safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+retains complete inventory, projection, edge, occurrence, producer, request and
+rule/diagnostic comparison under the same immutable before evidence. A retained
+transaction envelope survives preparation/precommit unwind and checked recovery;
+recovery error/unwind quarantines with exact material/count, never publication.
+All fallible undo/outcome preparation precedes `send_replace`; postcommit cache,
+response drop and stop cannot roll back the accepted successor. Reversal is
+symmetric. No semantic identity, public API/dependency or Coverage change is
+admitted. Custom detector evidence is owner-local, not public service injection;
+global panic-hook output is outside closed transaction-output redaction.
+Implementation and new review evidence remain pending; the historical results
+below do not qualify this amendment. Sprint 41 stays active/release-ineligible.
+
 [ADR-0064](../adr/0064-safe-edit-transactions.md) accepts the architecture for
 checked local apply/reversal of the existing complete callable-rename family.
 Task 5 implements this boundary at

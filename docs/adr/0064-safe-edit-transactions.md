@@ -8,6 +8,12 @@ capability. It extends [ADR-0063](0063-refactoring-planner.md) only at the local
 Runtime mutation boundary. The [investigation](../architecture/safe-edit-transactions-investigation.md)
 records the verified prerequisite; the invariant mapping is the next task.
 
+The controlled-unwind amendment below is accepted as the renewed architecture
+decision, not an implementation or review pass. Before further source changes,
+require the separate committed `Approve Sprint 41 controlled unwind recovery design`
+gate on the exact unique `Define Sprint 41 controlled unwind recovery` commit.
+Earlier design decisions remain valid only for their recorded ranges.
+
 ## Context and accepted scope
 
 A complete plan is immutable semantic evidence, not edit authorization. Current
@@ -227,7 +233,9 @@ The normative order for apply is:
    all owned staged/backup files before commit; the pre-reserved in-memory
    originals still permit recovery. Cleanup failure triggers recovery. Perform
    the final expected-source/path scan after cleanup and check cancellation.
-8. The single `snapshot.send_replace(Some(successor))` is the commit point.
+8. Prepare all fallible outcome/undo construction before publication, retaining
+   the attempt and I/O owner until the last precommit guard. The single
+   `snapshot.send_replace(Some(successor))` is the commit point.
    Publish the new private baseline and outcome in the same coordinator turn,
    increment the existing publication counter once, retain one reversal record,
    and invalidate other preparation evidence. There is no fallible source I/O
@@ -573,6 +581,92 @@ it never reuses the original publication ID. Failure recovers to the applied
 state, or poisons the service on failed recovery. A submitted reversal consumes
 the undo record on every outcome; there is no replay or automatic retry.
 
+### Controlled transaction-owner unwind
+
+This is a planned correction to the observed implementation at
+`38a9bde3407f151e2c17b380e8bd28252c5a39f9`. At that input,
+`EditCoordinator::run_attempt` retains its optional `EditIo` only in a local
+variable and finalizes `Result::Err`; `execute` and `abandon_commit` do not
+contain unwind. `run_workspace_updates` moves the coordinator into a joined
+worker and maps join failure to `SnapshotUnavailable`, which cannot recover
+the lost owner. It also calls `commit` to construct undo/outcome after
+`send_replace`. These source facts justify the new retained-owner design;
+they are not an executed post-write panic reproduction.
+
+The minimum correction stays private to Runtime `workspace/edit.rs`,
+`edit_io.rs` and `mod.rs`. A service-owned transaction envelope retains the
+coordinator, attempt/reservation, response sender, explicit phase, optional
+I/O owner and prepared terminal/commit material outside each unwind boundary.
+Workers borrow that state for narrow synchronous operations. Ownership may move
+into a joined worker only when its normal return carries the envelope and
+terminal/commit state back; no ordinary controlled unwind may escape to a
+join-error mapping that drops them. The snapshot sender stays in the lifecycle
+loop. Neither response drop nor cancellation owns or destroys this envelope.
+
+Contain preparation (including reversal receipt consumption), submission
+revalidation, precommit staging/replacement, complete build/comparison and
+fallible outcome/undo preparation in explicit synchronous boundaries. Retain
+the optional I/O owner before its first creating operation. A boundary returns
+either its normal result or a closed phase failure; both enter one shared
+finalizer. Do not wrap the whole async lifecycle, continue a partially executed
+phase or retry the panicking operation. Each `AssertUnwindSafe`, if required,
+must identify its captured mutable owners and explain why their partial state
+is usable only by finalization: exclusive access, prepaid retained buffers,
+immediate created-entry registration, marker-before-replace ordering, immutable
+predecessor/projection and no publication inside the boundary. No user callback,
+mutex guard or inferred poisoned invariant may be blindly asserted safe.
+
+On successful `create_new`, register a present entry immediately, before any
+fallible identity check or test callback; reserve registration capacity before
+the create. Unknown identity remains counted but never grants exclusion,
+cleanup, restoration or replacement authority. Mark attempted replacement
+before calling rename; record successful/ambiguous stage, restore and removal
+observations before any subsequent injectable boundary. Recovery interprets
+partial state through checked observation, never by assuming a failed or
+unwound call performed no mutation. Exact retained counts must reconcile known
+successful removal/rename observations; unknown present entries stay retained.
+
+With no attempted replacement, the finalizer verifies original source/tree
+state and owned staging cleanup before reporting `NotNeeded` and zero retained
+files. After any attempted replacement it invokes checked reverse-order recovery,
+including backup recreation after precommit cleanup removed the old backup.
+`abandon_commit`, apply and reversal use this same finalizer. Recovery borrows
+the retained I/O owner inside its own narrow unwind boundary; an error or
+unwind there stops recovery without retry and quarantines. Return
+`RecoveryRequired`/`Required`, the original closed trigger as secondary and the
+exact retained artifact count; expire preparation/undo, clear observation and
+forbid edit/rebuild/cache publication. Preserve bounded material through stop.
+Successful recovery requires the full original tree/bytes/permissions and no
+owned artifacts, retains the old publication and returns `Recovered`. Reversal
+uses its applied predecessor as the restoration oracle, with identical rules.
+
+Reuse existing closed causes without adding public variants: preparation or
+admission unwind maps to `Unavailable`; production build/comparison/impact
+unwind to `SemanticMismatch`; confined I/O or precommit material-construction
+unwind to `IoFailed`. These phase mappings describe containment failure, not
+an asserted OS error. Normal `Err` precedence stays unchanged; a contained
+unwind fixes its phase cause before recovery, and later cancellation cannot
+replace it. Recovery failure always takes precedence. Opaque panic payloads
+are never formatted or retained in outcomes, Debug, audit or transaction logs.
+No process-global panic hook is changed: the Rust hook can run before catch,
+so this contract does not promise redaction of hook output or stderr.
+
+Finish allocating/cloning outcome, receipt and undo material before the last
+precommit guard. Publication remains exactly `send_replace(Some(successor))`;
+the same non-awaiting coordinator turn installs prepared baseline/undo/status
+by ownership transfer. After publication there is no rollback path, fallible
+source I/O or reconstructive outcome step. The retained success survives
+postcommit cache failure/unwind, response drop and stop. Cache status alone
+records cache failure; terminal delivery follows its bounded attempt. Shutdown
+closes admission and joins both mutation and recovery before releasing the
+slot/owner or clearing a healthy observation. A blocked recovery therefore
+blocks completion of stop, even with a dropped response.
+
+Controlled Rust unwind is an in-process guarantee. `panic=abort`, a secondary
+panic during unwinding/destruction, process kill, OS crash and power loss remain
+excluded; no durable recovery follows. Existing confinement, cooperative-writer,
+memory/disk bounds and complete semantic obligations are unchanged.
+
 ### Cancellation, shutdown and redaction
 
 Cancellation before the first replacement cleans staging and writes no source;
@@ -592,6 +686,8 @@ content digests, policy argument payloads and absolute paths are redacted,
 including nested I/O/build errors. The existing intentionally bounded preview
 is the only display projection. Recovery status must not dump sensitive data.
 No new telemetry collection or persisted source-bearing history is added.
+This redaction promise applies to transaction-controlled output; process-global
+panic-hook output is outside it, as specified in the controlled-unwind boundary.
 
 ## Compatibility and affected consumers
 
@@ -615,6 +711,18 @@ semantics and source Coverage Registry claims remain unchanged.
 
 ## Rejected alternatives
 
+- A catch only around `spawn_blocking`/the whole moved coordinator loses
+  recovery and response ownership before classification; `Result`-only cleanup
+  omits controlled unwind. Both fail the retained-envelope requirement.
+- Catching each I/O call and blindly continuing/retrying can overwrite an
+  unrelated change or reuse partially invalid state. Shared checked finalization
+  and quarantine are required; cleanup in `Drop` is not a recovery protocol.
+- Constructing undo/outcome after publication leaves a fallible committed tail;
+  rollback after publication would contradict the accepted successor. Prepare
+  material first and retain committed success through cache/stop handling.
+- Global panic-hook replacement, public detector injection, a new public panic
+  variant, weaker semantic comparisons or a new recovery dependency expand this
+  correction without resolving transaction ownership.
 - Snapshot/client writes or a separate write-only mutex fail to serialize
   startup, watcher/rebuild, cache and shutdown publication paths.
 - Trusting a PlanId, numeric publication ID, caller-supplied operations or
@@ -633,6 +741,18 @@ semantics and source Coverage Registry claims remain unchanged.
   ownership and honest failure/crash limits are accepted instead.
 
 ## Implementation prerequisites and deferred scope
+
+The new unique architecture subject and separately committed targeted pass in
+Status supersede historical producer-only admission for this correction.
+Remap all T01-T35 under the retained envelope, preserve their R/L/C/T split and
+require owner-local tests at actual production boundaries. A custom detector
+is L evidence: `WorkspaceService::with_builder` and its builder field are private;
+public `WorkspaceSnapshotBuilder::with_detector` does not expose service
+injection. Require paired EDT/Designer positive apply/reversal controls and a
+post-write build unwind, recovery unwind, backup recreation, retained/dropped
+response, stop while recovery is blocked, replay/lease expiration, quarantine
+and postcommit-success oracles. Earlier guards must execute before fault seams.
+No default-input panic trigger or executed post-write reproduction is claimed.
 
 Task 3 must map every applicable guard and retention point above to planned
 production symbols and deterministic negative oracles. Task 4 must independently

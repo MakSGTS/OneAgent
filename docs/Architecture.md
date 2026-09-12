@@ -260,6 +260,23 @@ a fresh independent and primary Task 7 gate remains pending.
 
 ## Accepted Safe Edit Transactions boundary
 
+Current amendment: [controlled transaction-owner unwind](adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+and the [complete T01-T35 remapping](architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+define planned recovery ownership. A retained private envelope holds coordinator,
+attempt/reservation, response, phase and I/O outside narrow preparation/precommit
+catches; a separate retained-owner recovery catch quarantines on error/unwind.
+Apply, reversal and abandoned precommit share checked finalization, including
+recreating removed backups. All fallible outcome/undo material is prepared before
+the sole `send_replace` commit; committed success survives cache failure,
+response drop and stop without rollback. No global panic-hook redaction is claimed.
+These changes are not implemented or reviewed by this architecture amendment.
+Require unique `Define Sprint 41 controlled unwind recovery`, then separate
+`Approve Sprint 41 controlled unwind recovery design` before source remediation.
+The old producer pass and blocked reviews below remain historical. The renewed
+agreement supersedes awaiting-agreement text only; missing evidence persists.
+Sprint 41 remains active and v0.7 release-ineligible; public APIs, dependencies
+and Coverage Registry (`crates/graph/src/coverage.rs`) remain unchanged.
+
 [ADR-0064](adr/0064-safe-edit-transactions.md) accepts one opt-in local Runtime
 Rust API for checked apply and separately confirmed reversal of complete
 `bsl_callable_rename_v1` plans over EDT and Designer XML. Analysis owns pure

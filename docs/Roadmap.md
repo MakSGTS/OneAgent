@@ -10222,6 +10222,51 @@ Plan Sprint 40.1 Refactoring Planner remediation
 
 ##### Sprint 41 Safe Edit Transactions execution plan
 
+###### Current controlled-unwind prerequisite
+
+The user renewed the full unwind-recovery plan on 2026-09-12; only historical
+awaiting-agreement statements are superseded. Starting clean input is
+`38a9bde3407f151e2c17b380e8bd28252c5a39f9` on
+`codex/v0.7-sprint-41-remediation`. The
+[ADR amendment](adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+and [complete all-35 audit](architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+define planned retained-envelope recovery, not implementation or a review pass.
+Require the unique `Define Sprint 41 controlled unwind recovery` commit,
+then separate fresh targeted review/primary checks and committed
+`Approve Sprint 41 controlled unwind recovery design` before source/test edits.
+Producer pass `f25388cd8073bcd228c8eaa951ef1c0178907431` remains historical.
+The four efficiency records below select this new gate; the seven-task manifest,
+all children, original Task 5/6 boundaries and historical ledger are unchanged.
+This continuation gate overrides their historical prerequisite routing only.
+
+Only `apps/runtime/src/workspace/edit.rs`, `edit_io.rs` and `mod.rs` form the
+proposed source correction (estimated additional 1000-1800 churn); seven
+authority/evidence documents have a separate 300-700 estimate. Retain cumulative
+baseline `93661837df8d63bfed10c9b70d1986c4e0d12aa5`, 24 original source/fixture
+paths and only original Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Initial measured subtotal: 25/+14238/-234 = 14472, no binaries. No reset or
+blanket master exclusion; hard caps stay 32 paths/20000 churn/no binaries.
+
+Next sequence is committed design pass, coherent source remediation with one
+stable F1-F12/G1-G6 cycle, separate Task 6 evidence, fresh independent/primary
+Task 7 full gates, same-reviewer artifact consistency, then gated completion,
+retirement and final no-ff integration/push of current `codex/v0.7` only.
+No release review, main merge, tag or Sprint 42. All 11/4/8 prior/current prompt
+inventories remain; Sprint 41 stays active and v0.7 release-ineligible.
+
+The fifth blocked review's disagreement remains: primary P2 contract/evidence
+recommendation, independent conditional owner-local concern without confirmed
+P2 and incomplete integration acceptance. No default-input trigger or executed
+post-write unwind reproduction exists. The rejected exploratory probe never
+compiled/executed; it must not be retried or credited. The originating handoff
+reported natural G3 exit 101 (Runtime lib 165/1; partial total 1285/1,
+64 nonempty/one empty target, 4927.014s), not a signal or exit 75. G4-G6 and
+primary Cargo remain unexecuted; watcher/startup timeout causes are unknown.
+The master continuation section retains the exact reported failure/counts.
+Neither this architecture task nor the historical partial checks qualify new
+implementation. Detailed evidence reconciliation remains a separate Task 6.
+
 Planning starts from clean version head
 `ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7` after the
 committed non-blocking Sprint 40.1 review. Sprint 41 became `active` when Task 1
@@ -10731,7 +10776,7 @@ only its separate committed pass artifact unlocks Task 5.
 ```text
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
-design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 producer-owned semantic projection|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 producer-owned semantic projection design
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 controlled unwind recovery|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 controlled unwind recovery design
 implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|12000|none|12|1
 ```
 
@@ -10741,7 +10786,8 @@ The user explicitly increased the hard cap to 20000 on 2026-09-08, superseding
 the proposed 14000 and former 10000. The complete audited remaining-work estimate
 sets the final estimate at 12000; this numeric-only override changes no owner,
 architecture, requirement or gate. The existing design pass
-f25388cd8073bcd228c8eaa951ef1c0178907431 remains the mechanism gate. The
+f25388cd8073bcd228c8eaa951ef1c0178907431 was the mechanism gate for that
+numeric-only override; the current unwind amendment requires the new pass above. The
 24-path/9369-churn historical pause was incomplete and counted from
 original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
 carried work and the eventual Task 5 ledger delta; only exact separately

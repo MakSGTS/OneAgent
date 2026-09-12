@@ -1247,7 +1247,8 @@ where
                         status.published = accepted.publication_id().get();
                         // The sole semantic commit. The joined worker completed cleanup and all source guards.
                         snapshot.send_replace(Some(Arc::clone(&accepted)));
-                        let (response, outcome) = edits.commit(commit);
+                        let terminal = edits.commit(commit);
+                        edits.retain_success(terminal);
                         let store = Arc::clone(&cache);
                         let root = root_path.clone();
                         let write = tokio::task::spawn_blocking(move || {
@@ -1255,7 +1256,7 @@ where
                         }).await.unwrap_or(WorkspaceCacheWriteOutcome::Failed);
                         publish_cache_write(&cache_status, write);
                         edits.writer(false);
-                        let _ = response.send(outcome);
+                        edits.deliver_terminal();
                         updates.send_replace(status);
                     }
                     edits.writer(false);

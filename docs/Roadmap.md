@@ -49,8 +49,9 @@ records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
 administratively `completed`. The
 [Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
 records `pass`, resolves the two confirmed blockers, and completes Sprint 40.1.
-Sprint 41 Safe Edit Transactions is the unique `next` target. The
-completed
+The [Sprint 41 integration review](reviews/sprint-41-safe-edit-transactions.md)
+records `pass` and completes Sprint 41. The v0.7 release integration review is
+the next eligible gate; release execution has not started. The completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
 re-review with no actionable findings.
@@ -8576,7 +8577,7 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 | Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
 | Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | completed |
 | Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | completed |
-| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | active |
+| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | completed |
 
 ##### Sprint 36 Diagnostics Engine execution plan
 
@@ -10221,6 +10222,20 @@ Plan Sprint 40.1 Refactoring Planner remediation
 ```
 
 ##### Sprint 41 Safe Edit Transactions execution plan
+
+###### Completed Task 7 integration review
+
+[Sprint 41 integration review](reviews/sprint-41-safe-edit-transactions.md) records independent and primary **pass**
+on `ceb3a91da70afde202cab84f7ea42846cdd734bd..98d64fb9f775c5af77437b8c18cd0eeb21291c84`.
+Both separately executed F1-F12/G1-G6 (all exits 0; each G3 1471 passed,
+83 nonempty/four empty harnesses). Same-reviewer artifact consistency passed
+after two draft-only evidence corrections; the initial blocked consistency and
+all historical blocked source reviews remain preserved. Sprint 41 is **completed**;
+only the v0.7 release integration review is eligible. Dispatcher commit/no-ff
+version integration and current-version-only push remain pending at this record.
+The exact four Sprint 40.1 prompts are retired by this review change; all 11
+Sprint 40 and eight Sprint 41 files remain. The following prerequisite and task
+results preserve the historical implementation handoff; they do not reopen Task 7.
 
 ###### Current controlled-unwind prerequisite
 

@@ -13,6 +13,19 @@ child's admitted Context Manifest. Do not accumulate implementation transcripts.
 
 ## Sprint objective and current state
 
+Sprint 41 is **completed** by the
+[Task 7 integration review](../../../reviews/sprint-41-safe-edit-transactions.md)
+of `ceb3a91da70afde202cab84f7ea42846cdd734bd..98d64fb9f775c5af77437b8c18cd0eeb21291c84`.
+Fresh independent and primary full gates passed; the same reviewer accepted
+corrected draft SHA256 `0a70a3d5ab5748bf04d895ab0a28c5de00858f948497fc3114c13f730d629cdf`
+after two artifact-only corrections. Only v0.7 release integration review is
+eligible; release execution, Sprint 42, main and tags remain excluded.
+The four exact Sprint 40.1 prompts are retired by this review change; all 11
+Sprint 40/eight Sprint 41 files and historical blocked evidence remain.
+Dispatcher review commit/no-ff version merge/current-version-only push are pending.
+The starting-state and continuation records below preserve their historical
+prerequisites and do not reopen the completed gate.
+
 Sprint 41 is the unique next target at
 `ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7`.
 Sprint 40.1 has a committed pass review. Add checked, reversible local edit
@@ -569,6 +582,11 @@ then perform required artifact consistency. Measured telemetry is unavailable.
 | 4 | 04-review-safe-edit-transaction-design.md | completed | cb1a25ea70e395dbfa87eb51923686b28d09d94e | commit subject: Approve Sprint 41 producer-owned semantic projection design (resolve in sprint ancestry) | Independent and primary producer-gate pass; full35/classification35, typed complete frozen projection and allocation admission, exact25/8500 and caps32/10000, F12; 458 baseline Markdown references, syntax, explicit suite8/repository22 and full/correction/working diff-check pass; all historical gates and incomplete Task5 evidence preserved; production checks pending | Approve Sprint 41 producer-owned semantic projection design; prior passes b2f89c86012e71190afed077f42b5af82d552b42 and 93661837df8d63bfed10c9b70d1986c4e0d12aa5 remain historical; local, push deferred to sprint end | unavailable; effective window unknown; preflight warning with bounded selectors | none |
 | 5 | 05-implement-safe-edit-transactions.md | completed | 93661837df8d63bfed10c9b70d1986c4e0d12aa5 | commit subject: Implement Sprint 41 Safe Edit Transactions (resolve in sprint ancestry) | F1 74+7; F2 6; F3 20 (130 filtered); F4 6 (144 filtered); F5 16; F6 9; F7 11; F8 10; F9 26+7; F10 221/12 targets; F11 399/23 targets; F12 37/4 targets; all command exits 0, 40 named oracles/full35 mapping; canonical fmt/check/test/clippy/doc/diff pass, 1435 tests across 83 nonzero targets and 4 separate zero-test harnesses; initial G3 repo-local TMPDIR/Git-discovery failure and 8/8 focused environment retry retained, canonical repeat passed with GIT_CEILING_DIRECTORIES=$TMPDIR on unchanged source manifest | Implement Sprint 41 Safe Edit Transactions; all carried work included, cumulative 25 paths/11259 churn/no binaries; local, push deferred to sprint end | unavailable; effective window unknown | local-artifacts/codex-runs/sprint-41/task-5/producer-resume/ |
 | 6 | 06-complete-safe-edit-transaction-evidence.md | completed | f2813d2eff5fa78efe3f0d4a705e3bc51de13979 | commit subject: Document Sprint 41 Safe Edit Transaction Evidence (resolve in sprint ancestry) | Exact 25-path/11259-churn range and prerequisite exclusion, 24 committed source hashes, 35 invariant rows/40 named oracles and 18 retained command logs reconciled; G3 1435 tests/83 nonzero targets/4 separate zero harnesses, initial environment failure and 8/8 retry preserved; API/dependency/Graph/Coverage/cache/catalog/redaction audit; changed/new Markdown links, four efficiency records/seven tasks, prompt syntax/explicit suite8/repository22 and diff-check pass; documentation-only, no new Rust gate | Document Sprint 41 Safe Edit Transaction Evidence; local, push deferred to sprint end; Task 7 pending, Sprint 41 active | unavailable; effective window unknown; preflight warning with bounded selectors | local-artifacts/codex-runs/sprint-41/task-6/; Task 5 producer-resume logs retained |
+| 7 | 07-sprint-41-integration-review.md | completed | 98d64fb9f775c5af77437b8c18cd0eeb21291c84 | commit subject: Complete Sprint 41 Safe Edit Transactions Review (dispatcher commit pending) | Separate independent/primary F1-F12 and G1-G6 all exit 0; each G3 1471 tests/83 nonempty/four empty harnesses; all35/66 named oracles/836 inputs; reconciled pass and same-reviewer corrected-artifact consistency pass; final documentation and exact retirement audit in review artifact | Complete Sprint 41 Safe Edit Transactions Review; dispatcher commit/no-ff merge/version-only push pending | unavailable; bounded preflight warning | local-artifacts/codex-runs/sprint-41/unwind-remediation/review-r6/ |
+
+Historical first Task 7 ledger record (preserved; superseded only for current
+completion status):
+
 | 7 | 07-sprint-41-integration-review.md | blocked historical attempt; fresh gate pending | 33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0 | no completion commit | Primary R3-R5; independent R1-R3/M1-M4; primary documentation checks only, independent F1-F10 only; no successful review or inherited full gate | no review commit/push/retirement; restart after remediation evidence integration | unavailable | local-artifacts/codex-runs/sprint-41/remediation/review-handoff.md |
 
 The original Task 5/6 ledger rows above are historical completed boundaries.

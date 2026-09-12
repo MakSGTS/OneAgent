@@ -6,7 +6,11 @@ Accepted for Sprint 41 architecture; controlled-unwind implementation evidence
 qualifies `45147cf1649e9ca8315feb52c02a9936df0fa1f9` after separate design pass
 `19f9f23b3851e5b24f781e6c00b160fc706fe8d3` on architecture
 `d328d8638bab12c5ebc8fe2591d21d615be115a8`. Fresh independent and primary
-integration gates remain pending. This decision does not claim a supported edit
+integration gates and same-reviewer artifact consistency passed on
+`98d64fb9f775c5af77437b8c18cd0eeb21291c84`; the
+[integration review](../reviews/sprint-41-safe-edit-transactions.md) completes
+Sprint 41 and makes only the v0.7 release integration review eligible.
+This decision does not claim a supported edit
 capability. It extends [ADR-0063](0063-refactoring-planner.md) only at the local
 Runtime mutation boundary. The [investigation](../architecture/safe-edit-transactions-investigation.md)
 records the original prerequisite; the [current evidence](../architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)

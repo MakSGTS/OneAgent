@@ -7,7 +7,10 @@ after architecture `d328d8638bab12c5ebc8fe2591d21d615be115a8` and the separate
 design pass `19f9f23b3851e5b24f781e6c00b160fc706fe8d3`. All seven controlled-unwind
 oracles and F1-F12/G1-G6 executed successfully; the [current evidence](safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
 binds exact committed locations, 66 named functions and input/log hashes.
-Fresh independent/primary integration review remains PENDING. The original owner
+Fresh independent/primary integration review and same-reviewer artifact
+consistency passed on `98d64fb9f775c5af77437b8c18cd0eeb21291c84`; the
+[integration review](../reviews/sprint-41-safe-edit-transactions.md) records
+Sprint 41 completion and v0.7 release-review eligibility. The original owner
 key/matrix below retains its historical planned names; actual owners are mapped
 in the controlled-unwind table and evidence. Earlier passes retain their ranges.
 

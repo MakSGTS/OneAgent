@@ -276,11 +276,16 @@ reconciles all T01-T35, 66 named oracles and 18 successful stable commands,
 including G3 1471 passed/83 nonempty/four empty targets. It rehashes 836 committed
 inputs and every current command log. Source delta is three paths/+1341/-179;
 net cumulative implementation is 25 paths/+15400/-234 = 15634, no binaries.
-Separate fresh independent/primary full integration reviews remain PENDING.
+Separate fresh independent/primary full integration reviews passed on
+`98d64fb9f775c5af77437b8c18cd0eeb21291c84`; each full test gate passed 1471 tests
+across 83 nonempty/four empty harnesses. Same-reviewer final-artifact consistency
+passed after two draft-only corrections, preserved in the
+[integration review](reviews/sprint-41-safe-edit-transactions.md).
 The old producer pass and blocked reviews below remain historical. The renewed
 agreement supersedes awaiting-agreement text only; historical missing evidence
 and reviewer disagreement are not erased by current implementation validation.
-Sprint 41 remains active and v0.7 release-ineligible; public APIs, dependencies
+Sprint 41 is completed; the v0.7 release integration review is eligible and
+release execution has not started. Public APIs, dependencies
 and Coverage Registry (`crates/graph/src/coverage.rs`) remain unchanged.
 
 [ADR-0064](adr/0064-safe-edit-transactions.md) accepts one opt-in local Runtime

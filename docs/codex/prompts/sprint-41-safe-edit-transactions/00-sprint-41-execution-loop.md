@@ -67,6 +67,105 @@ override a runtime prohibition. If authorization or guaranteed fresh context is
 unavailable, stop at the exact child and report its prompt and committed
 prerequisite instead of executing it in this accumulated dispatcher context.
 
+## Current controlled-unwind continuation gate
+
+The user renewed the complete unwind-recovery plan on 2026-09-12. This supersedes
+historical awaiting-agreement statements, not failures, reviewer disagreement or
+missing evidence. Architecture starts from clean
+`38a9bde3407f151e2c17b380e8bd28252c5a39f9` on
+`codex/v0.7-sprint-41-remediation`. The accepted
+[ADR amendment](../../../adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+and [all-35 remapping](../../../architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+define a retained coordinator/attempt/response/phase/I/O envelope, narrow
+preparation/precommit containment, shared checked finalization and separate
+recovery containment. Apply/reversal/abandonment share coverage; fallible
+outcome/undo preparation precedes commit. No rollback is permitted after
+`send_replace`; no global panic-hook redaction or public detector injection is
+claimed. Current source `45147cf1649e9ca8315feb52c02a9936df0fa1f9`
+implements this correction; its evidence does not imply an integration pass.
+
+The unique `Define Sprint 41 controlled unwind recovery` commit is
+`d328d8638bab12c5ebc8fe2591d21d615be115a8`; the separate committed
+`Approve Sprint 41 controlled unwind recovery design` pass is
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3`, recorded in
+`docs/reviews/sprint-41-safe-edit-transactions-design.md` after fresh independent
+and primary checks and same-reviewer artifact consistency. These prerequisites
+admitted implementation; producer pass `f25388cd8073bcd228c8eaa951ef1c0178907431`
+does not qualify this mechanism change.
+The four efficiency records below route this current prerequisite; the unchanged
+seven-task manifest, child files and ledger retain historical task metadata.
+Dispatch continuation with these exact new subjects and committed IDs; historical
+child prerequisites do not silently override this newer architecture gate.
+
+The coherent source remediation is confined to
+`apps/runtime/src/workspace/edit.rs`, `edit_io.rs`, `mod.rs`, +1341/-179 = 1520.
+This separate Task 6 updates the existing evidence and current implementation
+locations/statuses; it supersedes only historical child prerequisite routing and
+the original create-new-evidence assumption. Next: dispatcher commits
+`Update Sprint 41 unwind recovery evidence`, merges remediation into the version
+branch with `git merge --no-ff`, then fresh independent and primary complete
+Task 7 reviews and same-reviewer final-artifact consistency. Keep original Task 5
+`f2813d2eff5fa78efe3f0d4a705e3bc51de13979`, Task 6
+`e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`, final review base
+`ceb3a91da70afde202cab84f7ea42846cdd734bd` and final subject
+`Complete Sprint 41 Safe Edit Transactions Review`. Completion/retirement and
+no-ff integration/final version-only push remain gated; no release execution.
+
+Keep original implementation baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, the 24 source/fixture paths and only
+Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Initial measured subtotal was 25/+14238/-234 = 14472, no binaries. Current net
+source-qualified subtotal is **25/+15400/-234 = 15634**, no binaries. Separate
+architecture range `38a9bde3..d328d863` is six paths/+399/-17, design range
+`d328d863..19f9f23b` one path/+190/-0; this Task 6 seven-document delta from
+`45147cf1649e9ca8315feb52c02a9936df0fa1f9` is measured separately, including its
+exact master delta. Historical additional
+three-source-path estimate 1000-1800 and separate seven-document estimate 300-700
+do not reset accounting; caps remain 32 paths/20000 churn/no binaries. Count
+exact task-owned ranges, never blanket-exclude this shared master. After stable
+remediation run one F1-F12/G1-G6 cycle from the matrix, followed by separate
+independent/primary review gates with new root-local target/tmp and input/log
+hashes. Existing partial checks cannot qualify new source. All 11 Sprint 40,
+four Sprint 40.1 and eight Sprint 41 prompts remain; Sprint 41 stays active and
+v0.7 release-ineligible.
+
+The fifth blocked review remains unresolved historical evidence: primary
+recommended P2 contract/evidence because Result-only recovery loses owner state
+across unwind; independent reported incomplete integration acceptance and a
+conditional owner-local concern, without assigning a confirmed P2 defect.
+No default-input panic trigger or executed post-write reproduction was shown
+by that historical review. Current approved owner-local unwind oracles are
+separate defensive validation, with no public service injection finding.
+The old exploratory probe was rejected by automatic safety review before
+compilation/execution; never retry it or count it as evidence. Startup panic
+tests cannot substitute for a post-write transaction test.
+
+The originating task reported the fifth partial G3's natural exit 101:
+Runtime lib 165 passed/1 failed/46.46s, `workspace_service_classifies_blocking_build_panics`
+at `apps/runtime/src/workspace/mod.rs:3192:10`,
+`Workspace task panic must not hang: Elapsed(())`; detector panic at 2123 was
+the expected trigger. Whole partial G3: 1285 passed/1 failed, 64 nonempty targets
+plus one empty harness, 4927.014s. No signal or deliberate exit 75 occurred.
+F1-F12/G1-G2 exited 0 (focused counts
+82/8/32/10/18/11/13/12/33/222/401/37); G4-G6 and all primary Cargo were
+unexecuted. Historical watcher/startup timeout causes remain unknown. These are
+handoff-reported historical results, not reexecuted or externally verified here.
+The [current Task 6 evidence](../../../architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+qualifies source `45147cf1649e9ca8315feb52c02a9936df0fa1f9`: all 35 rows,
+66 exact named oracles, F1-F12 counts 82/8/38/11/18/11/13/12/33/222/401/37,
+all 18 exits 0; G3 1471 passed/0 failed, 83 nonempty/four empty targets.
+All 836 committed input blobs and current log/input hashes were independently
+rechecked. The 18-command cycle totals 313.70s; G1-G6 alone 173.37s. Earlier
+development failures remain retained; historical timeout causes are unknown.
+No current implementation result is missing, but fresh independent/primary
+integration reviews remain PENDING. Logs and this documentation audit are under
+`local-artifacts/codex-runs/sprint-41/unwind-remediation/implementation/` and
+`local-artifacts/codex-runs/sprint-41/unwind-remediation/evidence/`.
+Architecture checks/report remain
+under `local-artifacts/codex-runs/sprint-41/unwind-remediation/architecture/`;
+effective context window and measured telemetry are unknown/unavailable.
+
 ## Constructor-boundary corrective prerequisite
 
 Task 5 admission at `b2f89c86012e71190afed077f42b5af82d552b42` stopped
@@ -189,14 +288,14 @@ Effective context window/telemetry may be unknown; estimates are admission-only.
 ```text
 sprint_efficiency_contract: v1
 adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
-design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 producer-owned semantic projection|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 producer-owned semantic projection design
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 controlled unwind recovery|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 controlled unwind recovery design
 implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|12000|none|12|1
 ```
 
-The matrix is provisional during planning. Task 3 maps all applicable accepted
-production invariants after ADR-0064 is committed. Task 4 is a pending design
-gate, not a claimed pass. Before Task 5, supply the exact matrix commit, design
-pass artifact/commit, task-start commit, and initial untracked inventory.
+The initial matrix was provisional during planning. The current controlled-unwind
+mapping uses the separately committed targeted design pass above, not an
+inherited producer pass. Its exact architecture/design/source commits and
+initial clean inventory are reconciled in the current evidence.
 The revised numerical baseline admits 25 paths and 12000 text additions/deletions, no
 binary paths, 12 focused checks and one stable full implementation gate.
 The focused commands are fixed by the accepted matrix before design review.

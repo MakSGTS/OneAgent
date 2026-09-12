@@ -1,5 +1,195 @@
 # Sprint 41 Safe Edit Transaction Design Review
 
+## Current controlled-unwind design decision
+
+Decision: **pass**, for design only, on the immutable full range
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..d328d8638bab12c5ebc8fe2591d21d615be115a8`.
+The correction delta is
+`38a9bde3407f151e2c17b380e8bd28252c5a39f9..d328d8638bab12c5ebc8fe2591d21d615be115a8`.
+Primary `/root/unwind_design_primary` and independent reviewer
+`/root/unwind_design_independent` used separate fresh contexts and observed
+the same initial/final review HEAD
+`d328d8638bab12c5ebc8fe2591d21d615be115a8`, clean on
+`codex/v0.7-sprint-41-remediation`. Exactly one ancestry commit has subject
+`Define Sprint 41 controlled unwind recovery`, at that endpoint. The correction
+changes six documentation paths, +399/-17 = 416 text churn, with no binary,
+production, manifest or reusable-framework change.
+
+The independent result arrived before this sole-artifact edit: **pass**, no
+blocking or non-blocking design findings, and no missing design-owner or
+negative-oracle specification. The primary independently inspected the same
+authorities and relevant owners and agrees without unresolved disagreement.
+This records planned architecture, not implemented conformance or execution of
+the seven new unwind oracles. The same independent reviewer
+`/root/unwind_design_independent` subsequently returned **artifact consistency:
+pass**, with no weakened-report discrepancy. It confirmed all 35 rows, both
+ranges, unique prerequisite, accounting, seven missing-evidence/risk items,
+separate checks, initial selector error/correction, explicit zero-match search,
+unexecuted Cargo and all detector/recovery/commit/shutdown/redaction boundaries.
+It verified the historical body byte-identical to HEAD, three new links/selectors
+valid and `git diff --check` exit 0. HEAD and branch stayed unchanged; the sole
+review artifact then contained +181/-0. Only this consistency metadata and next
+action are updated after that check; implementation still requires the committed
+pass.
+
+The [current continuation gate](../codex/prompts/sprint-41-safe-edit-transactions/00-sprint-41-execution-loop.md#current-controlled-unwind-continuation-gate)
+overrides historical child prerequisite routing only. Only the separately
+committed `Approve Sprint 41 controlled unwind recovery design` pass admits the
+three-file remediation. Producer pass `f25388cd8073bcd228c8eaa951ef1c0178907431`
+and every earlier decision below remain historical. Renewed user agreement
+supersedes awaiting-agreement text, not failures, missing evidence or reviewer
+disagreement. In particular the fifth blocked review retains the primary's P2
+contract/evidence recommendation and the independent reviewer's conditional
+owner-local concern without a confirmed P2. Historical partial checks and
+watcher/startup timeout causes are not reexecuted or diagnosed by this gate.
+The rejected exploratory probe was never compiled/executed and was not retried.
+
+### Complete controlled-unwind acceptance and reconciliation
+
+Both roles accepted all 35 rows of the
+[controlled-unwind audit](../architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit),
+preserving each original R/L/C/T classification and reachable negative oracle.
+The original matrix and amendment each contain T01-T35 exactly once in order.
+Constructor/type evidence never substitutes for an executable reachable case.
+
+| Rows | Independently reconciled design acceptance |
+|---|---|
+| T01-T05 | Opt-in/liveness/identity, sole retained reservation and terminal release, complete plan/type split, consumed capabilities and confirmation before the mutation queue remain ordered before retained mutation. |
+| T06-T10 | Original publication baseline, exact cache/owned-entry exclusions, admission before allocation, all source/result bounds and shared projection/undo leases survive partial failure without extra unreserved retention. |
+| T11-T15 | Confinement at every boundary; overflow/version/token/order checks; prepaid immediate created-entry registration; all staging/backups verified before replacement; attempted marker before rename and observed transition before the next injectable boundary. Unknown identity grants no cleanup or exclusion authority. |
+| T16-T19 | Retained I/O survives the actual post-write builder/comparator boundary; complete inventory and closed completeness-type evidence remain; frozen node/directly-owned-Query projection and full edge provenance comparison are unchanged. |
+| T20-T23 | Complete occurrence/raw/lexical evidence, before-bound canonical producer mappings, whole terminal requests/Query IDs and full diagnostic/rule reports retain constructor-valid substitutions and every original negative case. |
+| T24-T27 | Actual adjacent publication pair, fallible material/cleanup/final scan before commit, backup recreation on abandonment, committed success through cache failure and rejoined envelope with serialized writers. |
+| T28-T30 | Shared checked reverse finalizer and separate recovery catch; complete original bytes/tree/permissions and zero artifacts before recovery success; quarantine retains bounded material/exact counts, closed secondary cause and None observation on recovery error/unwind. |
+| T31-T35 | Symmetric reversal and receipt consumption, retained/dropped responses with joined stop, closed phase mapping and transaction-only redaction, unchanged APIs/dependencies and lifecycle expiry without blanket Query rejection. |
+
+Source inspection confirmed the correction's premise: `edit.rs::run_attempt`
+has local optional I/O at line 1292; `execute` and `abandon_commit` use Result-only
+finalization; `mod.rs:1227` moves the coordinator into a joined worker whose
+join-error mapping loses it. `mod.rs:1249` publishes before `edit.rs:1559`
+constructs undo/outcome. These are source observations, not an executed
+post-write panic reproduction. The actual I/O owners are `edit_io.rs` functions
+`create_owned`, `replace_checked`, `cleanup_owned`, `restore_checked` and
+`restore_one` at lines 547, 637, 698, 721 and 746 of the reviewed endpoint.
+
+The [ADR amendment](../adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+retains coordinator, attempt/reservation, response, phase, optional I/O and
+prepared terminal/commit material outside narrow synchronous catches. Workers
+return that envelope; the lifecycle loop alone owns the snapshot sender.
+Preparation, consumed submission, mutation/build/comparison and precommit
+material construction enter shared checked finalization. Recovery borrows the
+retained owner in a separate catch and quarantines without retry on error or
+unwind. Removed backups can be recreated from prepaid originals. Apply,
+reversal and abandoned commit share those rules.
+
+Preparation/admission unwind maps to `Unavailable`, build/comparison/impact to
+`SemanticMismatch`, confined I/O/precommit material construction to `IoFailed`.
+Recovery failure overrides with `RecoveryRequired`/`Required` and the original
+closed trigger as secondary; later cancellation cannot replace that trigger.
+All fallible outcome/receipt/undo preparation precedes the final guard and
+`send_replace`. The same non-awaiting coordinator turn transfers prepared
+baseline/undo/status; postcommit cache failure, response drop or stop cannot
+cause rollback. Shutdown joins mutation and recovery before owner release or
+healthy observation clearing, including when recovery is blocked.
+
+UP/US/UM/UR/UL/UC in `edit.rs::tests` and UI in `edit_io.rs::tests` have exact
+planned names and F3/F4 owners in the matrix. They must trace actual named
+operations with earlier guards executed, paired EDT/Designer apply/reversal
+controls and actual post-write builder faults; an earlier synthetic checkpoint
+cannot qualify a later boundary. Private `WorkspaceService::with_builder`
+means detector injection is L evidence even though the builder's `with_detector`
+is public. It establishes neither public-service injection nor a default-input
+panic trigger. All 30 original unique A/AP/E/I/R oracle names were located by
+the independent reviewer; existence alone does not prove execution.
+
+Frozen typed producer inventories, exactly-once consumption, canonical DP/EP/Q
+ownership, parser/output lifetime separation, preallocation arithmetic within
+268435456 and the exact 1MiB positive remain intact. No producer, public API,
+dependency, protocol, cache-schema or Coverage change is admitted. The correction
+fits the three planned Runtime owners: `edit.rs`, `edit_io.rs` and `mod.rs`.
+
+Accounting retains baseline `93661837df8d63bfed10c9b70d1986c4e0d12aa5`, 24
+source/fixture paths and only original Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`
+(+1/-1). The independent audit reproduced 25 paths, +14238/-234 = 14472,
+no binaries, leaving 5528 below the 20000 hard cap. The current 25-path estimate
+sums to 12000; historical 8500/10000 figures below are superseded. The additional
+1000-1800 source and separate 300-700 seven-document estimates do not reset
+accounting. Caps remain 32 paths/20000 churn/no binaries, with exact-range
+documentation exclusions and no blanket shared-master subtraction.
+
+### Separate controlled-unwind documentation validation
+
+All commands ran from the repository root. Each role performed its own checks;
+primary local artifacts are under
+`local-artifacts/codex-runs/sprint-41/unwind-remediation/design-primary/`.
+The independent reviewer created no files/logs; the dispatcher retained its
+compact returned report separately. The table distinguishes differing scopes.
+
+| Check | Independent reviewer | Primary |
+|---|---|---|
+| Root/status/branch/HEAD and unique prerequisite ancestry | exit 0; exact clean endpoint, one match | exit 0; same |
+| `git diff --check` for full immutable range, correction range and working tree | each exit 0 | each exit 0 |
+| `bash -n scripts/validate-codex-prompts.sh` | exit 0 | exit 0 |
+| `scripts/validate-codex-prompts.sh docs/codex/prompts/sprint-41-safe-edit-transactions/*.md` (eight explicitly expanded paths) | exit 0; 8 files | exit 0; 8 files |
+| `scripts/validate-codex-prompts.sh` | exit 0; 22 files | exit 0; 22 files |
+| Read-only Markdown/link/selector audit | 466 local references; zero flagged; four efficiency records match | nine added correction links/anchors resolve across six changed files; prompt validator verifies efficiency selectors |
+| Matrix/allocation/preserved suites | both 35-row inventories; exact accounting above; 11/4/8 prompts | both ordered 35-row inventories; 25 allocations sum to 12000; 11/4/8 tracked prompts |
+
+The independent initial ad hoc efficiency selector stopped Roadmap at a deeper
+heading and printed four false comparisons; the corrected delimiter produced
+four matches. This is an audit-selector mistake, not a repository defect.
+Its `rg -n 'fn controlled_unwind_' apps/runtime/src/workspace/edit.rs apps/runtime/src/workspace/edit_io.rs`
+and containing batch exited 1 with zero matches: all seven new functions remain
+absent/planned/unexecuted. No test pass follows. Changed-path production,
+manifest and reusable-framework queries found zero paths. No dedicated Markdown
+checker was discovered in scoped scripts; explicit link/selector checks apply.
+Neither role ran F1-F12, canonical Cargo validation, probes or panic reproduction.
+
+Primary exact command arguments and outcomes are retained in `validation.json`.
+SHA-256 of `syntax.log` and `diff.log` is
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`;
+`suite.log`: `97e195843b8803ec5485b13b02819112a47e3d06e1175b14b139f27175e61124`;
+`repository.log`: `bef4042bc4e99cbf365437427ebd45ed6d28716d61ab17b76a7e7d0d1dbc7c47`;
+`documentation-audit.log`: `b9d946b29c38ad41993af9e51df81f2132fd5a7e66953e7cc2cc200390d6ad8a`.
+Effective context window and measured telemetry are unavailable; both roles
+used bounded selectors. Primary preflight admitted the bounded manifest.
+
+### Missing implementation evidence and residual risks
+
+These are nonblocking for design only and remain required before completion:
+
+1. All seven new named functions remain absent/unexecuted. Require actual
+   boundary traces, paired format/direction controls, recovery unwind and
+   retained/dropped-response shutdown proof.
+2. Current source does not implement the envelope, complete containment or
+   prepared commit transfer. This design pass is not source acceptance.
+3. No default-input trigger or executed post-write reproduction exists. The
+   private detector oracle remains owner-local and must reach the real builder.
+4. Historical partial validations do not qualify new source. Watcher/startup
+   timeout causes remain unresolved; this gate performs no runtime diagnosis.
+5. Every `AssertUnwindSafe` needs owner-specific justification. Partial state
+   must remain usable only by finalization; callbacks or mutex guards cannot be
+   blindly asserted safe at uncontained transitions.
+6. No abort, secondary panic during unwinding/destruction, kill, crash, power-loss,
+   hostile-writer or durable-recovery guarantee is added. Global panic-hook
+   output/stderr is outside transaction-controlled redaction. Blocking OS I/O
+   can delay joined stop; multi-file disk atomicity and richer metadata remain
+   excluded as before.
+7. Remeasure final churn and every named oracle after implementation; estimates
+   and existing oracle names do not qualify the new source. Run one stable
+   F1-F12/G1-G6 remediation cycle, then separate independent/primary full gates.
+
+No source/tests, staging, commit, ref or push changed in this gate; `.codex/`
+was untouched. Only this review artifact is edited after reconciliation;
+ignored primary validation artifacts are local evidence. All 11 Sprint 40,
+four Sprint 40.1 and eight Sprint 41 prompts remain. Sprint 41 stays active,
+v0.7 release-ineligible; no retirement, release, main merge, tag or Sprint 42.
+Next action: following the same-reviewer consistency pass and final primary
+documentation check, the dispatcher may create the separate design-pass commit and admit
+the coherent three-file source remediation, followed by separate Task 6 evidence
+and Task 7 reviews. All historical decisions below retain their original scope.
+
 ## Current producer-owned projection decision
 
 Current decision: **pass** for the targeted design gate on the exact immutable

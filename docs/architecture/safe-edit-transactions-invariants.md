@@ -2,13 +2,14 @@
 
 Accepted design: [ADR-0064](../adr/0064-safe-edit-transactions.md), committed at
 `7de36516d283a810ec5ec01b09980b07b6e634dc` (`Define Sprint 41 Safe Edit Transactions`).
-Status: complete architecture mapping for the independent Task 4 gate.
-Production conformance and execution of planned tests are not claimed.
-Every new symbol and test below is explicitly **planned** for Task 5. This
-mapping includes the user-approved producer projection correction below. The
-original ADR commit remains historical; the current prerequisite is the unique
-`Define Sprint 41 producer-owned semantic projection` commit. A new independent
-design pass is pending; no prior pass approves this producer/identity revision.
+Status: current implementation mapping at `45147cf1649e9ca8315feb52c02a9936df0fa1f9`,
+after architecture `d328d8638bab12c5ebc8fe2591d21d615be115a8` and the separate
+design pass `19f9f23b3851e5b24f781e6c00b160fc706fe8d3`. All seven controlled-unwind
+oracles and F1-F12/G1-G6 executed successfully; the [current evidence](safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+binds exact committed locations, 66 named functions and input/log hashes.
+Fresh independent/primary integration review remains PENDING. The original owner
+key/matrix below retains its historical planned names; actual owners are mapped
+in the controlled-unwind table and evidence. Earlier passes retain their ranges.
 
 ## Owner and test key
 
@@ -207,11 +208,97 @@ representable candidate mutant still passes the real production A comparator
 and E `run_attempt` after a complete rebuild against independently frozen expected
 values. All original T03/T17 owner-local/type distinctions remain in force.
 
+## Controlled-unwind ownership and complete audit
+
+Normative mechanism: [controlled transaction-owner unwind](../adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind).
+The architecture described the Result-only owner-loss boundary at
+`38a9bde3407f151e2c17b380e8bd28252c5a39f9`; that source observation and the
+unexecuted historical probe remain historical. At current source
+`45147cf1649e9ca8315feb52c02a9936df0fa1f9`, E `EditEnvelope` (1147),
+`prepare` (721), `execute` (1181), `run_attempt` (1318), `finalize_failure`
+(1617), `contain_recovery` (1665), `commit` (1725) and `abandon_commit` (1759)
+implement retained preparation/submission/precommit/recovery ownership. I
+`create_owned` (556) reserves and immediately registers each created entry;
+W `run_workspace_updates` (1014) rejoins the coordinator and owns publication.
+These are private owners, not new public signatures. Order remains P preparation,
+S consumed/confirmed submission, M mutation/build/comparison, F prepared material/
+cleanup/final guard, R checked recovery, C publication, then K cache/delivery.
+No M/F catch publishes; R/L/C/T below retain their separate classification meaning.
+
+The seven new named oracles are **implemented and executed** at that commit:
+`controlled_unwind_preparation_retains_owner` (UP, E:2189),
+`controlled_unwind_before_replace_cleans_staging` (US, E:2309),
+`controlled_unwind_after_replace_recovers` (UM, E:2350),
+`controlled_unwind_recovery_quarantines` (UR, E:2419),
+`controlled_unwind_stop_and_response_join` (UL, E:2526),
+`controlled_unwind_commit_preserves_success` (UC, E:2687) in
+`apps/runtime/src/workspace/edit.rs::tests`, F3 (38 passed), and
+`controlled_unwind_io_ordinals_preserve_ownership` (UI, I:855) in
+`apps/runtime/src/workspace/edit_io.rs::tests`, F4 (11 passed). Existing original
+oracles remain required and executed; aliases supplement their exact names.
+The evidence table records real parameter inventories and per-command hashes.
+The R/L/C/T column covers the existing requirement: no new public semantic
+forging surface is inferred from these private containment tests.
+
+| Row | R/L/C/T | Actual owner / ordered retained-boundary obligation | Meaningful oracle / command |
+|---|---|---|---|
+| T01 | R | W:686 with_edit_policy; E:238 reserve_attempt. E `reserve_attempt`, W service startup: opt-in identity/liveness precedes P; no edit-enabled production entry point. | Existing disabled/foreign-service oracle asserts zero I events (F2); UP separately exercises private P containment (F3). |
+| T02 | R + L | E:195 Reservation; E:1147 EditEnvelope; E:1749 deliver_terminal. E reservation and envelope retain the sole slot through P/S/M/F/R and terminal transfer; never reuse IDs. | Existing attempt bounds plus UP/UL assert Busy, non-replay and one terminal release (F3). |
+| T03 | R + L + C + T | E:721 prepare; E:1318 run_attempt; A:265 compare_plan. E `prepare`/`run_attempt` regenerate and A `compare_plan` checks full structured plan before M; retained predecessor remains immutable across catch. | Existing E/AP complete-plan mutants and constructor/type evidence remain separate; UP verifies preparation failure cannot yield capability or I event (F1/F3). |
+| T04 | R + L | E:1181 execute; E:1147 EditEnvelope. E `execute` consumes the private capability before S revalidation; envelope keeps reservation/attempt through failure. | Existing private/foreign binding mutants plus UP/UL assert consumed submit/reversal cannot replay after unwind (F2/F3). |
+| T05 | R + L + C | E:503 EditPolicyGate; E:877 write_arguments; E:901 policy_matches. E handle `submit` completes `EditPolicyGate` before mutation queue; containment cannot skip confirmation or move mutation into executor. | Existing exact policy/no-queue oracle and UP/US trace policy before S/M with paired confirmed controls (F3/F9). |
+| T06 | R + L | I:205 capture; W:857 prepare_edit_baseline; E:721 prepare. E `prepare`, I `EditBaseline::capture`, W build retain the saved publication baseline; neither catch nor recovery replaces it with two later scans. | Existing staleness/admission mutants plus UM verify original complete baseline after restore (F2/F3). |
+| T07 | R + L | I:205 capture; I:323 verify_tree; E:1318 run_attempt. W/C namespace completion precedes P capture; I scan excludes only verified owned entries/exact safe cache file, including during R. | Existing scan exclusions plus US/UI unknown-created-identity sentinel case forbid cleanup or exclusion authority (F3/F4/F7). |
+| T08 | R + L | I:160 EditIoBudget; I:205 capture; I:382 read_checked. I capture/read/budget admission precedes allocation in P/M/F/R; error/unwind retains bounded state only. | Existing exact/one-over scan cases and UI observe read/allocation ordering and outside sentinels (F4). |
+| T09 | R + L | E:937 check_admission; I:471 with_admission; A:283 replacement_bytes. E `check_admission`, I `with_admission`, A replacement preserve all operation/file/result bounds before M; envelope adds no unreserved copy. | Existing attempt/buffer bounds plus US observe no stage before prepaid result/recovery buffers (F3/F4/F10). |
+| T10 | L | E:998 freeze_projection; E:472 EditUndo; E:1725 commit. E attempt/projection, I admission and undo transfer the same lease through M/F/R/C; stage/terminal failure expires it without an extra retained copy. | Existing shared-lease/attempt bounds plus UP/UR/UC assert retained/peak bytes and release or transfer at every terminal path (F3/F4). |
+| T11 | R + L | I:352 validate_path; I:382 read_checked; I:556 create_owned. I path/read/create/replace/restore/cleanup recheck confinement each time; catching unwind never authorizes an unknown path/identity. | Existing confinement negatives and UI exercise aliases/kind/path swaps with outside sentinel unchanged (F4). |
+| T12 | R + C | A:283 replacement_bytes; E:1318 run_attempt. E `run_attempt`, A replacements check overflow/version/token/order before M; F packaging also precedes C. | Existing range/overflow oracles prove zero writes for rejected input; UC checks one canonical successor in valid control (F1/F3). |
+| T13 | R + L | I:556 create_owned; I:422 OwnedEditFile. I `create_owned` reserves registration capacity before create, then immediately records present/unknown identity before metadata checks/callbacks. | UI/US observe each result/backup create and unknown-identity boundary, exact retained count, collisions and no removal of unrelated entry (F3/F4). |
+| T14 | R + L | I:616 stage_all; I:556 create_owned. I `stage_all` fully writes/verifies all results/backups before replacement; retained I survives create/write/permissions/sync/close/readback unwind. | UI/US enumerate real kind/ordinal in both directions; no source replacement, verified cleanup or Required quarantine (F3/F4). |
+| T15 | R + L | I:649 replace_checked. I `replace_checked` validates baseline/target, records attempt before rename and records observed result before next callback; M failures go to R. | UI/UM exercise before/after each rename and ambiguous results, reverse attempt order and third-state sentinel preservation (F3/F4). |
+| T16 | R + L | E:1318 run_attempt; W:1644 build; I:706 verify_results. E `run_attempt` retains I outside complete builder/tree/compare catch after real replacement; expected projection was frozen earlier. | UM uses owner-local custom detector that accepts initial build and panics on post-write build; paired EDT/Designer apply/reversal controls and exact restored tree/no candidate cache or publication (F3). |
+| T17 | R + T | A:1633 validate_postconditions; A:332 SafeEditEvidence. A inventory/complete source comparison after real B build and before F; all Configurations/documents remain exhaustive. | Existing A/E inventory mutants reach real comparator; sole completeness variant remains type evidence; UM verifies comparator boundary reached (F1/F3). |
+| T18 | R + C | A:1633 validate_postconditions; E:1104 compare_snapshot. A node/closure comparison with frozen DP/EP/Q evidence stays inside M, without new node or provenance ownership. | Existing constructor-valid node/Query mutants and E semantic-candidate recovery, then UM comparison unwind with valid positive control (F1/F3). |
+| T19 | R | A:1633 validate_postconditions; E:1104 compare_snapshot. A compares every edge endpoint/kind and explicit provenance inside M; containment changes no semantic input reachability. | Existing reachable complete edge/provenance mutants still reject without publication; UM independently covers owner-local catch, not private edge forgery (F1/F3). |
+| T20 | R + C | A:283 replacement_bytes; A:1633 validate_postconditions; AP:2627 raw_range_to_source_span. A/AP complete occurrence/range/lexical evidence follows real build inside M; constructor restrictions unchanged. | Existing canonical occurrence mutants and E candidate recovery, UI/UM preserve exact Unicode/BOM/line-ending bytes on recovery (F1/F3/F4/F11). |
+| T21 | R + C | DP:27 project_safe_edit_provenance; EP:26 project_safe_edit_provenance; E:998 freeze_projection. A/DP/EP before-bound complete provenance projection freezes before M; all mapping consumption precedes F. | Existing canonical anchor/reference/producer mutants and UM full comparison boundary; no candidate-derived expected evidence (F1/F3/F11). |
+| T22 | R + C | EP:26 project_safe_edit_provenance; A:1601 validate_equivalence. A/EP/L compare canonical whole requests, dependent Query IDs and every disposition inside M. | Existing reconstruct_terminal whole-record mutants reach A/E; no invented private ID corruption; UM preserves original ledger after restore (F1/F3/F11). |
+| T23 | R + C | W:1873 compose_rule_evidence; A:1601 validate_equivalence; E:1104 compare_snapshot. B composition and A compare full diagnostic/rule reports inside M before F; preserve pre-existing findings. | Existing producer-valid report mutants plus UM actual build/comparison unwind; no invented completeness/count field (F1/F3/F10/F11). |
+| T24 | R + L | W:1324 compose_change_impact; E:1792 predecessor_matches. W `compose_change_impact`, E predecessor guard and prepared commit bind actual adjacent pair before C; worker cannot publish. | Existing publication barrier/overflow and UC reject stale pair before C, prove old Arc immutable and exactly one valid increment (F2/F3). |
+| T25 | R + L | E:1318 run_attempt; I:710 cleanup_owned; E:1759 abandon_commit. E F material construction/cleanup/final scan precede W `send_replace`; envelope keeps I through `abandon_commit` and last guard. | US/UM/UC cover cleanup/final-guard/undo-preparation unwind and removed-backup recreation; only precommit failure restores (F3/F4). |
+| T26 | R + L | E:1725 commit; E:1781 retain_success; W:1014 run_workspace_updates. W postcommit K cache task cannot own source recovery; prepared success is retained independently through cache result/unwind. | UC and existing public cache-failure oracle prove accepted ID/bytes/receipt persist on cache failure, cancellation or response drop (F3/F7). |
+| T27 | R + L | W:1014 run_workspace_updates; E:1181 execute. W `run_workspace_updates` rejoins envelope/terminal state before writer release; all startup/watch/input/cache/clear writers remain serialized. | UL plus existing barriers/watch/input tests block R, assert Busy/no competing publication/cache and clean join (F3/F5/F6/F8). |
+| T28 | R + L | E:1617 finalize_failure; E:1665 contain_recovery; I:734 restore_checked; I:768 restore_one. E shared `finalize_failure`/`contain_recovery`, I `restore_checked`/`restore_one` cover Err/unwind and `abandon_commit` in reverse attempted order. | UI/UM cover actual restoration and recreated-backup ordinals; UR injects recovery unwind without retry/third-party overwrite (F3/F4). |
+| T29 | R + L | I:760 clean_unattempted; I:323 verify_tree; E:1617 finalize_failure. I final full baseline/permission comparison and owned cleanup must succeed before E reports Recovered; no-write cleanup also verifies original tree. | UM/US compare all original bytes/tree/modes/artifacts; remaining temp or unrelated change fails verified success (F3/F4). |
+| T30 | R + L | E:1617 finalize_failure; E:691 shutdown. E retained recovery owner/quarantine, W observation clear: recovery Err/unwind overrides trigger and prohibits later writers; stop preserves material. | UR covers restore/verification/cleanup unwind, exact count including unknown identity, closed secondary, None observation, no later publication/cache or sentinel change (F3/F4). |
+| T31 | R + L | E:297 prepare_reversal; E:721 prepare; E:1318 run_attempt; E:1804 compare_exact_snapshot. E `prepare_reversal`/`execute` share envelope/finalizer and all M/F/R stages; applied predecessor is reversal recovery oracle. | UP/UM/UI paired reversal at every shared ordinal restores applied state or quarantines; receipt/undo consumed with no replay (F2/F3/F4). |
+| T32 | R + L | E:1749 deliver_terminal; E:691 shutdown; W:1014 run_workspace_updates. E response sender/terminal/reservation remain retained across catches; W joins mutation and R before stop clearing or owner release. | UL keeps/drops response, cancels/stops each phase and blocks restore to prove stop waits; UC proves committed success survives (F3/F5). |
+| T33 | R + L | E:39 WorkspaceEditCause; E:1318 run_attempt; E:1617 finalize_failure. E maps unwind by ADR phase without payload formatting/retention; R failure overrides; transaction-controlled outputs remain closed. | UP/UM/UR closed cause/disposition/count and secret-sentinel assertions inspect outcome/Debug/audit/transaction logs, without global hook/stderr redaction claim (F3/F9). |
+| T34 | R | W:686 with_edit_policy; W:655 with_builder; Q:822 bsl_query_id. U public API, W builder composition and A/DP/EP/Q contracts unchanged; only three Runtime source paths admitted. | Existing default read-only consumers/paired planner suites plus source/API/dependency audit; private custom detector is not public service injection (F5/F10/F11/F12). |
+| T35 | R + L | W:857 prepare_edit_baseline; W:868 finish_edit_baseline; E:684 expire_capability. W baseline eligibility and E `expire_capability`/shutdown retain every successor/stop/quarantine expiration rule through envelope terminal transfer. | Existing baseline and retained-capability oracles plus UP/UR/UL assert no replay, released payload/lease, quarantine persists and no Query blanket rejection (F2/F3/F5/F7). |
+
+UP/US/UM/UI must observe actual named production operations and record that all
+earlier admission/confirmation/build guards ran. UI covers create, stage, replace,
+read/check/compare-adjacent I/O, cleanup, restore and backup recreation ordinals;
+UM covers actual build/semantic comparison and final-guard transitions. A fault
+at an earlier synthetic checkpoint is not proof of a later boundary. Positive
+controls must reach commit for both paired formats and directions without hooks.
+The private detector crosses W's real builder only after a source replacement:
+`WorkspaceSnapshotBuilder::with_detector` is public, but
+`WorkspaceService::with_builder` and `builder` are private. This is L, never a
+public-service injection finding. No default-input panic trigger is established.
+Startup panic tests are not transaction/post-write evidence. The rejected old
+exploratory probe was never compiled/executed and must not be retried or counted.
+
 ## Concrete focused validation commands
 
 Task 5 runs these **12 checks**, sequentially, after implementing planned tests.
-F1-F4 currently name new tests/modules: running them now would yield a missing
-target or zero matches, not evidence. No Rust tests were run by Task 3. At the
+F1-F4 originally named new tests/modules; those implementation targets now exist.
+The seven controlled-unwind functions above now have exact successful F3/F4
+records at the committed source endpoint; the original architecture tasks ran
+no Rust gate. Current counts are 82/8/38/11/18/11/13/12/33/222/401/37.
+No Rust tests were run by Task 3 or this architecture amendment. At the
 exact implementation head each command must execute nonzero tests and enumerate
 every assigned named oracle; a nonzero group cannot hide missing oracle names.
 Record per-target counts and zero-match filters separately.
@@ -308,7 +395,8 @@ producer, lifecycle, I/O, public, formatting and ledger evidence; no row or
 requirement is removed. On 2026-09-08 the user explicitly authorized a 20000
 hard cap, superseding the proposed 14000 and previous 10000. This changes only
 numeric budget; the mechanism gate at f25388cd8073bcd228c8eaa951ef1c0178907431
-remains valid and requires no new architecture gate or pass claim.
+remained valid for that numeric-only change. The later controlled-unwind
+amendment now requires its own separate targeted design pass.
 Stop **before further work** at more than 32 unique paths, more than 20000 text
 additions plus deletions, or any binary path. This explicitly tighter cap
 overrides the general 2x rule on the new estimate; do not derive 50/24000 caps.
@@ -338,6 +426,22 @@ gate once: `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`
 Independent reviewer and primary integration gates are separate required evidence.
 
 ## Separate non-production evidence and deferred guarantees
+
+For controlled-unwind remediation, the approved additional source envelope is
+only E/I/W: `apps/runtime/src/workspace/edit.rs`, `edit_io.rs` and `mod.rs`.
+Estimated additional source churn is 1000-1800; seven authority/evidence paths
+have a separate 300-700 estimate. These remain estimates. Initial measured
+implementation subtotal at `38a9bde3407f151e2c17b380e8bd28252c5a39f9` is
+25 paths, +14238/-234 = 14472, no binaries. Preserve original baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, its 24 source/fixture paths and
+only original Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Keep caps 32 paths/20000 churn/no binaries; no reset or blanket master exclusion.
+Current source `45147cf1649e9ca8315feb52c02a9936df0fa1f9` adds exactly three Runtime
+paths/+1341/-179 = 1520. Net cumulative scope is 25/+15400/-234 = 15634,
+no binaries. Separate architecture/design/evidence ranges and all 18 successful
+stable command records are in the current evidence; historical partial checks
+do not qualify this source. Separate Task 7 independent/primary full gates remain. Sprint 41 stays active and v0.7 release-ineligible.
 
 Documentation links/selectors, exact-head oracle enumeration/counts, dependency/
 consumer audits, unchanged Coverage Registry, scope/churn accounting, independent

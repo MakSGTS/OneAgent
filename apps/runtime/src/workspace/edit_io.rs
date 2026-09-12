@@ -37,6 +37,7 @@ pub(super) mod faults {
     struct State {
         action: Option<FaultAction>,
         failures: Vec<(&'static str, usize)>,
+        unwinds: Vec<(&'static str, usize)>,
         events: Vec<&'static str>,
     }
     pub(in crate::workspace) fn set(failures: Vec<(&'static str, usize)>) {
@@ -45,11 +46,15 @@ pub(super) mod faults {
                 failures,
                 events: Vec::new(),
                 action: None,
+                unwinds: Vec::new(),
             }
         });
     }
     pub(in crate::workspace) fn events() -> Vec<&'static str> {
         STATE.with(|state| state.borrow().events.clone())
+    }
+    pub(in crate::workspace) fn unwind(points: Vec<(&'static str, usize)>) {
+        STATE.with(|state| state.borrow_mut().unwinds = points);
     }
     pub(in crate::workspace) fn record(name: &'static str) {
         STATE.with(|state| state.borrow_mut().events.push(name));
@@ -66,6 +71,10 @@ pub(super) mod faults {
                 action();
             }
             let ordinal = state.events.iter().filter(|event| **event == name).count();
+            assert!(
+                !state.unwinds.contains(&(name, ordinal)),
+                "SECRET_UNWIND /absolute/private/path SECRET_SOURCE_TOKEN"
+            );
             if state.failures.contains(&(name, ordinal)) {
                 super::io(Err(std::io::Error::other(
                     "SECRET_IO_ERROR /absolute/private/path SECRET_SOURCE_TOKEN",
@@ -553,6 +562,9 @@ impl EditIo {
         let parent = path.parent().ok_or(EditIoError::Confinement)?;
         validate_path(&self.baseline.root, parent)?;
         let mut options = OpenOptions::new();
+        // Register without allocation immediately after a successful create.
+        // Recovery may recreate each removed backup once; reserve before I/O.
+        self.owned.try_reserve(1).map_err(|_| EditIoError::Bounds)?;
         options.write(true).create_new(true);
         #[cfg(unix)]
         {
@@ -711,6 +723,7 @@ impl EditIo {
             });
             if result.is_ok() {
                 entry.present = false;
+                checkpoint("cleanup_after")?;
             } else {
                 failed = true;
             }
@@ -731,6 +744,7 @@ impl EditIo {
         if !failed && self.cleanup_owned().is_err() {
             failed = true;
         }
+        checkpoint("restore_verify")?;
         let originals = self.originals();
         let restored = self.baseline.verify_tree(&originals, &self.owned);
         if !restored
@@ -741,6 +755,14 @@ impl EditIo {
         }
         ensure(!failed, EditIoError::Io)?;
         restored
+    }
+
+    pub(super) fn clean_unattempted(&mut self) -> Result<EditBaseline> {
+        self.cleanup_owned()?;
+        let observed = self.baseline.verify_tree(&BTreeMap::new(), &self.owned)?;
+        ensure(self.baseline.equals(&observed), EditIoError::Changed)?;
+        ensure(self.retained_files() == 0, EditIoError::Io)?;
+        Ok(observed)
     }
 
     fn restore_one(&mut self, index: usize) -> Result<()> {
@@ -827,6 +849,123 @@ mod tests {
         let baseline = EditBaseline::capture(&root.path().canonicalize().unwrap(), &[]).unwrap();
         let io = EditIo::new(baseline, outputs, 7).unwrap();
         (root, io)
+    }
+
+    #[test]
+    fn controlled_unwind_io_ordinals_preserve_ownership() {
+        fn route(io: &mut EditIo) -> Result<()> {
+            io.stage_all()?;
+            io.replace_checked(|| false)?;
+            io.verify_results()?;
+            io.cleanup_owned()?;
+            io.verify_results()?;
+            Ok(())
+        }
+        let (_root, mut control) = fixture();
+        faults::set(Vec::new());
+        route(&mut control).unwrap();
+        let mutation_events = faults::events().len();
+        control.restore_checked().unwrap();
+        let trace = faults::events();
+        let mut counts = BTreeMap::new();
+        let ordinals: Vec<_> = trace
+            .iter()
+            .enumerate()
+            .map(|(index, point)| {
+                let ordinal = counts.entry(*point).or_insert(0);
+                *ordinal += 1;
+                (index, *point, *ordinal)
+            })
+            .collect();
+        for required in [
+            "create",
+            "created_metadata",
+            "created_identity",
+            "write",
+            "permissions",
+            "sync",
+            "close_observation",
+            "readback",
+            "read",
+            "replace_before",
+            "replace_after",
+            "cleanup",
+            "cleanup_after",
+            "restore_check",
+            "restore_before",
+            "restore_after",
+            "restore_verify",
+        ] {
+            assert!(
+                counts.contains_key(required),
+                "missing real boundary {required}"
+            );
+        }
+        assert_eq!(
+            counts["create"], 6,
+            "four staged entries and two recreated backups"
+        );
+        for reverse in [false, true] {
+            for &(at, point, ordinal) in &ordinals {
+                let (root, mut io) = fixture();
+                if reverse {
+                    io.stage_all().unwrap();
+                    io.replace_checked(|| false).unwrap();
+                    io.cleanup_owned().unwrap();
+                    let baseline = EditBaseline::capture(root.path(), &[]).unwrap();
+                    io = EditIo::new(baseline, io.originals(), 8).unwrap();
+                }
+                let original = io.baseline.clone();
+                faults::set(Vec::new());
+                faults::unwind(vec![(point, ordinal)]);
+                // Test retains the same production owner across each injected
+                // boundary; production containment is independently exercised by E.
+                let mutation =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| route(&mut io)));
+                if at < mutation_events {
+                    assert!(mutation.is_err(), "{point}/{ordinal}/{reverse}");
+                } else {
+                    mutation.unwrap().unwrap();
+                }
+                let recovered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    if io.attempted() {
+                        io.restore_checked()
+                    } else {
+                        io.clean_unattempted()
+                    }
+                }));
+                if at >= mutation_events {
+                    assert!(recovered.is_err(), "recovery {point}/{ordinal}/{reverse}");
+                }
+                if recovered.is_ok_and(|result| result.is_ok()) {
+                    assert!(original.equivalent(&EditBaseline::capture(root.path(), &[]).unwrap()));
+                    assert_eq!(io.retained_files(), 0);
+                }
+                let present = fs::read_dir(root.path())
+                    .unwrap()
+                    .filter(|entry| {
+                        entry
+                            .as_ref()
+                            .unwrap()
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(".oneagent-edit-")
+                    })
+                    .count();
+                assert_eq!(
+                    io.retained_files(),
+                    present,
+                    "exact ownership {point}/{ordinal}/{reverse}"
+                );
+                let events = faults::events();
+                assert!(events.iter().filter(|event| **event == point).count() >= ordinal);
+                assert_eq!(
+                    fs::read(root.path().join("sentinel")).unwrap(),
+                    b"untouched"
+                );
+                faults::set(Vec::new());
+            }
+        }
     }
 
     #[test]

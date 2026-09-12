@@ -1629,6 +1629,27 @@ corrections. Sprint 41 is `active`; its accepted transaction contract follows.
 
 ## Safe Edit Transactions
 
+The [controlled-unwind amendment](../adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+is implemented at `45147cf1649e9ca8315feb52c02a9936df0fa1f9`, after unique
+architecture `d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate design
+pass `19f9f23b3851e5b24f781e6c00b160fc706fe8d3`.
+Its [all-35 audit](safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+retains complete inventory, projection, edge, occurrence, producer, request and
+rule/diagnostic comparison under the same immutable before evidence. A retained
+transaction envelope survives preparation/precommit unwind and checked recovery;
+recovery error/unwind quarantines with exact material/count, never publication.
+All fallible undo/outcome preparation precedes `send_replace`; postcommit cache,
+response drop and stop cannot roll back the accepted successor. Reversal is
+symmetric. No semantic identity, public API/dependency or Coverage change is
+admitted. Custom detector evidence is owner-local, not public service injection;
+global panic-hook output is outside closed transaction-output redaction.
+The [current controlled-unwind evidence](safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+binds all 35 rows/66 named oracles and 18 exit-0 commands to 836 committed input
+hashes; G3 reports 1471 passed, 83 nonempty and four empty binary harnesses.
+Net source scope is 25 paths/+15400/-234 = 15634, no binaries. Fresh independent
+and primary full integration review remains PENDING; historical results below
+do not qualify this amendment. Sprint 41 stays active/release-ineligible.
+
 [ADR-0064](../adr/0064-safe-edit-transactions.md) accepts the architecture for
 checked local apply/reversal of the existing complete callable-rename family.
 Task 5 implements this boundary at
@@ -1640,7 +1661,7 @@ was blocked for R1-R5/M1-M4. After remediation `aaeacbfa` and evidence
 `fc146d8802bbb82e9557a63d6c535f584a270b04` were blocked for missing
 oracles M1-M5, with no demonstrated production bypass. Independent F1/F2 passed
 before deliberate runner exit 75 stopped before F3; primary ran no Rust commands.
-The [current evidence](safe-edit-transactions-evidence.md) qualifies
+The historical ownership-recovery evidence qualifies
 `56fad47bf5c290011e32c4c304cb4639f64ca3ee`, all 35/current owners and
 59 named oracles. All four blocked reviews remain historical; closure still needs
 fresh independent/primary Task 7 validation and artifact consistency.

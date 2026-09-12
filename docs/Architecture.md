@@ -260,6 +260,29 @@ a fresh independent and primary Task 7 gate remains pending.
 
 ## Accepted Safe Edit Transactions boundary
 
+Current amendment: [controlled transaction-owner unwind](adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+and the [complete T01-T35 remapping](architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+are implemented at `45147cf1649e9ca8315feb52c02a9936df0fa1f9` after architecture
+`d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate design pass
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3`. A retained private envelope holds coordinator,
+attempt/reservation, response, phase and I/O outside narrow preparation/precommit
+catches; a separate retained-owner recovery catch quarantines on error/unwind.
+Apply, reversal and abandoned precommit share checked finalization, including
+recreating removed backups. All fallible outcome/undo material is prepared before
+the sole `send_replace` commit; committed success survives cache failure,
+response drop and stop without rollback. No global panic-hook redaction is claimed.
+The [current evidence](architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+reconciles all T01-T35, 66 named oracles and 18 successful stable commands,
+including G3 1471 passed/83 nonempty/four empty targets. It rehashes 836 committed
+inputs and every current command log. Source delta is three paths/+1341/-179;
+net cumulative implementation is 25 paths/+15400/-234 = 15634, no binaries.
+Separate fresh independent/primary full integration reviews remain PENDING.
+The old producer pass and blocked reviews below remain historical. The renewed
+agreement supersedes awaiting-agreement text only; historical missing evidence
+and reviewer disagreement are not erased by current implementation validation.
+Sprint 41 remains active and v0.7 release-ineligible; public APIs, dependencies
+and Coverage Registry (`crates/graph/src/coverage.rs`) remain unchanged.
+
 [ADR-0064](adr/0064-safe-edit-transactions.md) accepts one opt-in local Runtime
 Rust API for checked apply and separately confirmed reversal of complete
 `bsl_callable_rename_v1` plans over EDT and Designer XML. Analysis owns pure

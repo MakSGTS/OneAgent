@@ -2,16 +2,20 @@
 
 ## Status
 
-Accepted for Sprint 41 architecture; implementation and independent design and
-integration gates are pending. This decision does not claim a supported edit
+Accepted for Sprint 41 architecture; controlled-unwind implementation evidence
+qualifies `45147cf1649e9ca8315feb52c02a9936df0fa1f9` after separate design pass
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3` on architecture
+`d328d8638bab12c5ebc8fe2591d21d615be115a8`. Fresh independent and primary
+integration gates remain pending. This decision does not claim a supported edit
 capability. It extends [ADR-0063](0063-refactoring-planner.md) only at the local
 Runtime mutation boundary. The [investigation](../architecture/safe-edit-transactions-investigation.md)
-records the verified prerequisite; the invariant mapping is the next task.
+records the original prerequisite; the [current evidence](../architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+reconciles all 35 invariants and executed owner-local oracles.
 
 The controlled-unwind amendment below is accepted as the renewed architecture
-decision, not an implementation or review pass. Before further source changes,
-require the separate committed `Approve Sprint 41 controlled unwind recovery design`
-gate on the exact unique `Define Sprint 41 controlled unwind recovery` commit.
+decision. Its prerequisite was the separate committed
+`Approve Sprint 41 controlled unwind recovery design` gate on the exact unique
+`Define Sprint 41 controlled unwind recovery` commit; the IDs above satisfy it.
 Earlier design decisions remain valid only for their recorded ranges.
 
 ## Context and accepted scope
@@ -583,7 +587,7 @@ the undo record on every outcome; there is no replay or automatic retry.
 
 ### Controlled transaction-owner unwind
 
-This is a planned correction to the observed implementation at
+This correction was planned against the historical implementation at
 `38a9bde3407f151e2c17b380e8bd28252c5a39f9`. At that input,
 `EditCoordinator::run_attempt` retains its optional `EditIo` only in a local
 variable and finalizes `Result::Err`; `execute` and `abandon_commit` do not
@@ -752,7 +756,9 @@ injection. Require paired EDT/Designer positive apply/reversal controls and a
 post-write build unwind, recovery unwind, backup recreation, retained/dropped
 response, stop while recovery is blocked, replay/lease expiration, quarantine
 and postcommit-success oracles. Earlier guards must execute before fault seams.
-No default-input panic trigger or executed post-write reproduction is claimed.
+No default-input panic trigger is established. Current approved owner-local
+post-write unwind oracles are qualified by the evidence above; the historical
+safety-rejected exploratory probe was never compiled or executed.
 
 Task 3 must map every applicable guard and retention point above to planned
 production symbols and deterministic negative oracles. Task 4 must independently

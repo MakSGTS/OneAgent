@@ -10230,17 +10230,17 @@ awaiting-agreement statements are superseded. Starting clean input is
 `codex/v0.7-sprint-41-remediation`. The
 [ADR amendment](adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
 and [complete all-35 audit](architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
-define planned retained-envelope recovery, not implementation or a review pass.
-Require the unique `Define Sprint 41 controlled unwind recovery` commit,
-then separate fresh targeted review/primary checks and committed
-`Approve Sprint 41 controlled unwind recovery design` before source/test edits.
+define the retained-envelope contract implemented at
+`45147cf1649e9ca8315feb52c02a9936df0fa1f9` after unique architecture
+`d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate targeted design pass
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3`.
 Producer pass `f25388cd8073bcd228c8eaa951ef1c0178907431` remains historical.
 The four efficiency records below select this new gate; the seven-task manifest,
 all children, original Task 5/6 boundaries and historical ledger are unchanged.
 This continuation gate overrides their historical prerequisite routing only.
 
 Only `apps/runtime/src/workspace/edit.rs`, `edit_io.rs` and `mod.rs` form the
-proposed source correction (estimated additional 1000-1800 churn); seven
+committed source correction (+1341/-179 = 1520, within its 1000-1800 estimate); seven
 authority/evidence documents have a separate 300-700 estimate. Retain cumulative
 baseline `93661837df8d63bfed10c9b70d1986c4e0d12aa5`, 24 original source/fixture
 paths and only original Task 5 shared-master delta
@@ -10248,24 +10248,36 @@ paths and only original Task 5 shared-master delta
 Initial measured subtotal: 25/+14238/-234 = 14472, no binaries. No reset or
 blanket master exclusion; hard caps stay 32 paths/20000 churn/no binaries.
 
-Next sequence is committed design pass, coherent source remediation with one
-stable F1-F12/G1-G6 cycle, separate Task 6 evidence, fresh independent/primary
-Task 7 full gates, same-reviewer artifact consistency, then gated completion,
+Current net implementation subtotal is **25/+15400/-234 = 15634**, no binaries.
+Separate architecture `38a9bde3..d328d863` is six paths/+399/-17; design
+`d328d863..19f9f23b` is one path/+190/-0. This seven-document Task 6 delta is
+accounted separately from source, including its exact shared-master change.
+The [current evidence](architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+reconciles all 35 rows/66 named oracles and rehashes 836 committed blobs plus
+18 command logs/input manifests. F1-F12 counts are
+82/8/38/11/18/11/13/12/33/222/401/37; all F1-F12/G1-G6 exit 0. G3 is
+1471 passed/0 failed, 83 nonempty/four empty targets. The complete 18-command
+cycle totals 313.70s; G1-G6 alone 173.37s, without a historical-timeout diagnosis.
+
+Next sequence is dispatcher-committed Task 6 evidence, no-ff remediation merge
+into the version branch, fresh independent/primary Task 7 full gates on that
+immutable endpoint, same-reviewer artifact consistency, then gated completion,
 retirement and final no-ff integration/push of current `codex/v0.7` only.
 No release review, main merge, tag or Sprint 42. All 11/4/8 prior/current prompt
 inventories remain; Sprint 41 stays active and v0.7 release-ineligible.
 
 The fifth blocked review's disagreement remains: primary P2 contract/evidence
 recommendation, independent conditional owner-local concern without confirmed
-P2 and incomplete integration acceptance. No default-input trigger or executed
-post-write unwind reproduction exists. The rejected exploratory probe never
+P2 and incomplete integration acceptance. No default-input trigger was established.
+The current executed post-write oracles use the approved owner-local private
+service-builder boundary; they do not establish public injection. The rejected exploratory probe never
 compiled/executed; it must not be retried or credited. The originating handoff
 reported natural G3 exit 101 (Runtime lib 165/1; partial total 1285/1,
 64 nonempty/one empty target, 4927.014s), not a signal or exit 75. G4-G6 and
-primary Cargo remain unexecuted; watcher/startup timeout causes are unknown.
+primary Cargo remained unexecuted in that historical review; watcher/startup timeout causes are unknown.
 The master continuation section retains the exact reported failure/counts.
-Neither this architecture task nor the historical partial checks qualify new
-implementation. Detailed evidence reconciliation remains a separate Task 6.
+Historical partial checks do not qualify the new implementation. Task 6 records
+the current source-qualified cycle separately; integration review is PENDING.
 
 Planning starts from clean version head
 `ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7` after the

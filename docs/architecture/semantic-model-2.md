@@ -1625,7 +1625,7 @@ invocation. The complete executable matrix and limitations are recorded in the
 Sprint 40 is administratively completed. The
 [Sprint 40.1 remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
 records `pass` and completes the publication-owner and stale-evidence
-corrections. Sprint 41 is `active`; its accepted transaction contract follows.
+corrections. Sprint 41 is `completed`; its accepted transaction contract follows.
 
 ## Safe Edit Transactions
 
@@ -1647,8 +1647,12 @@ The [current controlled-unwind evidence](safe-edit-transactions-evidence.md#curr
 binds all 35 rows/66 named oracles and 18 exit-0 commands to 836 committed input
 hashes; G3 reports 1471 passed, 83 nonempty and four empty binary harnesses.
 Net source scope is 25 paths/+15400/-234 = 15634, no binaries. Fresh independent
-and primary full integration review remains PENDING; historical results below
-do not qualify this amendment. Sprint 41 stays active/release-ineligible.
+and primary full integration reviews passed on `98d64fb9f775c5af77437b8c18cd0eeb21291c84`,
+each with all 18 commands successful and G3 1471 passed / 83 nonempty / four
+empty harnesses. Same-reviewer artifact consistency passed after draft corrections;
+see the [integration review](../reviews/sprint-41-safe-edit-transactions.md).
+Sprint 41 is completed and only the v0.7 release integration review is eligible.
+Historical results below retain their original ranges and decisions.
 
 [ADR-0064](../adr/0064-safe-edit-transactions.md) accepts the architecture for
 checked local apply/reversal of the existing complete callable-rename family.

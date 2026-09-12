@@ -2,6 +2,21 @@
 
 ## Current controlled-unwind evidence and review handoff
 
+Current status: **Sprint 41 completed; v0.7 release integration review eligible**.
+The [final integration review](../reviews/sprint-41-safe-edit-transactions.md)
+qualifies immutable range `ceb3a91da70afde202cab84f7ea42846cdd734bd..98d64fb9f775c5af77437b8c18cd0eeb21291c84`.
+Fresh independent and primary reviews separately passed all 18 commands, each
+G3 1471 passed / 83 nonempty / four empty harnesses, with 66 exact named oracles
+and 836 committed inputs reconciled. Same-reviewer artifact consistency passed
+on corrected draft SHA256 `0a70a3d5ab5748bf04d895ab0a28c5de00858f948497fc3114c13f730d629cdf`;
+the initial draft-only blocked consistency remains in that artifact. Completion
+retires only the four inventoried Sprint 40.1 prompts and preserves all 11
+Sprint 40 and eight Sprint 41 files. Dispatcher review commit/version merge/push
+remain pending; no release execution follows from this status.
+
+The following implementation evidence preserves the Task 6 handoff as recorded
+before that integration gate. Its then-pending review status is historical.
+
 Implementation evidence qualifies `45147cf1649e9ca8315feb52c02a9936df0fa1f9`
 (`Preserve Sprint 41 transaction ownership across unwind`), clean at this
 Task 6 start on `codex/v0.7-sprint-41-remediation`. The unique architecture

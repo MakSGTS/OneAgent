@@ -1778,6 +1778,24 @@ mod tests {
         ));
     }
 
+    fn material(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        let mut result = BTreeMap::new();
+        for entry in fs::read_dir(root).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                result.extend(material(&path));
+            } else if path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with(".oneagent-edit-")
+            {
+                result.insert(path.clone(), fs::read(path).unwrap());
+            }
+        }
+        result
+    }
+
     async fn rejected(mut hooks: TestHooks, recovery: WorkspaceEditRecovery) {
         #[derive(Clone)]
         struct CapturedLog(Arc<Mutex<Vec<u8>>>);
@@ -1789,23 +1807,6 @@ mod tests {
             fn flush(&mut self) -> std::io::Result<()> {
                 Ok(())
             }
-        }
-        fn material(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
-            let mut result = BTreeMap::new();
-            for entry in fs::read_dir(root).unwrap() {
-                let path = entry.unwrap().path();
-                if path.is_dir() {
-                    result.extend(material(&path));
-                } else if path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .starts_with(".oneagent-edit-")
-                {
-                    result.insert(path.clone(), fs::read(path).unwrap());
-                }
-            }
-            result
         }
         let logs = Arc::new(Mutex::new(Vec::new()));
         let captured = CapturedLog(Arc::clone(&logs));
@@ -1831,6 +1832,12 @@ mod tests {
         let external_bytes = hooks.external_bytes;
         let candidate_rejection = hooks.candidate.is_some();
         let producer_rejection = hooks.projection_overflow || hooks.publication_overflow;
+        let created_failure = hooks
+            .io_failures
+            .iter()
+            .find(|(point, _)| matches!(*point, "created_metadata" | "created_identity"))
+            .copied();
+        let io_observed = Arc::clone(&hooks.io_observed);
         let root = fixtures::fixture("edt");
         if hooks.external_after_cleanup {
             let path = root
@@ -2014,6 +2021,28 @@ mod tests {
             );
         }
         let retained = material(root.path());
+        if let Some((point, ordinal)) = created_failure {
+            assert!(matches!(
+                outcome,
+                WorkspaceEditOutcome::Failed {
+                    retained_files: 1,
+                    ..
+                }
+            ));
+            assert_eq!(retained.len(), 1);
+            assert!(retained.values().all(Vec::is_empty));
+            let events = io_observed.lock().unwrap();
+            assert!(events.iter().filter(|event| **event == point).count() >= ordinal);
+            if ordinal <= 4 {
+                assert!(!events.contains(&"replace_before"));
+                for document in before.configurations()[0].source_evidence().documents() {
+                    assert_eq!(
+                        fs::read(root.path().join(document.path().path().as_str())).unwrap(),
+                        document.raw_content()
+                    );
+                }
+            }
+        }
         if recovery == WorkspaceEditRecovery::Required {
             let WorkspaceEditOutcome::Failed { retained_files, .. } = outcome else {
                 unreachable!()
@@ -2533,6 +2562,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn created_file_identity_failures_require_recovery() {
+        for point in ["created_metadata", "created_identity"] {
+            for ordinal in 1..=6 {
+                rejected(
+                    TestHooks {
+                        fail: if ordinal > 4 { Some("cleaned") } else { None },
+                        io_failures: vec![(point, ordinal)],
+                        ..TestHooks::default()
+                    },
+                    WorkspaceEditRecovery::Required,
+                )
+                .await;
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn reversal_read_ordinals_fail_closed() {
         async fn run(
             format: &str,
@@ -2683,6 +2729,8 @@ mod tests {
         }
         for point in [
             "create",
+            "created_metadata",
+            "created_identity",
             "write",
             "permissions",
             "sync",
@@ -2693,7 +2741,11 @@ mod tests {
                 cases.push((
                     None,
                     vec![(point, ordinal)],
-                    WorkspaceEditRecovery::NotNeeded,
+                    if matches!(point, "created_metadata" | "created_identity") {
+                        WorkspaceEditRecovery::Required
+                    } else {
+                        WorkspaceEditRecovery::NotNeeded
+                    },
                 ));
             }
             // Original backup recreation after final cleanup shares the same I/O owner.
@@ -2741,6 +2793,7 @@ mod tests {
                 );
                 service.edits.test_hooks.reversal_fail = *phase;
                 service.edits.test_hooks.reversal_io_failures = faults.clone();
+                let io_observed = Arc::clone(&service.edits.test_hooks.io_observed);
                 let (handle, observer, stop, task) =
                     fixtures::start_service(root.path(), service).await;
                 let before = observer.snapshot().unwrap();
@@ -2800,8 +2853,36 @@ mod tests {
                         );
                     }
                 }
+                let retained = material(root.path());
+                if let Some((point, ordinal)) = faults
+                    .iter()
+                    .find(|(point, _)| matches!(*point, "created_metadata" | "created_identity"))
+                {
+                    assert!(matches!(
+                        outcome,
+                        WorkspaceEditOutcome::Failed {
+                            retained_files: 1,
+                            ..
+                        }
+                    ));
+                    assert_eq!(retained.len(), 1);
+                    assert!(retained.values().all(Vec::is_empty));
+                    let events = io_observed.lock().unwrap();
+                    assert!(events.iter().filter(|event| **event == *point).count() >= *ordinal);
+                    if *ordinal <= 4 {
+                        assert!(!events.contains(&"replace_before"));
+                        for document in applied.configurations()[0].source_evidence().documents() {
+                            assert_eq!(
+                                fs::read(root.path().join(document.path().path().as_str()))
+                                    .unwrap(),
+                                document.raw_content()
+                            );
+                        }
+                    }
+                }
                 stop.send(()).unwrap();
                 task.await.unwrap().unwrap();
+                assert_eq!(material(root.path()), retained);
             }
         }
     }

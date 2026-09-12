@@ -1641,8 +1641,8 @@ was blocked for R1-R5/M1-M4. After remediation `aaeacbfa` and evidence
 oracles M1-M5, with no demonstrated production bypass. Independent F1/F2 passed
 before deliberate runner exit 75 stopped before F3; primary ran no Rust commands.
 The [current evidence](safe-edit-transactions-evidence.md) qualifies
-`32ffd52e485e7b04c72bf51e77c4e25d69325d0e`, all 35/current owners and
-56 named oracles. All three blocked reviews remain historical; closure still needs
+`56fad47bf5c290011e32c4c304cb4639f64ca3ee`, all 35/current owners and
+59 named oracles. All four blocked reviews remain historical; closure still needs
 fresh independent/primary Task 7 validation and artifact consistency.
 Graph identity, BSL name semantics, immutable Analysis planning and adapter
 source capture remain their existing owners. Analysis adds a pure exhaustive
@@ -1715,6 +1715,68 @@ rerun for docs. Cumulative 25/+13471/-234 = 13705 stays within 32/20000 hard cap
 using original baseline and original Task 5 master delta. Only macOS is qualified.
 No durable undo, hostile-writer exclusion, multi-file disk atomicity or crash
 recovery guarantee follows. Sprint 41 remains `active`.
+
+### Current ownership recovery evidence and fourth blocked review
+
+The fourth integration review at `a1c7e824d1852499d57609788ac1b0bf831e35f0` remains **blocked**.
+Both reviewers inspected all 35 rows and corroborated P2/T13-T14: successful
+`create_new` could be followed by descriptor metadata/identity failure before
+ownership registration, leaving an untracked artifact and an incorrect zero
+retained count. Neither claimed source overwrite or semantic-publication bypass.
+Independent F1-F12/G1-G2 passed; G3 naturally exited **101**, with Runtime lib
+162 passed/one failed in `workspace_service_classifies_blocking_build_panics`
+(`apps/runtime/src/workspace/mod.rs:3192`, `Workspace task panic must not hang: Elapsed(())`).
+The user paused work; no process was signalled and this was not runner exit 75.
+G4-G6 and primary Cargo validation were unexecuted. No full review pass, final
+review artifact or consistency gate exists. All four blocked reviews and every
+historical failure remain preserved in the evidence history.
+
+Current implementation `56fad47bf5c290011e32c4c304cb4639f64ca3ee` registers every successful
+create immediately with an unknown identity, before fallible descriptor checks.
+Unknown identity never authorizes pathname adoption, cleanup, tree exclusion or
+replacement: the artifact stays counted and the existing coordinator quarantines
+with `RecoveryRequired`. Known-identity successful transactions are preserved.
+New actual post-open metadata/identity fault seams cover all four staging and
+both backup-recreation ordinals, including paired reversal, exact one-empty-file
+retention, source state and stop preservation; actual Unix hard-link rejection
+is separate from deterministic injected errors. No OS metadata failure reproduction
+is claimed. Public APIs, dependencies, Graph/Coverage, cache schema and client
+catalog are unchanged; operator repair remains required for unknown ownership.
+
+Exact code range `a1c7e824d1852499d57609788ac1b0bf831e35f0..56fad47bf5c290011e32c4c304cb4639f64ca3ee`:
+**two paths/+236/-27 = 263 churn**. Stable F1-F12/G1-G6 all exited 0;
+F1-F12 passed **82/8/32/10/18/11/13/12/33/222/401/37**, G3 **1464 tests/83 nonempty
+plus four empty targets**, zero failed/ignored. Reconciliation binds all 35 rows,
+59 named oracles (56 preserved plus three new), 243 source/836 committed-input
+hashes and 24 retained log hashes in `owned-file-remediation/`. The panic test
+passed 1/1 on unchanged source before this fix and in the stable full gate;
+its prior timeout cause remains **unknown**, with no timeout or workspace owner
+change and no causal-resolution claim. The earlier watcher timeout also remains
+unknown. The new development clippy semicolon failure (101) and successful exact
+retry remain recorded. No Rust command is rerun by this documentation task.
+
+Net implementation is **25/+14238/-234 = 14472**, no binaries, above estimate
+12000 and within hard caps 32/20000. Keep baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, the 24 original source/fixture
+paths and only the original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisites and all documentation ranges stay separate; no reset, overlapping
+sum or blanket shared-master exclusion. Full unpartitioned code-head history is
+35/+16369/-329 = 16698, not the implementation subtotal.
+
+Sprint 41 stays **active**, Task 7 requires fresh independent/primary validation
+and same-reviewer final-artifact consistency, and v0.7 remains release-ineligible.
+All 11 Sprint 40, four Sprint 40.1 and eight Sprint 41 prompts remain. This
+five-document follow-on starts at the clean code commit above and uses
+`Update Sprint 41 ownership recovery evidence`; checks are retained under
+`local-artifacts/codex-runs/sprint-41/owned-file-evidence/`. It changes no source,
+creates no review artifact and performs no retirement, completion, merge or push.
+Only macOS execution is qualified; context window/telemetry are unknown/unavailable.
+
+### Historical semantic-comparator follow-on
+
+The following current-head/count statements qualify only the earlier comparator
+cycle; current ownership evidence above supersedes them.
 
 The third independent Task 7 audit of all 35 rows at
 `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for

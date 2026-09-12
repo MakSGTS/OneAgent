@@ -221,7 +221,7 @@ impl EditBaseline {
             .find(|entry| entry.path == relative && entry.present)
         {
             ensure(
-                file_identity == entry.identity && metadata.is_file(),
+                Some(file_identity) == entry.identity && metadata.is_file(),
                 EditIoError::Confinement,
             )?;
             return Ok(());
@@ -412,7 +412,9 @@ fn read_checked(
 /// Exact created-file ownership, never a prefix-based cleanup permission.
 pub(super) struct OwnedEditFile {
     path: PathBuf,
-    identity: Identity,
+    // A successful create is retained even when descriptor identity acquisition
+    // fails. Unknown identity never authorizes removal or tree exclusion.
+    identity: Option<Identity>,
     present: bool,
 }
 
@@ -567,13 +569,17 @@ impl EditIo {
             faults::record("create_already_exists");
         }
         let mut file = io(opened)?;
-        let entry_identity = identity(&io(file.metadata())?)?;
         let index = self.owned.len();
         self.owned.push(OwnedEditFile {
             path,
-            identity: entry_identity,
+            identity: None,
             present: true,
         });
+        checkpoint("created_metadata")?;
+        let metadata = io(file.metadata())?;
+        checkpoint("created_identity")?;
+        let entry_identity = identity(&metadata)?;
+        self.owned[index].identity = Some(entry_identity);
         checkpoint("write")?;
         io(file.write_all(bytes))?;
         checkpoint("permissions")?;
@@ -641,7 +647,7 @@ impl EditIo {
                     read_checked(
                         &self.baseline.root,
                         &owned.path,
-                        owned.identity,
+                        owned.identity.ok_or(EditIoError::Confinement)?,
                         bytes.len(),
                     )? == bytes.as_ref(),
                     EditIoError::Changed,
@@ -664,7 +670,7 @@ impl EditIo {
                 read_checked(
                     &self.baseline.root,
                     &stage.path,
-                    stage.identity,
+                    stage.identity.ok_or(EditIoError::Confinement)?,
                     replacement.result.len(),
                 )? == replacement.result.as_ref(),
                 EditIoError::Changed,
@@ -697,7 +703,7 @@ impl EditIo {
             }
             let result = validate_path(&self.baseline.root, &entry.path).and_then(|m| {
                 ensure(
-                    identity(&m)? == entry.identity && m.is_file(),
+                    Some(identity(&m)?) == entry.identity && m.is_file(),
                     EditIoError::Confinement,
                 )?;
                 checkpoint("cleanup")?;
@@ -757,7 +763,7 @@ impl EditIo {
         }
         ensure(
             current == replacement.result.as_ref()
-                && current_identity == self.owned[replacement.stage].identity,
+                && Some(current_identity) == self.owned[replacement.stage].identity,
             EditIoError::Changed,
         )?;
         let original = Arc::clone(&replacement.original);
@@ -774,7 +780,7 @@ impl EditIo {
             read_checked(
                 &self.baseline.root,
                 &backup.path,
-                backup.identity,
+                backup.identity.ok_or(EditIoError::Confinement)?,
                 original.len(),
             )? == original.as_ref(),
             EditIoError::Changed,
@@ -1237,6 +1243,128 @@ mod tests {
             );
             assert!(baseline.equals(&EditBaseline::capture(root.path(), &[]).unwrap()));
         }
+    }
+
+    #[test]
+    fn created_file_identity_failures_retain_exact_ownership() {
+        for point in ["created_metadata", "created_identity"] {
+            for ordinal in 1..=4 {
+                let (root, mut io) = fixture();
+                faults::set(vec![(point, ordinal)]);
+                assert_eq!(io.stage_all(), Err(EditIoError::Io));
+                assert_eq!(io.retained_files(), ordinal);
+                assert!(!io.attempted());
+                assert!(!faults::events().contains(&"replace_before"));
+                let unknown = &io.owned[ordinal - 1];
+                assert!(unknown.identity.is_none());
+                let path = root.path().join(&unknown.path);
+                assert_eq!(fs::read(&path).unwrap(), b"");
+                let observed_identity = identity(&fs::metadata(&path).unwrap()).unwrap();
+                assert_eq!(io.cleanup_owned(), Err(EditIoError::Io));
+                assert_eq!(io.retained_files(), 1);
+                assert_eq!(fs::read(&path).unwrap(), b"");
+                assert_eq!(
+                    identity(&fs::metadata(&path).unwrap()).unwrap(),
+                    observed_identity
+                );
+                assert!(
+                    io.baseline
+                        .verify_tree(&BTreeMap::new(), &io.owned)
+                        .is_err()
+                );
+                for replacement in &io.replacements {
+                    assert_eq!(
+                        fs::read(root.path().join(&replacement.path)).unwrap(),
+                        replacement.original.as_ref()
+                    );
+                }
+                assert_eq!(
+                    fs::read(root.path().join("sentinel")).unwrap(),
+                    b"untouched"
+                );
+                // Even a now-readable pathname cannot supply the missing
+                // created identity, nor authorize deletion of a replacement.
+                fs::rename(&path, root.path().join("saved-created-entry")).unwrap();
+                fs::write(&path, b"unowned replacement").unwrap();
+                assert_eq!(io.cleanup_owned(), Err(EditIoError::Io));
+                assert_eq!(io.retained_files(), 1);
+                assert_eq!(fs::read(&path).unwrap(), b"unowned replacement");
+            }
+            for ordinal in 1..=2 {
+                let (root, mut io) = fixture();
+                io.stage_all().unwrap();
+                io.replace_checked(|| false).unwrap();
+                io.cleanup_owned().unwrap();
+                faults::set(vec![(point, ordinal)]);
+                assert!(io.restore_checked().is_err());
+                assert_eq!(
+                    faults::events()
+                        .iter()
+                        .filter(|event| **event == point)
+                        .count(),
+                    2
+                );
+                assert_eq!(io.retained_files(), 1);
+                let unknown = io.owned.iter().find(|entry| entry.present).unwrap();
+                assert!(unknown.identity.is_none());
+                assert_eq!(fs::read(root.path().join(&unknown.path)).unwrap(), b"");
+                for (index, replacement) in io.replacements.iter().enumerate() {
+                    let expected = if index == 2 - ordinal {
+                        &replacement.result
+                    } else {
+                        &replacement.original
+                    };
+                    assert_eq!(
+                        fs::read(root.path().join(&replacement.path)).unwrap(),
+                        expected.as_ref()
+                    );
+                }
+                assert_eq!(io.cleanup_owned(), Err(EditIoError::Io));
+                assert_eq!(io.retained_files(), 1);
+                assert_eq!(
+                    fs::read(root.path().join("sentinel")).unwrap(),
+                    b"untouched"
+                );
+            }
+        }
+        // Positive controls cover both original staging and recreated backups.
+        let (root, mut io) = fixture();
+        io.stage_all().unwrap();
+        assert_eq!(io.retained_files(), 4);
+        assert!(io.owned.iter().all(|entry| entry.identity.is_some()));
+        io.replace_checked(|| false).unwrap();
+        io.cleanup_owned().unwrap();
+        let restored = io.restore_checked().unwrap();
+        assert!(io.baseline.equivalent(&restored));
+        assert_eq!(io.retained_files(), 0);
+        assert!(
+            io.baseline
+                .equivalent(&EditBaseline::capture(root.path(), &[]).unwrap())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn created_file_identity_rejection_never_adopts_an_alias() {
+        let (root, mut io) = fixture();
+        let path = root.path().join(".oneagent-edit-7-0-result");
+        let alias = root.path().join("unowned-alias");
+        let created = path.clone();
+        let linked = alias.clone();
+        faults::action("created_metadata", move || {
+            fs::hard_link(created, linked).unwrap();
+        });
+        assert_eq!(io.stage_all(), Err(EditIoError::Confinement));
+        assert_eq!(io.retained_files(), 1);
+        assert!(io.owned[0].identity.is_none());
+        assert!(!io.attempted());
+        assert_eq!(io.cleanup_owned(), Err(EditIoError::Io));
+        assert_eq!(fs::read(&path).unwrap(), b"");
+        assert_eq!(fs::read(&alias).unwrap(), b"");
+        fs::remove_file(alias).unwrap();
+        assert_eq!(io.cleanup_owned(), Err(EditIoError::Io));
+        assert_eq!(io.retained_files(), 1);
+        assert!(path.exists());
     }
 
     #[test]

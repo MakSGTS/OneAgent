@@ -1,9 +1,10 @@
 use oneagent_analysis::refactoring::{RefactoringFamily, RefactoringRequest, SourceOccurrenceKind};
 use oneagent_runtime::{
-    App, BoxError, ConfigurationProvider, RuntimeConfig, WorkspaceEditCancellation,
-    WorkspaceEditCause, WorkspaceEditHandle, WorkspaceEditOutcome, WorkspaceEditOwnership,
-    WorkspaceEditRecovery, WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder,
+    App, BoxError, ConfigurationProvider, RuntimeConfig, WorkspaceEditCause, WorkspaceEditHandle,
+    WorkspaceEditOwnership, WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder,
 };
+#[cfg(unix)]
+use oneagent_runtime::{WorkspaceEditCancellation, WorkspaceEditOutcome, WorkspaceEditRecovery};
 use oneagent_tool_policy::{
     ActorId, ActorScope, PolicyRevision, RuleAction, ToolEffect, ToolPolicy, ToolRequestId,
     ToolRule, ToolScope,
@@ -147,6 +148,7 @@ pub(crate) fn policy(action: RuleAction) -> ToolPolicy {
     .unwrap()
 }
 
+#[cfg(unix)]
 pub(crate) fn add_query_fixture(root: &Path, format: &str, disposition: &str) {
     let path = if format == "edt" {
         "src/CommonModules/DynamicSecurityOverridable/Module.bsl"
@@ -280,6 +282,7 @@ pub(crate) async fn start_service<
     (handle, observer, stop, task)
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn apply_reversal_preserve_exact_bytes_and_old_arcs() {
     for format in ["edt", "designer"] {
@@ -369,7 +372,7 @@ async fn apply_reversal_preserve_exact_bytes_and_old_arcs() {
 }
 
 #[tokio::test]
-async fn disabled_unready_stopped_and_foreign_services_reject() {
+async fn disabled_unready_and_stopped_services_reject() {
     let root = fixture("edt");
     let snapshot = WorkspaceSnapshotBuilder::new().build(root.path()).unwrap();
     let unready = WorkspaceService::new()
@@ -402,6 +405,12 @@ async fn disabled_unready_stopped_and_foreign_services_reject() {
             .unwrap_err(),
         WorkspaceEditCause::Stopped
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn foreign_services_reject() {
+    let root = fixture("edt");
     let other_root = fixture("edt");
     let (first, first_observer, first_stop, first_task) = start(root.path(), true).await;
     let (other, other_observer, other_stop, other_task) = start(other_root.path(), true).await;
@@ -440,6 +449,7 @@ async fn disabled_unready_stopped_and_foreign_services_reject() {
     other_task.await.unwrap().unwrap();
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn query_containing_targets_preserve_complete_nested_evidence() {
     for format in ["edt", "designer"] {
@@ -501,6 +511,7 @@ async fn query_containing_targets_preserve_complete_nested_evidence() {
     }
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn complete_baseline_staleness_rejects() {
     for changed in ["source", "metadata", "unknown"] {
@@ -541,6 +552,7 @@ async fn complete_baseline_staleness_rejects() {
     }
 }
 
+#[cfg(unix)]
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn stale_reversal_and_reconfirmation_reject() {
@@ -711,6 +723,7 @@ async fn stale_reversal_and_reconfirmation_reject() {
     }
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn exact_one_mib_document_remains_eligible() {
     let root = fixture("edt");
@@ -850,83 +863,154 @@ async fn configuration_under_oneagent_survives_cache_and_transactions() {
         );
         stop.send(()).unwrap();
         task.await.unwrap().unwrap();
-        let service = WorkspaceService::new().with_edit_policy(
-            policy(RuleAction::RequireConfirmation),
-            WorkspaceEditOwnership::ExclusiveCooperative,
-        );
-        let cache = service.cache_observer();
-        let (handle, observer, stop, task) = start_service(root.path(), service).await;
-        assert_eq!(cache.status().load(), WorkspaceCacheLoadOutcome::Missing);
-        let before = observer.snapshot().unwrap();
-        assert_eq!(before.configurations()[0].source_evidence(), &sources);
-        let (challenge, _) = handle
-            .prepare_apply(request(&before, "X"), actor(), request_id())
-            .await
-            .unwrap();
-        let outcome = handle
-            .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
-            .await;
-        let WorkspaceEditOutcome::Applied {
-            reversal: Some(receipt),
-            ..
-        } = outcome
-        else {
-            panic!("{format}: {outcome:?}");
-        };
-        assert_eq!(cache.status().write(), WorkspaceCacheWriteOutcome::Failed);
-        assert_eq!(
-            observer.snapshot().unwrap().publication_id().get(),
-            before.publication_id().get() + 1
-        );
-        assert_eq!(before.configurations()[0].source_evidence(), &sources);
-        let (challenge, _) = handle
-            .prepare_reversal(receipt, actor(), request_id())
-            .await
-            .unwrap();
-        let outcome = handle
-            .checked_reversal(challenge.confirm(), WorkspaceEditCancellation::new())
-            .await;
-        assert!(
-            matches!(
-                outcome,
-                WorkspaceEditOutcome::Applied { reversal: None, .. }
-            ),
-            "{outcome:?}"
-        );
-        assert_eq!(
-            observer.snapshot().unwrap().configurations()[0].source_evidence(),
-            &sources
-        );
-        // A source edit under .oneagent must participate in the complete
-        // transaction baseline even though the ordinary cache scan ignores it.
-        let current = observer.snapshot().unwrap();
-        let (challenge, _) = handle
-            .prepare_apply(request(&current, "Next"), actor(), request_id())
-            .await
-            .unwrap();
-        let document = &sources.documents()[0];
-        let path = root.path().join(document.path().path().as_str());
-        let mut external = document.raw_content().to_vec();
-        external.extend_from_slice(b"\n// external source change\n");
-        fs::write(&path, &external).unwrap();
-        let outcome = handle
-            .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
-            .await;
-        assert!(
-            matches!(
-                outcome,
-                WorkspaceEditOutcome::Failed {
-                    cause: WorkspaceEditCause::SourceChanged,
-                    recovery: WorkspaceEditRecovery::NotNeeded,
-                    retained_files: 0,
-                    ..
+        #[cfg(unix)]
+        {
+            let service = WorkspaceService::new().with_edit_policy(
+                policy(RuleAction::RequireConfirmation),
+                WorkspaceEditOwnership::ExclusiveCooperative,
+            );
+            let cache = service.cache_observer();
+            let (handle, observer, stop, task) = start_service(root.path(), service).await;
+            assert_eq!(cache.status().load(), WorkspaceCacheLoadOutcome::Missing);
+            let before = observer.snapshot().unwrap();
+            assert_eq!(before.configurations()[0].source_evidence(), &sources);
+            let (challenge, _) = handle
+                .prepare_apply(request(&before, "X"), actor(), request_id())
+                .await
+                .unwrap();
+            let outcome = handle
+                .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+                .await;
+            let WorkspaceEditOutcome::Applied {
+                reversal: Some(receipt),
+                ..
+            } = outcome
+            else {
+                panic!("{format}: {outcome:?}");
+            };
+            assert_eq!(cache.status().write(), WorkspaceCacheWriteOutcome::Failed);
+            assert_eq!(
+                observer.snapshot().unwrap().publication_id().get(),
+                before.publication_id().get() + 1
+            );
+            assert_eq!(before.configurations()[0].source_evidence(), &sources);
+            let (challenge, _) = handle
+                .prepare_reversal(receipt, actor(), request_id())
+                .await
+                .unwrap();
+            let outcome = handle
+                .checked_reversal(challenge.confirm(), WorkspaceEditCancellation::new())
+                .await;
+            assert!(
+                matches!(
+                    outcome,
+                    WorkspaceEditOutcome::Applied { reversal: None, .. }
+                ),
+                "{outcome:?}"
+            );
+            assert_eq!(
+                observer.snapshot().unwrap().configurations()[0].source_evidence(),
+                &sources
+            );
+            // A source edit under .oneagent must participate in the complete
+            // transaction baseline even though the ordinary cache scan ignores it.
+            let current = observer.snapshot().unwrap();
+            let (challenge, _) = handle
+                .prepare_apply(request(&current, "Next"), actor(), request_id())
+                .await
+                .unwrap();
+            let document = &sources.documents()[0];
+            let path = root.path().join(document.path().path().as_str());
+            let mut external = document.raw_content().to_vec();
+            external.extend_from_slice(b"\n// external source change\n");
+            fs::write(&path, &external).unwrap();
+            let outcome = handle
+                .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+                .await;
+            assert!(
+                matches!(
+                    outcome,
+                    WorkspaceEditOutcome::Failed {
+                        cause: WorkspaceEditCause::SourceChanged,
+                        recovery: WorkspaceEditRecovery::NotNeeded,
+                        retained_files: 0,
+                        ..
+                    }
+                ),
+                "{outcome:?}"
+            );
+            assert!(Arc::ptr_eq(&current, &observer.snapshot().unwrap()));
+            assert_eq!(fs::read(path).unwrap(), external);
+            stop.send(()).unwrap();
+            task.await.unwrap().unwrap();
+        }
+    }
+}
+
+#[cfg(not(unix))]
+#[tokio::test]
+async fn non_unix_edit_preparation_rejects_and_read_only_workspace_remains_available() {
+    use oneagent_analysis::refactoring::NeverCancelledRefactoring;
+    fn material(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+        fn collect(
+            root: &Path,
+            path: &Path,
+            files: &mut std::collections::BTreeMap<PathBuf, Vec<u8>>,
+        ) {
+            for entry in fs::read_dir(path).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if entry.file_type().unwrap().is_dir() {
+                    collect(root, &path, files);
+                } else {
+                    let relative = path.strip_prefix(root).unwrap();
+                    if relative != Path::new(".oneagent/cache/workspace-v1.json") {
+                        files.insert(relative.to_owned(), fs::read(path).unwrap());
+                    }
                 }
-            ),
-            "{outcome:?}"
+            }
+        }
+        let mut files = std::collections::BTreeMap::new();
+        collect(root, root, &mut files);
+        files
+    }
+    for format in ["edt", "designer"] {
+        let root = fixture(format);
+        let original = material(root.path());
+        let built = WorkspaceSnapshotBuilder::new().build(root.path()).unwrap();
+        assert_eq!(built.len(), 1);
+        assert_eq!(
+            built.configurations()[0]
+                .source_evidence()
+                .documents()
+                .len(),
+            2
         );
-        assert!(Arc::ptr_eq(&current, &observer.snapshot().unwrap()));
-        assert_eq!(fs::read(path).unwrap(), external);
+        let (handle, observer, stop, task) = start(root.path(), true).await;
+        let before = observer.snapshot().unwrap();
+        let requested = request(&before, "Changed");
+        let planned = before
+            .plan_refactoring(&requested, &NeverCancelledRefactoring)
+            .unwrap();
+        assert!(!planned.plan().operations().is_empty());
+        assert!(!planned.preview().entries().is_empty());
+        for _ in 0..2 {
+            assert_eq!(
+                handle
+                    .prepare_apply(requested.clone(), actor(), request_id())
+                    .await
+                    .unwrap_err(),
+                WorkspaceEditCause::Unavailable
+            );
+            assert!(Arc::ptr_eq(&before, &observer.snapshot().unwrap()));
+            assert_eq!(material(root.path()), original);
+        }
+        assert_eq!(
+            before.configurations()[0].source_evidence(),
+            built.configurations()[0].source_evidence()
+        );
         stop.send(()).unwrap();
         task.await.unwrap().unwrap();
+        assert_eq!(material(root.path()), original);
     }
 }

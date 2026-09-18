@@ -471,10 +471,14 @@ impl<'a> SafeEditProducerInput<'a> {
                     .is_some_and(|edge| edge.source() == module.owner)
                     && owners.next().is_none(),
             )?;
-            let relative = std::path::Path::new(module.path.as_str())
-                .strip_prefix(workspace_root)
-                .map_err(|_| SafeEditError::SemanticMismatch)?;
-            require(relative == std::path::Path::new(document.path().path().as_str()))?;
+            // Compare complete paths in the producer's representation. Parsing a
+            // slash-normalized Windows verbatim path as an OS Path changes its
+            // prefix kind and cannot be compared with the native canonical root.
+            let expected = workspace_root.join(document.path().path().as_str());
+            let expected =
+                SourcePath::new(expected.to_str().ok_or(SafeEditError::SemanticMismatch)?)
+                    .map_err(|_| SafeEditError::SemanticMismatch)?;
+            require(module.path == &expected)?;
             require(exact_result_matches(plan, document, module.result))?;
         }
         Ok(Self {

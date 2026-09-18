@@ -518,7 +518,7 @@ impl oneagent_tool_policy::ToolExecutor for EditPolicyGate {
 
 type PreparedEdit = Result<(WorkspaceEditChallenge, RefactoringPreview)>;
 type PendingPreparation = (oneshot::Sender<PreparedEdit>, PreparedEdit);
-#[cfg(test)]
+#[cfg(all(test, unix))]
 fn emit_worker_entry_calibration() {
     struct Entry;
     impl tracing::callsite::Callsite for Entry {
@@ -562,19 +562,19 @@ pub(super) struct EditCoordinator {
     terminal_reservation: Option<Reservation>,
     prepared: Option<PendingPreparation>,
     capability: Weak<Mutex<Option<EditAttempt>>>,
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     test_hooks: TestHooks,
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 type PhaseGate = (&'static str, Box<dyn FnOnce() + Send + Sync>);
-#[cfg(test)]
+#[cfg(all(test, unix))]
 type CandidateMutation = Box<dyn FnOnce(&mut WorkspaceSnapshot) + Send + Sync>;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 type SubmissionMutation = Box<dyn FnOnce(&mut EditAttempt, &crate::Cancellation) + Send + Sync>;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 type LeaseObservation = (&'static str, usize, usize);
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[derive(Default)]
 #[allow(clippy::struct_excessive_bools)] // Independent fault axes, not production states.
 struct TestHooks {
@@ -643,7 +643,7 @@ impl EditCoordinator {
             terminal_reservation: None,
             prepared: None,
             capability: Weak::new(),
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             test_hooks: TestHooks::default(),
         }
     }
@@ -783,7 +783,7 @@ impl EditCoordinator {
                 (Direction::Reverse, undo.plan.clone(), preview, Some(undo))
             }
         };
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         {
             self.test_hooks.current_direction = Some(direction);
             self.unwind_phase("preparation");
@@ -1121,11 +1121,11 @@ fn compare_snapshot(
             validate_postconditions(plan, &evidence(before), &evidence(after), projection)
                 .map_err(|_| WorkspaceEditCause::SemanticMismatch)?;
         } else {
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             super::edit_io::faults::record("compare_unedited_configuration");
             validate_equivalence(&evidence(before), &evidence(after))
                 .map_err(|_| WorkspaceEditCause::SemanticMismatch)?;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             super::edit_io::faults::record("compared_unedited_configuration");
         }
     }
@@ -1269,11 +1269,11 @@ impl EditCoordinator {
                             return Err(WorkspaceEditCause::AuthorizationMismatch);
                         }
                     }
-                    #[cfg(test)]
+                    #[cfg(all(test, unix))]
                     if let Some(mutate) = self.test_hooks.before_submission.take() {
                         mutate(attempt, service);
                     }
-                    #[cfg(test)]
+                    #[cfg(all(test, unix))]
                     self.unwind_phase("submission");
                     if service.is_requested() || cancellation.requested() {
                         return Err(WorkspaceEditCause::Cancelled);
@@ -1323,22 +1323,22 @@ impl EditCoordinator {
         builder: &WorkspaceSnapshotBuilder<D>,
         root: &Path,
     ) -> std::result::Result<EditPrepared, WorkspaceEditOutcome> {
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         struct ClearFaults(Arc<Mutex<Vec<&'static str>>>);
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         impl Drop for ClearFaults {
             fn drop(&mut self) {
                 *self.0.lock().unwrap() = super::edit_io::faults::events();
                 super::edit_io::faults::set(Vec::new());
             }
         }
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         let trace = self.test_hooks.trace.clone();
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         let _trace_guard = trace.as_ref().map(tracing::dispatcher::set_default);
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         emit_worker_entry_calibration();
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         let _clear_faults = ClearFaults(Arc::clone(&self.test_hooks.io_observed));
         let cancelled = || service.is_requested() || cancellation.requested();
         let EditEnvelope {
@@ -1348,7 +1348,7 @@ impl EditCoordinator {
             material,
             ..
         } = envelope;
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         if attempt.direction == Direction::Reverse {
             self.test_hooks.fail = self.test_hooks.reversal_fail.take();
             self.test_hooks.io_failures = std::mem::take(&mut self.test_hooks.reversal_io_failures);
@@ -1364,7 +1364,7 @@ impl EditCoordinator {
         // predecessor/projection and the builder are not recovery authority;
         // no snapshot sender, mutex guard or user callback state is recovered.
         let result = catch_unwind(AssertUnwindSafe(|| -> Result<EditBaseline> {
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             if std::mem::take(&mut self.test_hooks.publication_overflow) {
                 let mut previous = (*attempt.previous).clone();
                 previous.change_impact = super::WorkspaceChangeImpact::NoPreviousPublication {
@@ -1405,7 +1405,7 @@ impl EditCoordinator {
             } else {
                 EditIo::admission(&attempt.baseline)?
             };
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_hooks.lease_observations.lock().unwrap().push((
                 "raw",
                 admission.retained_bytes(),
@@ -1447,7 +1447,7 @@ impl EditCoordinator {
                 results
             };
             if attempt.direction == Direction::Apply {
-                #[cfg(test)]
+                #[cfg(all(test, unix))]
                 if std::mem::take(&mut self.test_hooks.projection_overflow) {
                     let reserved = admission.retained_bytes();
                     admission
@@ -1463,7 +1463,7 @@ impl EditCoordinator {
                     &mut admission,
                 )?);
             }
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_phase("projection_frozen")?;
             *edit_io = Some(EditIo::with_admission(
                 attempt.baseline.clone(),
@@ -1473,27 +1473,27 @@ impl EditCoordinator {
             )?);
             *phase = WorkspaceEditCause::IoFailed;
             let io = edit_io.as_mut().expect("created edit I/O");
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_hooks.lease_observations.lock().unwrap().push((
                 "frozen",
                 io.admission.retained_bytes(),
                 io.admission.peak_bytes(),
             ));
             io.stage_all()?;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_phase("staged")?;
             if cancelled() {
                 return Err(WorkspaceEditCause::Cancelled);
             }
             io.replace_checked(cancelled)?;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_phase("replaced")?;
             let before_build = io.verify_results()?;
             *phase = WorkspaceEditCause::SemanticMismatch;
             let mut candidate = builder
                 .build(root)
                 .map_err(|_| WorkspaceEditCause::SemanticMismatch)?;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             {
                 self.test_phase("built")?;
                 if let Some(mutate) = self.test_hooks.candidate.take() {
@@ -1513,7 +1513,7 @@ impl EditCoordinator {
             drop(before_build);
             drop(after_build);
             *phase = WorkspaceEditCause::SemanticMismatch;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.unwind_phase("comparison");
             if let Some(undo) = &attempt.undo {
                 compare_exact_snapshot(&undo.before, &candidate)?;
@@ -1531,18 +1531,18 @@ impl EditCoordinator {
             if cancelled() {
                 return Err(WorkspaceEditCause::Cancelled);
             }
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_hooks.lease_observations.lock().unwrap().push((
                 "compared",
                 io.admission.retained_bytes(),
                 io.admission.peak_bytes(),
             ));
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_phase("compared")?;
             compose_change_impact(&attempt.previous, &mut candidate, service)
                 .map_err(|_| WorkspaceEditCause::SemanticMismatch)?;
             *phase = WorkspaceEditCause::IoFailed;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             {
                 if self
                     .test_hooks
@@ -1583,16 +1583,16 @@ impl EditCoordinator {
                 outcome,
                 originals,
             });
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.unwind_phase("material");
             io.cleanup_owned()?;
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_phase("cleaned")?;
             let baseline = io.verify_results()?;
             if cancelled() {
                 return Err(WorkspaceEditCause::Cancelled);
             }
-            #[cfg(test)]
+            #[cfg(all(test, unix))]
             self.test_phase("final_guard")?;
             Ok(baseline)
         }));
@@ -1678,7 +1678,7 @@ impl EditCoordinator {
         .map_err(|_| ())
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn unwind_phase(&mut self, phase: &'static str) {
         self.test_hooks.unwind_observed.lock().unwrap().push(phase);
         if self.test_hooks.unwind_phase == Some(phase)
@@ -1692,7 +1692,7 @@ impl EditCoordinator {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn test_phase(&mut self, phase: &'static str) -> Result<()> {
         tracing::info!(phase, "safe edit test route reached");
         self.test_hooks.events.push(phase);
@@ -1757,7 +1757,7 @@ impl EditCoordinator {
     }
 
     pub(super) fn abandon_commit(&mut self, commit: EditCommit, cause: WorkspaceEditCause) {
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         {
             // Abandonment runs in another joined worker after the final lifecycle
             // predecessor/cancellation guard, so install its own boundary table.
@@ -1765,7 +1765,7 @@ impl EditCoordinator {
             super::edit_io::faults::unwind(std::mem::take(&mut self.test_hooks.abandon_unwinds));
         }
         let outcome = self.finalize_failure(&mut Some(commit.io), cause);
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         {
             self.test_hooks
                 .io_observed
@@ -1818,7 +1818,7 @@ fn compare_exact_snapshot(before: &WorkspaceSnapshot, after: &WorkspaceSnapshot)
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     // Keep each accepted named matrix oracle and its full fault table together.
     #![allow(clippy::too_many_lines)]
@@ -5381,34 +5381,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn closed_precedence_and_redaction() {
-        let mut coordinator = EditCoordinator::new();
-        let mut state = coordinator.handle.shared.admission.lock().unwrap();
-        state.poisoned = true;
-        state.stopped = true;
-        state.writer = true;
-        drop(state);
-        assert!(matches!(
-            coordinator.handle.reserve_attempt(),
-            Err(WorkspaceEditCause::RecoveryRequired)
-        ));
-        coordinator.handle.shared.admission.lock().unwrap().poisoned = false;
-        assert!(matches!(
-            coordinator.handle.reserve_attempt(),
-            Err(WorkspaceEditCause::Stopped)
-        ));
-        coordinator.shutdown();
-        let rendered = format!(
-            "{:?} {:?} {}",
-            coordinator.handle(),
-            WorkspaceEditOutcome::failure(WorkspaceEditCause::SourceChanged),
-            WorkspaceEditCause::IoFailed
-        );
-        assert!(!rendered.contains(env!("CARGO_MANIFEST_DIR")));
-        assert!(!rendered.contains("FillSecurityCollection"));
-    }
-
     #[tokio::test]
     async fn publication_baseline_admission() {
         {
@@ -6281,5 +6253,38 @@ mod tests {
         fs::remove_file(root.path().join(".oneagent/cache/workspace-v1.json")).unwrap();
         fs::create_dir(root.path().join(".oneagent/cache/workspace-v1.json")).unwrap();
         assert!(EditBaseline::capture(baseline.root(), &[]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+
+    #[test]
+    fn closed_precedence_and_redaction() {
+        let mut coordinator = EditCoordinator::new();
+        let mut state = coordinator.handle.shared.admission.lock().unwrap();
+        state.poisoned = true;
+        state.stopped = true;
+        state.writer = true;
+        drop(state);
+        assert!(matches!(
+            coordinator.handle.reserve_attempt(),
+            Err(WorkspaceEditCause::RecoveryRequired)
+        ));
+        coordinator.handle.shared.admission.lock().unwrap().poisoned = false;
+        assert!(matches!(
+            coordinator.handle.reserve_attempt(),
+            Err(WorkspaceEditCause::Stopped)
+        ));
+        coordinator.shutdown();
+        let rendered = format!(
+            "{:?} {:?} {}",
+            coordinator.handle(),
+            WorkspaceEditOutcome::failure(WorkspaceEditCause::SourceChanged),
+            WorkspaceEditCause::IoFailed
+        );
+        assert!(!rendered.contains(env!("CARGO_MANIFEST_DIR")));
+        assert!(!rendered.contains("FillSecurityCollection"));
     }
 }

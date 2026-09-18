@@ -314,6 +314,119 @@ fn plan(before: &Evidence) -> RefactoringPlan {
     RefactoringPlan::new(request, target, preconditions, operations).unwrap()
 }
 
+#[test]
+fn producer_input_requires_exact_path_and_document_correspondence() {
+    assert_producer_input_paths(&evidence("OldName").root);
+}
+
+#[cfg(windows)]
+#[test]
+fn producer_input_accepts_verbatim_disk_and_unc_roots() {
+    for root in [r"\\?\C:\workspace", r"\\?\UNC\server\share\workspace"] {
+        assert_producer_input_paths(std::path::Path::new(root));
+    }
+}
+
+fn assert_producer_input_paths(root: &std::path::Path) {
+    let before = evidence("OldName");
+    let after = evidence("NewName");
+    let plan = plan(&before);
+    let doc = &before.sources.documents()[0];
+    let owner = id("configuration.main");
+    let name = EntityName::new("Main").unwrap();
+    let expected =
+        SourcePath::new(root.join(doc.path().path().as_str()).to_str().unwrap()).unwrap();
+    let configuration = root.join("configuration");
+    let foreign = root.parent().unwrap().join("foreign");
+    let input = |configuration: &std::path::Path, modules: &[SafeEditModuleInput<'_>]| {
+        SafeEditProducerInput::new(
+            WorkspacePublicationId::initial(),
+            root,
+            configuration,
+            &before.graph,
+            &before.sources,
+            &before.diagnostics,
+            &before.references,
+            &plan,
+            modules,
+        )
+        .map(|_| ())
+    };
+    let module = |path| {
+        SafeEditModuleInput::new(
+            doc,
+            &owner,
+            &name,
+            path,
+            after.sources.documents()[0].raw_content(),
+        )
+        .unwrap()
+    };
+    assert_eq!(input(&configuration, &[module(&expected)]), Ok(()));
+    assert_eq!(
+        input(&configuration, &[]),
+        Err(SafeEditError::SemanticMismatch)
+    );
+    assert_eq!(
+        input(&configuration, &[module(&expected), module(&expected)]),
+        Err(SafeEditError::SemanticMismatch)
+    );
+    assert_eq!(
+        input(&foreign, &[module(&expected)]),
+        Err(SafeEditError::SemanticMismatch)
+    );
+    let rejected_paths = [
+        doc.path().path().clone(),
+        SourcePath::new(root.join("configuration/Other.bsl").to_str().unwrap()).unwrap(),
+        SourcePath::new(foreign.join(doc.path().path().as_str()).to_str().unwrap()).unwrap(),
+        SourcePath::new(format!(
+            "{}-other/{}",
+            root.to_str().unwrap(),
+            doc.path().path()
+        ))
+        .unwrap(),
+    ];
+    for path in &rejected_paths {
+        assert_eq!(
+            input(&configuration, &[module(path)]),
+            Err(SafeEditError::SemanticMismatch)
+        );
+    }
+    assert!(
+        SourcePath::new(format!(
+            "{}/../configuration/Main.bsl",
+            root.to_str().unwrap()
+        ))
+        .is_err()
+    );
+    let foreign_doc = doc.clone();
+    let copied = SafeEditModuleInput::new(
+        &foreign_doc,
+        &owner,
+        &name,
+        &expected,
+        after.sources.documents()[0].raw_content(),
+    )
+    .unwrap();
+    assert_eq!(
+        input(&configuration, &[copied]),
+        Err(SafeEditError::SemanticMismatch)
+    );
+    let foreign_owner = id("configuration.foreign");
+    let wrong_owner = SafeEditModuleInput::new(
+        doc,
+        &foreign_owner,
+        &name,
+        &expected,
+        after.sources.documents()[0].raw_content(),
+    )
+    .unwrap();
+    assert_eq!(
+        input(&configuration, &[wrong_owner]),
+        Err(SafeEditError::SemanticMismatch)
+    );
+}
+
 fn projection(
     before: &Evidence,
     plan: &RefactoringPlan,

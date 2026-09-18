@@ -3,6 +3,7 @@ use oneagent_graph::SemanticGraphDiff;
 #[path = "safe_edit_transactions.rs"]
 mod edit_fixture;
 
+#[cfg(unix)]
 #[tokio::test]
 #[allow(clippy::too_many_lines)] // One ordered apply/input/reversal lifecycle oracle.
 async fn edit_serializes_explicit_change_input() {

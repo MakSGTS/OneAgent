@@ -425,6 +425,53 @@ mod tests {
                             .unwrap()
                         })
                         .collect();
+                    #[cfg(windows)]
+                    {
+                        // The former constructor guard reparsed SourcePath as
+                        // native Path: normalization changes VerbatimDisk to UNC.
+                        // All earlier guards must pass before isolating that guard.
+                        assert_eq!(
+                            plan.request().expected_publication_id(),
+                            WorkspacePublicationId::initial()
+                        );
+                        assert!(root.starts_with(&workspace));
+                        assert_eq!(
+                            sources.configuration_id(),
+                            plan.request().configuration_id()
+                        );
+                        assert_eq!(sources.documents().len(), modules.len());
+                        assert_eq!(
+                            graph
+                                .nodes()
+                                .filter(|node| node.kind() == NodeKind::Module)
+                                .count(),
+                            modules.len()
+                        );
+                        for (document, module) in sources.documents().iter().zip(&modules) {
+                            assert!(std::ptr::eq(document, module.document()));
+                            let node = graph.node(document.id().module_id()).unwrap();
+                            assert_eq!(node.kind(), NodeKind::Module);
+                            assert_eq!(node.name(), module.name());
+                            let owners: Vec<_> = graph
+                                .edges()
+                                .filter(|edge| {
+                                    edge.kind() == EdgeKind::Contains && edge.target() == node.id()
+                                })
+                                .collect();
+                            assert_eq!(owners.len(), 1);
+                            assert_eq!(owners[0].source(), module.owner());
+                            assert_ne!(
+                                Path::new(module.path().as_str()).components().next(),
+                                workspace.components().next()
+                            );
+                            assert!(
+                                Path::new(module.path().as_str())
+                                    .strip_prefix(&workspace)
+                                    .is_err(),
+                                "the old path guard must reject the canonical Windows fixture"
+                            );
+                        }
+                    }
                     let input = SafeEditProducerInput::new(
                         WorkspacePublicationId::initial(),
                         &workspace,

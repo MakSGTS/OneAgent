@@ -97,7 +97,7 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
     }
 
     let mut digest = [0_u8; 32];
-    for (chunk, word) in digest.chunks_exact_mut(4).zip(state) {
+    for (chunk, word) in digest.as_chunks_mut::<4>().0.iter_mut().zip(state) {
         chunk.copy_from_slice(&word.to_be_bytes());
     }
     digest

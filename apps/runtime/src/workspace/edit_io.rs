@@ -28,7 +28,7 @@ pub(super) enum EditIoError {
 }
 type Result<T> = std::result::Result<T, EditIoError>;
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(super) mod faults {
     use std::cell::RefCell;
     thread_local! { static STATE: RefCell<State> = RefCell::new(State::default()); }
@@ -86,9 +86,9 @@ pub(super) mod faults {
     }
 }
 
-#[cfg_attr(not(test), allow(clippy::unnecessary_wraps))]
+#[cfg_attr(not(all(test, unix)), allow(clippy::unnecessary_wraps))]
 fn checkpoint(name: &'static str) -> Result<()> {
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     faults::hit(name)?;
     let _ = name;
     Ok(())
@@ -458,7 +458,7 @@ impl EditIo {
         SafeEditProjectionAdmission::new(raw).map_err(|_| EditIoError::Bounds)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(super) fn new(
         baseline: EditBaseline,
         results: BTreeMap<PathBuf, Arc<[u8]>>,
@@ -573,7 +573,7 @@ impl EditIo {
         }
         checkpoint("create")?;
         let opened = options.open(self.baseline.root.join(&path));
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         if opened
             .as_ref()
             .is_err_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists)
@@ -822,7 +822,7 @@ impl EditIo {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     // Named matrix oracles enumerate complete boundary and ordinal tables.
     #![allow(clippy::too_many_lines)]
@@ -969,6 +969,25 @@ mod tests {
     }
 
     #[test]
+    fn canonical_root_accepts_and_symlinked_root_rejects() {
+        let temporary = tempfile::tempdir().unwrap();
+        let canonical = temporary.path().canonicalize().unwrap();
+        let root = canonical.join("workspace");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("sentinel"), b"unchanged").unwrap();
+        let alias = canonical.join("alias");
+        std::os::unix::fs::symlink(&root, &alias).unwrap();
+        assert_eq!(alias.canonicalize().unwrap(), root);
+        let baseline = EditBaseline::capture(&root, &[]).unwrap();
+        assert!(matches!(
+            EditBaseline::capture(&alias, &[]),
+            Err(EditIoError::Confinement)
+        ));
+        assert!(baseline.equals(&EditBaseline::capture(&root, &[]).unwrap()));
+        assert_eq!(fs::read(root.join("sentinel")).unwrap(), b"unchanged");
+    }
+
+    #[test]
     fn scan_bounds_precede_retention() {
         {
             let root = tempfile::tempdir().unwrap();
@@ -978,7 +997,8 @@ mod tests {
                 fs::create_dir(root.path().join(&relative)).unwrap();
             }
             fs::write(root.path().join(&relative).join("leaf"), b"deep raw bytes").unwrap();
-            let baseline = EditBaseline::capture(root.path(), &[]).unwrap();
+            let canonical_root = root.path().canonicalize().unwrap();
+            let baseline = EditBaseline::capture(&canonical_root, &[]).unwrap();
             assert_eq!(baseline.entries.len(), 130);
             assert_eq!(baseline.raw_bytes(), 14);
             assert_eq!(
@@ -1098,39 +1118,6 @@ mod tests {
             EditBaseline::capture(root.path(), &[]),
             Err(EditIoError::Bounds)
         ));
-        let mut budget = EditIoBudget::default();
-        for _ in 0..MAX_ENTRIES {
-            budget.entry(Path::new("")).unwrap();
-        }
-        assert_eq!(budget.entry(Path::new("")), Err(EditIoError::Bounds));
-        let mut budget = EditIoBudget::default();
-        let exact = "a".repeat(MAX_PATH);
-        for _ in 0..MAX_PATHS / MAX_PATH {
-            budget.entry(Path::new(&exact)).unwrap();
-        }
-        assert_eq!(budget.entry(Path::new("a")), Err(EditIoError::Bounds));
-        assert_eq!(budget.paths, MAX_PATHS);
-        assert_eq!(budget.entries, MAX_PATHS / MAX_PATH);
-        budget.paths = usize::MAX;
-        assert_eq!(budget.entry_length(1), Err(EditIoError::Bounds));
-        budget.paths = 0;
-        budget.entries = usize::MAX;
-        assert_eq!(budget.entry_length(0), Err(EditIoError::Bounds));
-        assert_eq!(
-            EditIoBudget::default().entry(Path::new(&"a".repeat(MAX_PATH + 1))),
-            Err(EditIoError::Bounds)
-        );
-        let mut budget = EditIoBudget::default();
-        for _ in 0..MAX_BASELINE / MAX_FILE {
-            assert_eq!(budget.file(MAX_FILE as u64), Ok(MAX_FILE));
-        }
-        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
-        assert_eq!(
-            EditIoBudget::default().file(MAX_FILE as u64 + 1),
-            Err(EditIoError::Bounds)
-        );
-        budget.bytes = usize::MAX;
-        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
         let (root, io) = fixture();
         fs::write(root.path().join("a.bsl"), b"grown").unwrap();
         assert!(io.baseline.verify_tree(&BTreeMap::new(), &[]).is_err());
@@ -1226,15 +1213,6 @@ mod tests {
                 assert!(!faults::events().contains(&"create"));
             }
         }
-        assert_eq!(EditIoBudget::buffers(&[MAX_BUFFERS]), Ok(()));
-        assert_eq!(
-            EditIoBudget::buffers(&[MAX_BUFFERS, 1]),
-            Err(EditIoError::Bounds)
-        );
-        assert_eq!(
-            EditIoBudget::buffers(&[usize::MAX, 1]),
-            Err(EditIoError::Bounds)
-        );
         let (_root, io) = fixture();
         let baseline = io.baseline.clone();
         let mut results = io.results();
@@ -1749,6 +1727,88 @@ mod tests {
         assert_eq!(
             fs::read(root.path().join("sentinel")).unwrap(),
             b"untouched"
+        );
+    }
+}
+
+#[cfg(all(test, not(unix)))]
+mod non_unix_tests {
+    use super::*;
+
+    #[test]
+    fn identity_and_capture_fail_closed_before_source_writes() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().canonicalize().unwrap();
+        let source = root.join("source.bsl");
+        fs::write(&source, b"unchanged").unwrap();
+        assert_eq!(
+            identity(&fs::metadata(&root).unwrap()),
+            Err(EditIoError::Confinement)
+        );
+        assert_eq!(
+            identity(&fs::metadata(&source).unwrap()),
+            Err(EditIoError::Confinement)
+        );
+        assert!(matches!(
+            EditBaseline::capture(&root, &[]),
+            Err(EditIoError::Confinement)
+        ));
+        assert_eq!(fs::read(&source).unwrap(), b"unchanged");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    }
+}
+
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+
+    #[test]
+    fn baseline_budget_exact_over_and_overflow() {
+        let mut budget = EditIoBudget::default();
+        for _ in 0..MAX_ENTRIES {
+            budget.entry(Path::new("")).unwrap();
+        }
+        assert_eq!(budget.entry(Path::new("")), Err(EditIoError::Bounds));
+        let mut budget = EditIoBudget::default();
+        let exact = "a".repeat(MAX_PATH);
+        for _ in 0..MAX_PATHS / MAX_PATH {
+            budget.entry(Path::new(&exact)).unwrap();
+        }
+        assert_eq!(budget.entry(Path::new("a")), Err(EditIoError::Bounds));
+        assert_eq!(budget.paths, MAX_PATHS);
+        assert_eq!(budget.entries, MAX_PATHS / MAX_PATH);
+        budget.paths = usize::MAX;
+        assert_eq!(budget.entry_length(1), Err(EditIoError::Bounds));
+        budget.paths = 0;
+        budget.entries = usize::MAX;
+        assert_eq!(budget.entry_length(0), Err(EditIoError::Bounds));
+        assert_eq!(
+            EditIoBudget::default().entry(Path::new(&"a".repeat(MAX_PATH + 1))),
+            Err(EditIoError::Bounds)
+        );
+        let mut budget = EditIoBudget::default();
+        for _ in 0..MAX_BASELINE / MAX_FILE {
+            assert_eq!(budget.file(MAX_FILE as u64), Ok(MAX_FILE));
+        }
+        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
+        assert_eq!(
+            EditIoBudget::default().file(MAX_FILE as u64 + 1),
+            Err(EditIoError::Bounds)
+        );
+        budget.bytes = usize::MAX;
+        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
+    }
+
+    #[test]
+    fn buffer_budget_exact_over_and_overflow() {
+        assert_eq!(EditIoBudget::buffers(&[MAX_BUFFERS]), Ok(()));
+        assert_eq!(
+            EditIoBudget::buffers(&[MAX_BUFFERS, 1]),
+            Err(EditIoError::Bounds)
+        );
+        assert_eq!(
+            EditIoBudget::buffers(&[usize::MAX, 1]),
+            Err(EditIoError::Bounds)
         );
     }
 }

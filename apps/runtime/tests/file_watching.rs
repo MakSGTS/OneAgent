@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 #[path = "safe_edit_transactions.rs"]
 mod edit_fixture;
 
+#[cfg(unix)]
 #[tokio::test]
 async fn edit_self_write_noise_and_external_change() {
     use oneagent_runtime::{

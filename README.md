@@ -37,9 +37,11 @@ administratively completed, and the
 records `pass`, resolves its two acceptance blockers, and completes Sprint 40.1.
 Sprint 41 Safe Edit Transactions is completed. The
 [v0.7 Intelligence release review](docs/reviews/v0.7-release-review.md) records
-`pass` and closes the Sprints 36–41 review boundary. Release execution
-(merge to `main` and tag `v0.7`) remains pending separate authorization;
-Sprint 42 remains planned until that release step is complete.
+`pass` and closes the Sprints 36–41 review boundary. Release execution is
+complete: merge commit `e58be8ab6674` is on `main` and carries the annotated
+`v0.7` tag. Sprint 42 Designer XML Metadata Structure Parity is the unique
+`next` planning target; its required task-prompt-template readiness stage must
+complete before detailed task decomposition begins.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

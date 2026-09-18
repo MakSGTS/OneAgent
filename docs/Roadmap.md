@@ -53,9 +53,11 @@ The [Sprint 41 integration review](reviews/sprint-41-safe-edit-transactions.md)
 records `pass` and completes Sprint 41. The
 [v0.7 release integration review](reviews/v0.7-release-review.md) records `pass`
 and closes the Sprints 36–41 review boundary after cross-platform remediation.
-The `completed` version status records acceptance of that boundary, not a
-published release: merge to `main` and tag `v0.7` remain pending separate
-authorization. Sprint 42 remains planned until release execution is complete.
+Release execution completed on 2026-09-19: merge commit `e58be8ab6674` is on
+`main` and carries the annotated `v0.7` tag. Sprint 42 Designer XML Metadata
+Structure Parity is the unique `next` planning target. Its required Designer
+XML Semantic Parity task-prompt-template readiness stage must complete before
+detailed task decomposition begins.
 The completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
@@ -10862,23 +10864,26 @@ The immediately preceding suite is exactly these four tracked paths:
 
 Only a successful Task 7 may retire that unchanged inventory in its single
 review commit after re-enumeration and artifact consistency. Preserve the
-Sprint 40 suite and all current Sprint 41 prompts. A non-blocking final review
-marks Sprint 41 completed and makes the v0.7 release integration review eligible;
-Sprint 42 stays planned pending the release gate.
+Sprint 40 suite and all current Sprint 41 prompts. At that planning point, a
+non-blocking final review would mark Sprint 41 completed and make the v0.7
+release integration review eligible; Sprint 42 would remain planned pending
+the release gate. The current post-release outcome is recorded below.
 
 Suggested planning commit message: `Plan Sprint 41 Safe Edit Transactions`.
 
 
 The [v0.7 release integration review](reviews/v0.7-release-review.md) records
 `pass` after Sprint 41 and its portability remediation. Release execution
-(merge to `main` and tag `v0.7`) remains a separate pending step; Sprint 42
-has not started.
+completed on 2026-09-19 at merge commit `e58be8ab6674`, which is on `main` and
+carries the annotated `v0.7` tag. Sprint 42 is the unique `next` planning
+target and has not started; its required task-prompt-template readiness stage
+precedes detailed task decomposition.
 
 #### v0.8 — Designer XML Structure
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 42 — Designer XML Metadata Structure Parity | Parse and emit every nested metadata family represented by official hierarchical Designer XML, including Attributes, Tabular Sections and nested Attributes, Standard Attributes, Dimensions, Resources, Measures, Forms, Commands, Templates, and their canonical ownership, identity, payload, provenance, validation, and query behavior. | planned |
+| Sprint 42 — Designer XML Metadata Structure Parity | Parse and emit every nested metadata family represented by official hierarchical Designer XML, including Attributes, Tabular Sections and nested Attributes, Standard Attributes, Dimensions, Resources, Measures, Forms, Commands, Templates, and their canonical ownership, identity, payload, provenance, validation, and query behavior. | next |
 | Sprint 43 — Designer XML Specialized Semantics Parity | Parse and emit the complete specialized semantics represented by official hierarchical Designer XML for Roles and access rights, Subsystem hierarchy and composition, Event Subscriptions, report Data Composition Schemas, XDTO packages, HTTP and Web services, kind-specific payloads, and their canonical References, Grants, Includes, Triggers, ownership, diagnostics, and provenance. | planned |
 
 The v0.8 release integration review follows Sprint 43. It must prove complete

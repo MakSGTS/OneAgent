@@ -1060,8 +1060,16 @@ mod tests {
         fs::write(&path, b"old").expect("fixture must be created");
         let mut manifest =
             EdtSourceManifest::from_paths(vec![path.clone()]).expect("preflight must succeed");
+        let admitted_modified = fs::metadata(&path).unwrap().modified().unwrap();
         fs::remove_file(&path).expect("admitted fixture must be removed");
         fs::write(&path, b"new").expect("replacement fixture must be created");
+        // Same-size replacements can share timestamps on non-Unix filesystems.
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(admitted_modified + std::time::Duration::from_secs(2))
+            .unwrap();
 
         assert!(matches!(
             read_optional_module(&path, &mut SourceCapture::Manifest(&mut manifest)),

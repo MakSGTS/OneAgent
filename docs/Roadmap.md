@@ -18,7 +18,7 @@ boundaries; they do not define a second task sequence.
 | v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | completed |
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | completed |
 | v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | completed |
-| v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | planned |
+| v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | completed |
 | v0.8 — Designer XML Structure | Complete nested metadata and specialized semantic coverage for Designer XML | Sprints 42–43 | planned |
 | v0.9 — Designer XML Parity | Complete code, query, dependency, and cross-adapter semantic parity for Designer XML | Sprint 44 | planned |
 | v1.0 — Stable Platform | Stable APIs, plugin SDK, hardening, documentation, and release over the complete Designer XML model | Sprints 45–49 | planned |
@@ -50,8 +50,13 @@ administratively `completed`. The
 [Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
 records `pass`, resolves the two confirmed blockers, and completes Sprint 40.1.
 The [Sprint 41 integration review](reviews/sprint-41-safe-edit-transactions.md)
-records `pass` and completes Sprint 41. The v0.7 release integration review is
-the next eligible gate; release execution has not started. The completed
+records `pass` and completes Sprint 41. The
+[v0.7 release integration review](reviews/v0.7-release-review.md) records `pass`
+and closes the Sprints 36–41 review boundary after cross-platform remediation.
+The `completed` version status records acceptance of that boundary, not a
+published release: merge to `main` and tag `v0.7` remain pending separate
+authorization. Sprint 42 remains planned until release execution is complete.
+The completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
 re-review with no actionable findings.
@@ -10864,7 +10869,10 @@ Sprint 42 stays planned pending the release gate.
 Suggested planning commit message: `Plan Sprint 41 Safe Edit Transactions`.
 
 
-The v0.7 release integration review follows Sprint 41.
+The [v0.7 release integration review](reviews/v0.7-release-review.md) records
+`pass` after Sprint 41 and its portability remediation. Release execution
+(merge to `main` and tag `v0.7`) remains a separate pending step; Sprint 42
+has not started.
 
 #### v0.8 — Designer XML Structure
 

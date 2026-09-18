@@ -184,8 +184,12 @@ included in that total.
 - Sprint 37 adds public typed rule identity, definition, registry,
   configuration, plan, context, execution, result, diagnostic evidence, bounds,
   and errors in `oneagent-analysis`, plus the additive read-only Runtime
-  `rule_execution_report()` accessor. Existing APIs remain available; no
-  consumer requires migration.
+  `rule_execution_report()` accessor. Repository consumers are migrated to the
+  current diagnostic API: `DiagnosticFinding::code()` returns
+  `&DiagnosticCode`, and `DiagnosticCode` implements `Clone` but not `Copy`.
+  External Rust consumers that relied on an owned return value or implicit
+  copies must borrow the code or explicitly clone it when ownership is needed.
+  Arbitrary external Rust source compatibility is not established.
 - No Cargo manifest, `Cargo.lock`, production dependency, feature flag,
   third-party package, or license inventory changes. Analysis already depends
   on Graph and Runtime already depends on Analysis.

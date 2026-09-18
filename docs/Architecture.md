@@ -24,13 +24,20 @@ product adapters so that roadmap intent is not mistaken for available behavior.
    - `oneagent-analysis` contributes source-independent declaration and call
      analysis over the BSL and graph contracts. It also owns the additive
      source-independent Context Engine that derives deterministic budgeted
-     semantic bundles from one borrowed immutable graph.
+     semantic bundles from one borrowed immutable graph, the bounded
+     Diagnostics and Rules reports, and the bounded Change Impact product
+     report over Graph-owned diff and impact results. Its Refactoring Planner
+     owns immutable source evidence, checked plan/precondition/operation/
+     preview contracts, and pure Graph-backed evaluation without edit
+     authorization.
 3. **Source adapters**
    - `oneagent-edt` reads supported EDT artifacts and contributes facts to the
-     canonical semantic graph.
+     canonical semantic graph. It also captures complete immutable exact BSL
+     source evidence for accepted modules before publication.
    - `oneagent-designer-xml` reads accepted hierarchical Designer XML artifacts
      and contributes the same source-independent graph kinds without replacing
-     EDT semantics.
+     EDT semantics. It captures the paired source-evidence contract without
+     adding Designer-only Graph facts.
    - `oneagent-workspace-fs` discovers supported workspaces through the
      filesystem boundary.
    - `oneagent-openai-compatible` implements the bounded concrete ADR-0046
@@ -52,15 +59,21 @@ product adapters so that roadmap intent is not mistaken for available behavior.
      Workspace-local complete-snapshot cache, exact validity checks, safe
      replacement, and typed cache observation without making persisted bytes a
      semantic authority. Public status observers report rebuild phase, attempts,
-     publications, failures, and the latest cache load/write outcomes. Its sole
+     publications, failures, and the latest cache load/write outcomes. The
+     Runtime library also owns one explicit-demand bounded local Git reader and
+     one capacity-one source-neutral Workspace rebuild input. Git evidence is
+     never published, persisted, or used to select semantic work; accepted
+     input enters the same complete rebuild and atomic-publication path as
+     filesystem observation. Its sole
      Axum service exposes HTTP liveness and
      lifecycle-derived readiness probes plus the versioned read-only Graph
      Query route set. A transport-neutral observer-backed query component owns
      exact configuration, node, direct-relation, and bounded-traversal
      operations without becoming a background service. A separate bounded MCP
-     stdio adapter and `oneagent-mcp` binary build one immutable startup
-     snapshot and serve the seven read-only semantic tools without constructing
-     `App`, watching files, or changing Runtime service ownership. A separate
+     stdio adapter and `oneagent-mcp` binary compose one live Runtime-owned
+     `WorkspaceService`, wait for the initial complete publication, clone one
+     immutable current snapshot per call, and serve the eight read-only
+     semantic tools while later calls may observe accepted replacements. A separate
      bounded LSP stdio adapter and `oneagent-lsp` binary expose immutable
      workspace symbols and pull diagnostics through Content-Length framing and
      the accepted LSP lifecycle without changing Graph authority.
@@ -101,6 +114,352 @@ as query, resolution, reports, diffs, impact analysis, and the Sprint 4 Semantic
 Index remain read-only views over graph snapshots. Context selection and
 assembly are another read-only derived view and do not become graph authority.
 
+## Accepted Git Change Adapter boundary
+
+[ADR-0060](adr/0060-git-change-adapter.md) governs the implemented Sprint 38
+first slice. `oneagent-runtime` exposes validated source-independent repository
+endpoints, paths, statuses, change sets, closed errors, and an explicit local
+`GitRepositoryReader`. One read pins a 40- or 64-hex `HEAD`, requires the caller's
+Workspace root to be the exact canonical worktree root, and compares it with
+the final tracked worktree plus non-ignored untracked files. Conflicts,
+unsupported entry kinds, unconfined or non-UTF-8 paths, unstable two-pass
+observations, bounds, incompatible Git, process failure, timeout, and
+cancellation fail atomically.
+
+The production adapter invokes only fixed non-shell, non-mutating local Git
+commands with bounded stdout/stderr, one child at a time, one 30-second read
+deadline, and owned cleanup. Rename/copy similarity is disabled: moves and
+copies remain ordinary delete/add evidence and never claim semantic identity.
+No Cargo package, native library, unsafe code, Runtime configuration, cache
+version, protocol, IDE capability, or Coverage capability is added.
+
+`WorkspaceService` offers one cloneable pre-registration input handle. Empty
+sets are ignored; one non-empty request is accepted; a full slot reports
+backpressure; a stopped service reports closed. The private mapping discards
+Git endpoints and completeness and requests only the existing complete
+filesystem scan, production discovery, EDT/Designer builds, validation, stable
+rescan, cache policy, and immutable publication. The filesystem watcher remains
+active and authoritative for complete source state. The
+[Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records the
+full domain, reader, Workspace, platform, consumer, and scope matrix.
+
+## Accepted Change Impact Analysis boundary
+
+[ADR-0061](adr/0061-change-impact-analysis.md) governs the implemented Sprint
+39 first slice. `oneagent-analysis::change_impact` accepts only adjacent
+process-local publication IDs, canonical Configuration IDs, complete borrowed
+validated graphs, and cooperative cancellation. It calls the Graph-owned diff
+and impact APIs with fixed depth four, default dependency kinds, ownership
+disabled, and provenance changes direct-only. Analysis owns Configuration
+matching, transition/report identity, canonical order, checked summaries,
+complete admission bounds, and closed redacted errors; it does not create a
+second semantic, diff, propagation, seed, reason, or traversal authority.
+
+Configurations match only by canonical `EntityId`. Exact duplicates collapse;
+conflicting same-ID graph evidence fails closed; previous-only and current-only
+IDs become Removed and Added transitions through one canonical empty graph; an
+ID change never infers a rename. Equal graphs still produce a complete empty
+Compared transition. The complete report owns all admitted transitions and
+Graph results through configured depth four or is rejected as a whole; no
+diagnostic suppression or partial in-memory report applies.
+
+Every `WorkspaceSnapshot` atomically embeds one checked process-local
+publication ID and either `NoPreviousPublication` or the complete report from
+its immediately preceding successful publication. Cold, warm-cache, standalone,
+and fresh-service starts use publication `1` without invented history. Failed,
+cancelled, stale, invalid, or over-bound rebuilds retain the last valid
+publication and consume no ID; later recovery compares against that last
+success. Cache schema remains `1`; Sprint 40 source-evidence reconstruction
+and fail-closed BSL callable-scope classification advance current semantic
+compatibility to `8`, while publication IDs and
+Change Impact reports remain unserialized.
+
+The MCP catalog is now eight tools at revision `2026-07-28` with the existing
+legacy negotiated revisions and Tool Policy gate. The additive Sprint 40 tool
+does not change `oneagent.impact`: it retains the legacy same-snapshot two-
+Configuration mode and the exclusive publication selector with depth, item,
+and reason bounds plus explicit availability, completeness, truncation, and
+omission counts. The public MCP executable uses the live Workspace observer
+while each call remains internally immutable.
+Filesystem and Git input are equivalent only through complete semantic end
+states; repository evidence never enters report identity, seeds, reasons,
+summaries, cache, errors, or wire output. The complete executable matrix,
+compatibility audits, and limitations are recorded in the
+[Sprint 39 evidence](architecture/change-impact-analysis-evidence.md). The
+[Sprint 39 review](reviews/sprint-39-change-impact-analysis.md) records `pass`.
+
+## Implemented Refactoring Planner boundary
+
+[ADR-0063](adr/0063-refactoring-planner.md) governs the implemented Sprint 40
+first slice. `oneagent-analysis::refactoring` owns the source-independent
+immutable document, occurrence, request, target, precondition, operation, plan,
+preview, summary, bound, completeness, and closed failure contracts plus pure
+planner evaluation. Graph remains the only Configuration, Module, callable,
+ownership, `Calls`, and query authority. BSL owns callable identity and name
+equivalence. Adapters capture evidence, Runtime publishes it atomically, and
+MCP projects one result without redefining plan semantics.
+
+The only family is `bsl_callable_rename_v1`: one top-level Procedure or
+Function declaration and every supported unique local or exported qualified
+direct-call identifier inside one complete Configuration. One document binds
+Configuration and Module IDs, accepted source format and role, one confined
+Workspace-relative path, exact raw UTF-8 bytes, raw length plus SHA-256 content
+version, canonical exact half-open raw-byte occurrences, and one completeness
+marker. EDT and Designer production builders provide paired evidence while
+preserving deliberate format, path, encoding, line-ending, content-version,
+and range differences. Qualified-call evidence also retains the bounded
+immediate lexical owner token. Non-unique declarations and local calls are
+target-related only in the selected owner Module; non-unique qualified calls
+are target-related only when that token is BSL-equivalent to the selected
+owner Module name.
+
+One planner request borrows one immutable `WorkspaceSnapshot`, requires its
+checked process-local publication ID, resolves the target through Graph, and
+uses only retained source evidence. Declaration and direct-call identifier
+replacement are the complete operation vocabulary; dependencies are forbidden.
+Canonical identity, ordering, exact duplicate collapse, collision and overlap
+rejection, checked summaries, inclusive bounds, closed errors, cancellation,
+and a structured no-snippet preview are fail-closed and deterministic. Source
+is never reopened after publication and no planner or preview writes it.
+
+Workspace publications now retain a complete source-evidence set for every
+Configuration. Cache schema remains `1` and semantic compatibility is `8`;
+decode reconstructs documents from the private source-state bytes and validates
+the canonical manifest. Publication IDs and plans are not persisted. Failed,
+cancelled, stale, incomplete, or over-bound attempts publish no partial state,
+consume no publication ID, and do not replace the last valid snapshot.
+
+Callable declaration parsing accepts balanced multiline signatures and exact
+`Async`/`Асинх` prefixes, validates identifier and matching scope-end syntax,
+and retains parameter and local bindings for receiver classification. Computed
+member access and a module-like name shadowed by a callable or module binding
+remain complete `Unsupported` evidence and cannot be mapped to a rename target.
+Direct qualifiers split across lines retain their lexical owner, and unsupported
+calls cannot create Graph `Calls` edges. They bypass local and cross-module
+resolution but retain the existing unresolved diagnostic and reference-statistic
+outcome.
+
+`oneagent.refactor.plan` is the eighth lexicographically ordered MCP tool for
+revisions `2025-06-18`, `2025-11-25`, and `2026-07-28`. It is Tool Policy
+`ReadOnly`, accepts the exact bounded request schema, and returns a reconciled
+bounded preview with `readOnly=true` and `editAuthorization="none"`. It exposes
+no raw source, expected token, content version or digest, absolute path,
+provenance, or mutable handle. The VS Code client synchronizes only its catalog
+assertion; no command, code action, edit request, preview UI, or automatic call
+is added.
+
+The complete acceptance matrix, focused and canonical counts, compatibility,
+API/dependency/cache/Coverage/sensitive-data/scope audits, and hand-off are
+recorded in the [Sprint 40 evidence](architecture/refactoring-planner-evidence.md)
+and [Sprint 40.1 remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md).
+Sprint 40 is administratively completed, and Sprint 40.1 records `pass`,
+resolves the publication-identity and stale-evidence blockers, and is completed.
+Sprint 41 is `active`; original Task 5/6 and the subsequent implementation
+remediation are committed below. The previous integration gate was blocked;
+a fresh independent and primary Task 7 gate remains pending.
+
+## Accepted Safe Edit Transactions boundary
+
+Current amendment: [controlled transaction-owner unwind](adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+and the [complete T01-T35 remapping](architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+are implemented at `45147cf1649e9ca8315feb52c02a9936df0fa1f9` after architecture
+`d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate design pass
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3`. A retained private envelope holds coordinator,
+attempt/reservation, response, phase and I/O outside narrow preparation/precommit
+catches; a separate retained-owner recovery catch quarantines on error/unwind.
+Apply, reversal and abandoned precommit share checked finalization, including
+recreating removed backups. All fallible outcome/undo material is prepared before
+the sole `send_replace` commit; committed success survives cache failure,
+response drop and stop without rollback. No global panic-hook redaction is claimed.
+The [current evidence](architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+reconciles all T01-T35, 66 named oracles and 18 successful stable commands,
+including G3 1471 passed/83 nonempty/four empty targets. It rehashes 836 committed
+inputs and every current command log. Source delta is three paths/+1341/-179;
+net cumulative implementation is 25 paths/+15400/-234 = 15634, no binaries.
+Separate fresh independent/primary full integration reviews passed on
+`98d64fb9f775c5af77437b8c18cd0eeb21291c84`; each full test gate passed 1471 tests
+across 83 nonempty/four empty harnesses. Same-reviewer final-artifact consistency
+passed after two draft-only corrections, preserved in the
+[integration review](reviews/sprint-41-safe-edit-transactions.md).
+The old producer pass and blocked reviews below remain historical. The renewed
+agreement supersedes awaiting-agreement text only; historical missing evidence
+and reviewer disagreement are not erased by current implementation validation.
+Sprint 41 is completed; the v0.7 release integration review is eligible and
+release execution has not started. Public APIs, dependencies
+and Coverage Registry (`crates/graph/src/coverage.rs`) remain unchanged.
+
+[ADR-0064](adr/0064-safe-edit-transactions.md) accepts one opt-in local Runtime
+Rust API for checked apply and separately confirmed reversal of complete
+`bsl_callable_rename_v1` plans over EDT and Designer XML. Analysis owns pure
+plan equivalence, exact replacement/range mapping and complete semantic
+postconditions and complete typed producer-projection admission. EDT/Designer
+own pure canonical expected provenance generation before staging/candidate build;
+BSL owns the compatible Query identity helper. The sole dependent identity
+closure is the selected callable's directly owned format-supported Query nodes,
+with Query text/binding and all other facts preserved. Runtime owns service-bound one-use capabilities, private complete
+publication source baselines, bounded retention and the sole lifecycle
+coordinator; its private I/O module owns staging, backups and checked recovery.
+Existing Tool Policy confirmation gates admission without owning mutation.
+
+Startup, watcher and explicit rebuilds, transaction, cache decisions and shutdown
+serialize through the same coordinator. Guards cover service identity, complete
+structured plan, current predecessor Arc, all source/discovery inputs, path and
+alias confinement and pre-allocation budgets. Complete production rebuild and
+exact renamed target/calls plus unaffected graph/source/reference/rule/diagnostic
+equivalence precede the single successor publication. Cache write follows
+commit; failed recovery clears current observation and prevents new publication.
+Old snapshots remain immutable, and the existing publication ID/impact alias
+remains canonical. Undo is one bounded in-memory record, never durable history.
+
+The first write slice requires explicit cooperative exclusive source ownership
+and macOS/Linux file-identity guards. Per-file staged rename does not provide
+multi-file disk atomicity, hostile-writer exclusion or crash durability. Default
+services remain edit-disabled. Existing read-only APIs, eight MCP tools, UI,
+Graph semantics, cache format and Coverage claims remain unchanged.
+
+Historical boundary-oracle implementation evidence qualifies
+`a78568b250201fbab35bb36928d82b3b8fb9f414` after original Task 5
+`f2813d2eff5fa78efe3f0d4a705e3bc51de13979`, Task 6
+`e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`, remediation `aaeacbfa`
+and evidence `9c98e2ce`. Both integration reviews remain **blocked**:
+`33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` for R1-R5 and missing evidence M1-M4,
+and `fc146d8802bbb82e9557a63d6c535f584a270b04` for missing oracles M1-M5
+without a demonstrated production bypass. Second independent F1/F2 passed,
+then deliberate exit 75 stopped before F3; primary ran no Rust gate.
+
+The [boundary evidence](architecture/safe-edit-transactions-evidence.md#boundary-oracle-closure-and-reachability)
+maps all 35 requirements and 56 named oracles, retaining the first remediation's
+revocable payloads, prepaid producers/shared lease, cache Busy and policy-before-queue.
+New routes prove actual external alias rejection, OS AlreadyExists, existing
+second-Configuration equivalence rejection, original one-over at the I/O owner
+(public construction is unavailable), and actual `.oneagent` source/baseline
+with Missing/Failed cache compatibility and complete rebuild. No cache Hit or
+write success is claimed there. Production semantics/APIs/dependencies stay intact.
+Allocation observations do not measure whole-process heap or every canonical
+helper internal reallocation overlap; the accepted producer/type split remains.
+
+All 18 retained boundary-cycle commands exited 0: canonical test **1461/83 nonempty
+targets**, four empty targets separately. The latest watcher timeout at unchanged
+`file_watching.rs:256` has unknown exact caller/cause; focused retry and full
+cycle 2 passed on identical source. Public-fixture/lint corrections, earlier
+1435/1447 results and Git-fixture/F8 failures remain separate histories.
+243 committed source hashes/44 retained log hashes reconcile independently.
+Net implementation is 25/+13471/-234 = 13705 churn/no binaries, above estimate 12000
+and within 32/20000 caps without resetting baseline 93661837 or excluding the
+original shared-master delta. Only macOS ran. Sprint 41 remains active; closure
+claims await a fresh immutable independent/primary Task 7 gate and artifact
+consistency. Neither completion nor release eligibility follows.
+
+### Current ownership recovery evidence and fourth blocked review
+
+The fourth integration review at `a1c7e824d1852499d57609788ac1b0bf831e35f0` remains **blocked**.
+Both reviewers inspected all 35 rows and corroborated P2/T13-T14: successful
+`create_new` could be followed by descriptor metadata/identity failure before
+ownership registration, leaving an untracked artifact and an incorrect zero
+retained count. Neither claimed source overwrite or semantic-publication bypass.
+Independent F1-F12/G1-G2 passed; G3 naturally exited **101**, with Runtime lib
+162 passed/one failed in `workspace_service_classifies_blocking_build_panics`
+(`apps/runtime/src/workspace/mod.rs:3192`, `Workspace task panic must not hang: Elapsed(())`).
+The user paused work; no process was signalled and this was not runner exit 75.
+G4-G6 and primary Cargo validation were unexecuted. No full review pass, final
+review artifact or consistency gate exists. All four blocked reviews and every
+historical failure remain preserved in the evidence history.
+
+Current implementation `56fad47bf5c290011e32c4c304cb4639f64ca3ee` registers every successful
+create immediately with an unknown identity, before fallible descriptor checks.
+Unknown identity never authorizes pathname adoption, cleanup, tree exclusion or
+replacement: the artifact stays counted and the existing coordinator quarantines
+with `RecoveryRequired`. Known-identity successful transactions are preserved.
+New actual post-open metadata/identity fault seams cover all four staging and
+both backup-recreation ordinals, including paired reversal, exact one-empty-file
+retention, source state and stop preservation; actual Unix hard-link rejection
+is separate from deterministic injected errors. No OS metadata failure reproduction
+is claimed. Public APIs, dependencies, Graph/Coverage, cache schema and client
+catalog are unchanged; operator repair remains required for unknown ownership.
+
+Exact code range `a1c7e824d1852499d57609788ac1b0bf831e35f0..56fad47bf5c290011e32c4c304cb4639f64ca3ee`:
+**two paths/+236/-27 = 263 churn**. Stable F1-F12/G1-G6 all exited 0;
+F1-F12 passed **82/8/32/10/18/11/13/12/33/222/401/37**, G3 **1464 tests/83 nonempty
+plus four empty targets**, zero failed/ignored. Reconciliation binds all 35 rows,
+59 named oracles (56 preserved plus three new), 243 source/836 committed-input
+hashes and 24 retained log hashes in `owned-file-remediation/`. The panic test
+passed 1/1 on unchanged source before this fix and in the stable full gate;
+its prior timeout cause remains **unknown**, with no timeout or workspace owner
+change and no causal-resolution claim. The earlier watcher timeout also remains
+unknown. The new development clippy semicolon failure (101) and successful exact
+retry remain recorded. No Rust command is rerun by this documentation task.
+
+Net implementation is **25/+14238/-234 = 14472**, no binaries, above estimate
+12000 and within hard caps 32/20000. Keep baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, the 24 original source/fixture
+paths and only the original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisites and all documentation ranges stay separate; no reset, overlapping
+sum or blanket shared-master exclusion. Full unpartitioned code-head history is
+35/+16369/-329 = 16698, not the implementation subtotal.
+
+Sprint 41 stays **active**, Task 7 requires fresh independent/primary validation
+and same-reviewer final-artifact consistency, and v0.7 remains release-ineligible.
+All 11 Sprint 40, four Sprint 40.1 and eight Sprint 41 prompts remain. This
+five-document follow-on starts at the clean code commit above and uses
+`Update Sprint 41 ownership recovery evidence`; checks are retained under
+`local-artifacts/codex-runs/sprint-41/owned-file-evidence/`. It changes no source,
+creates no review artifact and performs no retirement, completion, merge or push.
+Only macOS execution is qualified; context window/telemetry are unknown/unavailable.
+
+### Historical semantic-comparator follow-on
+
+The following current-head/count statements qualify only the earlier comparator
+cycle; current ownership evidence above supersedes them.
+
+Current semantic-comparator evidence qualifies `32ffd52e485e7b04c72bf51e77c4e25d69325d0e`.
+The third independent Task 7 audit of all 35 rows at
+`de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for
+T18 target identity, T19 pure Analysis edge evidence, T20 consistent occurrences,
+T21 span-only provenance and T23 same-registry status evidence; no production
+bypass was demonstrated. Independent F1-F6 passed 82/8/31/8/18/11, then deliberate
+runner exit 75 stopped before F7. F7-F12/G1-G6 were unexecuted. Primary launch
+was denied twice by the agent thread limit; no primary review or pass occurred.
+All three blocked reviews and every historical failure remain preserved.
+
+Current implementation `32ffd52e485e7b04c72bf51e77c4e25d69325d0e` has
+exact delta `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5..32ffd52e485e7b04c72bf51e77c4e25d69325d0e`:
+two test-bearing paths/+563/-5 = 568, with production APIs, dependencies,
+Graph/Coverage, cache schema and protocol/client catalog unchanged. The
+[semantic comparator evidence](architecture/safe-edit-transactions-evidence.md#semantic-comparator-oracle-closure-and-reachability)
+reconciles all 35 rows/56 named oracles: same-count whole-Graph target identity
+reaches actual A target lookup; Analysis edge-only provenance/endpoints now
+have independent F1 evidence; consistent constructor-valid occurrences and
+untouched Unique retarget reach A/E; canonical span-only changes preserve
+path/producer/count. Analysis RuleEngine proves all six status transitions with
+one identical nonempty registry/RuleId/count and positive controls. Runtime's
+real empty registry remains a separate boundary; no nonempty same-count Runtime
+status evidence or constructor-unreachable comparator case is claimed.
+
+All 18 stable commands exited 0; F1-F12 counts remain
+82/8/31/8/18/11/13/12/33/222/401/37, G3 **1461/83 nonempty plus four empty
+targets**, zero failed/ignored. Independent documentation reconciliation verifies
+243 source and 836 committed all-input hashes, 25 retained log hashes and all
+18 command hashes/counts in `comparator-oracles/`. Current development dependency
+compile/lint failures and corrected selector are retained; the stable cycle
+passed. The prior unchanged watcher timeout's exact caller/cause stays unknown.
+No Rust rerun belongs to this documentation task; only macOS is qualified.
+
+Net implementation is **25/+14029/-234 = 14263**, no binaries, above estimate
+12000 and within hard caps 32/20000. Baseline remains
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: count 24 original source/fixture
+paths plus only exact original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite/Task 6/evidence follow-ons stay separately accounted; never reset
+the baseline, blanket-exclude the master or sum overlapping diffs. Full
+unpartitioned history is 35/+15809/-329 = 16138, not the implementation subtotal.
+
+No new production behavior is introduced. Sprint 41 remains active, all old/current
+prompt suites remain, and a fresh immutable independent/primary Task 7 gate with
+artifact consistency is required. The v0.7 release is ineligible; no review pass
+or completion is claimed. Compact documentation checks are retained under
+`local-artifacts/codex-runs/sprint-41/comparator-evidence/`.
+
 ## Planned boundaries
 
 The roadmap assigns future boundaries explicitly:
@@ -127,7 +486,19 @@ The roadmap assigns future boundaries explicitly:
   completed. The Sprint 34 EDT Integration Prototype review records `pass`,
   Sprint 35 External AI Client Compatibility is completed, and the
   [v0.6 MCP and IDE release review](reviews/v0.6-release-review.md) records
-  `pass with non-blocking follow-ups`.
+  `pass with non-blocking follow-ups`. The
+  [Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+  records `pass` and completes Sprint 36. The
+  [Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+  `pass with non-blocking follow-ups` and completes Sprint 37. The
+  [Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
+  records `pass` and completes Sprint 38. The
+  [Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
+  records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
+  administratively completed. The
+  [Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
+  records `pass`, completes the correction, and makes Sprint 41 Safe Edit
+  Transactions the unique `next` target.
 - Semantic MCP tools are implemented in Sprint 29, the bounded desktop VS Code
   connection foundation is implemented in Sprint 30, and typed source locations
   plus bounded symbol search and navigation are implemented in Sprint 31. The
@@ -135,10 +506,16 @@ The roadmap assigns future boundaries explicitly:
   in Sprint 32. Explicit semantic Context inspection and bounded request-selected
   chat are implemented in Sprint 33. The bounded native EDT compatibility probe
   is implemented in Sprint 34. External Codex and Cursor compatibility is
-  implemented in Sprint 35. Definition/reference providers, diagnostics UI,
+  implemented in Sprint 35. Source-independent diagnostic orchestration and
+  immutable MCP/LSP projections are implemented in Sprint 36. The bounded
+  source-independent rule registry, planning, execution, and immutable Runtime
+  composition boundary is implemented in Sprint 37 with an empty production
+  registry. Definition/reference providers, diagnostics UI, product rules,
   model tools or edits, and semantic EDT IDE workflows remain later work.
-- Git change ingestion arrives in Sprint 38 as an input adapter, not a semantic
-  authority.
+- Git change ingestion is implemented in Sprint 38 as an explicit local input
+  adapter, not a semantic authority. Product-facing Change Impact Analysis is
+  implemented in Sprint 39 over complete semantic publications; automatic Git
+  orchestration remains later work.
 
 Detailed accepted decisions live in `docs/adr`. The dependency-ordered delivery
 sequence and status live only in `docs/Roadmap.md`.
@@ -192,6 +569,112 @@ records `pass`; the later
 also records `pass`. Sprint 28 is completed with `pass with non-blocking
 follow-ups`; Sprints 29–35 and the v0.6 MCP and IDE boundary are completed with
 a non-blocking [release decision](reviews/v0.6-release-review.md).
+
+## Implemented Diagnostics Engine boundary
+
+[ADR-0058](adr/0058-diagnostics-engine.md) governs the implemented Sprint 36
+slice. `oneagent-analysis::diagnostics` consumes exactly immutable Graph-owned
+`SemanticDiagnostic` values and one caller-supplied
+`SemanticGraphValidationResult`. Graph remains the authority for facts,
+diagnostic and validation vocabularies, validation execution, provenance,
+locations, reports, and build diffs. The engine does not parse source, invoke a
+validator, mutate a graph, infer a location, or register a rule.
+
+Each normalized finding has one tagged semantic or validation identity, closed
+severity/category/disposition values, retained typed evidence, bounded message
+and anchors, and a deterministic total order. Exact duplicates collapse;
+same-identity different-content evidence fails closed. The only suppression
+authority is an exact in-memory identity set. Suppressed findings remain in the
+complete report and summary after active findings. Production Workspace uses
+the empty suppression policy.
+
+The engine accepts at most 65,536 diagnostics, 65,536 validation issues, and
+65,536 normalized findings; suppression, message, node-anchor, and provenance
+limits are independently enforced before cloning. It never truncates or
+returns a partial report. Closed errors contain only kind and bounded counts.
+The report owns checked complete totals and deterministic read-only filters.
+
+Runtime constructs complete build validation and the report before atomically
+publishing each immutable Configuration snapshot. Raw diagnostics and existing
+Graph reports remain available. Persistent cache schema and stored canonical
+input fields are unchanged, while the envelope semantic compatibility version
+advances from `2` to `3` and intentionally invalidates prior entries. Decode
+reconstructs both derived values from canonical stored evidence. Cold, warm,
+watched, rebuilt, and repeated snapshots expose equal results.
+
+MCP keeps the seven-tool catalog and Tool Policy gate. `oneagent.diagnostics`
+adds exact family/severity/category filters, optional suppressed visibility,
+normalized semantic and validation fields, and the complete unfiltered summary;
+the adapter retains its default 50 and maximum 100 result limit and explicit
+truncation. MCP exposes no path, source, raw reference, or provenance. LSP keeps
+pull-only full reports and projects only active findings with exactly one node
+and one confined typed span; it fails requests above 100 rather than returning
+a partial report. Neither protocol handler reruns normalization or validation.
+
+The complete requirement matrix, focused/public process counts, compatibility
+checks, and limitations are recorded in the
+[Sprint 36 evidence](architecture/diagnostics-engine-evidence.md), and the
+[Sprint 36 review](reviews/sprint-36-diagnostics-engine.md) records `pass` and
+completion. Sprint 37 implements the accepted Rules Engine composition below;
+persisted suppression, new producers, diagnostics UI, mutable documents, fixes,
+edits, remote access, and telemetry remain outside the completed Sprint 36
+boundary.
+
+## Implemented Rules Engine boundary
+
+[ADR-0059](adr/0059-rules-engine.md) governs the implemented Sprint 37 slice.
+`oneagent-analysis::rules` borrows only one immutable `SemanticGraph`, one
+caller-supplied complete `SemanticGraphValidationResult`, and the base
+Semantic/Validation `DiagnosticReport`. Graph remains authoritative for facts,
+validation, recoverable semantic diagnostics, provenance, locations, reports,
+and diffs. The Diagnostics Engine remains authoritative for normalized
+diagnostic identity, exact suppression, ordering, checked summaries, bounds,
+and complete reports. Rules do not read source, parse, mutate Graph, invoke a
+validator, consume another rule result, or access Runtime, persistence, or
+protocol state.
+
+The rule domain owns validated globally scoped `RuleId` values, local
+diagnostic and failure codes, immutable definitions, and one bounded registry
+ordered by complete rule ID. Equal duplicate and conflicting registrations
+fail closed. In-memory configuration supports only explicit Enabled/Disabled
+settings and defaults absent settings to Enabled; no file, environment,
+persistence, protocol, or UI grammar exists. Planning validates missing, self,
+and cyclic dependencies and uses the smallest ready `RuleId` as its
+deterministic tie-breaker.
+
+Execution is synchronous and sequential. Dependencies require `Completed`;
+Disabled, NotApplicable, Blocked, Failed, and Cancelled remain distinct terminal
+results and block dependents, while independent rules continue until
+cancellation. Cancellation is cooperative before and after each evaluation.
+Per-rule invalid output fails that rule, while engine/domain/aggregate-bound
+errors return no partial report. Complete results and rule-produced diagnostics
+are bounded, canonical, reconciled, and redacted.
+
+Rule diagnostics add one typed ADR-0058 family. Their identity is rule ID,
+local code, and canonical Graph-node anchors; existing normalized severity,
+category, message, disposition, ordering, suppression, summary, provenance,
+location, conflict, and completeness contracts remain authoritative. Runtime
+constructs base diagnostics, plan, execution report, and final diagnostics
+before atomic snapshot publication. Production uses an empty registry, default
+configuration, and `NeverCancelled`, so it publishes a complete empty rule
+report and no Rule findings without claiming a product rule.
+
+Persistent cache schema remains `1`; rule definitions, executable objects,
+configuration, plans, results, and findings are not serialized. Decode reruns
+the complete composition boundary, while private semantic compatibility
+advances from `3` to `4`. MCP keeps seven read-only Tool Policy-gated tools and
+adds only diagnostic family `rule` plus Rule-only `ruleId`. LSP keeps its exact
+3.17 capability and payload shape and may project only active single-anchor
+findings with one confined typed span.
+
+The complete requirement matrix, focused/public process counts, cross-platform
+consumer checks, audits, and limitations are recorded in the
+[Sprint 37 evidence](architecture/rules-engine-evidence.md). Sprint 37 is
+complete with `pass with non-blocking follow-ups` in the
+[Sprint 37 review](reviews/sprint-37-rules-engine.md). Product rules, external
+configuration, plugins, scripts, remote rules, mutable documents, fixes, edits,
+rule-management protocol/UI, telemetry, and performance/security claims remain
+outside this boundary.
 
 ## Accepted LLM Provider abstraction boundary
 
@@ -305,11 +788,13 @@ server. The adapter accepts LF and CRLF framing, enforces a 1 MiB payload limit
 and bounded JSON nesting, emits no response for notifications, flushes every
 response, maps controlled read/write/flush/shutdown failures to stable
 categories, and treats cancellation and EOF as successful completion. The
-separate `oneagent-mcp` binary constructs one immutable Workspace snapshot from
-its working directory before reading stdin and creates no Runtime `App`,
-watcher, cache, listener, or background task. Stdout contains protocol frames
-only, EOF exits with status zero, and startup or terminal failures use stable
-redacted stderr categories.
+separate `oneagent-mcp` binary constructs one Runtime `App` with the live
+Workspace service, waits for one complete initial snapshot before reading
+stdin, and clones one atomic immutable snapshot at the beginning of every call.
+The process owns the watcher, cache, and structured cleanup tree but creates no
+HTTP listener or remote client. Stdout contains protocol frames only, EOF exits
+with status zero after joined Runtime shutdown, and startup or terminal failures
+use stable redacted stderr categories.
 
 The exact lexicographic catalog is `oneagent.context`,
 `oneagent.diagnostics`, `oneagent.graph`, `oneagent.impact`, `oneagent.query`,
@@ -325,6 +810,26 @@ semantic failures set `isError`; malformed or unknown calls remain protocol
 `Invalid params` failures. No tool mutates files, graphs, processes, network
 state, or other external state.
 
+Under ADR-0061, `oneagent.impact` advertises two exclusive selectors. Legacy
+mode retains the exact two-Configuration same-snapshot Graph calculation.
+Publication mode selects one Configuration from the embedded latest transition
+report, including a removed Configuration, and projects only the requested
+depth before independent item/reason limits. Its summary and `total` describe
+the complete requested-depth view; `truncated` and `omittedReasons` describe
+only protocol projection. Initial no-predecessor availability has no invented
+previous ID, transition, completeness, summary, or items. The handler never
+reruns or widens Graph traversal.
+
+Under ADR-0058, `oneagent.diagnostics` consumes the Configuration snapshot's
+complete normalized report rather than raw diagnostics. Its required
+`configurationId`, optional unique non-empty family/severity/category filters,
+optional suppressed visibility, and `1..=100` limit are reflected exactly in
+the input schema and handler validation. Ordered results include both accepted
+families and normalized fields while retaining the existing semantic fields;
+`total` counts every match before the limit and `summary` always describes the
+complete unfiltered report. The Graph summary and `oneagent.validation` also
+reuse the published validation result rather than running validation per call.
+
 Public protocol, semantic-library, fixture, adapter, and real-process tests
 cover exact discovery, catalog order, annotations and schemas, validation
 bounds, all seven tool families, Tool Policy execution, path redaction and
@@ -339,7 +844,7 @@ Codex directly calls all seven tools and observes semantic success and domain
 failure. Cursor's public `mcp list-tools` command proves all seven definitions;
 that client version exposes no non-interactive direct-call command, so no
 Cursor call result is claimed. Additional revisions and clients, remote
-transports, authentication, snapshot refresh, Runtime packaging, references,
+transports, authentication, publication history, Runtime packaging, references,
 diagnostics UI, and broader IDE integration remain deferred. Sprint 31 is
 completed; the additive LSP boundary is described below.
 
@@ -362,10 +867,13 @@ and EDT Query nodes with one distinct confined typed span. It applies the
 accepted Unicode-lowercase substring match, deterministic identity order, LSP
 kinds 12/19, zero-based ranges, and a complete-result limit of 100 without
 silent truncation. `textDocument/diagnostic` returns full reports without a
-result ID. It projects only existing recoverable Graph diagnostics whose source
-node has one matching confined span, preserves Graph code, severity, message,
-and stable order, and returns an empty full report for a valid document without
-projected evidence.
+result ID. It consumes the immutable normalized report and projects only active
+findings with exactly one primary node that exists in the same Configuration
+and has one matching confined typed span. It preserves Graph code, severity,
+message, and deterministic order, and returns an empty full report for a valid
+document without projected evidence. Suppressed, unlocated, multi-anchor,
+conflicting, span-less, escaping, or incompatible evidence is omitted rather
+than guessed. A complete located result above 100 returns `RequestFailed`.
 
 Content-Length stdout is protocol-only and flushed per response. Notifications
 are silent; successful process completion requires `shutdown` followed by

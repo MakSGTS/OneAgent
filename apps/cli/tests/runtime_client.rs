@@ -82,6 +82,22 @@ fn startup_gate(
     }
 }
 
+fn observed_task_start<S>(service: S, started: oneshot::Sender<()>) -> impl RuntimeService
+where
+    S: RuntimeService,
+{
+    move |context: ServiceContext| -> ServiceStartFuture {
+        Box::pin(async move {
+            let service_task = Box::new(service).start(context).await?;
+            let task: ServiceTask = Box::pin(async move {
+                started.send(()).expect("HTTP task start must be observed");
+                service_task.await
+            });
+            Ok(task)
+        })
+    }
+}
+
 async fn wait_for_address(receiver: &mut watch::Receiver<Option<SocketAddr>>) -> SocketAddr {
     loop {
         if let Some(address) = *receiver.borrow() {
@@ -275,6 +291,7 @@ async fn run_production_matrix_once() -> Vec<Value> {
     let graph_query = GraphQueryService::new(workspace.snapshot_observer());
     let http = HttpService::with_graph_query(graph_query);
     let mut address_observer = http.subscribe_bound_address();
+    let (http_task_started_sender, http_task_started) = oneshot::channel();
     let (gate_started_sender, gate_started) = oneshot::channel();
     let (gate_release_sender, gate_release) = oneshot::channel();
     let provider = TestConfigurationProvider {
@@ -284,7 +301,7 @@ async fn run_production_matrix_once() -> Vec<Value> {
     let app = App::builder()
         .configure(&provider)
         .expect("CLI test configuration must load")
-        .register_service("http", http)
+        .register_service("http", observed_task_start(http, http_task_started_sender))
         .expect("HTTP service must register")
         .register_service("gate", startup_gate(gate_started_sender, gate_release))
         .expect("startup gate must register")
@@ -301,6 +318,10 @@ async fn run_production_matrix_once() -> Vec<Value> {
         .await
         .expect("startup gate must not hang")
         .expect("startup gate must be observed");
+    timeout(TEST_TIMEOUT, http_task_started)
+        .await
+        .expect("HTTP task start must not hang")
+        .expect("HTTP task start must be observed");
     assert_eq!(*lifecycle.borrow(), LifecycleState::Initializing);
 
     let live = success_json(&cli(address_args(address, &["health", "live"])).await);

@@ -555,23 +555,29 @@ fn writes_changed_register_propagates_impact_to_the_writing_procedure() {
 fn writes_full_builder_rejects_repository_boundaries_without_placeholder_edges() {
     let root = tempfile::tempdir().expect("temporary EDT project must be created");
     write_configuration(root.path());
+    let collection_level = format!("{COLLECTION_LEVEL}\nEndProcedure");
+    let local_predefined = format!("{LOCAL_PREDEFINED}\nEndProcedure");
+    let text_file = format!("{TEXT_FILE}\nEndFunction");
+    let archive_file = format!("{ARCHIVE_FILE}\nEndFunction");
+    let ui_form = format!("{UI_FORM}\nEndProcedure");
+    let external_input = format!("{EXTERNAL_INPUT}\nEndFunction");
     let object_source = [
         "RegisterRecords.TopLevel.Write();",
         "Procedure Malformed()\n    RegisterRecords.Broken.Write(\nEndProcedure",
         "Function FunctionWriter()\n    RegisterRecords.FunctionTarget.Write();\nEndFunction",
         "Procedure UnsupportedReceiver()\n    Other.Stock.Write();\nEndProcedure",
         ARGUMENT_BEARING,
-        COLLECTION_LEVEL,
+        collection_level.as_str(),
         CHAINED_MANAGER,
         CHAINED_COMMON,
         LOCAL_DOCUMENT,
-        LOCAL_PREDEFINED,
+        local_predefined.as_str(),
         ALIASED_RECORD_SET,
         BINARY_FILE,
-        TEXT_FILE,
-        ARCHIVE_FILE,
-        UI_FORM,
-        EXTERNAL_INPUT,
+        text_file.as_str(),
+        archive_file.as_str(),
+        ui_form.as_str(),
+        external_input.as_str(),
         COMPUTED_RECEIVER,
         ASYNC_SCOPE,
     ]

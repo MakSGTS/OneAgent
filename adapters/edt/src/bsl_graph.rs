@@ -1,7 +1,12 @@
 //! Integration between EDT module files, BSL declarations and the semantic graph.
 
+use oneagent_analysis::refactoring::MAX_SOURCE_OCCURRENCES_PER_DOCUMENT;
+use oneagent_analysis::safe_edit::{
+    SafeEditDiagnostic, SafeEditError, SafeEditProjectionAdmission, SafeEditProvenance,
+    SafeEditRequest,
+};
 use oneagent_bsl::{
-    BslCall, BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor,
+    BslCall, BslCallError, BslCallExtractor, BslCallKind, BslCallResolver, BslDeclarationExtractor,
     BslModuleSymbols, BslParseError, BslQuery, BslQueryError, BslQueryExtractor, BslSymbol,
     BslSymbolKind, CrossModuleCallResolver, LineBslCallExtractor, LineBslDeclarationExtractor,
     LineBslQueryExtractor, LocalBslCallResolver, QualifiedBslCallResolver, QueryLanguageDiagnostic,
@@ -26,10 +31,10 @@ use std::path::Path;
 use crate::EdtModuleDescriptor;
 use crate::query_source_resolution::{
     QuerySourceRequestError, QuerySourceResolutionIndex, WorkspaceResolutionScope,
-    collect_query_source_requests,
+    canonical_context, collect_query_source_requests, collect_query_source_requests_with_admission,
 };
 
-const EDT_BSL_GRAPH_PRODUCER: &str = "oneagent.edt.bsl-graph";
+pub(crate) const EDT_BSL_GRAPH_PRODUCER: &str = "oneagent.edt.bsl-graph";
 const QUERY_LANGUAGE_PARSER_STAGE: &str = "oneagent.bsl.query-language-parser";
 const QUERY_SOURCE_RESOLVER_STAGE: &str = "oneagent.edt.query-source-resolution";
 const QUERY_READS_CONTRIBUTOR: &str = "oneagent.edt.query-reads";
@@ -180,39 +185,90 @@ impl AnalyzedBslModule {
 ///
 /// Returns an error when the module cannot be read or parsed.
 pub fn analyze_module(module: &EdtModuleDescriptor) -> Result<AnalyzedBslModule, EdtBslGraphError> {
-    let source =
-        fs::read_to_string(module.path()).map_err(|source| EdtBslGraphError::ReadModule {
+    analyze_module_internal(module, None)
+}
+
+pub(crate) fn analyze_module_bounded(
+    module: &EdtModuleDescriptor,
+) -> Result<AnalyzedBslModule, EdtBslGraphError> {
+    analyze_module_internal(module, Some(MAX_SOURCE_OCCURRENCES_PER_DOCUMENT))
+}
+
+fn analyze_module_internal(
+    module: &EdtModuleDescriptor,
+    occurrence_maximum: Option<usize>,
+) -> Result<AnalyzedBslModule, EdtBslGraphError> {
+    let fallback;
+    let raw_source = if let Some(raw_source) = module.raw_source() {
+        raw_source
+    } else {
+        fallback = fs::read(module.path()).map_err(|source| EdtBslGraphError::ReadModule {
             path: module.path().to_path_buf(),
             source,
         })?;
+        &fallback
+    };
+    analyze_captured_module(
+        module.id(),
+        module.name(),
+        module.path(),
+        raw_source,
+        occurrence_maximum,
+    )
+}
 
-    let symbols = LineBslDeclarationExtractor
-        .extract(module.id(), &source)
+/// Runs the canonical extractors over captured bytes without reading the filesystem.
+pub(crate) fn analyze_captured_module(
+    module_id: &EntityId,
+    module_name: &EntityName,
+    path: &Path,
+    raw_source: &[u8],
+    occurrence_maximum: Option<usize>,
+) -> Result<AnalyzedBslModule, EdtBslGraphError> {
+    let source =
+        std::str::from_utf8(raw_source).map_err(|source| EdtBslGraphError::ReadModule {
+            path: path.to_path_buf(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
+        })?;
+
+    let symbols = occurrence_maximum
+        .map_or_else(
+            || LineBslDeclarationExtractor.extract(module_id, source),
+            |maximum| LineBslDeclarationExtractor.extract_bounded(module_id, source, maximum),
+        )
         .map_err(EdtBslGraphError::ParseDeclarations)?;
 
-    let calls = LineBslCallExtractor
-        .extract_calls(module.id(), &source)
+    let calls = occurrence_maximum
+        .map_or_else(
+            || LineBslCallExtractor.extract_calls(module_id, source),
+            |maximum| {
+                LineBslCallExtractor.extract_calls_bounded(
+                    module_id,
+                    source,
+                    symbols.len(),
+                    maximum,
+                )
+            },
+        )
         .map_err(EdtBslGraphError::ParseCalls)?;
 
     let queries = LineBslQueryExtractor
-        .extract_queries(module.id(), &source)
+        .extract_queries(module_id, source)
         .map_err(EdtBslGraphError::ParseQueries)?;
 
     let source_path = SourcePath::new(
-        module
-            .path()
-            .to_str()
+        path.to_str()
             .ok_or(EdtBslGraphError::InvalidSourceLocation)?,
     )
     .map_err(|_| EdtBslGraphError::InvalidSourceLocation)?;
 
     Ok(AnalyzedBslModule::new_with_source_queries_and_path(
-        module.id().clone(),
-        module.name().clone(),
+        module_id.clone(),
+        module_name.clone(),
         symbols,
         calls,
         queries,
-        Some(source_id_from_path(module.path())?),
+        Some(source_id_from_path(path)?),
         Some(source_path),
     ))
 }
@@ -270,9 +326,55 @@ pub(crate) fn add_configuration_module_symbols_with_diagnostics_in_scope(
     reference_statistics: &mut SemanticReferenceStatistics,
     reference_requests: &mut SemanticReferenceRequestLedger,
 ) -> Result<usize, EdtBslGraphError> {
+    add_configuration_module_symbols_with_diagnostics_in_scope_internal(
+        graph,
+        modules,
+        workspace_scope,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+        false,
+    )
+}
+
+pub(crate) fn add_configuration_module_symbols_with_bounded_source_evidence(
+    graph: &mut SemanticGraph,
+    modules: &[EdtModuleDescriptor],
+    workspace_scope: WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
+) -> Result<usize, EdtBslGraphError> {
+    add_configuration_module_symbols_with_diagnostics_in_scope_internal(
+        graph,
+        modules,
+        workspace_scope,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_configuration_module_symbols_with_diagnostics_in_scope_internal(
+    graph: &mut SemanticGraph,
+    modules: &[EdtModuleDescriptor],
+    workspace_scope: WorkspaceResolutionScope,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+    reference_requests: &mut SemanticReferenceRequestLedger,
+    bounded_source_evidence: bool,
+) -> Result<usize, EdtBslGraphError> {
     let analyzed_modules = modules
         .iter()
-        .map(analyze_module)
+        .map(|module| {
+            if bounded_source_evidence {
+                analyze_module_bounded(module)
+            } else {
+                analyze_module(module)
+            }
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     add_analyzed_modules(
@@ -331,6 +433,7 @@ fn add_analyzed_modules(
             diagnostics,
             reference_statistics,
         )?;
+        record_unsupported_calls(module, diagnostics, reference_statistics);
     }
 
     Ok(modules.iter().map(|module| module.symbols().len()).sum())
@@ -506,6 +609,257 @@ fn insert_query_reads(
     Ok(())
 }
 
+type CapturedEdge = (
+    usize,
+    (EntityId, EntityId, EdgeKind),
+    Vec<SafeEditProvenance>,
+);
+
+/// New retained producer output contains only explicitly prepaid typed copies.
+pub(crate) struct CapturedQueryEvidence {
+    pub(crate) requests: Vec<(usize, SafeEditRequest)>,
+    pub(crate) diagnostics: Vec<(usize, SafeEditDiagnostic)>,
+    pub(crate) edges: Vec<CapturedEdge>,
+    pub(crate) retained: usize,
+}
+impl CapturedQueryEvidence {
+    fn push_edge(
+        &mut self,
+        bytes: usize,
+        key: (EntityId, EntityId, EdgeKind),
+        mut values: Vec<SafeEditProvenance>,
+        admission: &mut SafeEditProjectionAdmission,
+    ) -> Result<(), SafeEditError> {
+        if let Some((retained, _, previous)) = self
+            .edges
+            .iter_mut()
+            .find(|(_, existing, _)| *existing == key)
+        {
+            let start = admission.retained_bytes();
+            let mut combined = admission.vector(
+                previous
+                    .len()
+                    .checked_add(values.len())
+                    .ok_or(SafeEditError::ProjectionBounds)?,
+            )?;
+            let granted = admission.retained_bytes() - start;
+            let old_storage = SafeEditProjectionAdmission::vector_bytes::<SafeEditProvenance>(
+                previous.capacity(),
+            )?
+            .checked_add(SafeEditProjectionAdmission::vector_bytes::<
+                SafeEditProvenance,
+            >(values.capacity())?)
+            .ok_or(SafeEditError::ProjectionBounds)?;
+            combined.append(previous);
+            combined.append(&mut values);
+            let previous_storage = std::mem::replace(previous, combined);
+            drop(previous_storage);
+            drop(values);
+            let keys = key
+                .0
+                .as_str()
+                .len()
+                .checked_add(key.1.as_str().len())
+                .ok_or(SafeEditError::ProjectionBounds)?;
+            drop(key);
+            admission.release(old_storage + keys)?;
+            *retained = retained
+                .checked_add(bytes)
+                .and_then(|n| n.checked_add(granted))
+                .and_then(|n| n.checked_sub(old_storage + keys))
+                .ok_or(SafeEditError::ProjectionBounds)?;
+            previous.sort_unstable_by(|a, b| a.source().cmp(&b.source()));
+            previous.dedup();
+        } else {
+            if self.edges.len() == self.edges.capacity() {
+                return Err(SafeEditError::ProjectionBounds);
+            }
+            self.edges.push((bytes, key, values));
+        }
+        Ok(())
+    }
+    pub(crate) fn release(
+        self,
+        admission: &mut SafeEditProjectionAdmission,
+    ) -> Result<(), SafeEditError> {
+        let bytes = self.retained;
+        drop(self);
+        admission.release(bytes)
+    }
+}
+
+pub(crate) fn captured_query_evidence(
+    module: &AnalyzedBslModule,
+    query: &BslQuery,
+    graph: &SemanticGraph,
+    index: &QuerySourceResolutionIndex,
+    admission: &mut SafeEditProjectionAdmission,
+) -> Result<CapturedQueryEvidence, SafeEditError> {
+    let checkpoint = admission.retained_bytes();
+    let result = capture_query_evidence(module, query, graph, index, admission);
+    if result.is_err() {
+        admission.release(admission.retained_bytes() - checkpoint)?;
+    }
+    result
+}
+
+#[allow(clippy::too_many_lines)] // One scoped producer result and its paid transfer.
+fn capture_query_evidence(
+    module: &AnalyzedBslModule,
+    query: &BslQuery,
+    graph: &SemanticGraph,
+    index: &QuerySourceResolutionIndex,
+    admission: &mut SafeEditProjectionAdmission,
+) -> Result<CapturedQueryEvidence, SafeEditError> {
+    let checkpoint = admission.retained_bytes();
+    let parse = QueryLanguageParser.parse(query.text());
+    let mut result = CapturedQueryEvidence {
+        requests: Vec::new(),
+        diagnostics: Vec::new(),
+        edges: Vec::new(),
+        retained: 0,
+    };
+    if !parse.is_source_set_complete()
+        || parse.program().is_none()
+        || !parse.diagnostics().is_empty()
+    {
+        result.diagnostics = admission.vector(parse.diagnostics().len())?;
+        for diagnostic in parse.diagnostics() {
+            let scratch_start = admission.retained_bytes();
+            let (working, _) =
+                query_language_diagnostic(module, query, *diagnostic, Some(admission))
+                    .map_err(capture_graph_error)?;
+            let scratch = admission.retained_bytes() - scratch_start;
+            let start = admission.retained_bytes();
+            let value = SafeEditDiagnostic::copy(&working, admission)?;
+            result
+                .diagnostics
+                .push((admission.retained_bytes() - start, value));
+            drop(working);
+            admission.release(scratch)?;
+        }
+        result.retained = admission.retained_bytes() - checkpoint;
+        return Ok(result);
+    }
+    let scratch_start = admission.retained_bytes();
+    if let Some(collected) = collect_query_source_requests_with_admission(
+        &parse,
+        module.source(),
+        query,
+        Some(admission),
+    )
+    .map_err(capture_request_error)?
+    {
+        // These existing canonical collector/resolver results stay scoped. They
+        // are never moved into the new output, attempt or inverse record.
+        let terminal = index
+            .resolve_requests_with_admission(
+                &collected,
+                WorkspaceResolutionScope::Complete,
+                Some(admission),
+            )
+            .map_err(capture_request_error)?;
+        let canonical_scratch = admission.retained_bytes() - scratch_start;
+        result.requests = admission.vector(terminal.len())?;
+        result.diagnostics = admission.vector(terminal.len())?;
+        result.edges = admission.vector(
+            terminal
+                .len()
+                .checked_mul(2)
+                .ok_or(SafeEditError::ProjectionBounds)?,
+        )?;
+        for request in terminal.requests() {
+            let start = admission.retained_bytes();
+            let copied = SafeEditRequest::copy(request, admission)?;
+            result
+                .requests
+                .push((admission.retained_bytes() - start, copied));
+            if request.outcome() == SemanticReferenceRequestOutcome::Resolved {
+                let [target] = request.candidates() else {
+                    return Err(SafeEditError::SemanticMismatch);
+                };
+                if graph.node(target).is_none() {
+                    return Err(SafeEditError::SemanticMismatch);
+                }
+                for (kind, producer, origin) in [
+                    (
+                        EdgeKind::Reads,
+                        QUERY_READS_CONTRIBUTOR,
+                        FactOrigin::Resolved,
+                    ),
+                    (
+                        EdgeKind::DependsOn,
+                        QUERY_DEPENDENCY_CONTRIBUTOR,
+                        FactOrigin::Derived,
+                    ),
+                ] {
+                    let scratch_start = admission.retained_bytes();
+                    let working = query_request_projection_provenance(
+                        request,
+                        Some((target, request.expected_kinds()[0])),
+                        kind,
+                        producer,
+                        origin,
+                        ResolutionState::Resolved,
+                        Some(admission),
+                    )
+                    .map_err(capture_graph_error)?;
+                    let scratch = admission.retained_bytes() - scratch_start;
+                    let start = admission.retained_bytes();
+                    let key = (
+                        admission.copy_id(request.source_node())?,
+                        admission.copy_id(target)?,
+                        kind,
+                    );
+                    let values = SafeEditProvenance::copy_all(&working, admission)?;
+                    result.push_edge(admission.retained_bytes() - start, key, values, admission)?;
+                    drop(working);
+                    admission.release(scratch)?;
+                }
+            } else {
+                let scratch_start = admission.retained_bytes();
+                let working = query_source_diagnostic(request, Some(admission))
+                    .map_err(capture_graph_error)?;
+                let scratch = admission.retained_bytes() - scratch_start;
+                let start = admission.retained_bytes();
+                let copied = SafeEditDiagnostic::copy(&working, admission)?;
+                result
+                    .diagnostics
+                    .push((admission.retained_bytes() - start, copied));
+                drop(working);
+                admission.release(scratch)?;
+            }
+        }
+        drop(terminal);
+        drop(collected);
+        admission.release(canonical_scratch)?;
+    }
+    result.retained = admission.retained_bytes() - checkpoint;
+    Ok(result)
+}
+
+fn capture_request_error(error: QuerySourceRequestError) -> SafeEditError {
+    let cause = if matches!(error, QuerySourceRequestError::ProjectionBounds) {
+        SafeEditError::ProjectionBounds
+    } else {
+        SafeEditError::SemanticMismatch
+    };
+    drop(error);
+    cause
+}
+
+fn capture_graph_error(error: EdtBslGraphError) -> SafeEditError {
+    // These helpers only encode already validated typed identities into fixed,
+    // nonempty canonical contexts; their identifier error is allocation admission.
+    let cause = if matches!(error, EdtBslGraphError::InvalidSourceIdentifier) {
+        SafeEditError::ProjectionBounds
+    } else {
+        SafeEditError::SemanticMismatch
+    };
+    drop(error);
+    cause
+}
+
 fn project_query_source_request(
     graph: &SemanticGraph,
     request: &SemanticReferenceRequest,
@@ -550,6 +904,7 @@ fn project_query_source_request(
                 producer,
                 origin,
                 ResolutionState::Resolved,
+                None,
             )?);
     }
     Ok(())
@@ -562,6 +917,18 @@ fn record_query_language_diagnostic(
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
 ) -> Result<(), EdtBslGraphError> {
+    let (diagnostic, outcome) = query_language_diagnostic(module, query, parser_diagnostic, None)?;
+    diagnostics.insert(diagnostic);
+    reference_statistics.record(outcome, true);
+    Ok(())
+}
+
+fn query_language_diagnostic(
+    module: &AnalyzedBslModule,
+    query: &BslQuery,
+    parser_diagnostic: QueryLanguageDiagnostic,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
+) -> Result<(SemanticDiagnostic, SemanticReferenceOutcome), EdtBslGraphError> {
     let (code, kind, outcome) = match parser_diagnostic.kind() {
         QueryLanguageDiagnosticKind::MalformedSyntax => (
             SemanticDiagnosticCode::QueryLanguageMalformedSyntax,
@@ -603,9 +970,23 @@ fn record_query_language_diagnostic(
         location.end_byte(),
         FactOrigin::Parsed,
         ResolutionState::Unresolved,
+        admission.as_deref_mut(),
     )?;
 
-    diagnostics.insert(
+    if let Some(admission) = admission {
+        admission
+            .reserve(
+                query
+                    .text()
+                    .len()
+                    .checked_add(query.id().as_str().len())
+                    .and_then(|n| n.checked_add(std::mem::size_of::<Provenance>()))
+                    .ok_or(EdtBslGraphError::InvalidSourceIdentifier)?,
+            )
+            .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
+    }
+
+    Ok((
         SemanticDiagnostic::new(
             code,
             SemanticDiagnosticSeverity::Error,
@@ -615,15 +996,22 @@ fn record_query_language_diagnostic(
         )
         .with_source_node(query.id().clone())
         .with_provenance(vec![provenance]),
-    );
-    reference_statistics.record(outcome, true);
-    Ok(())
+        outcome,
+    ))
 }
 
 fn project_query_source_diagnostic(
     request: &SemanticReferenceRequest,
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
 ) -> Result<(), EdtBslGraphError> {
+    diagnostics.insert(query_source_diagnostic(request, None)?);
+    Ok(())
+}
+
+fn query_source_diagnostic(
+    request: &SemanticReferenceRequest,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
+) -> Result<SemanticDiagnostic, EdtBslGraphError> {
     let (code, severity, kind, message) = match request.outcome() {
         SemanticReferenceRequestOutcome::MissingTarget => (
             SemanticDiagnosticCode::ReferenceUnresolved,
@@ -656,7 +1044,41 @@ fn project_query_source_diagnostic(
         }
     };
 
-    diagnostics.insert(
+    if let Some(admission) = admission.as_deref_mut() {
+        let SemanticReference::Name(name) = request.reference() else {
+            return Err(invalid_query_source_request(request));
+        };
+        let mut bytes = name
+            .as_str()
+            .len()
+            .checked_add(request.source_node().as_str().len())
+            .and_then(|n| {
+                n.checked_add(
+                    request
+                        .expected_kinds()
+                        .len()
+                        .checked_mul(std::mem::size_of::<NodeKind>())?,
+                )
+            })
+            .and_then(|n| {
+                n.checked_add(
+                    request
+                        .candidates()
+                        .len()
+                        .checked_mul(std::mem::size_of::<EntityId>())?,
+                )
+            })
+            .ok_or(EdtBslGraphError::InvalidSourceIdentifier)?;
+        for candidate in request.candidates() {
+            bytes = bytes
+                .checked_add(candidate.as_str().len())
+                .ok_or(EdtBslGraphError::InvalidSourceIdentifier)?;
+        }
+        admission
+            .reserve(bytes)
+            .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
+    }
+    Ok(
         SemanticDiagnostic::new(code, severity, kind, message, request.reference().clone())
             .with_source_node(request.source_node().clone())
             .with_expected_kinds(request.expected_kinds().to_vec())
@@ -668,9 +1090,9 @@ fn project_query_source_diagnostic(
                 QUERY_SOURCE_DIAGNOSTIC_CONTRIBUTOR,
                 FactOrigin::Resolved,
                 request.state(),
+                admission,
             )?),
-    );
-    Ok(())
+    )
 }
 
 fn invalid_query_source_request(request: &SemanticReferenceRequest) -> EdtBslGraphError {
@@ -686,41 +1108,33 @@ fn query_request_projection_provenance(
     producer: &'static str,
     origin: FactOrigin,
     resolution: ResolutionState,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
 ) -> Result<Vec<Provenance>, EdtBslGraphError> {
-    let mut provenance = Vec::new();
+    let capacity = request
+        .provenance()
+        .iter()
+        .filter(|evidence| evidence.origin() == FactOrigin::Parsed)
+        .count();
+    let mut provenance = if let Some(admission) = admission.as_deref_mut() {
+        admission
+            .vector(capacity)
+            .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?
+    } else {
+        Vec::with_capacity(capacity)
+    };
     for evidence in request
         .provenance()
         .iter()
         .filter(|evidence| evidence.origin() == FactOrigin::Parsed)
     {
-        let mut context = evidence.source().map_or_else(
-            || request.source_node().as_str().to_owned(),
-            |source| source.as_str().to_owned(),
-        );
-        context.push_str("#query_request_projection");
-        append_context(&mut context, "request", request.id().as_str());
-        append_context(&mut context, "query", request.source_node().as_str());
-        append_context(&mut context, "outcome", request.outcome().as_str());
-        append_context(&mut context, "projection", edge_kind_name(edge_kind));
-        append_context(
-            &mut context,
-            "collection_evidence",
-            evidence.source().map_or("none", EntityId::as_str),
-        );
-        if let Some((target_id, target_kind)) = target {
-            append_context(&mut context, "resolved_target", target_id.as_str());
-            append_context(
-                &mut context,
-                "target_kind",
-                query_target_kind_name(target_kind),
-            );
-        }
-        if edge_kind == EdgeKind::DependsOn {
-            append_context(&mut context, "proving_fact", "reads");
-            append_context(&mut context, "normalization", "query_data_dependency");
-        }
-        for candidate in request.candidates() {
-            append_context(&mut context, "candidate", candidate.as_str());
+        let context = canonical_context(admission.as_deref_mut(), |sink| {
+            write_query_request_context(sink, request, evidence, target, edge_kind)
+        })
+        .map_err(EdtBslGraphError::from)?;
+        if let Some(admission) = admission.as_deref_mut() {
+            admission
+                .reserve(producer.len())
+                .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
         }
 
         let source =
@@ -737,11 +1151,12 @@ fn query_request_projection_provenance(
     if provenance.is_empty() {
         return Err(invalid_query_source_request(request));
     }
-    provenance.sort_by(|left, right| left.source().cmp(&right.source()));
+    provenance.sort_unstable_by(|left, right| left.source().cmp(&right.source()));
     provenance.dedup();
     Ok(provenance)
 }
 
+#[allow(clippy::too_many_arguments)] // Preserve canonical context inputs plus optional admission.
 fn query_diagnostic_provenance(
     module_source: Option<&EntityId>,
     query: &BslQuery,
@@ -750,37 +1165,105 @@ fn query_diagnostic_provenance(
     end_byte: usize,
     origin: FactOrigin,
     resolution: ResolutionState,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
 ) -> Result<Provenance, EdtBslGraphError> {
-    let mut context = query_context(module_source, query);
-    append_context(&mut context, "query_text", query.text());
-    append_context(&mut context, "diagnostic_kind", diagnostic_kind);
-    append_context(&mut context, "range", &format!("{start_byte}..{end_byte}"));
+    let context = canonical_context(admission.as_deref_mut(), |sink| {
+        write_query_diagnostic_context(
+            sink,
+            module_source,
+            query,
+            diagnostic_kind,
+            start_byte,
+            end_byte,
+        )
+    })
+    .map_err(EdtBslGraphError::from)?;
+    if let Some(admission) = admission {
+        admission
+            .reserve(QUERY_READS_CONTRIBUTOR.len())
+            .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
+    }
     provenance_from_context(context, origin, resolution)
 }
 
-fn query_context(module_source: Option<&EntityId>, query: &BslQuery) -> String {
-    let mut context = module_source.map_or_else(
-        || query.id().as_str().to_owned(),
-        |source| source.as_str().to_owned(),
-    );
-    context.push_str("#query_reads");
-    append_context(&mut context, "query", query.id().as_str());
-    append_context(&mut context, "owner", query.owner_id().as_str());
-    append_context(&mut context, "binding", query.binding_name().as_str());
-    append_context(&mut context, "declaration_line", &query.line().to_string());
-    append_context(&mut context, "parser_stage", QUERY_LANGUAGE_PARSER_STAGE);
-    append_context(&mut context, "resolver_stage", QUERY_SOURCE_RESOLVER_STAGE);
-    append_context(&mut context, "contributor_stage", QUERY_READS_CONTRIBUTOR);
-    context
+pub(crate) fn write_query_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    module_source: Option<&EntityId>,
+    query: &BslQuery,
+) -> std::fmt::Result {
+    write!(
+        context,
+        "{}#query_reads",
+        module_source.unwrap_or(query.id()).as_str()
+    )?;
+    write_context_field(context, "query", query.id().as_str())?;
+    write_context_field(context, "owner", query.owner_id().as_str())?;
+    write_context_field(context, "binding", query.binding_name().as_str())?;
+    write_context_field(context, "declaration_line", query.line())?;
+    write_context_field(context, "parser_stage", QUERY_LANGUAGE_PARSER_STAGE)?;
+    write_context_field(context, "resolver_stage", QUERY_SOURCE_RESOLVER_STAGE)?;
+    write_context_field(context, "contributor_stage", QUERY_READS_CONTRIBUTOR)
 }
 
-fn append_context(context: &mut String, key: &str, value: &str) {
-    context.push(';');
-    context.push_str(key);
-    context.push('#');
-    context.push_str(&value.len().to_string());
-    context.push(':');
-    context.push_str(value);
+/// Length-prefixes the exact UTF-8 encoding without a temporary formatted value.
+pub(crate) fn write_context_field(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    key: &str,
+    value: impl std::fmt::Display,
+) -> std::fmt::Result {
+    use std::fmt::Write as _;
+    let mut count = oneagent_analysis::safe_edit::SafeEditCountingSink::default();
+    write!(&mut count, "{value}")?;
+    write!(context, ";{key}#{}:{value}", count.bytes())
+}
+
+pub(crate) fn write_query_diagnostic_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    module_source: Option<&EntityId>,
+    query: &BslQuery,
+    diagnostic_kind: &str,
+    start_byte: usize,
+    end_byte: usize,
+) -> std::fmt::Result {
+    write_query_context(context, module_source, query)?;
+    write_context_field(context, "query_text", query.text())?;
+    write_context_field(context, "diagnostic_kind", diagnostic_kind)?;
+    write_context_field(context, "range", format_args!("{start_byte}..{end_byte}"))
+}
+
+pub(crate) fn write_query_request_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    request: &SemanticReferenceRequest,
+    evidence: &Provenance,
+    target: Option<(&EntityId, NodeKind)>,
+    edge_kind: EdgeKind,
+) -> std::fmt::Result {
+    write!(
+        context,
+        "{}#query_request_projection",
+        evidence.source().unwrap_or(request.source_node()).as_str()
+    )?;
+    write_context_field(context, "request", request.id().as_str())?;
+    write_context_field(context, "query", request.source_node().as_str())?;
+    write_context_field(context, "outcome", request.outcome().as_str())?;
+    write_context_field(context, "projection", edge_kind_name(edge_kind))?;
+    write_context_field(
+        context,
+        "collection_evidence",
+        evidence.source().map_or("none", EntityId::as_str),
+    )?;
+    if let Some((target_id, target_kind)) = target {
+        write_context_field(context, "resolved_target", target_id.as_str())?;
+        write_context_field(context, "target_kind", query_target_kind_name(target_kind))?;
+    }
+    if edge_kind == EdgeKind::DependsOn {
+        write_context_field(context, "proving_fact", "reads")?;
+        write_context_field(context, "normalization", "query_data_dependency")?;
+    }
+    for candidate in request.candidates() {
+        write_context_field(context, "candidate", candidate.as_str())?;
+    }
+    Ok(())
 }
 
 fn provenance_from_context(
@@ -833,11 +1316,7 @@ fn insert_local_calls(
         )?;
     }
 
-    for call in module
-        .calls()
-        .iter()
-        .filter(|call| !is_qualified_call(call))
-    {
+    for call in module.calls().iter().filter(|call| is_local_call(call)) {
         if local_call_is_unresolved(call, resolution.unresolved()) {
             record_unresolved_call(module, call, diagnostics, reference_statistics);
         } else {
@@ -883,7 +1362,33 @@ fn insert_cross_module_calls(
 }
 
 fn is_qualified_call(call: &BslCall) -> bool {
-    call.target_symbol().as_str().contains('.')
+    match call.kind() {
+        Some(BslCallKind::Qualified) => true,
+        None => call.target_symbol().as_str().contains('.'),
+        Some(BslCallKind::Local | BslCallKind::Unsupported) => false,
+    }
+}
+
+fn is_local_call(call: &BslCall) -> bool {
+    match call.kind() {
+        Some(BslCallKind::Local) => true,
+        None => !call.target_symbol().as_str().contains('.'),
+        Some(BslCallKind::Qualified | BslCallKind::Unsupported) => false,
+    }
+}
+
+fn record_unsupported_calls(
+    module: &AnalyzedBslModule,
+    diagnostics: &mut BTreeSet<SemanticDiagnostic>,
+    reference_statistics: &mut SemanticReferenceStatistics,
+) {
+    for call in module
+        .calls()
+        .iter()
+        .filter(|call| call.kind() == Some(BslCallKind::Unsupported))
+    {
+        record_unresolved_call(module, call, diagnostics, reference_statistics);
+    }
 }
 
 fn local_call_is_unresolved(call: &BslCall, unresolved: &[UnresolvedBslCall]) -> bool {
@@ -911,6 +1416,14 @@ fn record_unresolved_call(
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
 ) {
+    diagnostics.insert(captured_unresolved_call_diagnostic(module, call));
+    reference_statistics.record(SemanticReferenceOutcome::Unresolved, true);
+}
+
+pub(crate) fn captured_unresolved_call_diagnostic(
+    module: &AnalyzedBslModule,
+    call: &BslCall,
+) -> SemanticDiagnostic {
     let reference = SemanticReference::Name(call.target_symbol().clone());
     let mut diagnostic = SemanticDiagnostic::from_resolution_error_with_reference(
         ResolutionError::MissingTarget {
@@ -925,8 +1438,35 @@ fn record_unresolved_call(
         diagnostic = diagnostic.with_source_node(source_node);
     }
 
-    diagnostics.insert(diagnostic);
-    reference_statistics.record(SemanticReferenceOutcome::Unresolved, true);
+    diagnostic
+}
+
+pub(crate) fn reserve_unresolved_call_inputs(
+    module: &AnalyzedBslModule,
+    call: &BslCall,
+    admission: &mut SafeEditProjectionAdmission,
+) -> Result<(), SafeEditError> {
+    let source = call.source_symbol().and_then(|name| {
+        module
+            .symbols()
+            .iter()
+            .find(|symbol| symbol.name().as_str().eq_ignore_ascii_case(name.as_str()))
+    });
+    let mut count = oneagent_analysis::safe_edit::SafeEditCountingSink::default();
+    write_unresolved_call_source(&mut count, module.source(), call)
+        .map_err(|_| SafeEditError::ProjectionBounds)?;
+    let bytes = call
+        .target_symbol()
+        .as_str()
+        .len()
+        .checked_mul(2)
+        .and_then(|n| n.checked_add(count.bytes().checked_mul(2)?))
+        .and_then(|n| n.checked_add(source.map_or(0, |symbol| symbol.id().as_str().len())))
+        .and_then(|n| n.checked_add(EDT_BSL_GRAPH_PRODUCER.len()))
+        .and_then(|n| n.checked_add(std::mem::size_of::<Provenance>()))
+        .and_then(|n| n.checked_add(2 * std::mem::size_of::<NodeKind>()))
+        .ok_or(SafeEditError::ProjectionBounds)?;
+    admission.reserve(bytes)
 }
 
 fn source_node_id(module: &AnalyzedBslModule, call: &BslCall) -> Option<EntityId> {
@@ -986,17 +1526,11 @@ fn resolved_provenance(source: Option<&EntityId>) -> Provenance {
 }
 
 fn unresolved_call_provenance(source: Option<&EntityId>, call: &BslCall) -> Provenance {
-    let source = source.map_or_else(
-        || call.id().clone(),
-        |source| {
-            EntityId::new(format!(
-                "{}#bsl_call={}",
-                source.as_str(),
-                call.id().as_str()
-            ))
-            .expect("a non-empty source and call identifier must produce a valid identifier")
-        },
-    );
+    let encoded = canonical_context(None, |sink| {
+        write_unresolved_call_source(sink, source, call)
+    })
+    .expect("canonical bounded call context");
+    let source = EntityId::new(encoded).expect("nonempty canonical call identifier");
 
     bsl_provenance(
         Some(&source),
@@ -1006,26 +1540,56 @@ fn unresolved_call_provenance(source: Option<&EntityId>, call: &BslCall) -> Prov
     )
 }
 
+fn write_unresolved_call_source(
+    sink: &mut dyn std::fmt::Write,
+    source: Option<&EntityId>,
+    call: &BslCall,
+) -> std::fmt::Result {
+    if let Some(source) = source {
+        write!(sink, "{}#bsl_call={}", source.as_str(), call.id().as_str())
+    } else {
+        sink.write_str(call.id().as_str())
+    }
+}
+
 fn query_provenance(
     module: &AnalyzedBslModule,
     query: &BslQuery,
 ) -> Result<Provenance, EdtBslGraphError> {
-    let source = module.source().map_or_else(
-        || query.id().clone(),
-        |source| {
-            EntityId::new(format!(
-                "{}#bsl_query={};owner={};binding={}",
-                source.as_str(),
-                query.id().as_str(),
-                query.owner_id().as_str(),
-                query.binding_name().as_str()
-            ))
-            .expect("a non-empty source and query context must produce a valid identifier")
-        },
-    );
+    let mut value = String::new();
+    write_query_source_id(&mut value, module, query)
+        .map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
+    let source = EntityId::new(value).map_err(|_| EdtBslGraphError::InvalidSourceIdentifier)?;
+    query_provenance_from_source(module, query, source)
+}
 
-    let provenance = bsl_provenance(
-        Some(&source),
+pub(crate) fn write_query_source_id(
+    output: &mut (impl std::fmt::Write + ?Sized),
+    module: &AnalyzedBslModule,
+    query: &BslQuery,
+) -> std::fmt::Result {
+    if let Some(source) = module.source() {
+        write!(
+            output,
+            "{}#bsl_query={};owner={};binding={}",
+            source.as_str(),
+            query.id().as_str(),
+            query.owner_id().as_str(),
+            query.binding_name().as_str()
+        )
+    } else {
+        output.write_str(query.id().as_str())
+    }
+}
+
+pub(crate) fn query_provenance_from_source(
+    module: &AnalyzedBslModule,
+    query: &BslQuery,
+    source: EntityId,
+) -> Result<Provenance, EdtBslGraphError> {
+    let provenance = Provenance::new(
+        Some(source),
+        ProducerId::new(EDT_BSL_GRAPH_PRODUCER),
         FactOrigin::Declared,
         Confidence::Exact,
         ResolutionState::NotApplicable,
@@ -1190,7 +1754,8 @@ impl std::error::Error for EdtBslGraphError {
 impl From<QuerySourceRequestError> for EdtBslGraphError {
     fn from(error: QuerySourceRequestError) -> Self {
         match error {
-            QuerySourceRequestError::InvalidSourceIdentifier => Self::InvalidSourceIdentifier,
+            QuerySourceRequestError::ProjectionBounds
+            | QuerySourceRequestError::InvalidSourceIdentifier => Self::InvalidSourceIdentifier,
             QuerySourceRequestError::InvalidTargetName(error) => {
                 Self::InvalidQuerySourceTargetName(error)
             }

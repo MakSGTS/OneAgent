@@ -2,7 +2,8 @@
 
 This fixture is the smallest tracked, non-empty paired slice accepted by
 ADR-0036. It represents the same configuration, `DynamicSecurityOverridable`
-Common Module, Common Module source, `FillSecurityCollection` Procedure, and
+Common Module, Common Module source, exported `FillSecurityCollection` target,
+`ExerciseSecurityCollection` caller, one local call, one qualified call, and
 immediate ownership facts in EDT and hierarchical Designer XML layouts.
 
 ## Provenance and treatment
@@ -42,14 +43,15 @@ placeholder facts.
 | Designer | `ConfigDumpInfo.xml` | `36fe2f7314e08defd6c59688ed88a2133e97153841436d4ea7164cd7f54ce942` |
 | Designer | `Configuration.xml` | `b7eed83a154d0f68c858f10d991ee985fb6d7df878f7abb328c1e441d57a2bdd` |
 | Designer | `CommonModules/DynamicSecurityOverridable.xml` | `cafbab22d5a4494797aaf15b097d5118b22f60bf16e7017e147ce6048d482e3e` |
-| Designer | `CommonModules/DynamicSecurityOverridable/Ext/Module.bsl` | `b798303db6df6427ac5e14abd616cf0838254e0262c22585b033950bb7642e48` |
+| Designer | `CommonModules/DynamicSecurityOverridable/Ext/Module.bsl` | `c62e6f19bca1b567b4d4132ae1254f9109a6236b48d2555d5b8d76d16a97ac61` |
 | EDT | `.project` | `2e64e2459c496f324104296fa51ee53625a6271d6b96c1bcfd0814060438b435` |
 | EDT | `src/Configuration/Configuration.mdo` | raw `017f5f4efeef37d63b72884d71a6770696763200c82eea3f2e0f38c634d3950c`; reduced `714994860f8f0ef62d63e846d07c1aa8bb9d558aa4f03a3dd6f3dd77fdc28507` |
 | EDT | `src/CommonModules/DynamicSecurityOverridable/DynamicSecurityOverridable.mdo` | raw `e7d05be70e82e0fe421df2198b09556c4f729a35a6150d0f9d0f0471d4fcaa70`; reduced `5ee546609607467d0d3cf066e943b1b8c1c0bfb5885a9ed72d3e73284a0d0141` |
-| EDT | `src/CommonModules/DynamicSecurityOverridable/Module.bsl` | `b56a39eedd53b8f621421e7e17dd59781ef3b6769e61f0e8b89c4192a7dac184` |
+| EDT | `src/CommonModules/DynamicSecurityOverridable/Module.bsl` | `36db708c54ebc97d06812195fe2357208510776d6f43a8f93283a7a58fee10d3` |
 
 The canonical oracle excludes only adapter-specific source paths, producer
 identifiers, XML vocabulary and serialization order, encoding/line endings,
-and raw provenance. It compares stable UUID and owner-role identities, kinds,
-exact names, accepted common payload, ownership, BSL declarations, explicit
-partial terminal success, and public consumer/index results.
+raw ranges, content versions, and raw provenance. It compares stable UUID and
+owner-role identities, kinds, exact names, accepted common payload, ownership,
+BSL declarations, local/qualified occurrence mapping, explicit partial
+terminal success, and public consumer/index results.

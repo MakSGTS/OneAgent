@@ -1,10 +1,14 @@
 //! Reader for accepted Designer XML BSL module layouts.
 
+use oneagent_analysis::refactoring::{
+    MAX_SOURCE_DOCUMENT_BYTES, SourceEvidenceAdmission, SourceEvidenceError,
+};
 use oneagent_common::{EntityId, EntityName};
 use oneagent_metadata::MetadataKind;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::metadata_object::{ACCEPTED_FAMILIES, FamilySpec};
@@ -147,12 +151,95 @@ pub trait DesignerXmlModuleReader {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FileSystemDesignerXmlModuleReader;
 
+#[derive(Debug)]
+pub(crate) struct DesignerXmlSourceManifest {
+    admitted_metadata: BTreeMap<PathBuf, fs::Metadata>,
+}
+
+impl DesignerXmlSourceManifest {
+    fn from_paths(mut paths: Vec<PathBuf>) -> Result<Self, DesignerXmlModuleError> {
+        paths.sort();
+        if let Some(duplicate) = paths.windows(2).find(|pair| pair[0] == pair[1]) {
+            return Err(DesignerXmlModuleError::DuplicateAdmissionPath(
+                duplicate[0].clone(),
+            ));
+        }
+        let mut admission = SourceEvidenceAdmission::new(paths.len())?;
+        let mut admitted_metadata = BTreeMap::new();
+        for path in paths {
+            let metadata = inspect_module(&path)?;
+            let length = admitted_length(&path, &metadata)?;
+            admission.admit_document(length)?;
+            admitted_metadata.insert(path, metadata);
+        }
+        admission.finish()?;
+        Ok(Self { admitted_metadata })
+    }
+
+    pub(crate) fn finish(self) -> Result<(), DesignerXmlModuleError> {
+        self.admitted_metadata
+            .into_keys()
+            .next()
+            .map_or(Ok(()), |path| {
+                Err(DesignerXmlModuleError::ChangedDuringCapture(path))
+            })
+    }
+
+    fn take_metadata(&mut self, path: &Path) -> Result<fs::Metadata, DesignerXmlModuleError> {
+        self.admitted_metadata
+            .remove(path)
+            .ok_or_else(|| DesignerXmlModuleError::ChangedDuringCapture(path.to_path_buf()))
+    }
+}
+
 impl DesignerXmlModuleReader for FileSystemDesignerXmlModuleReader {
     fn read_modules(
         &self,
         project_root: &Path,
         scope: DesignerXmlBuildScope,
         owners: &[DesignerXmlMetadataObjectDescriptor],
+    ) -> Result<Vec<DesignerXmlModuleDescriptor>, DesignerXmlModuleError> {
+        Self::read_modules_internal(project_root, scope, owners, None)
+    }
+}
+
+impl FileSystemDesignerXmlModuleReader {
+    pub(crate) fn preflight_modules(
+        project_root: &Path,
+        scope: DesignerXmlBuildScope,
+        owners: &[DesignerXmlMetadataObjectDescriptor],
+    ) -> Result<DesignerXmlSourceManifest, DesignerXmlModuleError> {
+        if !is_designer_xml_project(project_root)? {
+            return Err(DesignerXmlModuleError::MarkersNotFound(
+                project_root.to_path_buf(),
+            ));
+        }
+        let owners = assemble_owners(project_root, owners)?;
+        let mut paths = Vec::new();
+        for family in ACCEPTED_FAMILIES {
+            visit_family_modules(project_root, family, &owners, &mut |_, _, path| {
+                paths.push(path);
+                Ok(())
+            })?;
+        }
+        let _ = scope;
+        DesignerXmlSourceManifest::from_paths(paths)
+    }
+
+    pub(crate) fn read_modules_with_manifest(
+        project_root: &Path,
+        scope: DesignerXmlBuildScope,
+        owners: &[DesignerXmlMetadataObjectDescriptor],
+        manifest: &mut DesignerXmlSourceManifest,
+    ) -> Result<Vec<DesignerXmlModuleDescriptor>, DesignerXmlModuleError> {
+        Self::read_modules_internal(project_root, scope, owners, Some(manifest))
+    }
+
+    fn read_modules_internal(
+        project_root: &Path,
+        scope: DesignerXmlBuildScope,
+        owners: &[DesignerXmlMetadataObjectDescriptor],
+        mut manifest: Option<&mut DesignerXmlSourceManifest>,
     ) -> Result<Vec<DesignerXmlModuleDescriptor>, DesignerXmlModuleError> {
         if !is_designer_xml_project(project_root)? {
             return Err(DesignerXmlModuleError::MarkersNotFound(
@@ -162,7 +249,10 @@ impl DesignerXmlModuleReader for FileSystemDesignerXmlModuleReader {
         let owners = assemble_owners(project_root, owners)?;
         let mut modules = Vec::new();
         for family in ACCEPTED_FAMILIES {
-            collect_family_modules(project_root, family, &owners, &mut modules)?;
+            visit_family_modules(project_root, family, &owners, &mut |owner, kind, path| {
+                modules.push(read_module(owner, kind, path, manifest.as_deref_mut())?);
+                Ok(())
+            })?;
         }
         modules.sort_by(|left, right| {
             (
@@ -219,11 +309,15 @@ fn assemble_owners<'a>(
     Ok(assembled)
 }
 
-fn collect_family_modules(
+fn visit_family_modules(
     project_root: &Path,
     family: FamilySpec,
     owners: &BTreeMap<OwnerKey, &DesignerXmlMetadataObjectDescriptor>,
-    modules: &mut Vec<DesignerXmlModuleDescriptor>,
+    visit: &mut impl FnMut(
+        &DesignerXmlMetadataObjectDescriptor,
+        DesignerXmlModuleKind,
+        PathBuf,
+    ) -> Result<(), DesignerXmlModuleError>,
 ) -> Result<(), DesignerXmlModuleError> {
     let family_path = project_root.join(family.directory);
     let family_metadata = match fs::symlink_metadata(&family_path) {
@@ -265,7 +359,7 @@ fn collect_family_modules(
                     actual: owner.kind(),
                 });
             }
-            modules.push(read_module(owner, kind, path)?);
+            visit(owner, kind, path)?;
         }
     }
     Ok(())
@@ -398,11 +492,9 @@ fn read_module(
     owner: &DesignerXmlMetadataObjectDescriptor,
     kind: DesignerXmlModuleKind,
     path: PathBuf,
+    manifest: Option<&mut DesignerXmlSourceManifest>,
 ) -> Result<DesignerXmlModuleDescriptor, DesignerXmlModuleError> {
-    let raw_source = fs::read(&path).map_err(|source| DesignerXmlModuleError::ReadFile {
-        path: path.clone(),
-        source,
-    })?;
+    let raw_source = read_stable_module(&path, manifest)?;
     let source_text = normalize_source(&raw_source)
         .map_err(|_| DesignerXmlModuleError::InvalidUtf8 { path: path.clone() })?;
     let id = EntityId::new(format!("{}:{}", owner.id().as_str(), kind.as_str()))
@@ -427,6 +519,140 @@ fn read_module(
             raw_source,
         },
     })
+}
+
+fn read_stable_module(
+    path: &Path,
+    manifest: Option<&mut DesignerXmlSourceManifest>,
+) -> Result<Vec<u8>, DesignerXmlModuleError> {
+    let path_metadata = inspect_module(path)?;
+    let path_length = usize::try_from(path_metadata.len()).map_err(|_| {
+        DesignerXmlModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: path_metadata.len(),
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        }
+    })?;
+    let admitted_metadata = manifest
+        .map(|manifest| manifest.take_metadata(path))
+        .transpose()?;
+    if admitted_metadata.is_some() {
+        admitted_length(path, &path_metadata)?;
+    }
+    if admitted_metadata
+        .as_ref()
+        .is_some_and(|admitted| source_metadata_changed(admitted, &path_metadata))
+    {
+        return Err(DesignerXmlModuleError::ChangedDuringCapture(
+            path.to_path_buf(),
+        ));
+    }
+    let expected_length = admitted_metadata
+        .as_ref()
+        .map_or(path_length, path_length_from_metadata);
+
+    let mut file = fs::File::open(path).map_err(|source| DesignerXmlModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let before = file
+        .metadata()
+        .map_err(|source| DesignerXmlModuleError::ReadFile {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if source_metadata_changed(&path_metadata, &before)
+        || admitted_metadata
+            .as_ref()
+            .is_some_and(|admitted| source_metadata_changed(admitted, &before))
+        || before.len() != expected_length as u64
+    {
+        return Err(DesignerXmlModuleError::ChangedDuringCapture(
+            path.to_path_buf(),
+        ));
+    }
+    let mut raw_source = Vec::with_capacity(expected_length);
+    file.by_ref()
+        .take(if admitted_metadata.is_some() {
+            MAX_SOURCE_DOCUMENT_BYTES as u64 + 1
+        } else {
+            u64::MAX
+        })
+        .read_to_end(&mut raw_source)
+        .map_err(|source| DesignerXmlModuleError::ReadFile {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    let captured_len = u64::try_from(raw_source.len()).unwrap_or(u64::MAX);
+    if admitted_metadata.is_some() && raw_source.len() > MAX_SOURCE_DOCUMENT_BYTES {
+        return Err(DesignerXmlModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: captured_len,
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        });
+    }
+    let after = fs::symlink_metadata(path).map_err(|source| DesignerXmlModuleError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if source_metadata_changed(&before, &after) || captured_len != expected_length as u64 {
+        return Err(DesignerXmlModuleError::ChangedDuringCapture(
+            path.to_path_buf(),
+        ));
+    }
+    Ok(raw_source)
+}
+
+fn path_length_from_metadata(metadata: &fs::Metadata) -> usize {
+    usize::try_from(metadata.len()).expect("preflight admitted metadata length must fit usize")
+}
+
+fn inspect_module(path: &Path) -> Result<fs::Metadata, DesignerXmlModuleError> {
+    let path_metadata =
+        fs::symlink_metadata(path).map_err(|source| DesignerXmlModuleError::ReadFile {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if path_metadata.file_type().is_symlink() {
+        return Err(DesignerXmlModuleError::SymlinkArtifact(path.to_path_buf()));
+    }
+    if !path_metadata.file_type().is_file() {
+        return Err(DesignerXmlModuleError::ArtifactNotRegularFile(
+            path.to_path_buf(),
+        ));
+    }
+    Ok(path_metadata)
+}
+
+fn admitted_length(path: &Path, metadata: &fs::Metadata) -> Result<usize, DesignerXmlModuleError> {
+    if metadata.len() > MAX_SOURCE_DOCUMENT_BYTES as u64 {
+        return Err(DesignerXmlModuleError::SourceBoundExceeded {
+            path: path.to_path_buf(),
+            actual: metadata.len(),
+            maximum: MAX_SOURCE_DOCUMENT_BYTES,
+        });
+    }
+    usize::try_from(metadata.len()).map_err(|_| DesignerXmlModuleError::SourceBoundExceeded {
+        path: path.to_path_buf(),
+        actual: metadata.len(),
+        maximum: MAX_SOURCE_DOCUMENT_BYTES,
+    })
+}
+
+fn source_metadata_changed(before: &fs::Metadata, after: &fs::Metadata) -> bool {
+    let changed = !after.file_type().is_file()
+        || after.file_type().is_symlink()
+        || before.len() != after.len()
+        || before.modified().ok() != after.modified().ok();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        changed || before.dev() != after.dev() || before.ino() != after.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        changed
+    }
 }
 
 fn normalize_source(raw_source: &[u8]) -> Result<String, std::str::Utf8Error> {
@@ -539,6 +765,21 @@ pub enum DesignerXmlModuleError {
         /// Module path.
         path: PathBuf,
     },
+    /// A module exceeds the inclusive raw source bound.
+    SourceBoundExceeded {
+        /// Module path.
+        path: PathBuf,
+        /// Observed byte count.
+        actual: u64,
+        /// Accepted maximum.
+        maximum: usize,
+    },
+    /// A module changed while exact bytes were captured.
+    ChangedDuringCapture(PathBuf),
+    /// Source-evidence document or aggregate admission failed before reading.
+    Admission(SourceEvidenceError),
+    /// Preflight discovered the same accepted module path more than once.
+    DuplicateAdmissionPath(PathBuf),
     /// Stable module identity construction failed.
     InvalidIdentifier,
     /// Compatible module name construction failed.
@@ -548,6 +789,12 @@ pub enum DesignerXmlModuleError {
 impl From<DesignerXmlDiscoveryError> for DesignerXmlModuleError {
     fn from(value: DesignerXmlDiscoveryError) -> Self {
         Self::Discovery(value)
+    }
+}
+
+impl From<SourceEvidenceError> for DesignerXmlModuleError {
+    fn from(value: SourceEvidenceError) -> Self {
+        Self::Admission(value)
     }
 }
 
@@ -649,6 +896,28 @@ impl Display for DesignerXmlModuleError {
                 "Designer XML module is not valid UTF-8: {}",
                 path.display()
             ),
+            Self::SourceBoundExceeded {
+                path,
+                actual,
+                maximum,
+            } => write!(
+                formatter,
+                "Designer XML module {} exceeds source byte bound: actual={actual}, maximum={maximum}",
+                path.display()
+            ),
+            Self::ChangedDuringCapture(path) => write!(
+                formatter,
+                "Designer XML module changed during capture: {}",
+                path.display()
+            ),
+            Self::Admission(source) => {
+                write!(formatter, "Designer XML source admission failed: {source}")
+            }
+            Self::DuplicateAdmissionPath(path) => write!(
+                formatter,
+                "duplicate Designer XML source admission path: {}",
+                path.display()
+            ),
             Self::InvalidIdentifier => {
                 formatter.write_str("invalid Designer XML module identifier")
             }
@@ -661,6 +930,7 @@ impl std::error::Error for DesignerXmlModuleError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Discovery(source) => Some(source),
+            Self::Admission(source) => Some(source),
             Self::InspectPath { source, .. }
             | Self::ReadDirectory { source, .. }
             | Self::ReadDirectoryEntry { source, .. }
@@ -674,11 +944,16 @@ impl std::error::Error for DesignerXmlModuleError {
 mod tests {
     use super::{
         DesignerXmlModuleError, DesignerXmlModuleKind, DesignerXmlModuleReader,
-        FileSystemDesignerXmlModuleReader, normalize_source, select_role_path,
+        DesignerXmlSourceManifest, FileSystemDesignerXmlModuleReader, normalize_source,
+        read_stable_module, select_role_path, source_metadata_changed,
     };
     use crate::{
         DesignerXmlBuildScope, DesignerXmlMetadataObjectReader,
         FileSystemDesignerXmlMetadataObjectReader,
+    };
+    use oneagent_analysis::refactoring::{
+        MAX_SOURCE_BYTES_PER_CONFIGURATION, MAX_SOURCE_DOCUMENT_BYTES,
+        MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION, SourceEvidenceErrorKind,
     };
     use oneagent_bsl::{BslDeclarationExtractor, BslSymbolKind, LineBslDeclarationExtractor};
     use std::fs;
@@ -692,10 +967,92 @@ mod tests {
     const EDT_MODULE: &[u8] =
         include_bytes!("../tests/fixtures/modules/edt/DynamicSecurityOverridable.bsl");
 
+    fn assert_admission_bound(error: &DesignerXmlModuleError, actual: usize, maximum: usize) {
+        let DesignerXmlModuleError::Admission(error) = error else {
+            panic!("reader must preserve source-evidence admission failure");
+        };
+        assert_eq!(error.kind(), SourceEvidenceErrorKind::BoundExceeded);
+        assert_eq!(error.actual(), Some(actual));
+        assert_eq!(error.maximum(), Some(maximum));
+    }
+
+    #[test]
+    fn production_preflight_rejects_document_count_before_file_inspection() {
+        let root = tempdir().expect("temporary directory must be created");
+        let paths = (0..=MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION)
+            .map(|index| root.path().join(format!("missing-{index}.bsl")))
+            .collect();
+        let error = DesignerXmlSourceManifest::from_paths(paths)
+            .expect_err("one-over count must fail before paths are inspected");
+        assert_admission_bound(
+            &error,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION + 1,
+            MAX_SOURCE_DOCUMENTS_PER_CONFIGURATION,
+        );
+    }
+
+    #[test]
+    fn production_preflight_rejects_aggregate_before_raw_source_retention() {
+        let root = tempdir().expect("temporary directory must be created");
+        let mut paths = Vec::new();
+        for index in 0..(MAX_SOURCE_BYTES_PER_CONFIGURATION / MAX_SOURCE_DOCUMENT_BYTES) {
+            let path = root.path().join(format!("module-{index}.bsl"));
+            let file = fs::File::create(&path).expect("sparse fixture must be created");
+            file.set_len(MAX_SOURCE_DOCUMENT_BYTES as u64)
+                .expect("sparse fixture length must be set");
+            paths.push(path);
+        }
+        let one_over = root.path().join("one-over.bsl");
+        fs::write(&one_over, b" ").expect("one-over fixture must be created");
+        paths.push(one_over);
+        let error = DesignerXmlSourceManifest::from_paths(paths)
+            .expect_err("one-over aggregate must fail during metadata preflight");
+        assert_admission_bound(
+            &error,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION + 1,
+            MAX_SOURCE_BYTES_PER_CONFIGURATION,
+        );
+    }
+
+    #[test]
+    fn production_reader_binds_preflight_metadata_to_opened_file() {
+        let root = tempdir().expect("temporary directory must be created");
+        let path = root.path().join("Module.bsl");
+        fs::write(&path, b"old").expect("fixture must be created");
+        let mut manifest = DesignerXmlSourceManifest::from_paths(vec![path.clone()])
+            .expect("preflight must succeed");
+        let admitted_modified = fs::metadata(&path).unwrap().modified().unwrap();
+        fs::remove_file(&path).expect("admitted fixture must be removed");
+        fs::write(&path, b"new").expect("replacement fixture must be created");
+        // Same-size replacements can share timestamps on non-Unix filesystems.
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(admitted_modified + std::time::Duration::from_secs(2))
+            .unwrap();
+
+        assert!(matches!(
+            read_stable_module(&path, Some(&mut manifest)),
+            Err(DesignerXmlModuleError::ChangedDuringCapture(changed)) if changed == path
+        ));
+    }
+
     fn write_project(root: &Path) {
         fs::write(root.join("ConfigDumpInfo.xml"), DUMP_INFO).expect("dump marker must be created");
         fs::write(root.join("Configuration.xml"), CONFIGURATION)
             .expect("configuration marker must be created");
+    }
+
+    #[test]
+    fn changed_during_capture_metadata_is_rejected() {
+        let root = tempdir().expect("temporary directory must be created");
+        let path = root.path().join("Module.bsl");
+        fs::write(&path, "Procedure A()\nEndProcedure\n").expect("source must be written");
+        let before = fs::metadata(&path).expect("initial metadata must be readable");
+        fs::write(&path, "Procedure Changed()\nEndProcedure\n").expect("source must change");
+        let after = fs::metadata(&path).expect("changed metadata must be readable");
+        assert!(source_metadata_changed(&before, &after));
     }
 
     fn metadata_xml(root: &str, uuid: &str, name: &str) -> String {

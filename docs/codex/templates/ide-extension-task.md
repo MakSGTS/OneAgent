@@ -10,12 +10,14 @@ lifecycle implementation slice.
 
 - `docs/codex/profiles/ide-extension-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
 - Authoritative editor API, manifest, toolchain, packaging, ADRs, and
   architecture documents
-- Prerequisites / required gate
-- Task
 - Platform and version compatibility
 - Build, dependency, lockfile, and generated-artifact policy
 - Packaging contents and exclusions, when applicable
@@ -26,12 +28,6 @@ lifecycle implementation slice.
 - Connection states, failures, cancellation, restart, and shutdown behavior
 - User-visible state and diagnostic redaction
 - Integration-test layers and deterministic oracles
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

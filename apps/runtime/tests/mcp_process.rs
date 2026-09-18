@@ -7,10 +7,10 @@ use oneagent_protocol::{
     MAX_MESSAGE_BYTES, MCP_PROTOCOL_VERSION_2025_06_18, MCP_PROTOCOL_VERSION_2025_11_25,
     PROTOCOL_VERSION,
 };
-use oneagent_runtime::WorkspaceSnapshotBuilder;
+use oneagent_runtime::{WorkspaceSnapshot, WorkspaceSnapshotBuilder};
 use serde_json::{Value, json};
 use tempfile::tempdir;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -131,6 +131,28 @@ async fn run_process_in(root: &Path, input: &[u8]) -> std::process::Output {
         .expect("MCP process must be waitable")
 }
 
+async fn exchange_process_frame(
+    stdin: &mut tokio::process::ChildStdin,
+    lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    frame: &str,
+) -> Value {
+    stdin
+        .write_all(frame.as_bytes())
+        .await
+        .expect("MCP request frame must write");
+    stdin
+        .write_all(b"\n")
+        .await
+        .expect("MCP request delimiter must write");
+    stdin.flush().await.expect("MCP request must flush");
+    let line = timeout(PROCESS_TIMEOUT, lines.next_line())
+        .await
+        .expect("MCP response must not hang")
+        .expect("MCP response stream must remain readable")
+        .expect("MCP request must produce one response");
+    serde_json::from_str(&line).expect("MCP response line must be pure JSON")
+}
+
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service")
 }
@@ -162,7 +184,8 @@ fn semantic_calls(
     node_id: &str,
     diagnostic_configuration: &str,
     current_configuration: &str,
-) -> [Value; 7] {
+    refactoring: Value,
+) -> [Value; 8] {
     [
         json!({"name": "oneagent.graph", "arguments": {"limit": 1}}),
         json!({"name": "oneagent.query", "arguments": {
@@ -172,7 +195,12 @@ fn semantic_calls(
             "configurationId": configuration_id, "limit": 1
         }}),
         json!({"name": "oneagent.diagnostics", "arguments": {
-            "configurationId": diagnostic_configuration, "limit": 1
+            "configurationId": diagnostic_configuration,
+            "families": ["semantic"],
+            "severities": ["error"],
+            "categories": ["semantic"],
+            "includeSuppressed": true,
+            "limit": 1
         }}),
         json!({"name": "oneagent.impact", "arguments": {
             "previousConfigurationId": configuration_id,
@@ -191,7 +219,41 @@ fn semantic_calls(
         json!({"name": "oneagent.symbols", "arguments": {
             "query": "e", "kinds": ["module", "procedure", "function", "query"], "limit": 2
         }}),
+        refactoring,
     ]
+}
+
+fn refactoring_call(
+    snapshot: &WorkspaceSnapshot,
+    current_name: &str,
+    desired_name: &str,
+    publication_id: u64,
+) -> Value {
+    let (configuration, target) = snapshot
+        .configurations()
+        .iter()
+        .find_map(|configuration| {
+            configuration
+                .source_evidence()
+                .documents()
+                .iter()
+                .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+                .find(|occurrence| {
+                    occurrence.kind()
+                        == oneagent_analysis::refactoring::SourceOccurrenceKind::Declaration
+                        && occurrence.token() == current_name
+                })
+                .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+                .map(|target| (configuration, target))
+        })
+        .expect("fixture refactoring target must map uniquely");
+    json!({"name": "oneagent.refactor.plan", "arguments": {
+        "publicationId": publication_id,
+        "configurationId": configuration.configuration_id().as_str(),
+        "targetNodeId": target.as_str(),
+        "desiredName": desired_name,
+        "limit": 100
+    }})
 }
 
 #[tokio::test]
@@ -249,6 +311,7 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
                 "oneagent.graph",
                 "oneagent.impact",
                 "oneagent.query",
+                "oneagent.refactor.plan",
                 "oneagent.symbols",
                 "oneagent.validation"
             ]
@@ -260,6 +323,28 @@ async fn public_mcp_process_serves_requests_and_exits_cleanly_on_eof() {
                 "id": 3,
                 "error": {"code": -32602, "message": "Invalid params"}
             })
+        );
+    }
+}
+
+#[tokio::test]
+async fn public_mcp_process_starts_from_each_configuration_root() {
+    for directory in ["edt", "designer"] {
+        let root = tempdir().expect("temporary direct-root Workspace must be created");
+        copy_tree(&fixture_root().join(directory), root.path());
+        let input = format!("{}\n", cursor_initialize());
+        let output = run_process_in(root.path(), input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("direct-root MCP stdout must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("MCP response must be JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 1);
+        assert_eq!(
+            responses[0]["result"]["protocolVersion"],
+            MCP_PROTOCOL_VERSION_2025_11_25
         );
     }
 }
@@ -311,6 +396,7 @@ async fn public_mcp_process_runs_exact_codex_and_cursor_lifecycles_repeatably() 
                 "oneagent.graph",
                 "oneagent.impact",
                 "oneagent.query",
+                "oneagent.refactor.plan",
                 "oneagent.symbols",
                 "oneagent.validation"
             ]
@@ -614,9 +700,10 @@ async fn public_mcp_process_keeps_two_client_sessions_isolated() {
 
 #[tokio::test]
 async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
-    let root = fixture_root();
+    let root = tempdir().expect("temporary semantic Workspace must be created");
+    copy_tree(&fixture_root(), root.path());
     let snapshot = WorkspaceSnapshotBuilder::new()
-        .build(&root)
+        .build(root.path())
         .expect("mixed fixture must build");
     let configuration_id = snapshot.configurations()[0]
         .configuration_id()
@@ -642,11 +729,13 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
         .configuration_id()
         .as_str()
         .to_owned();
+    let refactoring = refactoring_call(&snapshot, "Posting", "PostingRenamed", 1);
     let calls = semantic_calls(
         &configuration_id,
         &node_id,
         &diagnostic_configuration,
         &current_configuration,
+        refactoring,
     );
     let mut frames = calls
         .iter()
@@ -684,10 +773,18 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
             "edgeKinds": ["calls", "calls"]
         }}),
     ));
+    frames.push(request_with_fields(
+        24,
+        "tools/call",
+        &json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": diagnostic_configuration,
+            "families": ["semantic", "semantic"]
+        }}),
+    ));
     let input = format!("{}\n", frames.join("\n"));
 
-    let first = run_process_in(&root, input.as_bytes()).await;
-    let repeated = run_process_in(&root, input.as_bytes()).await;
+    let first = run_process_in(root.path(), input.as_bytes()).await;
+    let repeated = run_process_in(root.path(), input.as_bytes()).await;
     assert!(first.status.success());
     assert!(first.stderr.is_empty());
     assert_eq!(first.stdout, repeated.stdout);
@@ -698,15 +795,199 @@ async fn public_mcp_process_serves_every_semantic_tool_family_repeatably() {
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).expect("tool response JSON"))
         .collect::<Vec<_>>();
-    assert_semantic_responses(&responses);
+    assert_semantic_responses(&responses, root.path());
 }
 
-fn assert_semantic_responses(responses: &[Value]) {
-    assert_eq!(responses.len(), 11);
-    for response in &responses[..7] {
+#[tokio::test]
+#[allow(clippy::too_many_lines)] // One process lifetime proves live replacement and EOF cleanup.
+async fn public_mcp_process_observes_live_atomic_impact_publications_between_calls() {
+    let root = tempdir().expect("temporary live MCP Workspace must be created");
+    copy_tree(&fixture_root(), root.path());
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(root.path())
+        .expect("live MCP fixture must build");
+    let configuration_id = snapshot.configurations()[1]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let initial_refactoring = refactoring_call(&snapshot, "Posting", "PostingRenamed", 1);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oneagent-mcp"))
+        .current_dir(root.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("live MCP process must spawn");
+    let mut stdin = child.stdin.take().expect("piped stdin must exist");
+    let stdout = child.stdout.take().expect("piped stdout must exist");
+    let mut stderr = child.stderr.take().expect("piped stderr must exist");
+    let mut lines = BufReader::new(stdout).lines();
+
+    let initial = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(
+            100,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": configuration_id
+            }}),
+        ),
+    )
+    .await;
+    let initial = &initial["result"]["structuredContent"];
+    assert_eq!(initial["currentPublicationId"], 1);
+    assert_eq!(initial["availability"], "no_previous_publication");
+
+    let first_plan = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(110, "tools/call", &initial_refactoring),
+    )
+    .await;
+    let repeated_plan = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(111, "tools/call", &initial_refactoring),
+    )
+    .await;
+    let first_plan = &first_plan["result"]["structuredContent"];
+    assert_eq!(first_plan, &repeated_plan["result"]["structuredContent"]);
+    assert_eq!(first_plan["publicationId"], 1);
+    assert_eq!(first_plan["completeness"], "complete");
+    assert_eq!(first_plan["readOnly"], true);
+    assert_eq!(first_plan["editAuthorization"], "none");
+    let first_plan_id = first_plan["planId"]
+        .as_str()
+        .expect("initial plan identity")
+        .to_owned();
+
+    let source = root.path().join("edt/src/Configuration/Configuration.mdo");
+    let changed = fs::read_to_string(&source)
+        .expect("live EDT source must be readable")
+        .replace("WritesFixture", "WritesLiveMcp");
+    fs::write(&source, changed).expect("live EDT source must be changed");
+    let updated = timeout(PROCESS_TIMEOUT, async {
+        let mut request_id = 101_u64;
+        loop {
+            let response = exchange_process_frame(
+                &mut stdin,
+                &mut lines,
+                &request_with_fields(
+                    request_id,
+                    "tools/call",
+                    &json!({"name": "oneagent.impact", "arguments": {
+                        "configurationId": configuration_id,
+                        "maxDepth": 4,
+                        "limit": 100,
+                        "reasonLimit": 100
+                    }}),
+                ),
+            )
+            .await;
+            let content = response["result"]["structuredContent"].clone();
+            if content["currentPublicationId"]
+                .as_u64()
+                .is_some_and(|publication| publication > 1)
+            {
+                break content;
+            }
+            request_id = request_id.checked_add(1).expect("small request counter");
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("live Workspace publication must become observable");
+    assert_eq!(updated["mode"], "publication");
+    assert_eq!(updated["availability"], "available");
+    assert_eq!(updated["transition"], "compared");
+    assert_eq!(updated["previousPublicationId"], 1);
+    assert_eq!(updated["currentPublicationId"], 2);
+    assert_eq!(updated["completeness"], "complete_within_requested_depth");
+    assert!(updated["total"].as_u64().is_some_and(|total| total > 0));
+    let encoded = updated.to_string();
+    assert!(!encoded.contains("Configuration.mdo"));
+    assert!(!encoded.contains(root.path().to_str().expect("UTF-8 root")));
+
+    let stale = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(112, "tools/call", &initial_refactoring),
+    )
+    .await;
+    assert_eq!(stale["result"]["isError"], true);
+    assert_eq!(
+        stale["result"]["structuredContent"],
+        json!({
+            "code": "execution_failed",
+            "message": "The semantic tool request failed."
+        })
+    );
+
+    let successor_refactoring = refactoring_call(
+        &snapshot,
+        "Posting",
+        "PostingRenamed",
+        updated["currentPublicationId"]
+            .as_u64()
+            .expect("successor publication ID"),
+    );
+    let successor = exchange_process_frame(
+        &mut stdin,
+        &mut lines,
+        &request_with_fields(113, "tools/call", &successor_refactoring),
+    )
+    .await;
+    let successor = &successor["result"]["structuredContent"];
+    assert_eq!(successor["publicationId"], 2);
+    assert_ne!(successor["planId"], first_plan_id);
+    assert_eq!(successor["readOnly"], true);
+    assert_eq!(successor["editAuthorization"], "none");
+
+    drop(stdin);
+    let status = timeout(PROCESS_TIMEOUT, child.wait())
+        .await
+        .expect("live MCP process EOF shutdown must not hang")
+        .expect("live MCP process must wait");
+    assert!(status.success());
+    let mut trailing_stdout = Vec::new();
+    lines
+        .into_inner()
+        .read_to_end(&mut trailing_stdout)
+        .await
+        .expect("remaining stdout must read");
+    assert!(trailing_stdout.is_empty());
+    let mut stderr_bytes = Vec::new();
+    stderr
+        .read_to_end(&mut stderr_bytes)
+        .await
+        .expect("stderr must read");
+    assert!(stderr_bytes.is_empty());
+}
+
+fn assert_semantic_responses(responses: &[Value], workspace_root: &Path) {
+    assert_eq!(responses.len(), 13);
+    for response in &responses[..8] {
         assert!(response["result"].get("isError").is_none(), "{response}");
         assert!(response["result"].get("structuredContent").is_some());
     }
+    let diagnostics = &responses[3]["result"]["structuredContent"];
+    assert_eq!(diagnostics["total"], 3);
+    assert_eq!(
+        diagnostics["diagnostics"]
+            .as_array()
+            .expect("findings")
+            .len(),
+        1
+    );
+    assert_eq!(diagnostics["truncated"], true);
+    assert_eq!(diagnostics["summary"]["total"], 3);
+    assert_eq!(diagnostics["summary"]["active"], 3);
+    assert_eq!(diagnostics["summary"]["suppressed"], 0);
+    assert_eq!(diagnostics["diagnostics"][0]["family"], "semantic");
+    assert_eq!(diagnostics["diagnostics"][0]["disposition"], "active");
+    assert!(!diagnostics.to_string().contains("Configuration.xml"));
     let symbols = &responses[6]["result"]["structuredContent"];
     assert_eq!(symbols["total"], 5);
     assert_eq!(
@@ -717,24 +998,92 @@ fn assert_semantic_responses(responses: &[Value]) {
     assert!(
         !symbols
             .to_string()
-            .contains(fixture_root().to_str().expect("UTF-8 fixture path"))
+            .contains(workspace_root.to_str().expect("UTF-8 Workspace path"))
     );
-    assert_eq!(responses[7]["result"]["isError"], true);
+    let refactoring = &responses[7]["result"]["structuredContent"];
+    assert_eq!(refactoring["family"], "bsl_callable_rename_v1");
+    assert_eq!(refactoring["publicationId"], 1);
+    assert_eq!(refactoring["readOnly"], true);
+    assert_eq!(refactoring["editAuthorization"], "none");
+    assert!(refactoring["preview"].is_array());
+    assert_eq!(responses[8]["result"]["isError"], true);
     assert_eq!(
-        responses[8],
+        responses[9],
         json!({
             "jsonrpc": "2.0",
             "id": 21,
             "error": {"code": -32602, "message": "Invalid params"}
         })
     );
-    for response in &responses[9..] {
+    for response in &responses[10..] {
         assert_eq!(response["result"]["isError"], true);
         assert_eq!(
             response["result"]["structuredContent"]["code"],
             "invalid_arguments"
         );
     }
+}
+
+#[tokio::test]
+async fn public_mcp_process_keeps_modern_and_legacy_diagnostic_payloads_equal() {
+    let root = tempdir().expect("temporary diagnostic Workspace must be created");
+    copy_tree(&fixture_root(), root.path());
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(root.path())
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot
+        .configurations()
+        .iter()
+        .find(|configuration| !configuration.diagnostic_report().findings().is_empty())
+        .expect("fixture must contain normalized findings")
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let mut payloads = Vec::new();
+
+    for initialize in [codex_initialize(), cursor_initialize()] {
+        let input = [
+            initialize,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_owned(),
+            legacy_request(
+                70,
+                "tools/call",
+                Some(&json!({"name": "oneagent.diagnostics", "arguments": {
+                    "configurationId": configuration_id,
+                    "families": ["semantic"],
+                    "severities": ["error"],
+                    "categories": ["semantic"],
+                    "includeSuppressed": false,
+                    "limit": 2
+                }})),
+            ),
+            legacy_request(71, "shutdown", None),
+            r#"{"jsonrpc":"2.0","method":"exit"}"#.to_owned(),
+        ]
+        .join("\n")
+            + "\n";
+        let output = run_process_in(root.path(), input.as_bytes()).await;
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let responses = String::from_utf8(output.stdout)
+            .expect("protocol output must be UTF-8")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("legacy response JSON"))
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 3);
+        let payload = responses[1]["result"]["structuredContent"].clone();
+        assert_eq!(payload["total"], 3);
+        assert_eq!(
+            payload["diagnostics"].as_array().expect("findings").len(),
+            2
+        );
+        assert_eq!(payload["truncated"], true);
+        assert_eq!(payload["summary"]["total"], 3);
+        assert!(responses[1]["result"].get("resultType").is_none());
+        payloads.push(payload);
+    }
+
+    assert_eq!(payloads[0], payloads[1]);
 }
 
 fn request_with_fields(id: u64, method: &str, fields: &Value) -> String {

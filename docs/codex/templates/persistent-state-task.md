@@ -10,11 +10,12 @@ slice.
 
 - `docs/codex/profiles/persistent-state-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
-- Authoritative ADRs / architecture documents
-- Prerequisites / required gate
-- Task
 - Canonical authority and persisted-state owner
 - Persisted envelope, payload, and schema version
 - Cache identity and deterministic invalidation inputs
@@ -23,12 +24,6 @@ slice.
 - Filesystem, replacement, and cleanup behavior
 - Runtime lifecycle and observability compatibility, when applicable
 - Clean-rebuild equivalence oracle
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

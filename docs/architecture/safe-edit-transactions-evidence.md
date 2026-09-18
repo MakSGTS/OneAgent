@@ -1,0 +1,1161 @@
+# Sprint 41 Safe Edit Transaction Evidence
+
+## Current controlled-unwind evidence and review handoff
+
+Current status: **Sprint 41 completed; v0.7 release integration review eligible**.
+The [final integration review](../reviews/sprint-41-safe-edit-transactions.md)
+qualifies immutable range `ceb3a91da70afde202cab84f7ea42846cdd734bd..98d64fb9f775c5af77437b8c18cd0eeb21291c84`.
+Fresh independent and primary reviews separately passed all 18 commands, each
+G3 1471 passed / 83 nonempty / four empty harnesses, with 66 exact named oracles
+and 836 committed inputs reconciled. Same-reviewer artifact consistency passed
+on corrected draft SHA256 `0a70a3d5ab5748bf04d895ab0a28c5de00858f948497fc3114c13f730d629cdf`;
+the initial draft-only blocked consistency remains in that artifact. Completion
+retires only the four inventoried Sprint 40.1 prompts and preserves all 11
+Sprint 40 and eight Sprint 41 files. Dispatcher review commit/version merge/push
+remain pending; no release execution follows from this status.
+
+The following implementation evidence preserves the Task 6 handoff as recorded
+before that integration gate. Its then-pending review status is historical.
+
+Implementation evidence qualifies `45147cf1649e9ca8315feb52c02a9936df0fa1f9`
+(`Preserve Sprint 41 transaction ownership across unwind`), clean at this
+Task 6 start on `codex/v0.7-sprint-41-remediation`. The unique architecture
+`d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate design pass
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3` precede this source commit. Original
+Task 5 `f2813d2eff5fa78efe3f0d4a705e3bc51de13979` and Task 6
+`e99a6ac14494f9b00fc2f144b01b84e402c9f7d4` remain unique ancestry boundaries.
+The current continuation gate routes this update of existing evidence; it does
+not replay either original task. Integration review remains **PENDING**,
+Sprint 41 **active**, v0.7 release-ineligible. Implementation checks are not a
+fresh independent or primary review pass.
+
+Exact source range `19f9f23b3851e5b24f781e6c00b160fc706fe8d3..45147cf1649e9ca8315feb52c02a9936df0fa1f9`:
+three existing Runtime paths, +1341/-179 = 1520 text churn, no binaries.
+The net original-baseline implementation is **25 paths, +15400/-234 = 15634**,
+below 32/20000/no-binary caps and above the historical 12000 estimate. Compute
+baseline `93661837df8d63bfed10c9b70d1986c4e0d12aa5` to this source commit on
+the 24 original source/fixture paths, plus **only** original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`
+(+1/-1). Do not sum overlapping snapshots, reset scope or blanket-exclude master.
+Separate documentation ranges are `38a9bde3407f151e2c17b380e8bd28252c5a39f9..d328d8638bab12c5ebc8fe2591d21d615be115a8`
+(six paths/+399/-17), `d328d8638bab12c5ebc8fe2591d21d615be115a8..19f9f23b3851e5b24f781e6c00b160fc706fe8d3`
+(one path/+190/-0), and this seven-document evidence delta from `45147cf1649e9ca8315feb52c02a9936df0fa1f9`
+to its dispatcher-created evidence commit. Its own measured diff belongs in
+`evidence/documentation-checks.json`; it is not part of the source subtotal.
+
+Retained evidence root is
+`local-artifacts/codex-runs/sprint-41/unwind-remediation/`.
+`implementation/result.md`, `result.json`, `scope-final.json`,
+`all35-and-source-audit.json`, `oracle-case-inventory.json`,
+`development-history.json` and `stable-per-target-counts.json` are required.
+Each command has `implementation/<key>.json`, `<key>.log` and `<key>-inputs.json`.
+`evidence/verified-inputs-commands.json` independently rehashes every log,
+all 18 input manifests and every one of **836 tracked committed blobs** at the
+source endpoint. All manifests have SHA256
+`47cebd805b6f158093e3e0a5d1f3766c3fdf0be6ed7ae6c052ca8c588db0ff73`;
+inputs stayed unchanged during every command. The retained runs record HEAD
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3` with the then-uncommitted source diff;
+the committed-blob comparison binds that tested tree to `45147cf1649e9ca8315feb52c02a9936df0fa1f9`.
+Documentation changes here do not retroactively change those input manifests.
+
+| Current source path | Committed SHA256 |
+|---|---|
+| `apps/runtime/src/workspace/edit.rs` | `d57c97527dc94be08664e98aa18315c679bb5f3ff64f8b1024986d5cd50f64c3` |
+| `apps/runtime/src/workspace/edit_io.rs` | `ee154422628bc5cb21f08612ba61d80407ff2bbead8c4f63cb43fdead61372a4` |
+| `apps/runtime/src/workspace/mod.rs` | `d18824f56837d1c9909de79022f29c22ad73d0cd76195b73683c8c19a1279e2f` |
+
+| Gate | Exact command | Exit | Passed | Nonempty / empty targets | Log SHA256 |
+|---|---|---:|---:|---|---|
+| F1 | `cargo test -p oneagent-analysis --lib --test safe_edit` | 0 | 82 | 2 / 0 | `81899429cb574d97b7a5fa59fd256bf96f4ea8a9ff5e0711e4fb333e0d9e3ed6` |
+| F2 | `cargo test -p oneagent-runtime --test safe_edit_transactions` | 0 | 8 | 1 / 0 | `032727c5530a81129ac086537af23db3146e843315409e6e2ef73d0020da04b9` |
+| F3 | `cargo test -p oneagent-runtime --lib workspace::edit::tests::` | 0 | 38 | 1 / 0 | `179116caeec9a0aea83ea8370d564df21afe05a972ea02c47ebd8b64aac21ae2` |
+| F4 | `cargo test -p oneagent-runtime --lib workspace::edit_io::tests::` | 0 | 11 | 1 / 0 | `4262755330269c35fdaf4a90fd900ddcadddbf717774d03ebfd05df0fbc79743` |
+| F5 | `cargo test -p oneagent-runtime --test workspace_service` | 0 | 18 | 1 / 0 | `4769f78b185f47624c4da2568eb677cbebbdab241e39a5421ce004825f1d9308` |
+| F6 | `cargo test -p oneagent-runtime --test file_watching` | 0 | 11 | 1 / 0 | `6a3ec00a03c608b2ccf9c901b0a0de2b2ff9bff50cf7207e11465b8b6b6fe3ee` |
+| F7 | `cargo test -p oneagent-runtime --test persistent_cache` | 0 | 13 | 1 / 0 | `ab939243e5e3cbd4068bf994ea8bf7e6db55f92e0d0e3549f1849c0eb9c7d39d` |
+| F8 | `cargo test -p oneagent-runtime --test git_change_workspace` | 0 | 12 | 1 / 0 | `026be37a53618769f2ea300a246f033129cc2c12df77bc12720ac6f8d51db260` |
+| F9 | `cargo test -p oneagent-tool-policy --all-targets` | 0 | 33 | 2 / 0 | `5d68b157e22a51f6231ec9fa392aae1665631c9c34385947dc8969b62de249d4` |
+| F10 | `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets` | 0 | 222 | 12 / 0 | `676bc054bf3e68e529cfaea8975921432c35d3a9a8174cd5d19dea9bd25bf1d9` |
+| F11 | `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets` | 0 | 401 | 23 / 0 | `4156095135eb75cf3913c57b97e4d894f54d17327f35ce6d0540018552497604` |
+| F12 | `cargo test -p oneagent-runtime --test mcp_process --test mcp_semantic_tools --test lsp_stdio --test graph_query_api` | 0 | 37 | 4 / 0 | `08c94d528298cfd602bbd5097fec01052f501fd86c0c1bf2b645da5f5c990a39` |
+| G1 | `cargo fmt --all -- --check` | 0 | n/a | n/a | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| G2 | `cargo check --workspace --all-targets` | 0 | n/a | n/a | `a6a93f89a37ad66f071e3188c2ddd0a84ce90394942001ca93bb3f7bb7541f78` |
+| G3 | `cargo test --workspace --all-targets` | 0 | 1471 | 83 / 4 | `03510c3fe336825fcd83fc97e8970f66c44aacd0230f36a8f3186bb4f47c1dc8` |
+| G4 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 | n/a | n/a | `c5185ec8eab070d8e793029ead770c7019a1ccd344274e452d3d9573fad30644` |
+| G5 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | 0 | n/a | n/a | `261907f1a956cb4fb5e573e0fdf838420d4cef28325f74897646c8f9d421a2f8` |
+| G6 | `git diff --check` | 0 | n/a | n/a | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+
+G3 has 1471 passed/0 failed, 83 nonempty targets and four separate empty binary
+harnesses: CLI main, Runtime LSP binary, Runtime MCP binary and Runtime main.
+No zero-match focused filter is credited. Counts overlap and are never summed
+into a distinct-test total. Exact per-target counts, selected environment,
+timestamps and input/log hashes remain in the artifacts above. The isolated
+`CARGO_TARGET_DIR` is `local-artifacts/codex-runs/sprint-41/unwind-remediation/target`;
+`TMPDIR` and `GIT_CEILING_DIRECTORIES` both use its sibling `tmp` directory.
+Sum of elapsed command durations: **313.70s for all 18**, **173.37s for G1-G6**.
+Neither number establishes the cause of historical multi-hour runs.
+
+Development history remains separate: initial ordinary Runtime check exit 0
+(reported 13.19s, exact start/end unrecorded); first new-oracle no-run compile
+exit 101, E0603 sibling-private `empty_change`, corrected with canonical
+`GitChangeSet` construction; `dev-unwind-1` 4 passed/3 failed from fixture/trace
+setup, and `dev-F3-2` 37 passed/1 failed from reversal trace setup, both corrected
+before the stable cycle. Those ordinary approved owner-local checks are distinct
+from the old safety-rejected exploratory probe, which never compiled/executed.
+
+The fifth blocked review is preserved: primary recommended P2 contract/evidence;
+independent reported incomplete acceptance and a conditional owner-local concern
+without a confirmed P2 defect. Its handoff reported natural partial G3 exit 101,
+Runtime lib 165 passed/1 failed and whole partial run 1285 passed/1 failed,
+64 nonempty/one empty harness, 4927.014s. Failure was
+`workspace_service_classifies_blocking_build_panics`, `Workspace task panic must
+not hang: Elapsed(())`; the detector panic was the expected trigger. F1-F12/G1-G2
+exited 0, G4-G6 and primary Cargo were unexecuted. No signal or deliberate exit
+75 is inferred. Historical watcher/startup timeout causes remain unknown. The
+new stable implementation cycle closes its own required evidence, not that
+historical disagreement or the pending integration review.
+
+Current source retains E `EditEnvelope`, reservation/response/I/O/phase/material
+across preparation, consumed submission and precommit boundaries. E
+`finalize_failure` and `contain_recovery` are shared by apply, reversal and
+`abandon_commit`; they restore the full predecessor or quarantine without retry.
+I `create_owned` reserves registration before create and records unknown present
+identity immediately; `replace_checked` marks attempt before rename and records
+success before the next seam. Unknown identity grants no cleanup/exclusion
+authority. Material is prepared before cleanup/final guard; W:1249 remains the
+sole transaction `send_replace`. E `commit` transfers prepared state and
+`retain_success` keeps the result through postcommit cache unwind/drop/stop.
+The actual locations and original negative cases are reconciled below; the
+[amended all-35 matrix](safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+adds the retained-owner order without dropping the R/L/C/T distinction.
+
+The six E and one I oracles below are executed, with parameter cases distinct
+from Cargo test counts. `evidence/named-oracles.json` binds all 59 existing plus
+seven new functions to committed declarations and exact focused `test ... ok`
+lines; `all35-original-and-controlled.json` preserves both sets of obligations.
+
+| Alias / exact function | Committed location | Cases / boundary inventory | Group |
+|---|---|---|---|
+| UP `controlled_unwind_preparation_retains_owner` | `apps/runtime/src/workspace/edit.rs:2189` | 8: EDT/Designer x apply/reversal preparation unwind and consumed submission unwind; reversal receipt replay; terminal slot release; subsequent eligible prepare; no source writes | F3 |
+| US `controlled_unwind_before_replace_cleans_staging` | `apps/runtime/src/workspace/edit.rs:2309` | 128: EDT/Designer x apply/reversal x create/created_metadata/created_identity/write/permissions/sync/close_observation/readback x ordinals 1..4; unknown identity requires quarantine; others clean without replacements | F3 |
+| UM `controlled_unwind_after_replace_recovers` | `apps/runtime/src/workspace/edit.rs:2350` | 60: EDT/Designer x apply/reversal x positive commit, actual postwrite builder detector, comparison/compared/material/cleaned/final_guard, replace_before/after x1..2, cleanup/cleanup_after x1..2; each actual I/O or phase boundary asserted, full tree/mode restoration; cleaned/final_guard recreate backups | F3 |
+| UR `controlled_unwind_recovery_quarantines` | `apps/runtime/src/workspace/edit.rs:2419` | 80: EDT/Designer x apply/reversal x (cleanup/cleanup_after after readback unwind; restore_check/before/after x1..2 and restore_verify; each recreated backup create/stage boundary ordinal5; abandoned commit restore_before/created_metadata/restore_verify). Required+secondary exact count, observation None, reject replay, watcher/explicit input no publication/cache, sentinels and stop preserve material | F3 |
+| UL `controlled_unwind_stop_and_response_join` | `apps/runtime/src/workspace/edit.rs:2526` | 8: EDT/Designer x apply/reversal x held/dropped response; actual built unwind then blocked restore_before, Busy/consumed capability/held slot/unchanged observation, later cancellation preserves original trigger, stop joins recovery before clear/release | F3 |
+| UC `controlled_unwind_commit_preserves_success` | `apps/runtime/src/workspace/edit.rs:2687` | 6: EDT/Designer x live service / stopped held response / stopped dropped response; actual cache write panic after publication and cancellation; prepared success retained. Live case uses returned receipt for valid reversal and second cache panic with original semantic equivalence | F3 |
+| UI `controlled_unwind_io_ordinals_preserve_ownership` | `apps/runtime/src/workspace/edit_io.rs:855` | dynamic exhaustive observed ordinal list x2 directions: Control performs stage_all/replace_checked/verify_results/cleanup_owned/verify_results/restore_checked; counts every real event including reads,4 staged creates+2 backup recreations. Inject each (event,ordinal) in both directions, assert boundary reached and retained file count equals real entries, successful recovery exact full original state, sentinel unchanged. Existing alias/kind/path/third-state negative alternatives retained. | F4 |
+
+UI derives each actual event/ordinal from a successful production route and
+injects it in both directions; the log does not print the dynamic case count,
+so no invented numeric total is credited. US/UM/UR/UL inspect actual earlier
+admission/confirmation and I/O/phase traces, complete bytes/tree/permissions,
+owned material, lease/slot state and publication/cache behavior. The actual
+post-write builder detector is **L owner-local evidence**: W:655 `with_builder`
+and its field are private; W:1628 `with_detector` is public on the builder only.
+There is no default-input panic trigger or public service injection finding.
+Startup panic tests and the unexecuted old probe are not post-write evidence.
+
+The three-file diff leaves public signatures/consumers, Cargo manifests/lock,
+Analysis/adapter/Graph/Coverage (`crates/graph/src/coverage.rs`), cache schema,
+protocol/client sources and the eight-tool catalog unchanged. Existing planner,
+semantic projection/comparison and authorization helpers remain byte-identical
+to the source prerequisite; F1/F5/F7/F9-F12 cover the preserved consumers.
+Closed outcomes/Debug/scoped audit/transaction tracing are checked for secret
+sentinels; opaque panic payloads are not formatted or retained there. The global
+Rust panic hook may run before catch: hook output/stderr redaction is excluded.
+Only macOS was executed. Cooperative confinement and existing byte/lease/disk
+bounds persist; Linux/Windows execution, hostile writers, multi-file disk
+atomicity, abort/secondary destructor panic, kill/crash/power loss, durable
+recovery and bounded stop latency remain unqualified or excluded by ADR-0064.
+
+Task 6 changes documentation only and runs no Cargo gate. Required checks are
+committed-source/log/oracle reconciliation, current selectors and Markdown
+links/anchors, four matching efficiency records, unchanged contiguous seven-task
+manifest and tracked 11/4/8 prompt inventories, prompt-validator syntax, explicit
+eight-file suite, repository 22-prompt check and diff-check. Retained results are
+under `evidence/`; measured context telemetry is unavailable, bounded preflight
+is a warning. There is no missing required current implementation result.
+
+Local provenance incident: the first copied Task 6 checker retained its old
+output directory and overwrote `architecture/documentation-checks.json` with
+current results. Its original bytes were recovered from the unchanged checker,
+historical log and immutable architecture blobs, and restored only after SHA256
+matched the independently retained original
+`aa64f5f51816a0472b20962dafa940a948e86a41b5363377ae0e1ce6522440fe`.
+`evidence/output-path-incident.json` records the method and preserved misrouted
+output/hash. No architecture validation was rerun or relabelled; original
+checker/log/report/hash inventory and all implementation artifacts are unchanged.
+The corrected checker and final documentation cycle write only to `evidence/`.
+
+Immutable next handoff: dispatcher commits this evidence with unique subject
+`Update Sprint 41 unwind recovery evidence`, verifies a clean committed endpoint
+and integrates remediation into `codex/v0.7` with `git merge --no-ff`. Then run
+`docs/codex/prompts/sprint-41-safe-edit-transactions/07-sprint-41-integration-review.md`
+in fresh independent and primary contexts on the exact merged endpoint, full
+range from `ceb3a91da70afde202cab84f7ea42846cdd734bd`, with separate full gates,
+new root-local target/tmp and input/log hashes. Require same-reviewer final
+artifact consistency before `Complete Sprint 41 Safe Edit Transactions Review`.
+Task 6 creates no final-review artifact, completion transition, retirement,
+release review, main merge, tag or Sprint 42 work. Earlier blocked reviews remain
+historical evidence; the dispatcher records the later commit and push state.
+
+## Historical ownership-recovery status and immutable boundary
+
+Historical ownership-recovery implementation evidence qualifies `56fad47bf5c290011e32c4c304cb4639f64ca3ee`
+(`Fix Sprint 41 created-file ownership recovery`) on
+`codex/v0.7-sprint-41-remediation`. This documentation follow-on starts at that
+clean commit; its code range is `a1c7e824d1852499d57609788ac1b0bf831e35f0..56fad47bf5c290011e32c4c304cb4639f64ca3ee`:
+two existing paths/+236/-27 = 263 churn. Successful creation is now registered
+before fallible descriptor identity acquisition; unknown identity stays retained
+and fails closed. Public APIs and dependencies are unchanged. Sprint 41 remains
+**active**; all four historical reviews remain blocked and fresh independent and
+primary Task 7 gates are pending. The 1464 implementation test passes are not a
+review pass. Original Task 5/6 subjects remain unique; this follow-on uses
+`Update Sprint 41 ownership recovery evidence`.
+
+Original unique Task 5 `f2813d2eff5fa78efe3f0d4a705e3bc51de13979` and
+Task 6 `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4` are verified ancestry
+prerequisites. The previous integration review of
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0`
+was **blocked**. Isolated baseline
+`fa031100ac19a98b17e676687a498bcce4e7280e` has the same tree as that reviewed
+endpoint. The remediation delta is exactly
+`fa031100ac19a98b17e676687a498bcce4e7280e..aaeacbfa675bd1a321f5e5c160950c6c661052d0`.
+Primary identified R3-R5 (P2) and ran documentation checks only; its Cargo
+completion evidence is absent. Independent identified R1/R2 (P1), R3 (P2) and
+M1-M4; it completed only F1-F10 on the old tree. F11/F12 and its canonical Cargo
+gate were not run. Neither review inherits the implementation's old 1435 tests.
+The original findings and final process-stop update remain in
+`local-artifacts/codex-runs/sprint-41/remediation/review-handoff.md`.
+
+### Second blocked integration gate
+
+After the earlier remediation `aaeacbfa675bd1a321f5e5c160950c6c661052d0`
+and evidence `9c98e2ce9abd205bb93a79f7177649ff1c7acbdf` were integrated,
+both reviewers audited all T01-T35 at the immutable range
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..fc146d8802bbb82e9557a63d6c535f584a270b04`
+and returned **blocked** for missing oracle evidence M1-M5: actual outside-Workspace
+hard link, actual `create_new` collision, changed existing second Configuration,
+original-document one-over bound and production Configuration under `.oneagent`.
+Neither demonstrated a production protection bypass or another concrete defect.
+These second-round M1-M5 identifiers are distinct from first-round M1-M4 above.
+
+Independent review completed F1 (82 tests/two nonempty targets) and F2
+(six tests/one nonempty target), both exit 0 with no failures, ignored or empty
+targets. The dispatcher runner deliberately stopped with exit 75 at
+`STOP_AFTER_CURRENT` before F3; no active Cargo process was signalled.
+F3-F12/G1-G5 were unexecuted and runner G6 was not reached; separate range and
+working diff checks passed. Primary completed its own all-35 source audit and
+documentation/Git checks but ran **no Rust commands** after the known blocker.
+Both trees and endpoints stayed clean/unchanged. Neither role produced a pass
+artifact, completion transition or artifact-consistency gate. Independent's
+three initial selector-checker failures were corrected without repository edits.
+Primary checked 243 hashes, 52 names, 133 references, four budgets and retirement
+targets; syntax and suite 8/repository 22 checks passed for both roles.
+
+The full compact handoff and retained review records are under
+`local-artifacts/codex-runs/sprint-41/oracle-remediation/review-handoff.md`
+and `prior-review/`. The new implementation below addresses those five evidence
+gaps; it does not convert either historical blocked review into a pass.
+
+### Third blocked integration gate
+
+The third independent reviewer audited all T01-T35 at
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5`,
+after code `a78568b250201fbab35bb36928d82b3b8fb9f414` and evidence
+`ef5215859c0b353cb5de54695d8b249b616a56f0` were integrated. It returned
+**blocked** for five missing-evidence findings: M1/T20 consistent occurrence
+substitutions, M2/T21 span-only provenance, M3/T23 same-registry rule status,
+M4/T18 same-count target identity, and M5/T19 pure Analysis edge evidence.
+No production protection bypass was demonstrated; existing Runtime edge evidence
+was explicitly retained. These M1-M5 identifiers belong only to this third gate.
+
+Independent F1-F6 exited 0 with 82/8/31/8/18/11 tests. The runner deliberately
+exited 75 before F7; F7-F12 and G1-G6 were unexecuted. Its complete source audit
+checked 35 rows, 243 source hashes, 44 historical log hashes, 56 named oracles
+(50 executed in its own focused run), 129 references and four budgets; syntax,
+suite 8/repository 22 and range/working/staged diff checks passed. Its initial
+broad Txx selector failed with exit 1, then the narrowed matrix selector passed;
+`ps` exited 1 because the sandbox denied the operation. A fresh primary launch
+was denied twice by the agent thread limit: **no primary review or validation
+was launched or passed**. No formal review artifact, consistency gate,
+retirement, completion or release eligibility followed. Retain the exact compact
+record at `local-artifacts/codex-runs/sprint-41/review-r3/dispatcher-handoff.json`.
+The current follow-on addresses its evidence gaps, subject to fresh review.
+
+### Fourth blocked integration gate and current ownership recovery
+
+The fourth integration review at `a1c7e824d1852499d57609788ac1b0bf831e35f0` remains **blocked**.
+Both reviewers inspected all 35 rows and corroborated P2/T13-T14: successful
+`create_new` could be followed by descriptor metadata/identity failure before
+ownership registration, leaving an untracked artifact and an incorrect zero
+retained count. Neither claimed source overwrite or semantic-publication bypass.
+Independent F1-F12/G1-G2 passed; G3 naturally exited **101**, with Runtime lib
+162 passed/one failed in `workspace_service_classifies_blocking_build_panics`
+(`apps/runtime/src/workspace/mod.rs:3192`, `Workspace task panic must not hang: Elapsed(())`).
+The user paused work; no process was signalled and this was not runner exit 75.
+G4-G6 and primary Cargo validation were unexecuted. No full review pass, final
+review artifact or consistency gate exists. All four blocked reviews and every
+historical failure remain preserved in the evidence history.
+
+Current implementation `56fad47bf5c290011e32c4c304cb4639f64ca3ee` registers every successful
+create immediately with an unknown identity, before fallible descriptor checks.
+Unknown identity never authorizes pathname adoption, cleanup, tree exclusion or
+replacement: the artifact stays counted and the existing coordinator quarantines
+with `RecoveryRequired`. Known-identity successful transactions are preserved.
+New actual post-open metadata/identity fault seams cover all four staging and
+both backup-recreation ordinals, including paired reversal, exact one-empty-file
+retention, source state and stop preservation; actual Unix hard-link rejection
+is separate from deterministic injected errors. No OS metadata failure reproduction
+is claimed. Public APIs, dependencies, Graph/Coverage, cache schema and client
+catalog are unchanged; operator repair remains required for unknown ownership.
+
+Exact code range `a1c7e824d1852499d57609788ac1b0bf831e35f0..56fad47bf5c290011e32c4c304cb4639f64ca3ee`:
+**two paths/+236/-27 = 263 churn**. Stable F1-F12/G1-G6 all exited 0;
+F1-F12 passed **82/8/32/10/18/11/13/12/33/222/401/37**, G3 **1464 tests/83 nonempty
+plus four empty targets**, zero failed/ignored. Reconciliation binds all 35 rows,
+59 named oracles (56 preserved plus three new), 243 source/836 committed-input
+hashes and 24 retained log hashes in `owned-file-remediation/`. The panic test
+passed 1/1 on unchanged source before this fix and in the stable full gate;
+its prior timeout cause remains **unknown**, with no timeout or workspace owner
+change and no causal-resolution claim. The earlier watcher timeout also remains
+unknown. The new development clippy semicolon failure (101) and successful exact
+retry remain recorded. No Rust command is rerun by this documentation task.
+
+Net implementation is **25/+14238/-234 = 14472**, no binaries, above estimate
+12000 and within hard caps 32/20000. Keep baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, the 24 original source/fixture
+paths and only the original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisites and all documentation ranges stay separate; no reset, overlapping
+sum or blanket shared-master exclusion. Full unpartitioned code-head history is
+35/+16369/-329 = 16698, not the implementation subtotal.
+
+Sprint 41 stays **active**, Task 7 requires fresh independent/primary validation
+and same-reviewer final-artifact consistency, and v0.7 remains release-ineligible.
+All 11 Sprint 40, four Sprint 40.1 and eight Sprint 41 prompts remain. This
+five-document follow-on starts at the clean code commit above and uses
+`Update Sprint 41 ownership recovery evidence`; checks are retained under
+`local-artifacts/codex-runs/sprint-41/owned-file-evidence/`. It changes no source,
+creates no review artifact and performs no retirement, completion, merge or push.
+Only macOS execution is qualified; context window/telemetry are unknown/unavailable.
+
+### Historical cumulative scope before controlled unwind
+
+Keep original baseline `93661837df8d63bfed10c9b70d1986c4e0d12aa5`.
+The exact prerequisite documentation range ends at
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510`; it contains ten paths,
++738/-85 = 823 churn and no production change. Original Task 5's exact range
+from that prerequisite has 25 paths, +11067/-192 = 11259 churn (seven created,
+eighteen modified). Remediation adds an eight-path delta, +2257/-393 = 2650.
+The first remediation subtotal was 25 paths/+12973/-234 = 13207.
+The previous three-path oracle delta was +507/-9 = 516, with net cumulative
+25/+13471/-234 = 13705. The prior comparator delta is +563/-5 = 568. The current ownership delta is
++236/-27 = 263; the **net cumulative implementation is 25 paths,
++14238/-234 = 14472 churn**,
+with no binaries. It exceeds the 12000 estimate and remains below the authorized
+32-path/20000-churn hard caps. Overlapping diffs are not added together.
+
+`local-artifacts/codex-runs/sprint-41/comparator-oracles/scope.json` and
+`local-artifacts/codex-runs/sprint-41/comparator-evidence/reconcile.py` reproduce the partition: net baseline-to-implementation on the
+24 original source/test/fixture paths, plus the exact original Task 5 master
+ledger delta. Never blanket-exclude the shared master path or drop carried work.
+Original Task 6 is a separate five-document +418/-20 = 438 contribution. The
+full unpartitioned baseline-to-`aaeacbfa` delta is 35 paths/+14118/-328 = 14446,
+not the implementation subtotal. Prior evidence `9c98e2ce` is separately
+five documents/+428/-125 = 553. At `a78568b2` the full unpartitioned range is
+35/+14920/-329 = 15249. Boundary evidence `ef521585` is separately five
+documents/+455/-124 = 579. At `32ffd52e` the full unpartitioned range is
+35/+15809/-329 = 16138. Comparator evidence is separately five documents/
++443/-92 = 535; at `56fad47b` the full range is 35/+16369/-329 = 16698.
+This five-document follow-on is separate again.
+Earlier 10000-cap failures, incomplete attempts and original Task 5 success stay
+historical; neither the design pass nor isolation resets accounting.
+
+Canonical decision: [ADR-0064](../adr/0064-safe-edit-transactions.md).
+The accepted [T01-T35 matrix](safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+and [producer design gate](../reviews/sprint-41-safe-edit-transactions-design.md#current-producer-owned-projection-decision)
+remain the authorities; the line references below describe actual committed
+owners rather than treating planned symbol names as implemented APIs.
+
+## Committed production and oracle locations
+
+Every `Key:line` below is a one-based source line at the implementation commit
+`45147cf1649e9ca8315feb52c02a9936df0fa1f9`. Owner keys expand to these exact repository paths. Test references use
+the full path and function name; source line numbers are immutable evidence for
+that commit, not a promise about future revisions.
+
+| Key | Exact committed owner |
+|---|---|
+| A | [`crates/analysis/src/safe_edit.rs`](../../crates/analysis/src/safe_edit.rs) |
+| AP | [`crates/analysis/src/refactoring.rs`](../../crates/analysis/src/refactoring.rs) |
+| E | [`apps/runtime/src/workspace/edit.rs`](../../apps/runtime/src/workspace/edit.rs) |
+| I | [`apps/runtime/src/workspace/edit_io.rs`](../../apps/runtime/src/workspace/edit_io.rs) |
+| W | [`apps/runtime/src/workspace/mod.rs`](../../apps/runtime/src/workspace/mod.rs) |
+| C | [`apps/runtime/src/workspace/cache.rs`](../../apps/runtime/src/workspace/cache.rs) |
+| DP | [`adapters/designer-xml/src/safe_edit.rs`](../../adapters/designer-xml/src/safe_edit.rs) |
+| EP | [`adapters/edt/src/safe_edit.rs`](../../adapters/edt/src/safe_edit.rs) |
+| Q | [`crates/bsl/src/queries.rs`](../../crates/bsl/src/queries.rs) |
+| U | [`apps/runtime/src/lib.rs`](../../apps/runtime/src/lib.rs) |
+| P | [`crates/tool-policy/src/execution.rs`](../../crates/tool-policy/src/execution.rs) |
+
+The shared recovery/quarantine branch is `E::finalize_failure`, with separate
+`E::contain_recovery`; publication
+occurs in W's existing lifecycle loop. There is no claim that every private
+helper name proposed by the design became a separately named function.
+
+| Invariant / ADR clause | Actual production location | Guard, order and boundary qualified by the tests | Executed negative oracle and outcome | Command |
+|---|---|---|---|---|
+| T01 Local API, authorization and lifetime | W:686 with_edit_policy; E:238 reserve_attempt | Default disabled, explicit cooperative ownership and immutable policy before startup; unavailable handle cannot reserve before readiness or after stop/poison. Platform eligibility precedes writes. | [`disabled_unready_stopped_and_foreign_services_reject`](../../apps/runtime/tests/safe_edit_transactions.rs) (`apps/runtime/tests/safe_edit_transactions.rs:372`): a second service at numeric publication 1 and unconfigured/new/stopped handles cannot reach I. | F2 |
+| T02 Local API, authorization and lifetime; Complete publication baseline and bounds before retention | E:195 Reservation; E:1147 EditEnvelope; E:1749 deliver_terminal | Nonblocking sole prepared/queued/running slot before retaining input, plan construction or scan; checked attempt increment never wraps/reuses; release on drop/terminal path. | [`attempt_lifetime_and_bounds`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3086`): second request while prepared/queued/running returns `Busy`; injected exhausted counter never reuses; dropped challenge/authorization releases exactly one slot. | F3 |
+| T03 Local API, authorization and lifetime | E:721 prepare; E:1318 run_attempt; A:265 compare_plan | Prepare and submit regenerate from same current Arc; compare complete request, target, preconditions, ordered operations (paths/ranges/tokens/versions/IDs/replacements), dependencies, completeness and summary before authorization retention/staging. Hash equality never substitutes for complete equality. Respect the reachability split below; no public forging API. | [`structured_plan_and_capability_tampering_reject`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:4967`) passes every constructor-reachable same-ID structural difference (including duplicate summaries and LocalCall/QualifiedCall categories), whole-plan substitutions and Runtime-private capability mutants through the real coordinator; zero writes. [`complete_plan_comparison_rejects_each_representable_private_field`](../../crates/analysis/src/refactoring.rs) (`crates/analysis/src/refactoring.rs:3071`) preserves the plan ID while changing each representable private component and calls the real A comparator. Single-variant/type-unrepresentable states use explicit type/constructor evidence, not fabricated runtime tests. | F3, F1 |
+| T04 Local API, authorization and lifetime | E:1181 execute; E:1147 EditEnvelope | Bind private Arc service identity, attempt, direction, predecessor Arc/ID, plan, baseline, frozen producer projection and immutable policy evaluation; irreversibly consume submission identity before revalidation. Capability fields private, non-cloneable, no constructor/deserializer; IDs/snapshots/receipts cannot confer authority. | [`structured_plan_and_capability_tampering_reject`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:4967`): actor/request/service, direction/baseline/Arc substitution, double submission and replay each reject; [`disabled_unready_stopped_and_foreign_services_reject`](../../apps/runtime/tests/safe_edit_transactions.rs) (`apps/runtime/tests/safe_edit_transactions.rs:372`) submits foreign public capability. | F3, F2 |
+| T05 Local API, authorization and lifetime | E:503 EditPolicyGate; E:877 write_arguments; E:901 policy_matches | Reserve bounded length-delimited arguments before allocation; exact apply/reverse ToolId, `LocalMutation`, actor/request/revision/effects/bytes. Only confirmed `RequireConfirmation` passes. Completed `execute_tool` precedes mutation queue/spawn/stage; executor performs none of those. | [`policy_gate_is_exact_confirmed_and_side_effect_free`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:5170`): Deny, bare Allow, missing/changed/reused confirmation, changed arguments/revision/effects and gate cancellation; no I event or mutation worker. | F3, F9 |
+| T06 Complete publication baseline and bounds before retention | I:205 capture; W:857 prepare_edit_baseline; E:721 prepare | Before eligibility capture all directory/entry kinds and exact bytes before/after build or validated cache acceptance; require equal scans and full root/document agreement. Custom detector coverage must be provable. Never replace saved publication baseline with two later scans. | [`complete_baseline_staleness_rejects`](../../apps/runtime/tests/safe_edit_transactions.rs) (`apps/runtime/tests/safe_edit_transactions.rs:505`): alter untouched call/module, metadata, roots or unknown input after preview; two equal later scans still reject. [`publication_baseline_admission`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:5413`) injects missing captured document/custom root. | F2, F3 |
+| T07 Complete publication baseline and bounds before retention | I:205 capture; I:323 verify_tree; E:1318 run_attempt | Finish namespace/cache maintenance before capture; directory markers remain inputs. Exclude only actual confined regular reserved cache file without source/discovery role and exact verified owned I files. Scan ignored directories/unknown `.oneagent`; serialize cache temps; leftover temp remains input. | `cache_namespace_and_scan_exclusions` (`apps/runtime/src/workspace/edit.rs:6124`) now inspects the prepared baseline for real EDT/Designer `.oneagent/configuration` roots, raw documents, descriptor and directory. `configuration_under_oneagent_survives_cache_and_transactions` (`apps/runtime/tests/safe_edit_transactions.rs:819`) exercises actual Missing/Failed cache compatibility, full rebuild, apply/undo and stale-source rejection. Existing namespace/load/write negatives remain. | F2, F3, F7 |
+| T08 Complete publication baseline and bounds before retention | I:160 EditIoBudget; I:205 capture; I:382 read_checked | Before collecting/sorting each entry/path admit 16,384 entries, 4,096 bytes/path, 4,194,304 total path bytes. Before reading admit metadata/remaining allowance: 8,388,608 bytes/file and 67,108,864 total. Limited read detects one extra byte; enumeration scratch bounded. | [`scan_bounds_precede_retention`](../../apps/runtime/src/workspace/edit_io.rs) (`apps/runtime/src/workspace/edit_io.rs:972`): exact/one-over each dimension, growing read, overflow and wide/deep trees; observe read/allocation counters, no over-bound retention. | F4 |
+| T09 Complete publication baseline and bounds before retention; order 1/3 | E:937 check_admission; I:471 with_admission; A:283 replacement_bytes | Before copies/buffers admit 4,096 operations/64 files, one Configuration/target, 1,048,576 original/result bytes per edited document, 8,388,608 aggregate originals/results each; checked result length before allocation. Preserve existing planner/adapter bounds. | `attempt_lifetime_and_bounds` (`apps/runtime/src/workspace/edit.rs:3086`) and `buffer_and_disk_bounds_precede_allocation` (`apps/runtime/src/workspace/edit_io.rs:1186`) retain operation/file/result/aggregate checks. `original_one_over_document_bound_rejects_admissible_result` (`apps/runtime/src/workspace/edit_io.rs:1140`) separately tests 1048576/1048577-byte originals and an admissible shorter result at the real I/O guard: exact Bounds before I/O, unchanged full baseline/bytes. Public over-bound construction is impossible, not a Runtime comparator test; public exact-limit positive remains. | F2, F3, F4, F10 |
+| T10 Complete publication baseline and bounds before retention | E:998 freeze_projection; E:472 EditUndo; E:1725 commit | Every baseline/verification/original/result/recovery copy plus new projection records, nested strings and scratch reserves within the same 268,435,456 bytes first through A/DP/EP count/reserve/emit before staging; share unchanged buffers, promptly release scans. Only one undo; expire before next apply/other successor/stop/poison. No rejected payload retained in error. | [`buffer_and_disk_bounds_precede_allocation`](../../apps/runtime/src/workspace/edit_io.rs) (`apps/runtime/src/workspace/edit_io.rs:1186`) covers bound arithmetic exact/one-over and overflow (real shared-lease peak and release are qualified separately under R1/R2/R4); [`attempt_lifetime_and_bounds`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3086`) asserts release on every terminal path including denied reversal/drop. | F4, F3 |
+| T11 Filesystem ownership, staging and guarantees; order 1/2/4/5 | I:352 validate_path; I:382 read_checked; I:556 create_owned | Before each source read, stage, replace, restore and cleanup validate canonical Workspace/Configuration roots and all ancestors with `symlink_metadata`; reject lexical escapes, symlinks, wrong kind/outside canonical path, unprovable platform identity, nlink != 1, duplicate identities and non-bijective document/file mapping. | `confinement_rechecked_at_every_io_boundary` (`apps/runtime/src/workspace/edit_io.rs:1630`) retains internal alias/root/ancestor/target/owned-file swaps. `outside_workspace_hard_link_rejects_without_touching_alias` (`apps/runtime/tests/safe_edit_transactions.rs:748`) adds the actual sibling outside-Workspace alias and separate sentinel, both inside the repository; ConfinementUnverifiable/NotNeeded/0 preserves bytes/dev/inode/nlink, source evidence and current Arc. | F2, F4 |
+| T12 Single coordinator and guard ordering, order 2/3 | A:283 replacement_bytes; E:1318 run_attempt | Check next publication increment before source mutation; validate document version, expected token, bounds/nonoverlap/canonical operation order; apply descending raw offsets preserving every other byte. | [`replacement_rejects_invalid_ranges_versions_and_tokens`](../../crates/analysis/tests/safe_edit.rs) (`crates/analysis/tests/safe_edit.rs:905`): stale version, wrong token, overlap/reordering/omission, invalid byte boundary and overflow reject; [`publication_barriers_and_overflow`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3269`) proves exhausted successor cannot stage/write. | F1, F3 |
+| T13 Filesystem ownership, staging and guarantees; order 4 | I:556 create_owned; I:422 OwnedEditFile | Before `create_new` reserve 16,777,216 disk bytes/128 files, bounded checked names without source extensions in same parent, private permissions; track exact created identity. Collisions never remove existing entries; no prefix sweep. Restore reuses backup slot. | `buffer_and_disk_bounds_precede_allocation` (`apps/runtime/src/workspace/edit_io.rs:1186`) retains exact/one-over disk admission. `staging_faults_preserve_sources` (`apps/runtime/src/workspace/edit_io.rs:1314`) captures occupied result/backup names in the baseline before staging, reaches actual create_new AlreadyExists exactly once and reports Io. One occupied-name attempt, no retries, create counts 1/2, owned retention 0/1 then zero after cleanup, no replacement and intact unowned bytes/identity/full baseline. Ownership-acquisition failures and exact retained outcomes are additionally qualified by the current ownership recovery section below. | F4 |
+| T14 Single coordinator and guard ordering, order 4 | I:616 stage_all; I:556 create_owned | Fully write results/backups, preserve standard permissions without broadening temp access, `sync_all`, close/read back exact bytes; verify all backups before first replace. Staging failure cleans only owned artifacts. | [`staging_faults_preserve_sources`](../../apps/runtime/src/workspace/edit_io.rs) (`apps/runtime/src/workspace/edit_io.rs:1314`): every create/write/permission/sync/close-observation/readback ordinal for results/backups, short/corrupt output; no replacement, successful cleanup or explicit cleanup recovery failure. | F4 |
+| T15 Single coordinator and guard ordering, order 5 | I:649 replace_checked | Repeat complete original baseline and path guards immediately before first replace; recheck original bytes/kind/identity before each later file in canonical path order. Rename verified sibling over target, no pre-delete/truncate/copy fallback. Record attempt before call and classify observed result even on ambiguous error. | [`replacement_ordinals_classify_ambiguous_failure`](../../apps/runtime/src/workspace/edit_io.rs) (`apps/runtime/src/workspace/edit_io.rs:1510`): faults before/after each actual rename and later-target external edit; recovery reflects observed bytes, never false success or lost unrelated change. | F4 |
+| T16 Single coordinator and guard ordering, order 6 | E:1318 run_attempt; W:1644 build; I:706 verify_results | Entire actual tree must equal baseline plus exact result bytes before rebuild, excluding only verified owned files. Build complete Workspace; repeat scan after build; evaluate A. No candidate cache write. | [`post_write_build_and_tree_failures_recover`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3495`): unrelated module/metadata mutation, added/removed root/file, edit during build; fail builder/Designer Complete/validation/rule/diagnostic composition; recover without candidate publication/cache write. | F3 |
+| T17 Complete semantic oracle 1/6 | A:1633 validate_postconditions; A:332 SafeEditEvidence | Before commit compare all Configuration IDs/roots/formats, Module identities/owners, document IDs/roles/paths/completeness/inventory and exact changed/untouched bytes. Other Configurations exactly equal; undo uses saved original projection. | `inventory_and_untouched_evidence_mismatch_rejects` (`crates/analysis/tests/safe_edit.rs:430`) and `semantic_candidate_faults_recover` (`apps/runtime/src/workspace/edit.rs:4879`) retain inventory/document/role/path/root and reachable candidate mutants. `existing_second_configuration_semantic_change_recovers` (`apps/runtime/src/workspace/edit.rs:4717`) adds two existing distinct Configurations, unchanged inventory and a constructor-valid role mutation after the real build. The actual unedited-Configuration comparator rejects with SemanticMismatch/Recovered/0 after replacement/restoration; positive control applies/increments once. Sole completeness variant remains type evidence. | F1, F3 |
+| T18 Complete semantic oracle 2 | A:1633 validate_postconditions; E:1104 compare_snapshot | BSL-owned expected target appears once and old target disappears; compare target name/kind/Module owner and all node payloads/provenance after the callable/directly-owned-Query closure and frozen DP/EP projection. Q owns Query IDs; exact binding/text and unchanged other-callable Query remain mandatory. Exact nonidentifier bytes also preserve export/async/parameters absent from Graph payload. No unrelated node change. | `node_and_edge_projection_rejects_unrelated_changes` (`crates/analysis/tests/safe_edit.rs:502`) and `semantic_candidate_faults_recover` (`apps/runtime/src/workspace/edit.rs:4879`) construct retained-old/wrong-new whole-Graph target IDs with identical node/edge counts and remapped incident endpoints. Earlier source/report evidence stays equal; the actual expected-ID lookup A:1703 rejects. Existing name/kind/owner/payload and Query closure cases remain. | F1, F3 |
+| T19 Complete semantic oracle 2 | A:1633 validate_postconditions; E:1104 compare_snapshot | Exhaustive endpoints/kinds/full provenance after the callable/directly-owned-Query closure and frozen producer projection; Reads/DependsOn targets remain exact; Compare every input to Graph’s canonical derived edge identity without allocating duplicate NodeIds/EdgeIds; GraphEdge stores no independent ID. Explicit provenance comparison is mandatory: `GraphEdge::eq` omits it. Include incoming/outgoing calls inside target and ownership. | `node_and_edge_projection_rejects_unrelated_changes` (`crates/analysis/tests/safe_edit.rs:502`) now includes pure Analysis equal-count Calls endpoint replacement and edge-only provenance mutation; nodes remain equal and provenance-only GraphEdge equality still holds. `semantic_candidate_faults_recover` (`apps/runtime/src/workspace/edit.rs:4879`) retains Calls/Reads/DependsOn edge evidence, preserving provenance in endpoint-only mutations. Actual endpoint lookup A:1734 and explicit provenance A:1744 reject. | F1, F3 |
+| T20 Complete semantic oracle 3 | A:283 replacement_bytes; A:1633 validate_postconditions; AP:2627 raw_range_to_source_span | Every occurrence in canonical document/range/kind order: exact cumulative byte deltas, replacement lengths, tokens/kinds/lexical owners/unique resolutions. Only prescribed target/range changes. Designer mappings remain required without unsupported Graph Calls edges. | `occurrence_projection_rejects_omission_and_ambiguity` (`crates/analysis/tests/safe_edit.rs:775`) and `semantic_candidate_faults_recover` (`apps/runtime/src/workspace/edit.rs:4879`) include constructor-valid same-count kind and consistent range/token/owner substitutions. Untouched Unique retarget changes only mapped target to another existing EntityId; bytes/version/range/token/kind/owner/count remain equal. Actual A:1674 occurrence guard rejects. Inconsistent lexical-owner-only and raw range/token/version mutations rejected by AP:533/AP:889 are constructor evidence, never Runtime comparator credit. | F1, F3, F11 |
+| T21 Complete semantic oracle 4 | DP:27 project_safe_edit_provenance; EP:26 project_safe_edit_provenance; E:998 freeze_projection | Freeze DP whole-module/declaration and EP nested Query/request/diagnostic provenance before stage/candidate. A independently enumerates typed before keys and rejects incomplete/duplicate/conflicting/unconsumed maps. Map before/result raw coordinates with canonical helpers; preserve path/source kind/role, producer/origin/confidence/resolution. Respect producer line-start/file-only anchors; never replace with token spans. Compare every node/edge/reference provenance record. | `anchor_and_reference_projection_rejects_loss` (`crates/analysis/tests/safe_edit.rs:977`) invokes `span_only_provenance_changes_reject` (`crates/analysis/tests/safe_edit.rs:1054`) with a valid unchanged-span positive and a fresh projection before the span-only negative. `semantic_candidate_faults_recover` (`apps/runtime/src/workspace/edit.rs:4879`) adds `fact_span` after real rebuild. Canonical SourcePosition/SourceSpan change only coordinates while path/producer/count remain equal; A:1720 rejects against frozen expected provenance. Existing BOM/Unicode/CRLF and file-only anchor controls remain. | F1, F3 |
+| T22 Complete semantic oracle 4 | EP:26 project_safe_edit_provenance; A:1601 validate_equivalence | Consume frozen EP complete terminal requests with dependent Query IDs and unchanged metadata; map typed references/source IDs/names/anchors; reconstruct terminal IDs via `reconstruct_terminal`; compare every category/expected kind/candidate/state/outcome/provenance. Resolved/unresolved/unsupported dispositions and statistics agree, no omitted request. | [`anchor_and_reference_projection_rejects_loss`](../../crates/analysis/tests/safe_edit.rs) (`crates/analysis/tests/safe_edit.rs:977`): lost unresolved request, altered candidate/outcome at equal statistics, canonical identity changed through a structural reference substitution or provenance change; no isolated corruption of a private derived ID; [`semantic_candidate_faults_recover`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:4879`) rejects. | F1, F3 |
+| T23 Complete semantic oracle 5 | W:1873 compose_rule_evidence; A:1601 validate_equivalence; E:1104 compare_snapshot | Require complete validation/rule/diagnostic composition; compare every existing report/status/count and complete record collection, code/severity/parameters/related evidence/anchors; no absent incomplete marker or omission-counter field is invented. Use before-bound DiagnosticFact keys and frozen canonical producer diagnostics, including malformed/unsupported Query; reconstruct canonical findings/IDs from typed inputs; unchanged messages exact, derived messages use known producer. Unclassifiable mapping fails closed, no blanket replacement/clean-project prerequisite. | `diagnostic_and_rule_projection_rejects_non_equivalence` (`crates/analysis/tests/safe_edit.rs:1128`) invokes `same_registry_rule_status_changes_reject` (`crates/analysis/tests/safe_edit.rs:1181`): canonical RuleEngine executes one identical nonempty registry/RulePlan/RuleId and one result, with all six directed Completed/NotApplicable/Failed transitions and unchanged-status positives. Runtime `semantic_candidate_faults_recover` (`apps/runtime/src/workspace/edit.rs:4879`) separately tests empty-to-nonempty report substitutions: W:1839 retains the real empty production registry. No nonempty same-count Runtime status execution or private report forge API is claimed; diagnostic whole-record negatives and mapped pre-existing positive remain. | F1, F3 |
+| T24 Complete semantic oracle 6; order 7 | W:1324 compose_change_impact; E:1792 predecessor_matches | Derive impact from actual adjacent pair after complete oracle; check current predecessor Arc and successor overflow. Undo receives new publication/impact IDs, never original ID. | [`publication_barriers_and_overflow`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3269`): stale Arc, wrong impact pair/overflow reject or recover; [`apply_reversal_preserve_exact_bytes_and_old_arcs`](../../apps/runtime/tests/safe_edit_transactions.rs) (`apps/runtime/tests/safe_edit_transactions.rs:284`) proves old readers immutable and one increment. | F3, F2 |
+| T25 Single coordinator and guard ordering, order 7/8 | E:1318 run_attempt; I:710 cleanup_owned; E:1759 abandon_commit | Check cancellation/predecessor/full state, remove all owned stage/backup while retaining pre-reserved originals; cleanup failure recovers. Final expected source/path scan and cancellation after cleanup precede sole commit `send_replace(Some(successor))`. Same turn installs baseline/outcome/undo and invalidates preparation. No fallible source I/O or cancellation rollback after commit. | [`final_cleanup_scan_and_commit_barrier`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3534`): cleanup failure, edit after cleanup, cancel at final guard/just after commit; only precommit cases recover, committed success remains. | F3 |
+| T26 Single coordinator and guard ordering, order 9 | E:1725 commit; E:1781 retain_success; W:1014 run_workspace_updates | Only accepted successor writes cache while serialized; success delivered after bounded cache attempt. Cache failure affects cache status, never source success/count. Existing schema/version; no baseline/capability/undo persistence. | [`cache_namespace_and_scan_exclusions`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:6124`) blocks/fails postcommit cache write without rollback; [`edit_commit_cache_failure_preserves_success`](../../apps/runtime/tests/persistent_cache.rs) (`apps/runtime/tests/persistent_cache.rs:7`) checks public status/cold restart without edit authority. | F3, F7 |
+| T27 Single coordinator and guard ordering | W:1014 run_workspace_updates; E:1181 execute | No admission during earlier build/cache write; no watcher/explicit-input build, cache write or clearing writer alongside transaction. Coalesce watcher noise; self-write-only baseline consumes no extra ID; true external change and bounded explicit input rebuild normally. | [`publication_barriers_and_overflow`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3269`) controls startup/build/cache/transaction/stop; [`edit_self_write_noise_and_external_change`](../../apps/runtime/tests/file_watching.rs) (`apps/runtime/tests/file_watching.rs:7`), [`edit_serializes_explicit_change_input`](../../apps/runtime/tests/git_change_workspace.rs) (`apps/runtime/tests/git_change_workspace.rs:8`) verify public ordering. | F3, F6, F8 |
+| T28 Recovery, failure precedence and reversal | E:1617 finalize_failure; E:1665 contain_recovery; I:734 restore_checked; I:768 restore_one | All failures after any attempted replacement enter joined recovery in reverse attempt order; restore only exact expected result identity/bytes or prove already original. Observe ambiguous failures. Stage/verify originals through same confinement; never overwrite third-party bytes/delete unknown entry. | [`recovery_ordinals_preserve_unrelated_edits`](../../apps/runtime/src/workspace/edit_io.rs) (`apps/runtime/src/workspace/edit_io.rs:1550`): each restoration/check/stage/rename ordinal, third-state bytes/kind/alias swaps; unchanged unrelated sentinels and complete outcome record. | F4 |
+| T29 Recovery, failure precedence and reversal | I:760 clean_unattempted; I:323 verify_tree; E:1617 finalize_failure | Recovery success requires full original bytes/tree/permissions and all owned artifacts removed; retain old publication/no increment, original closed cause plus `Recovered`, no undo. Restore exact originals, not semantic reconstruction. | [`recovery_outcomes_and_precedence`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3556`): failure after every replace then successful restore checks full state/old Arc; remaining temp/untouched-source change cannot report `Recovered`. | F3 |
+| T30 Recovery, failure precedence and reversal | E:1617 finalize_failure; E:691 shutdown | Restore/original verification/cleanup failure takes precedence as `RecoveryRequired`, trigger secondary. Clear current to None; invalidate capabilities/undo; disable edits/rebuild publication/cache writes; retain bounded recovery data. Stop preserves unremovable owned files/counts. Only operator repair and new cold validated service exits. | [`recovery_outcomes_and_precedence`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3556`): fail recovery then edit/watch/explicit-input/cache/stop; no new publication/write, old Arcs immutable, no force/retry, no source/path secrets. Ownership-acquisition failures and exact retained outcomes are additionally qualified by the current ownership recovery section below. | F3 |
+| T31 Recovery, failure precedence and reversal | E:297 prepare_reversal; E:721 prepare; E:1318 run_attempt; E:1804 compare_exact_snapshot | Receipt consumed even if preparation denied; same service/exact current applied successor Arc/ID/result baseline plus fresh confirmation. Saved originals/results/original semantics, symmetric bounds/guards/rebuild/cleanup; submitted reversal consumes undo on every outcome. Failure restores applied state or quarantines. | [`stale_reversal_and_reconfirmation_reject`](../../apps/runtime/tests/safe_edit_transactions.rs) (`apps/runtime/tests/safe_edit_transactions.rs:546`): foreign/stale successor, intervening apply/rebuild, denied/replayed confirmation, changed bytes; [`reversal_failures_restore_applied_state`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:3731`) covers shared fault ordinals and no replay. Ownership-acquisition failures and exact retained outcomes are additionally qualified by the current ownership recovery section below. | F2, F3 |
+| T32 Cancellation, shutdown and redaction | E:1749 deliver_terminal; E:691 shutdown; W:1014 run_workspace_updates | Before first replace cancel cleans staging; afterwards requests uninterruptible recovery. Dropped response never drops service ownership; terminal status retained until slot release. Stop closes admission/invalidates preparation/signals work/joins worker and recovery before clearing; committed success survives. | [`cancellation_drop_and_shutdown_join`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:5257`): cancel/drop/stop every phase, block restore and prove shutdown waits; no detached writer/late rollback. | F3, F5 |
+| T33 Recovery, failure precedence and reversal; Cancellation, shutdown and redaction | E:39 WorkspaceEditCause; E:1318 run_attempt; E:1617 finalize_failure | Precedence: availability, input/bounds, capability, policy, cancellation, publication/plan, source/path, staging; first error per phase except recovery override. Before output/log retention redact bytes/tokens/digests/arguments/absolute paths/nested errors; only bounded preview displays source projection. | [`closed_precedence_and_redaction`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:5385`): multiple simultaneous failures and secret sentinels in source/path/arguments/build/I/O error; inspect Debug/errors/audit/outcome/captured logs, only closed status/counts/IDs and deterministic results. Ownership-acquisition failures and exact retained outcomes are additionally qualified by the current ownership recovery section below. | F3, F9 |
+| T34 Compatibility and affected consumers; Owners and dependency direction | W:686 with_edit_policy; W:655 with_builder; Q:822 bsl_query_id | Additive opt-in Rust API only; no planner authority/new counter; preserve impact alias, eight-tool catalog, protocols/GraphQuery/diagnostics/adapter semantics/cache format. No product entry point enables edits. Pure A uses public G/L/D and admitted DP/EP/Q owners, no second planner/graph facts. Test canonical encoding and builder compatibility before/after helper extraction. | [`default_service_remains_read_only_with_edit_api`](../../apps/runtime/tests/workspace_service.rs) (`apps/runtime/tests/workspace_service.rs:7`) denies mutation; existing public consumer/paired planner suites reject unsupported/stale input and preserve observations. | F5, F10, F11, F12 |
+| T35 Complete publication baseline and bounds before retention; Local API, authorization and lifetime | W:857 prepare_edit_baseline; W:868 finish_edit_baseline; E:684 expire_capability | Edit-enabled initial instability fails startup; unstable successor retains predecessor/no increment. An unprovable or over-bound edit baseline never permits preparation; otherwise valid read-only evidence remains read-only. Preserve otherwise eligible Query-containing targets without blanket rejection. Every accepted nontransaction successor invalidates prepared challenge/authorization/undo; no time-based or cross-process credential exists. | [`publication_baseline_admission`](../../apps/runtime/src/workspace/edit.rs) (`apps/runtime/src/workspace/edit.rs:5413`): unstable before/after startup, rebuild and validated cache hit cannot become edit-eligible; over-bound baseline denies preparation; a watcher/explicit-input successor expires retained challenge and undo. Existing default read-only lifecycle remains valid. | F3, F5, F7 |
+
+### Complete named-oracle reconciliation
+
+The table below preserves the forty original named oracle functions and adds
+twelve first-remediation, four boundary-remediation and three ownership-recovery
+oracles: 59 existing functions. The seven new unwind functions above make
+66 reconciled names. This follow-on checked each
+declaration at `45147cf1649e9ca8315feb52c02a9936df0fa1f9` and the current focused group's exact
+`test ... ok` record, independently of aggregate target success. Additional
+producer and projection tests qualify T10/T16-T23; the one-MiB positive qualifies
+T09/T10/T35. Group counts below include existing tests too and are not 52 new
+independent suites. Runtime candidate substitutions execute after the real
+production build and before the production comparator, with expected projection
+already frozen before staging. They never supply their own expected evidence.
+
+| Named oracle | Exact test location | Successful focused groups |
+|---|---|---|
+| `anchor_and_reference_projection_rejects_loss` | [`crates/analysis/tests/safe_edit.rs:977`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `apply_reversal_preserve_exact_bytes_and_old_arcs` | [`apps/runtime/tests/safe_edit_transactions.rs:284`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `attempt_lifetime_and_bounds` | [`apps/runtime/src/workspace/edit.rs:3086`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `buffer_and_disk_bounds_precede_allocation` | [`apps/runtime/src/workspace/edit_io.rs:1186`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `cache_namespace_and_scan_exclusions` | [`apps/runtime/src/workspace/edit.rs:6124`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `cancellation_drop_and_shutdown_join` | [`apps/runtime/src/workspace/edit.rs:5257`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `closed_precedence_and_redaction` | [`apps/runtime/src/workspace/edit.rs:5385`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `complete_baseline_staleness_rejects` | [`apps/runtime/tests/safe_edit_transactions.rs:505`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `complete_plan_comparison_rejects_each_representable_private_field` | [`crates/analysis/src/refactoring.rs:3071`](../../crates/analysis/src/refactoring.rs) | F1, F10 |
+| `confinement_rechecked_at_every_io_boundary` | [`apps/runtime/src/workspace/edit_io.rs:1630`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `default_service_remains_read_only_with_edit_api` | [`apps/runtime/tests/workspace_service.rs:7`](../../apps/runtime/tests/workspace_service.rs) | F5 |
+| `designer_projection_preserves_canonical_provenance` | [`adapters/designer-xml/src/safe_edit.rs:305`](../../adapters/designer-xml/src/safe_edit.rs) | F11 |
+| `diagnostic_and_rule_projection_rejects_non_equivalence` | [`crates/analysis/tests/safe_edit.rs:1128`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `disabled_unready_stopped_and_foreign_services_reject` | [`apps/runtime/tests/safe_edit_transactions.rs:372`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `edit_commit_cache_failure_preserves_success` | [`apps/runtime/tests/persistent_cache.rs:7`](../../apps/runtime/tests/persistent_cache.rs) | F7 |
+| `edit_self_write_noise_and_external_change` | [`apps/runtime/tests/file_watching.rs:7`](../../apps/runtime/tests/file_watching.rs) | F6 |
+| `edit_serializes_explicit_change_input` | [`apps/runtime/tests/git_change_workspace.rs:8`](../../apps/runtime/tests/git_change_workspace.rs) | F8 |
+| `edt_projection_preserves_nested_query_evidence` | [`adapters/edt/src/safe_edit.rs:512`](../../adapters/edt/src/safe_edit.rs) | F11 |
+| `exact_one_mib_document_remains_eligible` | [`apps/runtime/tests/safe_edit_transactions.rs:715`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `final_cleanup_scan_and_commit_barrier` | [`apps/runtime/src/workspace/edit.rs:3534`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `inventory_and_untouched_evidence_mismatch_rejects` | [`crates/analysis/tests/safe_edit.rs:430`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `node_and_edge_projection_rejects_unrelated_changes` | [`crates/analysis/tests/safe_edit.rs:502`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `occurrence_projection_rejects_omission_and_ambiguity` | [`crates/analysis/tests/safe_edit.rs:775`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `policy_gate_is_exact_confirmed_and_side_effect_free` | [`apps/runtime/src/workspace/edit.rs:5170`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `post_write_build_and_tree_failures_recover` | [`apps/runtime/src/workspace/edit.rs:3495`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `producer_projection_completeness_and_bounds` | [`crates/analysis/tests/safe_edit.rs:1256`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `projection_freeze_precedes_io` | [`apps/runtime/src/workspace/edit.rs:3249`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `publication_barriers_and_overflow` | [`apps/runtime/src/workspace/edit.rs:3269`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `publication_baseline_admission` | [`apps/runtime/src/workspace/edit.rs:5413`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `query_containing_targets_preserve_complete_nested_evidence` | [`apps/runtime/tests/safe_edit_transactions.rs:444`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `recovery_ordinals_preserve_unrelated_edits` | [`apps/runtime/src/workspace/edit_io.rs:1550`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `recovery_outcomes_and_precedence` | [`apps/runtime/src/workspace/edit.rs:3556`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `replacement_ordinals_classify_ambiguous_failure` | [`apps/runtime/src/workspace/edit_io.rs:1510`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `replacement_rejects_invalid_ranges_versions_and_tokens` | [`crates/analysis/tests/safe_edit.rs:905`](../../crates/analysis/tests/safe_edit.rs) | F1, F10 |
+| `reversal_failures_restore_applied_state` | [`apps/runtime/src/workspace/edit.rs:3731`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `scan_bounds_precede_retention` | [`apps/runtime/src/workspace/edit_io.rs:972`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `semantic_candidate_faults_recover` | [`apps/runtime/src/workspace/edit.rs:4879`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `staging_faults_preserve_sources` | [`apps/runtime/src/workspace/edit_io.rs:1314`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `stale_reversal_and_reconfirmation_reject` | [`apps/runtime/tests/safe_edit_transactions.rs:546`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `structured_plan_and_capability_tampering_reject` | [`apps/runtime/src/workspace/edit.rs:4967`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `every_nested_copy_allocation_is_prepaid_and_releases_on_failure` | [`crates/analysis/src/safe_edit.rs:814`](../../crates/analysis/src/safe_edit.rs) | F1, F10 |
+| `every_read_ordinal_fails_through_real_io_routes` | [`apps/runtime/src/workspace/edit_io.rs:1253`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `nested_projection_allocations_are_prepaid_and_partial_failures_release` | [`adapters/edt/src/safe_edit.rs:441`](../../adapters/edt/src/safe_edit.rs) | F11 |
+| `ordinary_rebuild_cache_keeps_admission_busy` | [`apps/runtime/src/workspace/edit.rs:6043`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `policy_rejections_never_enter_mutation_queue` | [`apps/runtime/src/workspace/edit.rs:5977`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `prepaid_resolution_preserves_unicode_contexts_and_all_terminal_outcomes` | [`adapters/edt/src/query_source_resolution.rs:784`](../../adapters/edt/src/query_source_resolution.rs) | F11 |
+| `queued_cancellation_precedes_changed_predecessor` | [`apps/runtime/src/workspace/edit.rs:5705`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `queued_payload_remains_revocable_until_worker_claim` | [`apps/runtime/src/workspace/edit.rs:5833`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `retained_capabilities_release_payload_on_successor_and_stop` | [`apps/runtime/src/workspace/edit.rs:5606`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `reversal_read_ordinals_fail_closed` | [`apps/runtime/src/workspace/edit.rs:3604`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `shared_raw_projection_lease_survives_io_and_undo` | [`apps/runtime/src/workspace/edit.rs:5902`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `submit_availability_precedes_expired_or_malformed_capability` | [`apps/runtime/src/workspace/edit.rs:5773`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `existing_second_configuration_semantic_change_recovers` | [`apps/runtime/src/workspace/edit.rs:4717`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+| `original_one_over_document_bound_rejects_admissible_result` | [`apps/runtime/src/workspace/edit_io.rs:1140`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `outside_workspace_hard_link_rejects_without_touching_alias` | [`apps/runtime/tests/safe_edit_transactions.rs:748`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `configuration_under_oneagent_survives_cache_and_transactions` | [`apps/runtime/tests/safe_edit_transactions.rs:819`](../../apps/runtime/tests/safe_edit_transactions.rs) | F2, F3, F5, F6, F7, F8 |
+| `created_file_identity_failures_retain_exact_ownership` | [`apps/runtime/src/workspace/edit_io.rs:1388`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `created_file_identity_rejection_never_adopts_an_alias` | [`apps/runtime/src/workspace/edit_io.rs:1487`](../../apps/runtime/src/workspace/edit_io.rs) | F4 |
+| `created_file_identity_failures_require_recovery` | [`apps/runtime/src/workspace/edit.rs:3587`](../../apps/runtime/src/workspace/edit.rs) | F3 |
+
+`SourceEvidenceCompleteness::BslCallableRenameV1` (`AP:652`) and
+`RefactoringCompleteness::Complete` (`AP:1720`) have no alternative safe values.
+These are closed-type evidence. Invalid raw UTF-8/ranges/tokens/overlaps and
+forbidden Graph payload combinations are constructor evidence; they are never
+counted as Runtime comparator executions. T03's representable Analysis-private
+mutants call the real comparator at their owning module, with plan ID preserved.
+Private Runtime slot/identity/policy mutants and public foreign-service use
+exercise the reachable capability boundary without a public forge API.
+
+Parameter coverage is separate from Cargo test totals: 70 post-build semantic
+candidate mutations, 18 plan/capability cases, 110 original reversal phase/I/O ordinal
+cases across both formats, plus 66 real read/read_filled failure ordinals and
+360 normal/recovery reversal read cases, and 16 public Query format/disposition/Unicode
+combinations. Test data derives from the tracked paired Sprint 14 corpus plus
+complete Workspace descriptors and Query fixtures; the exact derivations are in
+the [Workspace fixture README](../../apps/runtime/tests/fixtures/workspace_service/README.md).
+Both complete production builders accept the temporary multi-file fixtures.
+EDT LF and Designer BOM/CRLF byte oracles cover longer/shorter Unicode names,
+declaration/local/qualified calls, unaffected bytes, exact reversal and old Arcs.
+
+## Remediation closure and new direct evidence
+
+The following complements every T01-T35 row above; it does not replace the
+accepted R/L/C/T split or count constructor rejection as Runtime execution.
+Current source and test positions above and in this correction inventory qualify
+`56fad47b`; historical validation sections retain their own immutable endpoints.
+The first-round corrections remain present.
+
+| Finding and affected requirements | Current production correction and directly executed oracle |
+|---|---|
+| R1 / T02,T10,T31,T32,T35 | `E:673 expire_capability`, `E:660 publish_baseline`, `E:680 shutdown`: service-revocable `Arc<Mutex<Option<EditAttempt>>>` stays with caller and queued command until worker claim; a Weak coordinator handle takes/drops payload on successor/stop. `E:4584 retained_capabilities_release_payload_on_successor_and_stop` checks actual Weak raw-buffer release across repeated successors and reversal stop; `E:4811 queued_payload_remains_revocable_until_worker_claim` checks the real unserviced queue and empty payload. Logical invalidation alone is not credited. |
+| R2 / T10,T18-T23 | `adapters/edt/src/bsl_graph.rs:707 capture_query_evidence` retains prepaid typed requests/diagnostics/edge-provenance vectors; duplicate merging reserves old/new overlap. `adapters/edt/src/query_source_resolution.rs:502 canonical_context` shares nonallocating count and fixed-capacity canonical emission; `:288 resolve_name_with_admission`, `:350 reserve_request_clone` and `bsl_graph.rs:1444 reserve_unresolved_call_inputs` prepay new producer arguments. `A:814 every_nested_copy_allocation_is_prepaid_and_releases_on_failure` covers 15 request + 12 diagnostic owner allocations. `EP:441 nested_projection_allocations_are_prepaid_and_partial_failures_release` covers 15 distinct quota attempts; `query_source_resolution.rs:784 prepaid_resolution_preserves_unicode_contexts_and_all_terminal_outcomes` compares legacy/admitted canonical records. |
+| R3 / T27 | `E:660 publish_baseline` preserves writer Busy; `W:1014 run_workspace_updates` remains owner through ordinary rebuild cache completion. `E:5021 ordinary_rebuild_cache_keeps_admission_busy` blocks the actual cache write, checks immediate Busy and later successful apply. `apps/runtime/tests/git_change_workspace.rs:8 edit_serializes_explicit_change_input` now waits for Watching at the expected identity and asserts exact AuthorizationMismatch, preserving the controlled cache regression. |
+| R4 / T10,T19 | `I:442 admission`, `I:462 with_admission`, `E:1259 run_attempt`: one lease includes baseline + two scans + two edited-byte allowances + read scratch, then transfers through frozen projection, I/O/recovery and undo. `A:1633 validate_postconditions` compares mapped source/target/kind and explicit complete provenance without duplicate owning identity scratch. `E:4880 shared_raw_projection_lease_survives_io_and_undo` observes real Query apply/reversal retained and peak charges and transfer to undo. |
+| R5 / T05,T33 | `E:335 submit` completes side-effect-free `execute_tool` before `try_send`; `E:1119 execute` rechecks availability/cancellation before claim/predecessor without executing policy again. `E:4955 policy_rejections_never_enter_mutation_queue` proves denial/cancel never queues; `E:4751 submit_availability_precedes_expired_or_malformed_capability` proves stopped/poisoned/unavailable/Busy precedence; `E:4683 queued_cancellation_precedes_changed_predecessor` proves Cancelled before PublicationMismatch with no transaction I/O. |
+| M1 / T03 | `AP:3071 complete_plan_comparison_rejects_each_representable_private_field` now also independently changes nested declaration document/module/configuration/version/kind/lexical owner, precondition document/version, operation configuration and both range endpoints, retaining the plan ID and calling the actual comparator. Absent fields and sole completeness variants remain explicit type evidence. |
+| M2 / T08,T14-T16,T25,T28,T29,T31 | `I:1114 every_read_ordinal_fails_through_real_io_routes` injects all 66 reached read/read_filled positions; `E:2582 reversal_read_ordinals_fail_closed` replays 360 EDT/Designer normal and recovery read positions, checking exact causes/recovery/tree/observer outcomes. `I:833 scan_bounds_precede_retention` adds a real 128-level tree and constrained scanner rejection before retaining the next path, preserving wide/exact/one-over checks. R2/R4 provide separate allocation/lease evidence. |
+| M3 / T33 | `E:1799 rejected` and `E:2709 reversal_failures_restore_applied_state` assert exact primary/secondary causes and RecoveryRequired override. `E:4363 closed_precedence_and_redaction` captures actual selected-worker tracing after positive `E:521 emit_worker_entry_calibration`; real nested detector failure and `I:88 io` conversion receive secret-bearing errors. Captured outcome/trace excludes secret tokens, names and absolute paths. Audit/Debug remain separate negative routes; no claim covers every process stdout/stderr stream. |
+| M4 | Direct real capability, queue, producer, allocation, ordinary-cache and I/O regressions for R1-R5 above are present and executed. Closure remains subject to independent review. |
+
+The allocation evidence has distinct scopes. Analysis instruments the actual
+owner after reservation/before `try_reserve_exact`, observes granted capacity,
+and injects failure at every one of the selected 15 request/12 diagnostic nested
+boundaries with return to the initial lease. EDT runs three production Query
+cases at five quotas: 15 quota attempts, **not 15 allocation boundaries**.
+The real shared-lease test proves transfer and accounted peak, not whole-process
+heap measurement. Existing canonical parsing and Graph/helper internal work stay
+within ADR-0064's accepted scoped exclusion; newly retained outputs and new
+producer-created constructor arguments are prepaid and are not reclassified as
+excluded internals. Count passes borrow scoped results without parsing or
+allocating output. Full semantic records and canonical encodings remain intact.
+
+The local `remediation/lowercase-capacity.rs` probe compiled/executed with exit 0
+and records U+0130 input 2 bytes/output 3/capacity 8/reservation 8 in
+`lowercase-capacity.log`. The retained lookup output is prepaid and checked.
+The arithmetic is **not proof of every internal reallocation overlap** of the
+unchanged canonical lowercase helper; those scoped internals remain under the
+accepted exclusion. Greek final sigma and all terminal resolution outcomes are
+covered separately by the production-builder equality test.
+
+## Boundary oracle closure and reachability
+
+All 35 rows retain the accepted R/L/C/T split. The retained boundary-cycle
+`oracle-remediation/35-row-nonvacuity-audit.{md,json}` records each guard,
+fixture/mutant, positive control and observable outcome; `35-row-mapping.json`
+is only a selector index. The five second-review closures are implementation
+claims verified against committed source and exact focused log records here.
+
+- **M1 / T11:** the public transaction is prepared before a hard link is created
+  in a sibling repository-owned temporary directory. Explicit assertions prove
+  the alias is outside Workspace but inside repository; source/alias share
+  device/inode and nlink=2. The real confinement guard (`I:101`) rejects before
+  mutation. Original source evidence/current Arc and both linked byte/identity
+  observations plus a separate external sentinel remain unchanged. The former
+  I/O fixture's internally named `outside` was not this external-alias evidence.
+- **M2 / T13:** occupied result and backup names now belong to the captured
+  baseline, so `I:604 stage_all` passes tree equality before `I:547 create_owned`
+  reaches `OpenOptions::create_new`. The `I:569 create_already_exists` marker
+  observes the actual OS error, not an injected checkpoint error. Both negatives
+  have exact Io, one collision marker, create counts 1/2, no replacement and
+  owned counts 0/1 before cleanup, zero afterwards. The algorithm makes one
+  occupied-name attempt with no retry/alternate name; unowned bytes/device/inode
+  and the complete baseline survive. Synthetic creation failures remain separate.
+- **M3 / T17:** the complete production EDT pair has two distinct existing
+  Configurations and constant identities/count. After the actual candidate build,
+  the test confirms the renamed target exists and the second Configuration was
+  equivalent before changing only a constructor-valid document role. The real
+  `E:1064 compare_snapshot` records entry at `E:1085` into `validate_equivalence`
+  and completion at `E:1089`. Entry occurs once for each positive/negative;
+  completion is absent only for the negative. SemanticMismatch/Recovered/0
+  follows actual replacement/restoration; original disk/source evidence and old
+  Arc survive. The unmutated pair applies with one publication increment.
+- **M4 / T09:** original 1048577 bytes is public-constructor-unreachable:
+  `SourceDocument::new` and `SourceEvidenceAdmission` already reject it. The real
+  `I:462 with_admission` original-byte guard is independently executable using
+  1048576/1048577-byte originals, one file, a shorter result below 1 MiB and
+  admissible aggregates/baseline/raw lease. Exact limit stages and cleans two
+  owned files; one-over returns Bounds before any I/O event with unchanged full
+  baseline/bytes. This is I/O-owner evidence, not an impossible Runtime semantic
+  publication or forged plan. Existing public exact-one-MiB positive remains.
+- **M5 / T07:** real EDT/Designer roots under `.oneagent/configuration` are built
+  by production discovery. `E:5102 cache_namespace_and_scan_exclusions` directly
+  checks the bound prepared baseline contains directory, all raw documents and
+  descriptor. The public `:819` oracle observes read-only default rejection,
+  Missing cache load and Failed writes: ordinary cache scanning excludes
+  `.oneagent` and its strict codec rejects incomplete source coverage, so startup
+  uses complete rebuild. Apply/undo succeed despite Failed writes. A later
+  `.oneagent` source mutation returns SourceChanged/NotNeeded/0 without semantic
+  publication or overwriting external bytes. No successful cache Hit/write or
+  cache schema change is claimed for this Configuration case.
+
+## Semantic comparator oracle closure and reachability
+
+The complete current `comparator-oracles/matrix-audit.json` preserves all 35
+accepted R/L/C/T rows, actual guards and test placement; `row-source-audit.json`
+and `named-oracles.json` bind declarations and selectors. The five third-review
+corrections in T18-T23 above extend existing named tests, so the focused oracle
+historical comparator inventory remained 56 names while the Runtime candidate table grows from 64 to 70 cases.
+They introduce no production API, dependency, semantic producer or forge API.
+
+T18's constructor-valid whole-Graph identity substitutions remap incident edge
+endpoints while retaining name/payload/provenance and all earlier source/report
+checks. With equal node/edge counts, A:1703 reaches the actual missing expected
+target lookup. A removed node still belongs to the earlier count-guard case.
+T19's Analysis-only Calls endpoint/provenance cases now qualify F1 independently;
+the third review never claimed that Runtime's existing edge coverage was absent.
+T20 uses `SourceOccurrence::new_with_lexical_owner`, `SourceDocument::new` and
+`SourceEvidenceSet::new` successfully, preserving raw bytes and occurrence count.
+A bare inconsistent lexical owner remains rejected at AP:533/AP:889. T21 uses
+canonical spans and the same path/producer; its fresh frozen expected projection
+is not reused after positive consumption or derived from the mutated candidate.
+
+T23's canonical Analysis `RuleEngine` uses one identical nonempty registry,
+configuration, plan and RuleId for six directed status changes; each old status
+has a positive control, and the one-result count and empty diagnostics match.
+Production Runtime constructs `RuleRegistry::new([])` at W:1838; its test at
+E:3107 explicitly checks empty results before empty-to-nonempty substitution.
+That producer boundary remains unchanged and supplies no same-count nonempty
+Runtime status claim. The pure Analysis evidence directly qualifies the report
+comparison without adding a production rule or weakening constructor invariants.
+
+For Runtime semantic mutants the actual post-build hook feeds the production
+comparator. The shared `rejected` helper observes `built` and absence of
+`compared`, exact SemanticMismatch/Recovered/0, original full source bytes and
+old current Arc; fresh confirmation retry succeeds. These are post-replacement
+recovery observations, distinct from pre-write constructor rejection. The
+canonical rule-status oracle is pure Analysis and has no Runtime recovery claim.
+
+## Current stable validation and immutable handoff
+
+The current stable source and handoff are the [controlled-unwind evidence](#current-controlled-unwind-evidence-and-review-handoff) above.
+The following ownership-recovery cycle is historical and does not qualify the
+new source.
+
+### Historical ownership-recovery validation
+
+Production `I:571-584 create_owned` registers `OwnedEditFile { identity: None,
+present: true }` immediately after successful open. Metadata/identity errors
+cannot bypass registration. `I:224` refuses unknown-identity scan exclusions;
+`I:650`, `I:673`, `I:706`, `I:766` and `I:783` require proven identity for
+reads, cleanup and restore. `E:1487-1517` retains the I/O owner and count,
+poisons admission and reports RecoveryRequired when cleanup/restoration fails.
+This is a production control-flow correction to T13/T14, with T30/T31/T33
+retention, reversal and precedence consequences. It does not widen authority.
+
+`created_file_identity_failures_retain_exact_ownership` executes metadata and
+identity errors after actual creation at each of four staging/two recovery
+ordinals; it checks exact empty retention, unchanged sources/sentinel and refusal
+to adopt a later readable or replaced pathname. The Unix alias test executes
+real link-count identity rejection and proves removing the alias does not grant
+cleanup authority. `created_file_identity_failures_require_recovery` uses the
+real coordinator, and `reversal_failures_restore_applied_state` extends both
+format runs with all 12 new point/ordinal cases (24 paired executions). The
+original 110 reversal cases remain; these are additional parameter cases, not
+24 new Cargo tests. Positive staging/recreation still restores a full baseline.
+The retained all-35 audit and source-body comparison preserve 53/54 previous
+per-row oracle bodies; only the reversal table changed among them. The third
+review's five comparator closures remain unchanged.
+
+Current log root: `local-artifacts/codex-runs/sprint-41/owned-file-remediation/`.
+The exact F1-F12 commands are unchanged from the historical command table below;
+G1-G6 are fmt/check/test/clippy/doc/diff with their exact commands in
+`validation-commands.json` and results in `validation-results.json`. Logs are
+`logs/F1.log` through `logs/F12.log` and `logs/G1.log` through `logs/G6.log`.
+All 18 command statuses, individual log hashes and raw target counts were
+independently reconciled, including 59 declarations and exact focused `test ... ok`
+records. Aggregate and overlapping focused counts are never summed.
+
+- `stable-source-manifest.json`: 243 entries, SHA256 `658e1fc02317a395ce89ffbf992f4206b8a234aab43a8c45e8116bac6cbadae3`.
+- `stable-input-manifest.json`: 836 entries, SHA256 `dd0e0e22615453995421380bb524789e6c4323adbf21a925ccf007ae5dc4164c`.
+- `log-sha256.json`: 24 entries, SHA256 `9597641b65954c1b2b618e33883fefb1ddf6d130e6604568db5b6538beb248a8`.
+
+- `apps/runtime/src/workspace/edit_io.rs`: SHA256 `9477241d7787e14127cde3c28aa1646a3d32a4b814d2a543e7aa32543aac4647`.
+- `apps/runtime/src/workspace/edit.rs`: SHA256 `060a8f5b42f0924d60a7d17ab1d405d9bbf65cf9b63b44aa9c61a0776649196c`.
+- `stable.patch`: SHA256 `dd20e61026eef2b68d8a463da6f26ed26a5c4c83c0b9e1c27e9d0d4a0da77a01`.
+
+Reproduction uses `TMPDIR=$PWD/local-artifacts/codex-runs/sprint-41/owned-file-remediation/tmp`,
+`GIT_CEILING_DIRECTORIES=$TMPDIR`,
+`CARGO_TARGET_DIR=$PWD/local-artifacts/codex-runs/sprint-41/remediation/target`
+and `RUSTDOCFLAGS="-D warnings"`. Only recorded macOS execution is qualified.
+
+The fourth-review source and failure records remain at
+`local-artifacts/codex-runs/sprint-41/review-r4/independent/pause-handoff.json`
+and `local-artifacts/codex-runs/sprint-41/review-r4/primary/finding.json`.
+`panic-diagnosis.json` preserves the unknown timeout cause;
+`development-history.json` retains the new clippy failure and exact retry.
+No historical failed review is converted into a pass.
+
+## Historical semantic-comparator validation and handoff
+
+All current/latest claims in this historical section qualify only the earlier
+comparator cycle and its documentation; the ownership cycle above supersedes
+its current-head/count claims without removing its failures.
+
+This cycle qualifies only `32ffd52e485e7b04c72bf51e77c4e25d69325d0e`.
+Current log root: `local-artifacts/codex-runs/sprint-41/comparator-oracles/`.
+All **243** source/Cargo hashes match current files and committed blobs; all
+**836** tracked-input hashes match committed blobs at this implementation head
+(the five documentation files change afterwards). SHA256 manifests are:
+
+- `stable-source-manifest.json`: `5f0b3803dd211c55bcf5b91347ccc2b599abf072faeec59a09e9b4ff6aa8c411`.
+- `stable-input-manifest.json`: `7dd2180ba95cebe73fa8c4fd8b562031279915d256a69d899f581bf2f1ea5189`.
+- `log-sha256.json`: **25** retained logs, `898cc491d13c7e90cb317329ff4658ee88fd3de7c9d6d50b9da2ba174efc1f8a`.
+
+The two changed source hashes are E
+`7a29b837d794736e1f6bf19374a0d88ded5b23faf2b20f43942558314f681d26`
+and `crates/analysis/tests/safe_edit.rs`
+`558ec693964d518f89e87221e4a44a8edb13896469dae889f1d068757f9d9402`.
+`stable.patch` SHA256 is
+`b71cd2927195054819e0708c28b422faa60c3e945903e2a6cdd7a6cc7ede62ef`.
+`validation-results.json` records every exact command, exit and raw target count
+with its individual log SHA256. Documentation reconciliation independently
+verified all 18 command hashes/counts and 56 declared names in successful focused
+logs, without printing complete successful logs or rerunning Rust.
+
+Reproduction uses the repository root, `TMPDIR=$PWD/local-artifacts/codex-runs/sprint-41/comparator-oracles/tmp`,
+`GIT_CEILING_DIRECTORIES=$TMPDIR`,
+`CARGO_TARGET_DIR=$PWD/local-artifacts/codex-runs/sprint-41/remediation/target`,
+and `RUSTDOCFLAGS="-D warnings"`. All 18 stable commands exited 0. The exact
+commands and target counts are the same as the historical boundary-cycle table
+below, but current logs are exclusively `comparator-oracles/logs/`, not the
+historical table's root. F1-F12 passed **82/8/31/8/18/11/13/12/33/222/401/37**.
+G1-G6 (fmt/check/test/clippy/doc/diff) all passed; G3 has **1461 tests across
+83 nonempty targets and four empty unit targets**, zero failed/ignored. The
+empty targets remain CLI main, Runtime main, MCP main and LSP main; none is
+capability evidence. Focused groups have no zero-match filters. Counts overlap
+between commands and are not summed into canonical or historical totals.
+
+Current development failures remain in `development-history.json`:
+`development-runtime-1.log` exited 101 for unresolved `oneagent_bsl` (not a
+Runtime dependency); the test was corrected through the existing canonical
+`RefactoringTarget` API, with no dependency added, then the focused retry passed.
+`development-clippy-1.log` exited 101 for too_many_lines, items_after_statements
+and redundant closure; local test fixes and package retry passed. The initial
+row selector exited 1 with IndexError because it included correction tables;
+the narrowed matrix selector passed. Five development command logs and the
+selector history are retained. `git-operational-events.json` preserves the
+commit approval history; the dispatcher committed only the validated diff
+following the user's explicit authorization. The current stable cycle had no
+failed command. Earlier watcher timeout (exact caller/cause unknown), public
+fixture/lint failures, Git-fixture/F8 failures, incomplete attempts and all
+three blocked reviews remain historical, with no inherited review pass.
+
+This separate documentation task changes only five existing documentation paths.
+Its compact `comparator-evidence/` artifacts retain `reconcile.py`,
+`reconciliation.json`, documentation source/anchor/manifest/budget checks,
+prompt syntax, explicit suite 8/repository 22 and diff-check logs. Source and
+log manifests remain local evidence, not new tracked artifacts. Context window
+and measured telemetry are unknown/unavailable; bounded-selector admission is
+warning. Only the existing macOS execution is qualified. Fresh independent and
+primary Task 7 validation and same-reviewer artifact consistency must examine
+an immutable integrated endpoint including this evidence commit. Sprint 41 is
+active, Task 7 pending and v0.7 release ineligible. All 11 Sprint 40, four
+Sprint 40.1 and eight Sprint 41 prompts remain; no source change, formal review
+artifact, retirement, completion, merge or push belongs to this task.
+
+## Historical boundary-oracle validation and handoff
+
+The following cycle qualifies `a78568b250201fbab35bb36928d82b3b8fb9f414`
+and its separate `ef5215859c0b353cb5de54695d8b249b616a56f0` documentation.
+All “current” and “latest” references within this historical section refer to
+that earlier cycle; its failures and evidence remain intact.
+
+Current log root: `local-artifacts/codex-runs/sprint-41/oracle-remediation/`.
+The stable source manifest has **243** inputs, SHA256
+`d82154fcfd7540a376fa8bec1638ee727fc390c0d715316dfdeda373ecb8c5f5`.
+This documentation task independently matched every input to its working file
+and committed `a78568b2` blob, verified all **44** current/historical log hashes,
+parsed every current raw test summary and matched all **56** named oracles to
+current declarations and successful focused log records. Counts overlap between
+commands and public fixture inclusions; no historical/focused total is added to
+the canonical count. `final-git.json` binds the stable source to the clean code
+commit. `validation-commands.json` and `validation-results.json` give exact
+commands/statuses/target identities; `log-sha256.json` binds retained logs.
+
+For reproduction, use the repository root and these exact paths:
+
+```bash
+export TMPDIR="$PWD/local-artifacts/codex-runs/sprint-41/oracle-remediation/tmp"
+export GIT_CEILING_DIRECTORIES="$TMPDIR"
+export CARGO_TARGET_DIR="$PWD/local-artifacts/codex-runs/sprint-41/remediation/target"
+export RUSTDOCFLAGS="-D warnings"
+```
+
+Stable attempt 2 completed all 18 commands with exit 0:
+
+| Key | Exact command | Passed / nonempty targets / empty targets | Full log |
+|---|---|---|---|
+| F1 | `cargo test -p oneagent-analysis --lib --test safe_edit` | 82 / 2 / 0 | `logs/F1.log` |
+| F2 | `cargo test -p oneagent-runtime --test safe_edit_transactions` | 8 / 1 / 0 | `logs/F2.log` |
+| F3 | `cargo test -p oneagent-runtime --lib workspace::edit::tests::` | 31 / 1 / 0 | `logs/F3.log` |
+| F4 | `cargo test -p oneagent-runtime --lib workspace::edit_io::tests::` | 8 / 1 / 0 | `logs/F4.log` |
+| F5 | `cargo test -p oneagent-runtime --test workspace_service` | 18 / 1 / 0 | `logs/F5.log` |
+| F6 | `cargo test -p oneagent-runtime --test file_watching` | 11 / 1 / 0 | `logs/F6.log` |
+| F7 | `cargo test -p oneagent-runtime --test persistent_cache` | 13 / 1 / 0 | `logs/F7.log` |
+| F8 | `cargo test -p oneagent-runtime --test git_change_workspace` | 12 / 1 / 0 | `logs/F8.log` |
+| F9 | `cargo test -p oneagent-tool-policy --all-targets` | 33 / 2 / 0 | `logs/F9.log` |
+| F10 | `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets` | 222 / 12 / 0 | `logs/F10.log` |
+| F11 | `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets` | 401 / 23 / 0 | `logs/F11.log` |
+| F12 | `cargo test -p oneagent-runtime --test mcp_process --test mcp_semantic_tools --test lsp_stdio --test graph_query_api` | 37 / 4 / 0 | `logs/F12.log` |
+| fmt | `cargo fmt --all -- --check` | not a test command | `logs/fmt.log` |
+| check | `cargo check --workspace --all-targets` | not a test command | `logs/check.log` |
+| test | `cargo test --workspace --all-targets` | 1461 / 83 / 4 | `logs/test.log` |
+| clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | not a test command | `logs/clippy.log` |
+| doc | `cargo doc --workspace --no-deps` | not a test command | `logs/doc.log` |
+| diff | `git diff --check` | not a test command | `logs/diff.log` |
+
+Canonical test: **1461 passed / 83 nonempty targets / four empty unit targets**,
+zero failed/ignored. The empty targets are CLI `src/main.rs`, Runtime
+`src/main.rs`, `src/bin/oneagent-mcp.rs` and `src/bin/oneagent-lsp.rs`; exact
+harness identities are retained in `validation-summary.md` and reconciliation.
+They supply no capability credit. Every focused group is nonempty. No Rust
+command is rerun for this five-document follow-on.
+
+**Retained latest failures:** `logs/dev-public-1.log` exited 101 (7 passed,
+2 failed): the oversized public fixture was rejected by the source constructor,
+and the `.oneagent` cache success/Hit expectation contradicted the existing
+codec. Corrected owner/cache assertions passed (8 public tests); no production
+protection bypass or relaxed constructor was introduced. `logs/dev-clippy-1.log`
+retains the redundant-closure lint (exit 101); the `SourceDocument::occurrences`
+replacement and focused retry passed. `development-history.json` preserves all
+nine development/retry commands.
+
+The first stable cycle passed F1-F12/fmt/check, then canonical test exited 101
+(1293 passed, one failed, zero ignored before Cargo stopped) in the unchanged
+watcher test's generic five-second update wait at
+`apps/runtime/tests/file_watching.rs:256`. Exact caller/cause is unknown because
+no backtrace was captured; a watcher coalescing race is only a hypothesis.
+Clippy/doc/diff were not reached. `stable-attempt-1/` retains its commands,
+results, logs and identical manifest. The exact focused watcher retry passed,
+then the complete second cycle above passed on unchanged source; no timeout,
+assertion or source adjustment was made. This is not first-attempt success.
+Older failures below and both blocked review gates remain separate histories.
+
+The latest three-path diff changes no production API, dependency, Graph/Common,
+Coverage registry, cache schema or wire/client catalog. It adds test-only event
+observations and four named tests, extending the existing baseline/collision
+oracles; the same OpenOptions result still receives the same I/O conversion.
+The earlier additive public compatibility audit below remains applicable.
+Current consumers are qualified by F5/F7/F10-F12 and this implementation cycle,
+not by the incomplete historical reviewer runs. Only this macOS host ran.
+
+Compact documentation-task outputs are under
+`local-artifacts/codex-runs/sprint-41/oracle-evidence/`: `reconciliation.json`,
+`reconciliation.log`, `documentation-checks.json`, `documentation-checks.log`,
+`prompt-syntax.log`, `prompt-suite.log`, `prompt-repository.log`, `diff-check.log`
+and `final-git.json`. The first local reconciliation attempt incorrectly looked
+for a new `.oneagent` test name in E; the baseline assertions extend an existing
+oracle. Correcting that selector yielded 56 unique names, with no source change;
+`reconciliation-attempt-1.log` preserves the failure. Context window/telemetry
+are unknown/unavailable; narrowed-selector admission is warning. Documentation
+checks cover exact paths/anchors/locations, all 35 rows, four matching budget
+records and seven manifest tasks; prompt syntax, explicit suite 8, repository 22
+and working/staged/committed whitespace checks qualify only these documents.
+A fresh Task 7 must audit an immutable integrated endpoint including this
+separate documentation commit, with independent and primary validation plus
+artifact consistency. Sprint 41 stays active; no retirement/release/merge/push
+or completion action occurs here.
+
+## Historical first-remediation validation and handoff
+
+The following historical subsection qualifies `aaeacbfa`, not the current head.
+Its 1447 tests and 52 names remain separate first-remediation results; the
+current 1461/56 evidence above supersedes their role as current implementation
+inputs without rewriting either failed review or prior validation history.
+
+The retained current log root is
+`local-artifacts/codex-runs/sprint-41/remediation/`. `validation-commands.json`
+and `validation-results.json` contain full commands, statuses and target counts;
+`log-sha256.json` verifies 50 retained current/historical logs. All 243 Rust/Cargo
+inputs match both current source and `stable-source-manifest.json`, SHA256
+`dcd2e411c611e7fc8bef959b5e46fb18c398d595c503038ec7493b7ffb1a017e`.
+The runner checked the manifest before every command. `final-git.json` binds
+these inputs to committed `aaeacbfa` and its eight changed source blob hashes.
+The follow-on independently reconciled raw log summaries and 52 exact named
+`test ... ok` records in the focused groups; no historical count was added.
+
+Every Cargo reproduction uses the repository root and the exact environment:
+
+```bash
+export TMPDIR="$PWD/local-artifacts/codex-runs/sprint-41/remediation/tmp"
+export GIT_CEILING_DIRECTORIES="$TMPDIR"
+export CARGO_TARGET_DIR="$PWD/local-artifacts/codex-runs/sprint-41/remediation/target"
+```
+
+All 18 commands below exited 0. The test columns are passed / nonzero targets /
+zero harnesses; non-test commands have no test claim. Log filenames expand
+under the current log root, not the historical Task 5 directory.
+
+| Key | Exact command | Passed / targets / zero | Full log |
+|---|---|---|---|
+| F1 | `cargo test -p oneagent-analysis --lib --test safe_edit` | 82 / 2 / 0 | `logs/F1.log` |
+| F2 | `cargo test -p oneagent-runtime --test safe_edit_transactions` | 6 / 1 / 0 | `logs/F2.log` |
+| F3 | `cargo test -p oneagent-runtime --lib workspace::edit::tests::` | 28 / 1 / 0 | `logs/F3.log` |
+| F4 | `cargo test -p oneagent-runtime --lib workspace::edit_io::tests::` | 7 / 1 / 0 | `logs/F4.log` |
+| F5 | `cargo test -p oneagent-runtime --test workspace_service` | 16 / 1 / 0 | `logs/F5.log` |
+| F6 | `cargo test -p oneagent-runtime --test file_watching` | 9 / 1 / 0 | `logs/F6.log` |
+| F7 | `cargo test -p oneagent-runtime --test persistent_cache` | 11 / 1 / 0 | `logs/F7.log` |
+| F8 | `cargo test -p oneagent-runtime --test git_change_workspace` | 10 / 1 / 0 | `logs/F8.log` |
+| F9 | `cargo test -p oneagent-tool-policy --all-targets` | 33 / 2 / 0 | `logs/F9.log` |
+| F10 | `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets` | 222 / 12 / 0 | `logs/F10.log` |
+| F11 | `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets` | 401 / 23 / 0 | `logs/F11.log` |
+| F12 | `cargo test -p oneagent-runtime --test mcp_process --test mcp_semantic_tools --test lsp_stdio --test graph_query_api` | 37 / 4 / 0 | `logs/F12.log` |
+| fmt | `cargo fmt --all -- --check` | not a test command | `logs/fmt.log` |
+| check | `cargo check --workspace --all-targets` | not a test command | `logs/check.log` |
+| test | `cargo test --workspace --all-targets` | 1447 / 83 / 4 | `logs/test.log` |
+| clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | not a test command | `logs/clippy.log` |
+| doc | `cargo doc --workspace --no-deps` | not a test command | `logs/doc.log` |
+| diff | `git diff --check` | not a test command | `logs/diff.log` |
+
+F1 is 75 library + 7 integration tests; F9 is 26 + 7. All focused groups are
+nonempty. Canonical test is **1447 passed / 83 nonzero targets / 4 zero
+harnesses**, zero failed/ignored. The empty CLI main, Runtime main, MCP binary
+and LSP binary harnesses are not capability evidence. Focused groups overlap;
+never add them to the workspace count. No Cargo command was rerun for this
+five-document follow-on.
+
+Historical stable attempt 1 remains in `stable-attempt-1/`: F1-F7 passed,
+F8 failed 9/1 because its test treated publication as ordinary update completion.
+The subsequent lifecycle-aware test change is explicit; final attempt 2 above
+qualifies the corrected source. `development-history.json`, `logs/dev-*.log`
+and `closure.md` preserve earlier harness calibration, type/lint corrections
+and canonical-constructor test rejection. The original Task 5 Git-fixture
+failure and 1435-test successful repeat remain below as historical results.
+Only macOS was executed; no Linux/Windows or GUI validation claim is made.
+
+Current consumer audit compares exact original/cumulative/remediation diffs:
+Runtime exports and signatures, public planner/source types, Graph/Common/Tool
+Policy production, Cargo manifests/lockfile, Coverage registries, protocol and
+client catalog, product entry points and cache schema remain unchanged by the
+eight-path remediation. Analysis additively exposes `SafeEditProvenance::source`,
+`SafeEditRequest::{source_node,same_resolution_as}` and
+`SafeEditDiagnostic::same_payload_as`; these borrowed access/comparison helpers
+serve the admitted EDT producer/projector. Existing counting, admission and
+typed-copy APIs remain compatible, with no API removal or migration. Graph/BSL/common -> Analysis -> adapters -> Runtime stays intact.
+Only tests enable the local Rust edit API. Existing cache schema 1/eight MCP
+tools/read-only defaults and exact canonical Graph semantics remain unchanged;
+F5/F7/F10-F12 and the current canonical gate qualify those consumers.
+
+The local follow-on evidence root is
+`local-artifacts/codex-runs/sprint-41/remediation-evidence/`: the compact summary,
+source/log/named-oracle reconciliation, scope reproduction, API/consumer audit
+and documentation checks identify this start commit and its eventual documentation
+commit. Measured context telemetry/effective window are unavailable; preflight
+used a warning and bounded selectors, not a numerical headroom claim.
+The follow-on documentation checker passed five allowed paths, 275 Markdown
+references (five anchors), 35 rows/123 current production references/52 named
+oracles, four consistent efficiency records and seven manifest tasks.
+`bash -n scripts/validate-codex-prompts.sh`, the explicitly selected eight-file
+Sprint 41 suite, repository validator (22 files) and `git diff --check` exited 0.
+Its first local checker attempt failed because it expected the matrix's prose
+budget in machine-record syntax; the corrected checker passed without changing
+the accepted budget. That local failure log is preserved separately.
+Task 7 must review the new immutable integrated endpoint independently and run
+its own primary/completion validation and artifact consistency. No completion,
+previous-suite retirement, merge, push, tag or release eligibility follows here.
+
+## Historical Task 5 validation commands and retained logs
+
+All paths in the command table are relative to this repository. The complete
+Task 5 log directory is
+`local-artifacts/codex-runs/sprint-41/task-5/producer-resume/`.
+The log filename in each row expands beneath that exact directory. Full command
+strings, exit statuses, per-target identities and counts are retained in
+`stable-focused-results.json`, `stable-full-results.json`, and Task 6's
+`local-artifacts/codex-runs/sprint-41/task-6/reconciliation.json`.
+The latter was independently derived from the actual log summary/name records.
+
+The 24 source/test/fixture paths in `stable-source-manifest.json` match their
+committed blobs; its recorded SHA256 is
+`402badacaa29e2e357ed44441535b3a457dd62dae250ab3874319420583668f8`.
+Only the Runtime library cfg(test) candidate substitutions `query_other_callable`
+and `query_owner` were finalized after F2. F1 Analysis and F2 public integration
+inputs and all production files remained identical; F3 onward and the canonical
+gate cover the final test source. Earlier development passes are not added to
+the stable totals.
+
+Every Cargo reproduction must use the repository root and this environment:
+
+```bash
+export TMPDIR="$PWD/local-artifacts/codex-runs/sprint-41/task-5/producer-resume/tmp"
+export GIT_CEILING_DIRECTORIES="$TMPDIR"
+```
+
+| Key | Exact command | Exit | Passed / nonzero targets / zero harnesses | Full log filename |
+|---|---|---:|---|---|
+| F1 | `cargo test -p oneagent-analysis --lib --test safe_edit` | 0 | 81 / 2 / 0 | `stable-F1.log` |
+| F2 | `cargo test -p oneagent-runtime --test safe_edit_transactions` | 0 | 6 / 1 / 0 | `stable-F2.log` |
+| F3 | `cargo test -p oneagent-runtime --lib workspace::edit::tests::` | 0 | 20 / 1 / 0 | `stable-F3.log` |
+| F4 | `cargo test -p oneagent-runtime --lib workspace::edit_io::tests::` | 0 | 6 / 1 / 0 | `stable-F4.log` |
+| F5 | `cargo test -p oneagent-runtime --test workspace_service` | 0 | 16 / 1 / 0 | `stable-F5.log` |
+| F6 | `cargo test -p oneagent-runtime --test file_watching` | 0 | 9 / 1 / 0 | `stable-F6.log` |
+| F7 | `cargo test -p oneagent-runtime --test persistent_cache` | 0 | 11 / 1 / 0 | `stable-F7.log` |
+| F8 | `cargo test -p oneagent-runtime --test git_change_workspace` | 0 | 10 / 1 / 0 | `stable-F8.log` |
+| F9 | `cargo test -p oneagent-tool-policy --all-targets` | 0 | 33 / 2 / 0 | `stable-F9.log` |
+| F10 | `cargo test -p oneagent-analysis -p oneagent-bsl --all-targets` | 0 | 221 / 12 / 0 | `stable-F10.log` |
+| F11 | `cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets` | 0 | 399 / 23 / 0 | `stable-F11.log` |
+| F12 | `cargo test -p oneagent-runtime --test mcp_process --test mcp_semantic_tools --test lsp_stdio --test graph_query_api` | 0 | 37 / 4 / 0 | `stable-F12.log` |
+| G1 | `cargo fmt --all -- --check` | 0 | not a test command | `stable-G1.log` |
+| G2 | `cargo check --workspace --all-targets` | 0 | not a test command | `stable-G2.log` |
+| G3 | `cargo test --workspace --all-targets` | 0 | 1435 / 83 / 4 | `stable-G3.log` |
+| G4 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 | not a test command | `stable-G4.log` |
+| G5 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | 0 | not a test command | `stable-G5.log` |
+| G6 | `git diff --check` | 0 | not a test command | `stable-G6.log` |
+
+All focused groups executed nonzero tests and have zero ignored tests. F1 is
+74 library + 7 integration tests; F9 is 26 + 7. F3 excludes 130 unrelated
+library tests and F4 excludes 144; neither is a zero-match filter. F10/F11/F12
+contain 12/23/4 nonzero targets. Counts overlap between commands and must not be
+summed as unique coverage. G3 is 1435 passed tests in 83 nonzero targets plus
+four zero-test harnesses; no tests were ignored or failed in the successful run.
+The empty CLI main, Runtime main, `oneagent-mcp` and `oneagent-lsp` unit harnesses
+provide no capability evidence; F12's process integration targets are nonempty.
+Their exact target records and every nonzero per-target count are retained in
+Task 6's reconciliation JSON.
+
+The one planned canonical gate had an initial environment failure: G1/G2 passed,
+then G3 exited 101 at unchanged
+`apps/runtime/tests/git_change_reader.rs:309`, expecting `NotRepository` but
+observing `WorktreeRootMismatch` because repository-local TMPDIR allowed the
+non-repository fixture to discover the enclosing OneAgent Git repository.
+The same eight-test target passed 8/8 with the Git ceiling above, with no source
+or oracle change, followed by the full G1-G6 repeat on the unchanged source
+manifest. This is not a first-attempt clean pass. The retained full failure logs
+are `initial-environment-stable-G1.log`, `initial-environment-stable-G2.log`,
+`initial-environment-stable-G3.log`; statuses are in
+`initial-environment-stable-full-results.json`. The focused reproduction is
+`git-reader-environment-repeat.log` with `environment-repeat-result.json`.
+The ceiling isolates only repository-local temporary fixtures; actual fixture
+repositories, subdirectory mismatch, bare/unborn/detached/linked-worktree
+behavior still run. See `validation-environment.md` in the same log directory.
+
+Task 6 reconciles these retained results; it does not run another redundant
+production gate for documentation-only edits. Task 7's independent and primary
+full gates remain separate required results.
+
+## Compatibility, consumers and preserved boundaries
+
+| Area | Audited implementation evidence and impact |
+|---|---|
+| Runtime API | `apps/runtime/src/lib.rs:45` additively exports `WorkspaceEditHandle`, `WorkspaceEditOwnership`, `WorkspaceEditCancellation`, `WorkspaceEditChallenge`, `WorkspaceEditAuthorization`, `WorkspaceEditReceipt`, `WorkspaceEditCause`, `WorkspaceEditRecovery`, `WorkspaceEditOutcome`. `W:686/697` adds `with_edit_policy`/`edit_handle`; `WorkspaceEditHandle::{prepare_apply,prepare_reversal,checked_apply,checked_reversal}` and `WorkspaceEditChallenge::confirm` own preparation/submission/confirmation. No existing consumer migration is required. All enabling callers are tests, including owner-local cfg(test); product main/MCP/LSP entry points remain byte-identical. F5/F12 and the canonical gate qualify existing consumers. |
+| Analysis and producers | The additive `oneagent_analysis::safe_edit` module owns borrowed evidence, checked typed projections, retained lossless values, complete equality, replacement bytes and admission. Runtime consumes it and both adapters' `project_safe_edit_provenance`; adapters consume its pure admission/projection types. BSL exposes the existing canonical `bsl_query_id` encoding; extractor, Analysis and EDT projection reuse it. Shared Designer and EDT helpers preserve builder encodings; F1/F10/F11 and canonical regression tests qualify the extraction. No copied ID/provenance formatter or second planner enters Analysis/Runtime. |
+| Existing planner and public observations | Existing immutable plan APIs remain intact; full structured equality and crate-local canonical coordinate/full-plan-copy helpers are shared. A plan, preview, snapshot, numeric publication ID or receipt is not authorization. `WorkspacePublicationId` and compatible `ChangeImpactPublicationId` alias remain canonical. Old Arcs remain immutable; no intermediate candidate is published. |
+| Dependency direction | Exact diff contains no Cargo manifest/lockfile, Common, Graph or Tool Policy production changes, no added dependency edge/package and no unsafe block. Graph/BSL/common feed Analysis; adapters own provenance; Runtime coordinates I/O and consumes unchanged Tool Policy. Proposed extra Common/Graph APIs were unnecessary and were not added. |
+| Graph and Coverage Registry | No Graph fact, semantic schema, registry entry or Supported claim changes. `adapters/edt/src/coverage.rs`, `adapters/designer-xml/src/coverage.rs` and `crates/graph/src/coverage.rs` are byte-identical. Only the selected callable and directly owned format-supported Query identities transform. Designer gains neither Query Graph facts nor unsupported Calls edges. Query binding/text, unrelated nodes/edges, terminal dispositions and diagnostics remain fully compared. This transaction is not a source-format Coverage upgrade. |
+| Cache | `apps/runtime/src/workspace/cache.rs:41` keeps schema 1 and existing identity/codec. Namespace preparation is private and precedes baseline capture; exact reserved regular cache file is excluded, other entries remain inputs. Capabilities, publication baselines and undo are not persisted. Cache writes occur after semantic commit (`W:1249/1253`); F7 proves cache failure preserves committed success and cold restart has no edit authority. |
+| Protocol and client catalog | `apps/runtime/src/mcp_tools.rs`, `main.rs`, `bin/oneagent-mcp.rs`, `bin/oneagent-lsp.rs` and protocol/client sources are unchanged in the exact diff. The existing eight-tool MCP catalog is unchanged; internal policy tool IDs are not catalog entries. No MCP/HTTP/CLI/LSP/IDE mutation endpoint or model-generated edit is added. F12 exercises MCP process/semantic tools, LSP stdio and GraphQuery consumers. |
+| Sensitive data | Closed cause/recovery enums and redacted capability Debug (`E:38`/`E:461`) avoid retaining raw source, expected tokens, content digests, absolute paths, policy argument bytes or nested I/O/build errors in outputs. F3 redaction/precedence tests inspect sentinels across outcome, Debug, audit and actual selected-worker tracing (not all process stdout/stderr); F9 exercises unchanged policy binding. Only the existing bounded preview intentionally displays source. No new telemetry or persisted source-bearing history is added. |
+
+## Recovery outcomes, limitations and review handoff
+
+Pre-write rejection leaves source bytes and publication unchanged, with no source
+replacement. Post-write failures before semantic commit run joined recovery.
+`Recovered` requires exact original complete tree/bytes/permissions and cleanup,
+retains the predecessor and consumes no publication ID. If recovery, verification
+or cleanup fails, `RecoveryRequired` overrides the trigger, clears current
+observation to None, invalidates capabilities/undo, prevents further edit/rebuild/
+cache publication, and retains bounded recovery material. The tests check
+unrelated sentinels, owned artifacts, retained old Arcs and stop behavior.
+Operator repair and a new cold validated service are required; there is no
+force-accept or automatic retry API.
+
+One successful apply retains one in-process reversal record. Reversal consumes
+the receipt, needs the exact current applied successor and fresh confirmation,
+uses saved original bytes/semantics and the same guarded rebuild/recovery path,
+and publishes a new canonical ID on success. An intervening publication/apply,
+stop or quarantine expires it. Failed reversal restores the applied state or
+quarantines; submitted reversal has no replay or automatic retry. Cancellation
+after replacement requests uninterruptible recovery. A dropped response never
+drops service ownership; shutdown joins the worker/recovery. A committed result
+is not rolled back by later cancellation or cache failure.
+
+The retained execution is from this macOS host. The Unix identity branch
+(`I:101`, `I:1363` test) checks device/inode/link count; non-Unix identity
+(`I:113`) fails confinement before mutation. The ADR's macOS/Linux scope is not
+evidence of an executed Linux, Windows or broader Unix qualification: none was
+run here. No GUI-dependent validation was required by this Rust/documentation
+surface. No ignored test is substituted for missing platform evidence.
+
+The caller explicitly promises cooperative exclusive source ownership; this is
+not an OS lock. Detected external changes reject, but hostile path swaps or a
+write after the final check are outside the guarantee. Per-file same-directory
+rename permits mixed multi-file disk visibility. No process-crash, power-loss,
+hard-kill recovery, durable journal, cross-process undo or bounded shutdown-time
+guarantee exists. Stalled OS I/O can delay joined shutdown. Standard permissions
+are preserved; exact inode/timestamps/ACLs/xattrs/file flags are not promised.
+The 268435456-byte reservation bounds new transaction-owned raw/projection
+retention, not existing parser/builder/Graph internals, reader-held Arcs or total
+process memory. Exact and one-over tests do not establish broad performance or
+security guarantees.
+
+Other refactoring families, metadata/file/path renames, cross-Workspace or
+multi-Configuration mutation, Git/remote mutation, new wire/UI edit surfaces,
+automatic model edits, durable history and Sprint 42/release execution remain
+deferred. Accepted alternatives and their rejection remain in ADR-0064; this
+evidence task does not reopen the mechanism.
+
+Historical original Task 6 retained checks live under
+`local-artifacts/codex-runs/sprint-41/task-6/`: `reconciliation.json`,
+`reconciliation.log`, `documentation-checks.log`, `prompt-syntax.log`,
+`prompt-suite.log`, `prompt-repository.log`, and `diff-check.log`.
+Original Task 6 checks passed: the bounded documentation checker verified five approved
+paths, 112 added/new Markdown links, all matrix/oracle/command entries, four
+matching efficiency records and seven ordered tasks. Prompt-validator syntax,
+the explicit eight-file Sprint 41 suite, the repository's 22 selected prompts,
+and working/staged whitespace checks exited 0. No standalone repository
+Markdown linter was found; the added/new references and sections were checked
+directly. No Rust source or test changed and no production test was rerun here.
+These are local artifacts, not tracked release evidence bundles. Source and
+test locations and compact command outcomes are committed here; the dispatcher
+must retain local logs for the fresh reviewer. The implementation manifest,
+`invariant-evidence-map.md`, `stable-named-oracle-results.json`,
+`prerequisite-exclusion-audit.json`, `compatibility-audit.md` and
+`completion-summary.md` remain in the exact Task 5 log directory above.
+
+The historical next action was dispatcher-owned remediation integration and a fresh Task 7
+review of the immutable endpoint including this follow-on documentation commit.
+Original Task 5/6 prerequisites remain unique. Both prior blocked gates are not
+superseded by an implementation or documentation pass: closure claims must be
+independently reviewed. Push remains deferred to sprint end. Effective context
+window and measured token telemetry are unavailable; bounded-selector admission
+is a warning, not a measured percentage.

@@ -1,14 +1,89 @@
 use std::collections::BTreeMap;
+
+#[path = "safe_edit_transactions.rs"]
+mod edit_fixture;
+
+#[cfg(unix)]
+#[tokio::test]
+async fn edit_self_write_noise_and_external_change() {
+    use oneagent_runtime::{
+        WorkspaceEditCancellation, WorkspaceEditOutcome, WorkspaceEditOwnership,
+    };
+    let root = edit_fixture::fixture("edt");
+    let service = WorkspaceService::new().with_edit_policy(
+        edit_fixture::policy(oneagent_tool_policy::RuleAction::RequireConfirmation),
+        WorkspaceEditOwnership::ExclusiveCooperative,
+    );
+    let (handle, observer, stop, task) = edit_fixture::start_service(root.path(), service).await;
+    let before = observer.snapshot().unwrap();
+    let (challenge, _) = handle
+        .prepare_apply(
+            edit_fixture::request(&before, "Changed"),
+            edit_fixture::actor(),
+            edit_fixture::request_id(),
+        )
+        .await
+        .unwrap();
+    let result = handle
+        .checked_apply(challenge.confirm(), WorkspaceEditCancellation::new())
+        .await;
+    assert!(
+        matches!(result, WorkspaceEditOutcome::Applied { .. }),
+        "{result:?}"
+    );
+    let applied = observer.snapshot().unwrap();
+    let mut changes = observer.subscribe();
+    changes.borrow_and_update();
+    assert!(
+        timeout(Duration::from_millis(500), changes.changed())
+            .await
+            .is_err(),
+        "self-write observation must not allocate another publication"
+    );
+    assert!(Arc::ptr_eq(&applied, &observer.snapshot().unwrap()));
+    let path = root
+        .path()
+        .join("src/CommonModules/SecondaryCaller/Module.bsl");
+    let original = fs::read(&path).unwrap();
+    let mut external = original.clone();
+    external.extend_from_slice(b"\n// external input\n");
+    fs::write(&path, &external).unwrap();
+    timeout(Duration::from_secs(10), async {
+        while changes.borrow().as_ref().unwrap().publication_id() == applied.publication_id() {
+            changes.changed().await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        observer.snapshot().unwrap().publication_id().get(),
+        applied.publication_id().get() + 1
+    );
+    assert_eq!(fs::read(&path).unwrap(), external);
+    assert!(
+        before.configurations()[0]
+            .graph()
+            .nodes()
+            .any(|n| n.name().as_str() == "FillSecurityCollection")
+    );
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+}
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use oneagent_analysis::change_impact::ConfigurationImpactKind;
+use oneagent_analysis::refactoring::{
+    NeverCancelledRefactoring, RefactoringErrorKind, RefactoringFamily, RefactoringRequest,
+    SourceContentVersion, SourceOccurrenceKind, WorkspacePublicationId,
+};
 use oneagent_runtime::{
     App, AppBuilder, BoxError, ConfigurationProvider, GraphQueryService, HttpService,
-    LifecycleState, RuntimeConfig, WorkspaceService, WorkspaceSnapshot, WorkspaceUpdateFailureKind,
-    WorkspaceUpdatePhase, WorkspaceUpdateStatus,
+    LifecycleState, RuntimeConfig, WorkspaceChangeImpact, WorkspaceService, WorkspaceSnapshot,
+    WorkspaceUpdateFailureKind, WorkspaceUpdatePhase, WorkspaceUpdateStatus,
 };
 use serde_json::Value;
 use tempfile::TempDir;
@@ -71,6 +146,57 @@ fn copy_tree(source: &Path, destination: &Path) {
             fs::copy(&source_path, &destination_path).expect("fixture file must be copied");
         }
     }
+}
+
+fn posting_request(
+    snapshot: &WorkspaceSnapshot,
+    publication_id: WorkspacePublicationId,
+) -> RefactoringRequest {
+    let configuration_id =
+        oneagent_common::EntityId::new(EDT_ID).expect("EDT Configuration ID must be valid");
+    let configuration = snapshot
+        .configuration(&configuration_id)
+        .expect("EDT Configuration must be published");
+    let target = configuration
+        .source_evidence()
+        .documents()
+        .iter()
+        .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+        .find(|occurrence| {
+            occurrence.kind() == SourceOccurrenceKind::Declaration
+                && occurrence.token() == "Posting"
+        })
+        .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+        .expect("Posting declaration must map uniquely")
+        .clone();
+    RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        publication_id,
+        configuration_id,
+        target,
+        "PostingRenamed",
+    )
+    .expect("Posting refactoring request must be valid")
+}
+
+fn posting_source_version(snapshot: &WorkspaceSnapshot) -> SourceContentVersion {
+    let configuration_id =
+        oneagent_common::EntityId::new(EDT_ID).expect("EDT Configuration ID must be valid");
+    snapshot
+        .configuration(&configuration_id)
+        .expect("EDT Configuration must be published")
+        .source_evidence()
+        .documents()
+        .iter()
+        .find(|document| {
+            document
+                .path()
+                .path()
+                .as_str()
+                .ends_with("Documents/RefundOfPaymentByOrder/ObjectModule.bsl")
+        })
+        .expect("Posting source document must be retained")
+        .content_version()
 }
 
 fn replace_exact(path: &Path, before: &str, after: &str) {
@@ -168,6 +294,25 @@ fn configuration_names(snapshot: &WorkspaceSnapshot) -> Vec<String> {
         .iter()
         .map(|configuration| configuration.configuration_name().as_str().to_owned())
         .collect()
+}
+
+fn assert_diagnostic_snapshots_complete(snapshot: &WorkspaceSnapshot) {
+    for configuration in snapshot.configurations() {
+        assert!(configuration.validation().is_valid());
+        assert_eq!(
+            configuration.diagnostic_report().summary().total(),
+            configuration.diagnostic_report().findings().len()
+        );
+        assert_eq!(configuration.diagnostic_report().summary().suppressed(), 0);
+        assert!(configuration.rule_execution_report().results().is_empty());
+        assert!(
+            configuration
+                .rule_execution_report()
+                .diagnostics()
+                .is_empty()
+        );
+        assert_eq!(configuration.rule_execution_report().summary().total(), 0);
+    }
 }
 
 async fn request(address: SocketAddr, target: &str) -> RawResponse {
@@ -276,6 +421,12 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     assert_eq!(initial_status.attempt(), 1);
     assert_eq!(initial_status.published(), 1);
     let initial = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    assert_eq!(initial.publication_id().get(), 1);
+    assert!(matches!(
+        initial.change_impact(),
+        WorkspaceChangeImpact::NoPreviousPublication { .. }
+    ));
+    assert_diagnostic_snapshots_complete(&initial);
     assert_eq!(
         configuration_names(&initial),
         ["DNSWorldEdition", "WritesFixture"]
@@ -284,6 +435,11 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         wire_configuration_names(&configuration_list(address).await),
         ["DNSWorldEdition", "WritesFixture"]
     );
+    let initial_refactoring_request = posting_request(&initial, initial.publication_id());
+    let initial_source_version = posting_source_version(&initial);
+    let initial_plan = initial
+        .plan_refactoring(&initial_refactoring_request, &NeverCancelledRefactoring)
+        .expect("initial published source evidence must produce a plan");
 
     replace_exact(
         &root.path().join("designer/Configuration.xml"),
@@ -300,10 +456,31 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         "<name>WritesFixture</name>",
         "<name>WritesWatched</name>",
     );
+    let edt_module = root
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let mut edt_source = fs::read_to_string(&edt_module).expect("EDT module must be readable");
+    edt_source.push('\n');
+    fs::write(&edt_module, edt_source).expect("EDT module source version must change");
     let modified_snapshot = wait_for_snapshot(&mut snapshots, |snapshot| {
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesWatched"]
+            && posting_source_version(snapshot) != initial_source_version
     })
     .await;
+    let modified_impact = modified_snapshot
+        .change_impact()
+        .report()
+        .expect("replacement must contain adjacent impact");
+    assert_eq!(
+        modified_impact.current_publication_id(),
+        modified_snapshot.publication_id()
+    );
+    assert_eq!(
+        modified_impact.current_publication_id().get(),
+        modified_impact.previous_publication_id().get() + 1
+    );
+    assert_eq!(modified_impact.summary().compared_configurations(), 2);
+    assert_diagnostic_snapshots_complete(&modified_snapshot);
     assert_eq!(
         configuration_names(&initial),
         ["DNSWorldEdition", "WritesFixture"]
@@ -316,6 +493,28 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         wire_configuration_names(&configuration_list(address).await),
         ["DNSWorldWatched", "WritesWatched"]
     );
+    let stale_error = modified_snapshot
+        .plan_refactoring(&initial_refactoring_request, &NeverCancelledRefactoring)
+        .expect_err("successor publication must reject the old request");
+    assert_eq!(
+        stale_error.kind(),
+        RefactoringErrorKind::PublicationMismatch
+    );
+    assert_eq!(
+        initial
+            .plan_refactoring(&initial_refactoring_request, &NeverCancelledRefactoring)
+            .expect("retained predecessor Arc must remain independently plannable"),
+        initial_plan
+    );
+    let successor_request = posting_request(&modified_snapshot, modified_snapshot.publication_id());
+    let successor_plan = modified_snapshot
+        .plan_refactoring(&successor_request, &NeverCancelledRefactoring)
+        .expect("successor source evidence must produce a fresh plan");
+    assert_ne!(
+        posting_source_version(&modified_snapshot),
+        initial_source_version
+    );
+    assert_ne!(successor_plan.plan().id(), initial_plan.plan().id());
     let followed_up = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.attempt() == first_rebuild.attempt() + 1
@@ -327,6 +526,22 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     fs::rename(root.path().join("designer"), &moved_designer)
         .expect("Designer root removal must succeed");
     let removed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 1).await;
+    assert_diagnostic_snapshots_complete(&removed);
+    let removed_impact = removed
+        .change_impact()
+        .report()
+        .expect("removal publication must contain impact");
+    assert_eq!(removed_impact.summary().removed_configurations(), 1);
+    assert_eq!(
+        removed_impact
+            .configuration(
+                &oneagent_common::EntityId::new(DESIGNER_ID)
+                    .expect("Designer fixture identity must be valid")
+            )
+            .expect("removed Designer transition must remain queryable")
+            .kind(),
+        ConfigurationImpactKind::Removed
+    );
     let removed_status = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.published() == followed_up.published() + 1
@@ -344,6 +559,12 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     let renamed_designer = root.path().join("designer-renamed");
     fs::rename(&moved_designer, &renamed_designer).expect("Designer root addition must succeed");
     let renamed = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    assert_diagnostic_snapshots_complete(&renamed);
+    let renamed_impact = renamed
+        .change_impact()
+        .report()
+        .expect("addition publication must contain impact");
+    assert_eq!(renamed_impact.summary().added_configurations(), 1);
     let renamed_status = wait_for_update(&mut updates, |status| {
         status.phase() == WorkspaceUpdatePhase::Watching
             && status.published() == removed_status.published() + 1
@@ -370,6 +591,8 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
     let retained = observer
         .snapshot()
         .expect("last valid snapshot must be retained");
+    assert_eq!(retained.publication_id(), renamed.publication_id());
+    assert_eq!(retained.change_impact(), renamed.change_impact());
     assert_eq!(
         configuration_names(&retained),
         ["DNSWorldWatched", "WritesWatched"]
@@ -388,6 +611,19 @@ async fn public_file_watching_rebuilds_recovers_and_keeps_graph_queries_atomic()
         configuration_names(snapshot) == ["DNSWorldWatched", "WritesRecovered"]
     })
     .await;
+    assert_eq!(
+        recovered.publication_id().get(),
+        retained.publication_id().get() + 1
+    );
+    assert_eq!(
+        recovered
+            .change_impact()
+            .report()
+            .expect("recovery publication must contain impact")
+            .previous_publication_id(),
+        retained.publication_id()
+    );
+    assert_diagnostic_snapshots_complete(&recovered);
     assert_eq!(
         configuration_names(&recovered),
         ["DNSWorldWatched", "WritesRecovered"]

@@ -166,7 +166,7 @@ impl BslQueryExtractor for LineBslQueryExtractor {
             {
                 let declaration = parsed.value;
                 let key = declaration.binding.as_str().to_lowercase();
-                let id = query_id(scope.owner_id(), declaration.binding.as_str())?;
+                let id = bsl_query_id(scope.owner_id(), declaration.binding.as_str())?;
                 match candidates.entry(key) {
                     Entry::Occupied(mut entry) => {
                         entry.insert(QueryCandidate::ambiguous());
@@ -815,7 +815,11 @@ impl DecodedBslSourceMap {
     }
 }
 
-fn query_id(owner_id: &EntityId, binding_name: &str) -> Result<EntityId, BslQueryError> {
+/// Creates the canonical identifier of a query bound within one callable.
+///
+/// # Errors
+/// Returns an identifier error when the composed identifier is invalid.
+pub fn bsl_query_id(owner_id: &EntityId, binding_name: &str) -> Result<EntityId, BslQueryError> {
     EntityId::new(format!("{}:query:{}", owner_id.as_str(), binding_name))
         .map_err(|_| BslQueryError::InvalidIdentifier(0))
 }
@@ -892,6 +896,27 @@ EndProcedure
             "module.sales.object:procedure:Post:query:Query"
         );
         assert_eq!(queries[0].text(), "SELECT Ref FROM Catalog.Products");
+        assert_eq!(
+            queries[0].id(),
+            &super::bsl_query_id(queries[0].owner_id(), queries[0].binding_name().as_str())
+                .expect("canonical query identity"),
+        );
+        // Derive the renamed input from the same tracked extraction fixture.
+        for name in ["ПереименованныйОбработчик", "Я"] {
+            let renamed = source.replace("Post", name);
+            let after = LineBslQueryExtractor
+                .extract_queries(&module_id(), &renamed)
+                .expect("renamed queries must parse");
+            assert_eq!(after.len(), queries.len());
+            assert_eq!(after[0].binding_name(), queries[0].binding_name());
+            assert_eq!(after[0].text(), queries[0].text());
+            assert_ne!(after[0].owner_id(), queries[0].owner_id());
+            assert_eq!(
+                after[0].id(),
+                &super::bsl_query_id(after[0].owner_id(), after[0].binding_name().as_str())
+                    .expect("renamed canonical identity")
+            );
+        }
     }
 
     #[test]

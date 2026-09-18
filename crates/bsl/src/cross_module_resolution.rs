@@ -1,6 +1,6 @@
 //! Cross-module resolution of qualified BSL calls.
 
-use crate::{BslCall, BslSymbol};
+use crate::{BslCall, BslCallKind, BslSymbol, bsl_name_key};
 use oneagent_common::{EntityId, EntityName};
 use std::collections::BTreeMap;
 
@@ -216,15 +216,17 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
 
         let module_index = available_modules
             .iter()
-            .map(|module| (normalize(module.module_name().as_str()), module))
+            .map(|module| (bsl_name_key(module.module_name().as_str()), module))
             .collect::<BTreeMap<_, _>>();
 
         let mut resolved = Vec::new();
         let mut unresolved = Vec::new();
 
         for call in calls {
-            if !call.target_symbol().as_str().contains('.') {
-                continue;
+            match call.kind() {
+                Some(BslCallKind::Local | BslCallKind::Unsupported) => continue,
+                None if !call.target_symbol().as_str().contains('.') => continue,
+                Some(BslCallKind::Qualified) | None => {}
             }
 
             let Some(source_name) = call.source_symbol() else {
@@ -237,7 +239,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
                 continue;
             };
 
-            let Some(origin_symbol) = source_index.get(&normalize(source_name.as_str())) else {
+            let Some(origin_symbol) = source_index.get(&bsl_name_key(source_name.as_str())) else {
                 unresolved.push(UnresolvedCrossModuleCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -259,7 +261,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
                 continue;
             };
 
-            let Some(target_module) = module_index.get(&normalize(module_name)) else {
+            let Some(target_module) = module_index.get(&bsl_name_key(module_name)) else {
                 unresolved.push(UnresolvedCrossModuleCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -271,7 +273,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
 
             let destination_index = build_symbol_index(target_module.symbols());
 
-            let Some(destination_symbol) = destination_index.get(&normalize(symbol_name)) else {
+            let Some(destination_symbol) = destination_index.get(&bsl_name_key(symbol_name)) else {
                 unresolved.push(UnresolvedCrossModuleCall::new(
                     Some(source_name.clone()),
                     call.target_symbol().clone(),
@@ -305,7 +307,7 @@ impl CrossModuleCallResolver for QualifiedBslCallResolver {
 fn build_symbol_index(symbols: &[BslSymbol]) -> BTreeMap<String, &BslSymbol> {
     symbols
         .iter()
-        .map(|symbol| (normalize(symbol.name().as_str()), symbol))
+        .map(|symbol| (bsl_name_key(symbol.name().as_str()), symbol))
         .collect()
 }
 
@@ -319,17 +321,13 @@ fn split_qualified_target(value: &str) -> Option<(&str, &str)> {
     Some((module_name, symbol_name))
 }
 
-fn normalize(value: &str) -> String {
-    value.to_lowercase()
-}
-
 #[cfg(test)]
 mod tests {
     use oneagent_common::{EntityId, EntityName};
 
     use crate::{
-        BslCall, BslModuleSymbols, BslSymbol, BslSymbolKind, CrossModuleCallResolver,
-        QualifiedBslCallResolver, UnresolvedCrossModuleCallReason,
+        BslCall, BslCallKind, BslIdentifierRange, BslModuleSymbols, BslSymbol, BslSymbolKind,
+        CrossModuleCallResolver, QualifiedBslCallResolver, UnresolvedCrossModuleCallReason,
     };
 
     fn id(value: &str) -> EntityId {
@@ -470,5 +468,87 @@ mod tests {
             result.unresolved()[0].reason(),
             UnresolvedCrossModuleCallReason::TargetModuleNotFound
         );
+    }
+
+    #[test]
+    fn ignores_unsupported_calls_instead_of_creating_cross_module_edges() {
+        let source_module = BslModuleSymbols::new(
+            id("document-module"),
+            name("SalesObjectModule"),
+            vec![symbol(
+                "document-module:procedure:Post",
+                "Post",
+                BslSymbolKind::Procedure,
+                false,
+            )],
+        );
+        let target_module = BslModuleSymbols::new(
+            id("access-module"),
+            name("AccessManagement"),
+            vec![symbol(
+                "access-module:procedure:CheckRights",
+                "CheckRights",
+                BslSymbolKind::Procedure,
+                true,
+            )],
+        );
+        let calls = vec![BslCall::new_with_identifier_range(
+            id("document-module:call:2:1"),
+            Some(name("Post")),
+            name("AccessManagement.CheckRights"),
+            2,
+            BslCallKind::Unsupported,
+            BslIdentifierRange::new(0, 11).expect("range must be valid"),
+        )];
+
+        let result = QualifiedBslCallResolver.resolve_cross_module_calls(
+            &source_module,
+            &[target_module],
+            &calls,
+        );
+
+        assert!(result.resolved().is_empty());
+        assert!(result.unresolved().is_empty());
+    }
+
+    #[test]
+    fn explicit_local_kind_cannot_resolve_as_a_cross_module_call() {
+        let source_module = BslModuleSymbols::new(
+            id("document-module"),
+            name("SalesObjectModule"),
+            vec![symbol(
+                "document-module:procedure:Post",
+                "Post",
+                BslSymbolKind::Procedure,
+                false,
+            )],
+        );
+        let target_module = BslModuleSymbols::new(
+            id("access-module"),
+            name("AccessManagement"),
+            vec![symbol(
+                "access-module:procedure:CheckRights",
+                "CheckRights",
+                BslSymbolKind::Procedure,
+                true,
+            )],
+        );
+        let calls = vec![BslCall::new_with_identifier_range(
+            id("document-module:call:2:1"),
+            Some(name("Post")),
+            name("AccessManagement.CheckRights"),
+            2,
+            BslCallKind::Local,
+            BslIdentifierRange::new(0, 11).expect("range must be valid"),
+        )];
+
+        let result = QualifiedBslCallResolver.resolve_cross_module_calls(
+            &source_module,
+            &[target_module],
+            &calls,
+        );
+
+        assert!(result.resolved().is_empty());
+        assert!(result.unresolved().is_empty());
     }
 }

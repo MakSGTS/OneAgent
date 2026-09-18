@@ -2,9 +2,20 @@
 
 mod cache;
 mod change;
+mod edit;
+mod edit_io;
+mod git;
 mod graph_query;
+mod repository_change;
 
 pub use cache::{WorkspaceCacheLoadOutcome, WorkspaceCacheWriteOutcome};
+use edit::EditCoordinator;
+pub use edit::{
+    WorkspaceEditAuthorization, WorkspaceEditCancellation, WorkspaceEditCause,
+    WorkspaceEditChallenge, WorkspaceEditHandle, WorkspaceEditOutcome, WorkspaceEditOwnership,
+    WorkspaceEditReceipt, WorkspaceEditRecovery,
+};
+use edit_io::EditBaseline;
 
 pub use graph_query::{
     GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
@@ -14,12 +25,36 @@ pub use graph_query::{
     GraphQueryTraversalResult, GraphQueryWorkspaceFormat,
 };
 
+pub use git::{GitRepositoryReadError, GitRepositoryReadErrorKind, GitRepositoryReader};
+
+pub use repository_change::{
+    GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,
+    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, MAX_REPOSITORY_CHANGE_PATH_BYTES,
+    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeError, RepositoryChangeErrorKind,
+    RepositoryChangeKind, RepositoryChangePath, RepositoryChangePathError,
+    RepositoryChangePathErrorKind,
+};
+
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use oneagent_analysis::change_impact::{
+    ChangeImpactCancellationSignal, ChangeImpactConfiguration, ChangeImpactError,
+    ChangeImpactEvaluator, ChangeImpactReport,
+};
+use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy, DiagnosticReport};
+use oneagent_analysis::publication::WorkspacePublicationId;
+use oneagent_analysis::refactoring::{
+    RefactoringCancellationSignal, RefactoringError, RefactoringEvaluation, RefactoringPlanner,
+    RefactoringPlannerInput, RefactoringRequest, SourceEvidenceSet,
+};
+use oneagent_analysis::rules::{
+    NeverCancelled as NeverRuleCancelled, Rule, RuleCancellationSignal, RuleConfiguration,
+    RuleContext, RuleEngine, RuleExecutionReport, RulePlan, RuleRegistry,
+};
 use oneagent_common::{EntityId, EntityName};
 use oneagent_designer_xml::{
     DesignerXmlBuildScope, DesignerXmlSemanticGraphBuilder,
@@ -28,12 +63,13 @@ use oneagent_designer_xml::{
 use oneagent_edt::{EdtSemanticGraphBuilder, FileSystemEdtSemanticGraphBuilder};
 use oneagent_graph::{
     NodeKind, SemanticDiagnostic, SemanticGraph, SemanticGraphReport,
-    SemanticGraphValidationResult, SemanticReferenceRequestLedger, SemanticReferenceStatistics,
+    SemanticGraphValidationResult, SemanticGraphValidator, SemanticReferenceRequestLedger,
+    SemanticReferenceStatistics,
 };
 use oneagent_metadata::MetadataKind;
 use oneagent_workspace::{DiscoveredConfiguration, WorkspaceDetector, WorkspaceFormat};
 use oneagent_workspace_fs::FileSystemWorkspaceDetector;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinError;
 
 use crate::{BoxError, RuntimeService, ServiceContext, ServiceStartFuture, ServiceTask};
@@ -42,6 +78,18 @@ use change::{
     RunningWorkspaceChangeSource, WorkspaceChangeOutcome, WorkspaceChangeSource,
     WorkspaceChangeSourceError, WorkspaceFileState,
 };
+
+impl ChangeImpactCancellationSignal for crate::Cancellation {
+    fn is_cancelled(&self) -> bool {
+        self.is_requested()
+    }
+}
+
+impl RefactoringCancellationSignal for crate::Cancellation {
+    fn is_cancelled(&self) -> bool {
+        self.is_requested()
+    }
+}
 
 /// Stable source-neutral category for an initial Workspace build failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -458,6 +506,88 @@ pub struct WorkspaceSnapshotObserver {
     snapshot: watch::Receiver<Option<Arc<WorkspaceSnapshot>>>,
 }
 
+/// Closed outcome of one non-blocking Workspace change-input submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceChangeSubmissionOutcome {
+    /// The supplied change set was empty and queued no work.
+    IgnoredEmpty,
+    /// One non-empty complete-rebuild request entered the bounded slot.
+    Accepted,
+    /// The one-slot input already contains a pending request.
+    Backpressure,
+    /// The Workspace service no longer owns the input receiver.
+    Closed,
+}
+
+/// Cloneable pre-registration input for explicit complete Workspace rebuilds.
+#[derive(Clone)]
+pub struct WorkspaceChangeInputHandle {
+    sender: mpsc::Sender<WorkspaceChangeRequest>,
+}
+
+impl WorkspaceChangeInputHandle {
+    /// Submits one validated Git-derived change set without blocking.
+    ///
+    /// Only normalized path and status evidence enters the private request;
+    /// repository endpoints and completeness are discarded before submission.
+    #[must_use]
+    pub fn submit(&self, change_set: GitChangeSet) -> WorkspaceChangeSubmissionOutcome {
+        if change_set.is_empty() {
+            return WorkspaceChangeSubmissionOutcome::IgnoredEmpty;
+        }
+        match self
+            .sender
+            .try_send(WorkspaceChangeRequest::from(change_set))
+        {
+            Ok(()) => WorkspaceChangeSubmissionOutcome::Accepted,
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                WorkspaceChangeSubmissionOutcome::Backpressure
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => WorkspaceChangeSubmissionOutcome::Closed,
+        }
+    }
+}
+
+impl std::fmt::Debug for WorkspaceChangeInputHandle {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WorkspaceChangeInputHandle")
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
+struct WorkspaceChangeRequest {
+    _changes: Box<[WorkspaceChangeRecord]>,
+}
+
+impl From<GitChangeSet> for WorkspaceChangeRequest {
+    fn from(change_set: GitChangeSet) -> Self {
+        let changes = change_set
+            .changes()
+            .iter()
+            .map(|change| WorkspaceChangeRecord {
+                _kind: change.kind(),
+                _previous_path: change
+                    .previous_path()
+                    .map(|path| Box::<str>::from(path.as_str())),
+                _current_path: change
+                    .current_path()
+                    .map(|path| Box::<str>::from(path.as_str())),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Self { _changes: changes }
+    }
+}
+
+#[derive(Debug)]
+struct WorkspaceChangeRecord {
+    _kind: RepositoryChangeKind,
+    _previous_path: Option<Box<str>>,
+    _current_path: Option<Box<str>>,
+}
+
 impl WorkspaceSnapshotObserver {
     /// Returns the currently published complete snapshot, when present.
     #[must_use]
@@ -502,7 +632,10 @@ impl std::fmt::Debug for WorkspaceCacheBackend {
 #[derive(Debug)]
 pub struct WorkspaceService<D = FileSystemWorkspaceDetector> {
     builder: WorkspaceSnapshotBuilder<D>,
+    edits: EditCoordinator,
     cache_backend: WorkspaceCacheBackend,
+    change_input: WorkspaceChangeInputHandle,
+    change_requests: mpsc::Receiver<WorkspaceChangeRequest>,
     cache_status: watch::Sender<WorkspaceCacheStatus>,
     snapshot: watch::Sender<Option<Arc<WorkspaceSnapshot>>>,
     updates: watch::Sender<WorkspaceUpdateStatus>,
@@ -523,9 +656,15 @@ impl<D> WorkspaceService<D> {
         let (cache_status, _receiver) = watch::channel(WorkspaceCacheStatus::starting());
         let (snapshot, _receiver) = watch::channel(None);
         let (updates, _receiver) = watch::channel(WorkspaceUpdateStatus::starting());
+        let (change_sender, change_requests) = mpsc::channel(1);
         Self {
             builder,
+            edits: EditCoordinator::new(),
             cache_backend: WorkspaceCacheBackend::Production,
+            change_input: WorkspaceChangeInputHandle {
+                sender: change_sender,
+            },
+            change_requests,
             cache_status,
             snapshot,
             updates,
@@ -542,6 +681,23 @@ impl<D> WorkspaceService<D> {
         }
     }
 
+    /// Enables the bounded local edit API under immutable policy and cooperative ownership.
+    #[must_use]
+    pub fn with_edit_policy(
+        mut self,
+        policy: oneagent_tool_policy::ToolPolicy,
+        ownership: WorkspaceEditOwnership,
+    ) -> Self {
+        self.edits.configure(policy, ownership);
+        self
+    }
+
+    /// Returns an endpoint whose edit authority begins only after stable startup.
+    #[must_use]
+    pub fn edit_handle(&self) -> WorkspaceEditHandle {
+        self.edits.handle()
+    }
+
     /// Creates a cloneable observer before this service is registered.
     #[must_use]
     pub fn snapshot_observer(&self) -> WorkspaceSnapshotObserver {
@@ -556,6 +712,12 @@ impl<D> WorkspaceService<D> {
         WorkspaceUpdateObserver {
             status: self.updates.subscribe(),
         }
+    }
+
+    /// Creates the cloneable explicit change-input handle before registration.
+    #[must_use]
+    pub fn change_input_handle(&self) -> WorkspaceChangeInputHandle {
+        self.change_input.clone()
     }
 
     #[cfg(test)]
@@ -593,13 +755,17 @@ where
                 .to_path_buf();
             let WorkspaceService {
                 builder,
+                mut edits,
                 cache_backend,
+                change_input,
+                change_requests,
                 cache_status,
                 snapshot,
                 updates,
                 #[cfg(test)]
                 controlled_change_ticks,
             } = *self;
+            drop(change_input);
             let cache = cache_backend.open(root_path.clone());
             updates.send_replace(WorkspaceUpdateStatus {
                 attempt: 1,
@@ -613,13 +779,18 @@ where
             let initial_cache = Arc::clone(&cache);
             let initial_cache_status = cache_status.clone();
             let error_root = root_path.clone();
+            let edit_enabled = edits.enabled();
             let initial = tokio::task::spawn_blocking(move || {
-                initialize_workspace(
+                let before =
+                    prepare_edit_baseline(edit_enabled, &initial_root, initial_cache.as_ref());
+                let initialized = initialize_workspace(
                     &initial_builder,
                     &initial_root,
                     initial_cache.as_ref(),
                     &initial_cache_status,
-                )
+                )?;
+                let baseline = finish_edit_baseline(before, &initial_root)?;
+                Ok::<_, WorkspaceBuildError>((initialized, baseline))
             })
             .await
             .map_err(|source| WorkspaceBuildError::BuildTask {
@@ -627,6 +798,8 @@ where
                 source,
             })?
             .map_err(|error| Box::new(error) as BoxError)?;
+            let (initial, baseline) = initial;
+            edits.publish_baseline(baseline);
             snapshot.send_replace(Some(Arc::new(initial.snapshot)));
             updates.send_replace(WorkspaceUpdateStatus {
                 attempt: 1,
@@ -664,6 +837,8 @@ where
                     updates,
                     cancellation,
                     source,
+                    change_requests,
+                    edits,
                 )
                 .await
                 .map_err(|error| Box::new(error) as BoxError)
@@ -677,6 +852,54 @@ struct WorkspaceInitialization {
     snapshot: WorkspaceSnapshot,
     source_state: WorkspaceFileState,
     follow_up_required: bool,
+}
+
+fn prepare_edit_baseline(
+    enabled: bool,
+    root: &Path,
+    cache: &dyn WorkspaceCacheStorage,
+) -> Option<EditBaseline> {
+    if !enabled || cache.prepare_edit_namespace().is_err() {
+        return None;
+    }
+    EditBaseline::capture(root, &[]).ok()
+}
+
+fn finish_edit_baseline(
+    before: Option<EditBaseline>,
+    root: &Path,
+) -> Result<Option<EditBaseline>, WorkspaceBuildError> {
+    let Some(before) = before else {
+        return Ok(None);
+    };
+    let after = EditBaseline::capture(root, &[]);
+    if !after.as_ref().is_ok_and(|after| before.equals(after)) {
+        return Err(WorkspaceBuildError::Observation {
+            root_path: root.to_owned(),
+            source: Box::new(std::io::Error::other("edit publication source changed")),
+        });
+    }
+    Ok(Some(before))
+}
+
+fn rebuild_edit_workspace<D: WorkspaceDetector>(
+    builder: &WorkspaceSnapshotBuilder<D>,
+    root: &Path,
+    cache: &dyn WorkspaceCacheStorage,
+    previous: &WorkspaceSnapshot,
+    cancellation: &dyn ChangeImpactCancellationSignal,
+) -> Result<(WorkspaceRebuild, Option<EditBaseline>), WorkspaceRebuildError> {
+    let before = prepare_edit_baseline(true, root, cache);
+    let mut snapshot = builder.build(root)?;
+    let baseline = finish_edit_baseline(before, root)?;
+    compose_change_impact(previous, &mut snapshot, cancellation)?;
+    Ok((
+        WorkspaceRebuild {
+            snapshot,
+            write: WorkspaceCacheWriteOutcome::SkippedUnstableSource,
+        },
+        baseline,
+    ))
 }
 
 fn initialize_workspace<D>(
@@ -746,6 +969,7 @@ enum WorkspaceUpdateRuntimeError {
     ChangeSource(WorkspaceChangeSourceError),
     ChangeSourceTask(JoinError),
     StatusCounterOverflow,
+    SnapshotUnavailable,
 }
 
 impl Display for WorkspaceUpdateRuntimeError {
@@ -763,6 +987,9 @@ impl Display for WorkspaceUpdateRuntimeError {
             Self::StatusCounterOverflow => {
                 formatter.write_str("Workspace update status counter overflowed")
             }
+            Self::SnapshotUnavailable => {
+                formatter.write_str("Workspace update has no current published snapshot")
+            }
         }
     }
 }
@@ -772,7 +999,9 @@ impl Error for WorkspaceUpdateRuntimeError {
         match self {
             Self::ChangeSource(error) => Some(error),
             Self::ChangeSourceTask(error) => Some(error),
-            Self::ChangeSourceStopped | Self::StatusCounterOverflow => None,
+            Self::ChangeSourceStopped | Self::StatusCounterOverflow | Self::SnapshotUnavailable => {
+                None
+            }
         }
     }
 }
@@ -791,6 +1020,8 @@ async fn run_workspace_updates<D>(
     updates: watch::Sender<WorkspaceUpdateStatus>,
     mut cancellation: crate::Cancellation,
     source: RunningWorkspaceChangeSource,
+    mut change_requests: mpsc::Receiver<WorkspaceChangeRequest>,
+    mut edits: EditCoordinator,
 ) -> Result<(), WorkspaceUpdateRuntimeError>
 where
     D: WorkspaceDetector + Clone + Send + 'static,
@@ -798,73 +1029,19 @@ where
     let (mut observations, mut source_task) = source.into_parts();
     let mut processed_revision = 0_u64;
     let mut status = *updates.borrow();
+    let mut explicit_rebuild_pending = false;
+    let mut change_input_open = true;
 
     loop {
+        let mut rebuild_requested = explicit_rebuild_pending;
+        let explicit_request = explicit_rebuild_pending;
+        explicit_rebuild_pending = false;
         let observation = *observations.borrow_and_update();
-        if observation.revision() > processed_revision {
+        if !rebuild_requested && observation.revision() > processed_revision {
             processed_revision = observation.revision();
             match observation.outcome() {
                 Some(WorkspaceChangeOutcome::Changed) => {
-                    status.attempt = status
-                        .attempt
-                        .checked_add(1)
-                        .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
-                    status.phase = WorkspaceUpdatePhase::Rebuilding;
-                    status.failure = None;
-                    updates.send_replace(status);
-
-                    let build_root = root_path.clone();
-                    let build_builder = builder.clone();
-                    let build_cache = Arc::clone(&cache);
-                    let mut build = tokio::task::spawn_blocking(move || {
-                        rebuild_workspace(&build_builder, &build_root, build_cache.as_ref())
-                    });
-                    let build_result = tokio::select! {
-                        biased;
-                        () = cancellation.cancelled() => {
-                            let _ = (&mut build).await;
-                            let source_result = source_task.await;
-                            return finish_workspace_updates(
-                                &snapshot,
-                                &updates,
-                                source_result,
-                                true,
-                            );
-                        }
-                        source_result = &mut source_task => {
-                            let _ = (&mut build).await;
-                            return finish_workspace_updates(
-                                &snapshot,
-                                &updates,
-                                source_result,
-                                false,
-                            );
-                        }
-                        result = &mut build => result,
-                    };
-
-                    match build_result {
-                        Ok(Ok(rebuilt)) => {
-                            publish_cache_write(&cache_status, rebuilt.write);
-                            snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
-                            status.published = status
-                                .published
-                                .checked_add(1)
-                                .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
-                            status.phase = WorkspaceUpdatePhase::Watching;
-                            status.failure = None;
-                        }
-                        Ok(Err(error)) => {
-                            status.phase = WorkspaceUpdatePhase::Failed;
-                            status.failure = Some(error.kind().into());
-                        }
-                        Err(_) => {
-                            status.phase = WorkspaceUpdatePhase::Failed;
-                            status.failure = Some(WorkspaceUpdateFailureKind::BuildTask);
-                        }
-                    }
-                    updates.send_replace(status);
-                    continue;
+                    rebuild_requested = true;
                 }
                 Some(WorkspaceChangeOutcome::ObservationFailed(_)) => {
                     status.phase = WorkspaceUpdatePhase::Failed;
@@ -876,13 +1053,143 @@ where
             }
         }
 
+        if edits.poisoned() {
+            rebuild_requested = false;
+        }
+        if rebuild_requested {
+            if edits.enabled() && !explicit_request && edits.unchanged().await {
+                continue;
+            }
+            edits.writer(true);
+            status.attempt = status
+                .attempt
+                .checked_add(1)
+                .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
+            status.phase = WorkspaceUpdatePhase::Rebuilding;
+            status.failure = None;
+            updates.send_replace(status);
+
+            let build_root = root_path.clone();
+            let build_builder = builder.clone();
+            let build_cache = Arc::clone(&cache);
+            let previous = snapshot
+                .borrow()
+                .clone()
+                .ok_or(WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
+            let build_previous = Arc::clone(&previous);
+            let build_cancellation = cancellation.clone();
+            let edit_enabled = edits.enabled();
+            let mut build = tokio::task::spawn_blocking(move || {
+                if edit_enabled {
+                    rebuild_edit_workspace(
+                        &build_builder,
+                        &build_root,
+                        build_cache.as_ref(),
+                        &build_previous,
+                        &build_cancellation,
+                    )
+                } else {
+                    rebuild_workspace(
+                        &build_builder,
+                        &build_root,
+                        build_cache.as_ref(),
+                        &build_previous,
+                        &build_cancellation,
+                    )
+                    .map(|rebuilt| (rebuilt, None))
+                }
+            });
+            let build_result = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => {
+                    edits.shutdown();
+                    change_requests.close();
+                    let _ = (&mut build).await;
+                    let source_result = source_task.await;
+                    return finish_workspace_updates(
+                        &snapshot,
+                        &updates,
+                        source_result,
+                        true,
+                    );
+                }
+                source_result = &mut source_task => {
+                    edits.shutdown();
+                    change_requests.close();
+                    let _ = (&mut build).await;
+                    return finish_workspace_updates(
+                        &snapshot,
+                        &updates,
+                        source_result,
+                        false,
+                    );
+                }
+                result = &mut build => result,
+            };
+
+            match build_result {
+                Ok(Ok((rebuilt, baseline))) => {
+                    let predecessor_is_current = snapshot
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|current| Arc::ptr_eq(current, &previous));
+                    let next_published = status
+                        .published
+                        .checked_add(1)
+                        .ok_or(WorkspaceUpdateRuntimeError::StatusCounterOverflow)?;
+                    if predecessor_is_current
+                        && rebuilt.snapshot.publication_id().get() == next_published
+                    {
+                        publish_cache_write(&cache_status, rebuilt.write);
+                        snapshot.send_replace(Some(Arc::new(rebuilt.snapshot)));
+                        edits.publish_baseline(baseline);
+                        if edit_enabled {
+                            let accepted = snapshot.borrow().clone().expect("just published");
+                            let store = Arc::clone(&cache);
+                            let root = root_path.clone();
+                            let write = tokio::task::spawn_blocking(move || {
+                                observe_workspace(&root)
+                                    .map_or(WorkspaceCacheWriteOutcome::Failed, |state| {
+                                        store.write(&state, &accepted)
+                                    })
+                            })
+                            .await
+                            .unwrap_or(WorkspaceCacheWriteOutcome::Failed);
+                            publish_cache_write(&cache_status, write);
+                        }
+                        status.published = next_published;
+                        status.phase = WorkspaceUpdatePhase::Watching;
+                        status.failure = None;
+                    } else {
+                        status.phase = WorkspaceUpdatePhase::Failed;
+                        status.failure = Some(WorkspaceUpdateFailureKind::SemanticBuild);
+                    }
+                }
+                Ok(Err(error)) => {
+                    status.phase = WorkspaceUpdatePhase::Failed;
+                    status.failure = Some(error.failure_kind());
+                }
+                Err(_) => {
+                    status.phase = WorkspaceUpdatePhase::Failed;
+                    status.failure = Some(WorkspaceUpdateFailureKind::BuildTask);
+                }
+            }
+            edits.writer(false);
+            updates.send_replace(status);
+            continue;
+        }
+
         tokio::select! {
             biased;
             () = cancellation.cancelled() => {
+                edits.shutdown();
+                change_requests.close();
                 let source_result = source_task.await;
                 return finish_workspace_updates(&snapshot, &updates, source_result, true);
             }
             source_result = &mut source_task => {
+                edits.shutdown();
+                change_requests.close();
                 return finish_workspace_updates(
                     &snapshot,
                     &updates,
@@ -892,6 +1199,8 @@ where
             }
             changed = observations.changed() => {
                 if changed.is_err() {
+                    edits.shutdown();
+                    change_requests.close();
                     let source_result = source_task.await;
                     return finish_workspace_updates(
                         &snapshot,
@@ -899,6 +1208,58 @@ where
                         source_result,
                         false,
                     );
+                }
+            }
+            request = change_requests.recv(), if change_input_open => {
+                if request.is_some() {
+                    explicit_rebuild_pending = true;
+                } else {
+                    change_input_open = false;
+                }
+            }
+            command = edits.commands.recv() => {
+                if let Some(command) = command {
+                    edits.writer(true);
+                    let previous = snapshot.borrow().clone();
+                    let edit_builder = builder.clone();
+                    let edit_root = root_path.clone();
+                    let edit_cancellation = cancellation.clone();
+                    let (returned, commit) = tokio::task::spawn_blocking(move || {
+                        let commit = edits.execute(command, previous, &edit_builder, &edit_root, &edit_cancellation);
+                        (edits, commit)
+                    }).await.map_err(|_| WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
+                    edits = returned;
+                    if edits.poisoned() { snapshot.send_replace(None); }
+                    if commit.is_none() { edits.writer(false); edits.deliver_terminal(); }
+                    if let Some(commit) = commit {
+                        let failure = if cancellation.is_requested() || EditCoordinator::precommit_cancelled(&commit) { Some(WorkspaceEditCause::Cancelled) }
+                            else if !EditCoordinator::predecessor_matches(&commit, snapshot.borrow().as_ref()) { Some(WorkspaceEditCause::PublicationMismatch) }
+                            else { None };
+                        if let Some(cause) = failure {
+                            edits = tokio::task::spawn_blocking(move || { edits.abandon_commit(commit, cause); edits })
+                                .await.map_err(|_| WorkspaceUpdateRuntimeError::SnapshotUnavailable)?;
+                            if edits.poisoned() { snapshot.send_replace(None); }
+                            edits.writer(false);
+                            edits.deliver_terminal();
+                            continue;
+                        }
+                        let accepted = Arc::clone(&commit.candidate);
+                        status.published = accepted.publication_id().get();
+                        // The sole semantic commit. The joined worker completed cleanup and all source guards.
+                        snapshot.send_replace(Some(Arc::clone(&accepted)));
+                        let terminal = edits.commit(commit);
+                        edits.retain_success(terminal);
+                        let store = Arc::clone(&cache);
+                        let root = root_path.clone();
+                        let write = tokio::task::spawn_blocking(move || {
+                            observe_workspace(&root).map_or(WorkspaceCacheWriteOutcome::Failed, |state| store.write(&state, &accepted))
+                        }).await.unwrap_or(WorkspaceCacheWriteOutcome::Failed);
+                        publish_cache_write(&cache_status, write);
+                        edits.writer(false);
+                        edits.deliver_terminal();
+                        updates.send_replace(status);
+                    }
+                    edits.writer(false);
                 }
             }
         }
@@ -911,23 +1272,82 @@ struct WorkspaceRebuild {
     write: WorkspaceCacheWriteOutcome,
 }
 
+#[derive(Debug)]
+enum WorkspaceRebuildError {
+    Build(WorkspaceBuildError),
+    ChangeImpact,
+}
+
+impl WorkspaceRebuildError {
+    fn failure_kind(&self) -> WorkspaceUpdateFailureKind {
+        match self {
+            Self::Build(error) => error.kind().into(),
+            Self::ChangeImpact => WorkspaceUpdateFailureKind::SemanticBuild,
+        }
+    }
+}
+
+impl From<WorkspaceBuildError> for WorkspaceRebuildError {
+    fn from(error: WorkspaceBuildError) -> Self {
+        Self::Build(error)
+    }
+}
+
+impl From<ChangeImpactError> for WorkspaceRebuildError {
+    fn from(_error: ChangeImpactError) -> Self {
+        Self::ChangeImpact
+    }
+}
+
 fn rebuild_workspace<D>(
     builder: &WorkspaceSnapshotBuilder<D>,
     root_path: &Path,
     cache: &dyn WorkspaceCacheStorage,
-) -> Result<WorkspaceRebuild, WorkspaceBuildError>
+    previous: &WorkspaceSnapshot,
+    cancellation: &dyn ChangeImpactCancellationSignal,
+) -> Result<WorkspaceRebuild, WorkspaceRebuildError>
 where
     D: WorkspaceDetector,
 {
     let initial_state = observe_workspace(root_path)?;
-    let snapshot = builder.build(root_path)?;
+    let mut snapshot = builder.build(root_path)?;
     let final_state = observe_workspace(root_path)?;
+    compose_change_impact(previous, &mut snapshot, cancellation)?;
     let write = if initial_state == final_state {
         cache.write(&final_state, &snapshot)
     } else {
         WorkspaceCacheWriteOutcome::SkippedUnstableSource
     };
     Ok(WorkspaceRebuild { snapshot, write })
+}
+
+fn compose_change_impact(
+    previous: &WorkspaceSnapshot,
+    current: &mut WorkspaceSnapshot,
+    cancellation: &dyn ChangeImpactCancellationSignal,
+) -> Result<(), ChangeImpactError> {
+    let previous_configurations = previous
+        .configurations()
+        .iter()
+        .map(|configuration| {
+            ChangeImpactConfiguration::new(configuration.configuration_id(), configuration.graph())
+        })
+        .collect::<Vec<_>>();
+    let current_configurations = current
+        .configurations()
+        .iter()
+        .map(|configuration| {
+            ChangeImpactConfiguration::new(configuration.configuration_id(), configuration.graph())
+        })
+        .collect::<Vec<_>>();
+    let report = ChangeImpactEvaluator.evaluate(
+        previous.publication_id(),
+        &previous_configurations,
+        &current_configurations,
+        cancellation,
+    )?;
+    current.change_impact = WorkspaceChangeImpact::Available(report);
+    Ok(())
 }
 
 fn finish_workspace_updates(
@@ -960,10 +1380,14 @@ pub struct WorkspaceConfigurationSnapshot {
     configuration_id: EntityId,
     configuration_name: EntityName,
     graph: Arc<SemanticGraph>,
+    source_evidence: SourceEvidenceSet,
     diagnostics: Arc<[SemanticDiagnostic]>,
     reference_requests: Arc<SemanticReferenceRequestLedger>,
     reference_statistics: SemanticReferenceStatistics,
     report: SemanticGraphReport,
+    validation: Arc<SemanticGraphValidationResult>,
+    rule_execution_report: Arc<RuleExecutionReport>,
+    diagnostic_report: Arc<DiagnosticReport>,
 }
 
 impl WorkspaceConfigurationSnapshot {
@@ -997,6 +1421,12 @@ impl WorkspaceConfigurationSnapshot {
         &self.graph
     }
 
+    /// Returns complete immutable source evidence captured with the Graph.
+    #[must_use]
+    pub const fn source_evidence(&self) -> &SourceEvidenceSet {
+        &self.source_evidence
+    }
+
     /// Returns ordered recoverable semantic diagnostics.
     #[must_use]
     pub fn diagnostics(&self) -> &[SemanticDiagnostic] {
@@ -1020,16 +1450,79 @@ impl WorkspaceConfigurationSnapshot {
     pub const fn report(&self) -> &SemanticGraphReport {
         &self.report
     }
+
+    /// Returns the complete Graph validation result used by diagnostics.
+    #[must_use]
+    pub fn validation(&self) -> &SemanticGraphValidationResult {
+        &self.validation
+    }
+
+    /// Returns the complete deterministic Rules Engine execution report.
+    #[must_use]
+    pub fn rule_execution_report(&self) -> &RuleExecutionReport {
+        &self.rule_execution_report
+    }
+
+    /// Returns the complete normalized diagnostic report.
+    #[must_use]
+    pub fn diagnostic_report(&self) -> &DiagnosticReport {
+        &self.diagnostic_report
+    }
+}
+
+/// Change-impact availability embedded atomically in one Workspace publication.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceChangeImpact {
+    /// This is the first complete publication of a fresh Workspace service.
+    NoPreviousPublication {
+        /// Process-local identity of the current publication.
+        current_publication_id: WorkspacePublicationId,
+    },
+    /// Complete bounded impact from the immediately preceding publication.
+    Available(ChangeImpactReport),
+}
+
+impl WorkspaceChangeImpact {
+    /// Returns the process-local identity of the snapshot containing this value.
+    #[must_use]
+    pub const fn current_publication_id(&self) -> WorkspacePublicationId {
+        match self {
+            Self::NoPreviousPublication {
+                current_publication_id,
+            } => *current_publication_id,
+            Self::Available(report) => report.current_publication_id(),
+        }
+    }
+
+    /// Returns the complete adjacent-publication report when a predecessor exists.
+    #[must_use]
+    pub const fn report(&self) -> Option<&ChangeImpactReport> {
+        match self {
+            Self::NoPreviousPublication { .. } => None,
+            Self::Available(report) => Some(report),
+        }
+    }
 }
 
 /// Complete immutable semantic state for one configured Workspace root.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceSnapshot {
     root_path: PathBuf,
     configurations: Vec<WorkspaceConfigurationSnapshot>,
+    change_impact: WorkspaceChangeImpact,
 }
 
 impl WorkspaceSnapshot {
+    fn initial(root_path: PathBuf, configurations: Vec<WorkspaceConfigurationSnapshot>) -> Self {
+        Self {
+            root_path,
+            configurations,
+            change_impact: WorkspaceChangeImpact::NoPreviousPublication {
+                current_publication_id: WorkspacePublicationId::initial(),
+            },
+        }
+    }
+
     /// Returns the startup Workspace root retained by this immutable snapshot.
     #[must_use]
     pub fn root_path(&self) -> &Path {
@@ -1042,6 +1535,18 @@ impl WorkspaceSnapshot {
         &self.configurations
     }
 
+    /// Returns the process-local identity of this complete publication.
+    #[must_use]
+    pub const fn publication_id(&self) -> WorkspacePublicationId {
+        self.change_impact.current_publication_id()
+    }
+
+    /// Returns change-impact availability paired atomically with this snapshot.
+    #[must_use]
+    pub const fn change_impact(&self) -> &WorkspaceChangeImpact {
+        &self.change_impact
+    }
+
     /// Finds a configuration snapshot by canonical identity.
     #[must_use]
     pub fn configuration(&self, id: &EntityId) -> Option<&WorkspaceConfigurationSnapshot> {
@@ -1049,6 +1554,37 @@ impl WorkspaceSnapshot {
             .binary_search_by(|candidate| candidate.configuration_id.cmp(id))
             .ok()
             .map(|index| &self.configurations[index])
+    }
+
+    /// Builds one complete read-only refactoring plan from this publication.
+    ///
+    /// The selected Configuration Graph and source evidence are borrowed only
+    /// from this immutable snapshot. Source files are never read or changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns one closed domain failure and no partial plan or preview.
+    pub fn plan_refactoring(
+        &self,
+        request: &RefactoringRequest,
+        cancellation: &dyn RefactoringCancellationSignal,
+    ) -> Result<RefactoringEvaluation, RefactoringError> {
+        let input = self
+            .configuration(request.configuration_id())
+            .map(|configuration| {
+                RefactoringPlannerInput::new(
+                    self.publication_id(),
+                    configuration.configuration_id(),
+                    configuration.graph(),
+                    configuration.source_evidence(),
+                )
+            });
+        RefactoringPlanner.evaluate_selected_configuration(
+            self.publication_id(),
+            input,
+            request,
+            cancellation,
+        )
     }
 
     /// Returns the number of discovered and built configurations.
@@ -1061,6 +1597,12 @@ impl WorkspaceSnapshot {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.configurations.is_empty()
+    }
+}
+
+impl Default for WorkspaceSnapshot {
+    fn default() -> Self {
+        Self::initial(PathBuf::new(), Vec::new())
     }
 }
 
@@ -1111,7 +1653,7 @@ where
             BTreeMap::new();
 
         for project in discovered {
-            let snapshot = build_configuration(&project)?;
+            let snapshot = build_configuration(root, &project)?;
             let configuration_id = snapshot.configuration_id.clone();
             if let Some(existing) = configurations.get(&configuration_id) {
                 return Err(WorkspaceBuildError::DuplicateConfigurationIdentity {
@@ -1123,10 +1665,10 @@ where
             configurations.insert(configuration_id, snapshot);
         }
 
-        Ok(WorkspaceSnapshot {
-            root_path: root.to_path_buf(),
-            configurations: configurations.into_values().collect(),
-        })
+        Ok(WorkspaceSnapshot::initial(
+            root.to_path_buf(),
+            configurations.into_values().collect(),
+        ))
     }
 }
 
@@ -1137,11 +1679,12 @@ impl Default for WorkspaceSnapshotBuilder<FileSystemWorkspaceDetector> {
 }
 
 fn build_configuration(
+    workspace_root: &Path,
     project: &DiscoveredConfiguration,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     match project.format() {
-        WorkspaceFormat::Edt => build_edt(project),
-        WorkspaceFormat::DesignerXml => build_designer_xml(project),
+        WorkspaceFormat::Edt => build_edt(workspace_root, project),
+        WorkspaceFormat::DesignerXml => build_designer_xml(workspace_root, project),
         format @ (WorkspaceFormat::Extension | WorkspaceFormat::Unknown) => {
             Err(WorkspaceBuildError::UnsupportedFormat {
                 root_path: project.root_path().to_path_buf(),
@@ -1152,13 +1695,15 @@ fn build_configuration(
 }
 
 fn build_edt(
+    workspace_root: &Path,
     project: &DiscoveredConfiguration,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     let root_path = project.root_path();
     let result = FileSystemEdtSemanticGraphBuilder
-        .build_graph_with_diagnostics(root_path)
+        .build_graph_with_source_evidence(workspace_root, root_path)
         .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::Edt, source))?;
-    let validation = result.validate();
+    let build = result.build();
+    let validation = build.validate();
     if !validation.is_valid() {
         return Err(WorkspaceBuildError::GraphValidation {
             root_path: root_path.to_path_buf(),
@@ -1167,32 +1712,52 @@ fn build_edt(
         });
     }
     let reference_requests =
-        SemanticReferenceRequestLedger::from_requests(result.reference_requests().iter().cloned())
+        SemanticReferenceRequestLedger::from_requests(build.reference_requests().iter().cloned())
             .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::Edt, source))?;
-    let graph = result.graph().clone();
-    let diagnostics = result.diagnostics().to_vec();
-    let reference_statistics = *result.reference_statistics();
-    let report = result.report();
+    let graph = build.graph().clone();
+    let source_evidence = result.source_evidence().clone();
+    let diagnostics = build.diagnostics().to_vec();
+    let reference_statistics = *build.reference_statistics();
+    let report = build.report();
 
     snapshot_from_parts(
         root_path,
         WorkspaceFormat::Edt,
         graph,
+        source_evidence,
         diagnostics,
         reference_requests,
         reference_statistics,
         report,
+        validation,
     )
 }
 
 fn build_designer_xml(
+    workspace_root: &Path,
     project: &DiscoveredConfiguration,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     let root_path = project.root_path();
-    let graph = FileSystemDesignerXmlSemanticGraphBuilder
-        .build_graph(root_path, DesignerXmlBuildScope::Complete)
+    let result = FileSystemDesignerXmlSemanticGraphBuilder
+        .build_graph_with_source_evidence(
+            workspace_root,
+            root_path,
+            DesignerXmlBuildScope::Complete,
+        )
         .map_err(|source| semantic_build_error(root_path, WorkspaceFormat::DesignerXml, source))?;
-    let validation = graph.validate();
+    let graph = result.graph().clone();
+    let source_evidence = result.source_evidence().clone();
+    let diagnostics = Vec::new();
+    let reference_requests = SemanticReferenceRequestLedger::new();
+    let reference_statistics = SemanticReferenceStatistics::new();
+    let report = graph.report();
+    let validation = validate_complete_build(
+        &graph,
+        &diagnostics,
+        &reference_requests,
+        reference_statistics,
+        &report,
+    );
     if !validation.is_valid() {
         return Err(WorkspaceBuildError::GraphValidation {
             root_path: root_path.to_path_buf(),
@@ -1200,15 +1765,31 @@ fn build_designer_xml(
             validation: Box::new(validation),
         });
     }
-    let report = graph.report();
-
     snapshot_from_parts(
         root_path,
         WorkspaceFormat::DesignerXml,
         graph,
-        Vec::new(),
-        SemanticReferenceRequestLedger::new(),
-        SemanticReferenceStatistics::new(),
+        source_evidence,
+        diagnostics,
+        reference_requests,
+        reference_statistics,
+        report,
+        validation,
+    )
+}
+
+fn validate_complete_build(
+    graph: &SemanticGraph,
+    diagnostics: &[SemanticDiagnostic],
+    reference_requests: &SemanticReferenceRequestLedger,
+    legacy_reference_statistics: SemanticReferenceStatistics,
+    report: &SemanticGraphReport,
+) -> SemanticGraphValidationResult {
+    SemanticGraphValidator::new().validate_build_result_with_reference_requests_and_report(
+        graph,
+        diagnostics,
+        reference_requests,
+        legacy_reference_statistics,
         report,
     )
 }
@@ -1230,10 +1811,12 @@ fn snapshot_from_parts(
     root_path: &Path,
     format: WorkspaceFormat,
     graph: SemanticGraph,
+    source_evidence: SourceEvidenceSet,
     diagnostics: Vec<SemanticDiagnostic>,
     reference_requests: SemanticReferenceRequestLedger,
     reference_statistics: SemanticReferenceStatistics,
     report: SemanticGraphReport,
+    validation: SemanticGraphValidationResult,
 ) -> Result<WorkspaceConfigurationSnapshot, WorkspaceBuildError> {
     let (configuration_id, configuration_name) =
         configuration_identity(&graph).map_err(|actual| {
@@ -1243,6 +1826,32 @@ fn snapshot_from_parts(
                 actual,
             }
         })?;
+    if source_evidence.configuration_id() != &configuration_id {
+        return Err(semantic_build_error(
+            root_path,
+            format,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Workspace source evidence Configuration does not match the Graph",
+            ),
+        ));
+    }
+    let registry = RuleRegistry::<Arc<dyn Rule>>::new([])
+        .map_err(|source| semantic_build_error(root_path, format, source))?;
+    let configuration = RuleConfiguration::default();
+    let (rule_execution_report, diagnostic_report) = compose_rule_evidence(
+        &registry,
+        &configuration,
+        &graph,
+        &validation,
+        &diagnostics,
+        &NeverRuleCancelled,
+    )
+    .map_err(|source| WorkspaceBuildError::SemanticBuild {
+        root_path: root_path.to_path_buf(),
+        format,
+        source,
+    })?;
 
     Ok(WorkspaceConfigurationSnapshot {
         root_path: root_path.to_path_buf(),
@@ -1250,11 +1859,42 @@ fn snapshot_from_parts(
         configuration_id,
         configuration_name,
         graph: Arc::new(graph),
+        source_evidence,
         diagnostics: Arc::from(diagnostics.into_boxed_slice()),
         reference_requests: Arc::new(reference_requests),
         reference_statistics,
         report,
+        validation: Arc::new(validation),
+        rule_execution_report: Arc::new(rule_execution_report),
+        diagnostic_report: Arc::new(diagnostic_report),
     })
+}
+
+fn compose_rule_evidence<R>(
+    registry: &RuleRegistry<R>,
+    configuration: &RuleConfiguration,
+    graph: &SemanticGraph,
+    validation: &SemanticGraphValidationResult,
+    diagnostics: &[SemanticDiagnostic],
+    cancellation: &dyn RuleCancellationSignal,
+) -> Result<(RuleExecutionReport, DiagnosticReport), BoxError>
+where
+    R: Rule,
+{
+    let policy = DiagnosticPolicy::default();
+    let base = DiagnosticEngine
+        .build(diagnostics, validation, &policy)
+        .map_err(|error| Box::new(error) as BoxError)?;
+    let plan =
+        RulePlan::new(registry, configuration).map_err(|error| Box::new(error) as BoxError)?;
+    let context = RuleContext::new(graph, validation, &base);
+    let rule_report = RuleEngine
+        .execute(registry, &plan, configuration, &context, cancellation)
+        .map_err(|error| Box::new(error) as BoxError)?;
+    let final_report = DiagnosticEngine
+        .build_with_rules(diagnostics, validation, rule_report.diagnostics(), &policy)
+        .map_err(|error| Box::new(error) as BoxError)?;
+    Ok((rule_report, final_report))
 }
 
 fn configuration_identity(graph: &SemanticGraph) -> Result<(EntityId, EntityName), usize> {
@@ -1277,6 +1917,27 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use oneagent_analysis::change_impact::{
+        ChangeImpactCancellationSignal, ChangeImpactErrorKind, NeverCancelledChangeImpact,
+    };
+    use oneagent_analysis::diagnostics::{
+        DiagnosticCategory, DiagnosticFamily, DiagnosticSeverity, MAX_SEMANTIC_DIAGNOSTICS,
+    };
+    use oneagent_analysis::publication::WorkspacePublicationId;
+    use oneagent_analysis::refactoring::SourceEvidenceSet;
+    use oneagent_analysis::rules::{
+        Rule, RuleCancellationSignal, RuleConfiguration, RuleContext, RuleDefinition,
+        RuleDiagnostic, RuleDiagnosticCode, RuleEvaluation, RuleId, RuleRegistration, RuleRegistry,
+        RuleStatus,
+    };
+    use oneagent_common::{EntityId, EntityName};
+    use oneagent_graph::{
+        GraphNode, NodeKind, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
+        SemanticDiagnosticSeverity, SemanticGraph, SemanticGraphReport,
+        SemanticGraphValidationCode, SemanticGraphValidator, SemanticReference,
+        SemanticReferenceRequestLedger, SemanticReferenceStatistics,
+    };
+    use oneagent_metadata::MetadataKind;
     use oneagent_workspace::WorkspaceFormat;
     use tempfile::tempdir;
     use tokio::sync::{mpsc, oneshot, watch};
@@ -1286,13 +1947,40 @@ mod tests {
 
     use super::cache::{WorkspaceCacheLoad, WorkspaceCacheStorage};
     use super::{
-        DiscoveredConfiguration, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
-        WorkspaceCacheWriteOutcome, WorkspaceDetector, WorkspaceFileState, WorkspaceService,
+        DiscoveredConfiguration, GitChangeSet, GitCommitId, RepositoryChange, RepositoryChangeKind,
+        RepositoryChangePath, WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome,
+        WorkspaceCacheWriteOutcome, WorkspaceChangeImpact, WorkspaceChangeSubmissionOutcome,
+        WorkspaceDetector, WorkspaceFileState, WorkspaceRebuildError, WorkspaceService,
         WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceUpdateFailureKind,
-        WorkspaceUpdatePhase, WorkspaceUpdateStatus, initialize_workspace, rebuild_workspace,
+        WorkspaceUpdatePhase, WorkspaceUpdateStatus, compose_change_impact, compose_rule_evidence,
+        initialize_workspace, rebuild_workspace, snapshot_from_parts, validate_complete_build,
     };
 
     const DUMP_INFO: &str = r#"<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" format="Hierarchical" version="2.20"><ConfigVersions /></ConfigDumpInfo>"#;
+    const TEST_HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn explicit_change(path: &str) -> GitChangeSet {
+        let path = RepositoryChangePath::new(path).expect("test change path must be valid");
+        let change = RepositoryChange::new(
+            RepositoryChangeKind::Modified,
+            Some(path.clone()),
+            Some(path),
+        )
+        .expect("test change must be valid");
+        GitChangeSet::new(
+            GitCommitId::new(TEST_HEAD).expect("test baseline must be valid"),
+            [change],
+        )
+        .expect("test change set must be valid")
+    }
+
+    fn empty_change() -> GitChangeSet {
+        GitChangeSet::new(
+            GitCommitId::new(TEST_HEAD).expect("test baseline must be valid"),
+            [],
+        )
+        .expect("empty test change set must be valid")
+    }
 
     #[derive(Debug, Clone)]
     struct StaticDetector {
@@ -1334,6 +2022,41 @@ mod tests {
     #[derive(Debug, Clone)]
     struct FailingDetector {
         calls: Arc<AtomicUsize>,
+    }
+
+    struct ControlledRule {
+        definition: RuleDefinition,
+        diagnostic: RuleDiagnostic,
+    }
+
+    impl RuleRegistration for ControlledRule {
+        fn definition(&self) -> &RuleDefinition {
+            &self.definition
+        }
+    }
+
+    impl Rule for ControlledRule {
+        fn evaluate(
+            &self,
+            _context: &RuleContext<'_>,
+            _cancellation: &dyn RuleCancellationSignal,
+        ) -> RuleEvaluation {
+            RuleEvaluation::Completed(vec![self.diagnostic.clone()])
+        }
+    }
+
+    struct AlwaysCancelled;
+
+    impl RuleCancellationSignal for AlwaysCancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+    }
+
+    impl ChangeImpactCancellationSignal for AlwaysCancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
     }
 
     struct ControlledCacheStorage {
@@ -1596,6 +2319,237 @@ mod tests {
         assert_eq!(snapshot.len(), 0);
         assert!(snapshot.configurations().is_empty());
         assert_eq!(snapshot.root_path(), root.path());
+        assert_eq!(snapshot.publication_id(), WorkspacePublicationId::initial());
+        assert!(matches!(
+            snapshot.change_impact(),
+            WorkspaceChangeImpact::NoPreviousPublication { .. }
+        ));
+    }
+
+    #[test]
+    fn workspace_impact_composition_uses_only_identity_and_graph_and_fails_atomically() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let edt = root.path().join("edt");
+        write_edt(&edt, "configuration:impact", "ImpactBefore");
+        let previous = WorkspaceSnapshotBuilder::new()
+            .build(root.path())
+            .expect("previous Workspace snapshot must build");
+        let mut current = previous.clone();
+        current.configurations[0].format = WorkspaceFormat::DesignerXml;
+        current.configurations[0].configuration_name =
+            EntityName::new("ImpactAfter").expect("changed test name must be valid");
+
+        compose_change_impact(&previous, &mut current, &NeverCancelledChangeImpact)
+            .expect("source-format and name transitions must compare by identity and graph");
+        let report = current
+            .change_impact()
+            .report()
+            .expect("successful composition must embed a report");
+        assert_eq!(report.previous_publication_id(), previous.publication_id());
+        assert_eq!(report.current_publication_id(), current.publication_id());
+        assert_eq!(report.summary().compared_configurations(), 1);
+        assert_eq!(report.summary().total_affected_nodes(), 0);
+
+        let mut cancelled = WorkspaceSnapshot::default();
+        let cancelled_before = cancelled.change_impact().clone();
+        let error = compose_change_impact(&previous, &mut cancelled, &AlwaysCancelled)
+            .expect_err("cancelled composition must fail without mutation");
+        assert_eq!(error.kind(), ChangeImpactErrorKind::Cancelled);
+        assert_eq!(cancelled.change_impact(), &cancelled_before);
+
+        let exhausted = WorkspaceSnapshot {
+            change_impact: WorkspaceChangeImpact::NoPreviousPublication {
+                current_publication_id: WorkspacePublicationId::new(u64::MAX)
+                    .expect("maximum publication identity is non-zero"),
+            },
+            ..WorkspaceSnapshot::default()
+        };
+        let mut candidate = WorkspaceSnapshot::default();
+        let candidate_before = candidate.change_impact().clone();
+        let error = compose_change_impact(&exhausted, &mut candidate, &NeverCancelledChangeImpact)
+            .expect_err("publication overflow must fail without mutation");
+        assert_eq!(error.kind(), ChangeImpactErrorKind::SummaryOverflow);
+        assert_eq!(candidate.change_impact(), &candidate_before);
+    }
+
+    #[test]
+    fn diagnostic_composition_accepts_exact_and_rejects_one_over_atomically() {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            EntityId::new("configuration:test").expect("configuration ID must be valid"),
+            EntityName::new("Test").expect("configuration name must be valid"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let diagnostic = SemanticDiagnostic::new(
+            SemanticDiagnosticCode::QueryLanguageMalformedSyntax,
+            SemanticDiagnosticSeverity::Error,
+            SemanticDiagnosticKind::QueryLanguageMalformedSyntax,
+            "malformed query",
+            SemanticReference::Raw("query".to_owned()),
+        );
+        let exact = vec![diagnostic.clone(); MAX_SEMANTIC_DIAGNOSTICS];
+        let report = SemanticGraphReport::from_graph_diagnostics_and_references(
+            &graph,
+            &exact,
+            SemanticReferenceStatistics::new(),
+        );
+        let validation = SemanticGraphValidator::new().validate_build_result_with_report(
+            &graph,
+            &exact,
+            SemanticReferenceStatistics::new(),
+            &report,
+        );
+        let snapshot = snapshot_from_parts(
+            std::path::Path::new("configuration"),
+            WorkspaceFormat::Edt,
+            graph.clone(),
+            SourceEvidenceSet::new(
+                EntityId::new("configuration:test").expect("configuration ID must be valid"),
+                Vec::new(),
+            )
+            .expect("empty source evidence must be valid"),
+            exact,
+            SemanticReferenceRequestLedger::new(),
+            SemanticReferenceStatistics::new(),
+            report,
+            validation,
+        )
+        .expect("exact diagnostic input bound must publish");
+        assert_eq!(snapshot.diagnostics().len(), MAX_SEMANTIC_DIAGNOSTICS);
+        assert!(snapshot.rule_execution_report().results().is_empty());
+        assert!(snapshot.rule_execution_report().diagnostics().is_empty());
+        assert_eq!(snapshot.rule_execution_report().summary().total(), 0);
+        assert_eq!(snapshot.diagnostic_report().summary().total(), 2);
+
+        let over = vec![diagnostic; MAX_SEMANTIC_DIAGNOSTICS + 1];
+        let report = SemanticGraphReport::from_graph_diagnostics_and_references(
+            &graph,
+            &over,
+            SemanticReferenceStatistics::new(),
+        );
+        let validation = SemanticGraphValidator::new().validate_build_result_with_report(
+            &graph,
+            &over,
+            SemanticReferenceStatistics::new(),
+            &report,
+        );
+        let error = snapshot_from_parts(
+            std::path::Path::new("configuration"),
+            WorkspaceFormat::Edt,
+            graph,
+            SourceEvidenceSet::new(
+                EntityId::new("configuration:test").expect("configuration ID must be valid"),
+                Vec::new(),
+            )
+            .expect("empty source evidence must be valid"),
+            over,
+            SemanticReferenceRequestLedger::new(),
+            SemanticReferenceStatistics::new(),
+            report,
+            validation,
+        )
+        .expect_err("one-over diagnostic input must not publish");
+        assert_eq!(error.kind(), WorkspaceBuildErrorKind::SemanticBuildFailed);
+    }
+
+    #[test]
+    fn rule_composition_publishes_complete_and_cancelled_evidence_atomically() {
+        let configuration_id =
+            EntityId::new("configuration:test").expect("configuration ID must be valid");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            configuration_id.clone(),
+            EntityName::new("Test").expect("configuration name must be valid"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let validation = graph.validate();
+        let rule_id = RuleId::new("runtime.rule").expect("rule ID must be valid");
+        let rule: Arc<dyn Rule> = Arc::new(ControlledRule {
+            definition: RuleDefinition::new(rule_id.clone(), [])
+                .expect("rule definition must be valid"),
+            diagnostic: RuleDiagnostic::new(
+                rule_id,
+                RuleDiagnosticCode::new("finding").expect("diagnostic code must be valid"),
+                DiagnosticSeverity::Warning,
+                DiagnosticCategory::Semantic,
+                "controlled runtime rule finding",
+                [configuration_id],
+            ),
+        });
+        let registry =
+            RuleRegistry::<Arc<dyn Rule>>::new([rule]).expect("controlled registry must be valid");
+
+        let (completed, diagnostics) = compose_rule_evidence(
+            &registry,
+            &RuleConfiguration::default(),
+            &graph,
+            &validation,
+            &[],
+            &super::NeverRuleCancelled,
+        )
+        .expect("complete rule evidence must compose");
+        assert_eq!(completed.results().len(), 1);
+        assert_eq!(completed.results()[0].status(), RuleStatus::Completed);
+        assert_eq!(completed.diagnostics().len(), 1);
+        assert_eq!(diagnostics.summary().total(), 2);
+        assert_eq!(
+            diagnostics
+                .summary()
+                .by_family()
+                .get(&DiagnosticFamily::Rule),
+            Some(&1)
+        );
+
+        let (cancelled, diagnostics) = compose_rule_evidence(
+            &registry,
+            &RuleConfiguration::default(),
+            &graph,
+            &validation,
+            &[],
+            &AlwaysCancelled,
+        )
+        .expect("cancelled rule evidence must compose");
+        assert_eq!(cancelled.results().len(), 1);
+        assert_eq!(cancelled.results()[0].status(), RuleStatus::Cancelled);
+        assert!(cancelled.diagnostics().is_empty());
+        assert_eq!(diagnostics.summary().total(), 1);
+        assert!(
+            diagnostics
+                .summary()
+                .by_family()
+                .get(&DiagnosticFamily::Rule)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn designer_complete_build_validation_rejects_a_mismatched_report() {
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            EntityId::new("configuration:designer")
+                .expect("Designer configuration ID must be valid"),
+            EntityName::new("Designer").expect("Designer configuration name must be valid"),
+            NodeKind::Metadata(MetadataKind::Configuration),
+        ));
+        let mismatched_report = SemanticGraphReport::from_graph(&SemanticGraph::new());
+        let reference_requests = SemanticReferenceRequestLedger::new();
+
+        assert!(graph.validate().is_valid());
+        let validation = validate_complete_build(
+            &graph,
+            &[],
+            &reference_requests,
+            SemanticReferenceStatistics::new(),
+            &mismatched_report,
+        );
+
+        assert!(!validation.is_valid());
+        assert!(
+            validation
+                .issues()
+                .iter()
+                .any(|issue| { issue.code() == SemanticGraphValidationCode::InconsistentReport })
+        );
     }
 
     #[test]
@@ -1649,8 +2603,20 @@ mod tests {
             assert_eq!(actual.report(), expected.report());
             assert!(actual.graph().validate().is_valid());
         }
-        assert!(first.configurations()[1].diagnostics().is_empty());
-        assert!(first.configurations()[1].reference_requests().is_empty());
+        let designer = &first.configurations()[1];
+        assert!(designer.diagnostics().is_empty());
+        assert!(designer.reference_requests().is_empty());
+        assert_eq!(
+            designer.validation(),
+            &SemanticGraphValidator::new()
+                .validate_build_result_with_reference_requests_and_report(
+                    designer.graph(),
+                    designer.diagnostics(),
+                    designer.reference_requests(),
+                    SemanticReferenceStatistics::new(),
+                    designer.report(),
+                )
+        );
     }
 
     #[test]
@@ -1995,6 +2961,7 @@ mod tests {
 
     #[test]
     fn workspace_cache_builds_write_only_complete_stable_results() {
+        let previous = WorkspaceSnapshot::default();
         let stable_root = tempdir().expect("stable Workspace root must be created");
         let stable_storage = ControlledCacheStorage::new(
             WorkspaceCacheLoadOutcome::NotAttempted,
@@ -2007,6 +2974,8 @@ mod tests {
             }),
             stable_root.path(),
             &stable_storage,
+            &previous,
+            &NeverCancelledChangeImpact,
         )
         .expect("stable rebuild must succeed");
         assert_eq!(stable.write, WorkspaceCacheWriteOutcome::Succeeded);
@@ -2024,6 +2993,8 @@ mod tests {
             }),
             unstable_root.path(),
             &unstable_storage,
+            &previous,
+            &NeverCancelledChangeImpact,
         )
         .expect("unstable semantic rebuild remains valid");
         assert_eq!(
@@ -2045,9 +3016,15 @@ mod tests {
             }),
             failed_root.path(),
             &failed_storage,
+            &previous,
+            &NeverCancelledChangeImpact,
         )
         .expect_err("failed semantic build must retain the prior publication");
-        assert_eq!(error.kind(), WorkspaceBuildErrorKind::DiscoveryFailed);
+        assert!(matches!(
+            error,
+            WorkspaceRebuildError::Build(error)
+                if error.kind() == WorkspaceBuildErrorKind::DiscoveryFailed
+        ));
         assert_eq!(failed_calls.load(Ordering::SeqCst), 1);
         assert_eq!(failed_storage.writes(), 0);
     }
@@ -2120,12 +3097,44 @@ mod tests {
         assert!(observer.snapshot().is_none());
     }
 
+    #[test]
+    fn workspace_change_input_outcomes_are_exact_bounded_and_redacted() {
+        let service = WorkspaceService::new();
+        let input = service.change_input_handle();
+        let repeated = input.clone();
+
+        assert_eq!(
+            input.submit(empty_change()),
+            WorkspaceChangeSubmissionOutcome::IgnoredEmpty
+        );
+        assert_eq!(
+            input.submit(explicit_change("private/first.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        assert_eq!(
+            repeated.submit(explicit_change("private/second.bsl")),
+            WorkspaceChangeSubmissionOutcome::Backpressure
+        );
+        assert!(!format!("{input:?}").contains("private"));
+
+        drop(service);
+        assert_eq!(
+            input.submit(explicit_change("private/closed.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
+        assert_eq!(
+            input.submit(empty_change()),
+            WorkspaceChangeSubmissionOutcome::IgnoredEmpty
+        );
+    }
+
     #[tokio::test]
     async fn workspace_service_reports_named_start_failure_without_publication() {
         let parent = tempdir().expect("temporary parent must be created");
         let missing = parent.path().join("missing");
         let service = WorkspaceService::new();
         let observer = service.snapshot_observer();
+        let input = service.change_input_handle();
         let provider = TestConfigurationProvider {
             workspace_root: missing,
         };
@@ -2152,6 +3161,10 @@ mod tests {
             .expect("Workspace startup error must preserve the build classification");
         assert_eq!(source.kind(), WorkspaceBuildErrorKind::ObservationFailed);
         assert!(observer.snapshot().is_none());
+        assert_eq!(
+            input.submit(explicit_change("after-start-failure.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
     }
 
     #[tokio::test]
@@ -2369,6 +3382,162 @@ mod tests {
             .expect("Workspace shutdown must not hang")
             .expect("Workspace task must join")
             .expect("requested shutdown must succeed");
+    }
+
+    #[tokio::test]
+    async fn workspace_service_rebuilds_each_accepted_input_with_one_bounded_follow_up() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (second_started_sender, second_started) = std::sync::mpsc::channel();
+        let (second_release, second_release_receiver) = std::sync::mpsc::channel();
+        let detector = GatedDetector {
+            calls: Arc::clone(&calls),
+            second_started: second_started_sender,
+            second_release: Arc::new(Mutex::new(second_release_receiver)),
+        };
+        let (_ticks, controlled_ticks) = mpsc::channel(8);
+        let service =
+            WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(detector))
+                .with_controlled_change_ticks(controlled_ticks);
+        let input = service.change_input_handle();
+        assert_eq!(
+            input.submit(explicit_change("first.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let run = tokio::spawn(app.run(shutdown));
+        timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || second_started.recv()),
+        )
+        .await
+        .expect("input rebuild must start")
+        .expect("input-build observer must join")
+        .expect("input-build start must be observed");
+        assert_eq!(
+            input.submit(explicit_change("second.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        assert_eq!(
+            input.submit(explicit_change("third.bsl")),
+            WorkspaceChangeSubmissionOutcome::Backpressure
+        );
+        second_release
+            .send(())
+            .expect("input rebuild must be released");
+
+        let followed_up = wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching && status.published() == 3
+        })
+        .await;
+        assert_eq!(followed_up.attempt(), 3);
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+        assert_eq!(
+            input.submit(explicit_change("after-shutdown.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_service_cancellation_joins_input_build_and_closes_pending_slot() {
+        let root = tempdir().expect("temporary Workspace root must be created");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (second_started_sender, second_started) = std::sync::mpsc::channel();
+        let (second_release, second_release_receiver) = std::sync::mpsc::channel();
+        let detector = GatedDetector {
+            calls: Arc::clone(&calls),
+            second_started: second_started_sender,
+            second_release: Arc::new(Mutex::new(second_release_receiver)),
+        };
+        let (_ticks, controlled_ticks) = mpsc::channel(8);
+        let service =
+            WorkspaceService::with_builder(WorkspaceSnapshotBuilder::with_detector(detector))
+                .with_controlled_change_ticks(controlled_ticks);
+        let input = service.change_input_handle();
+        let updates = service.update_observer();
+        let mut update_changes = updates.subscribe();
+        let provider = TestConfigurationProvider {
+            workspace_root: root.path().to_path_buf(),
+        };
+        let app = App::builder()
+            .configure(&provider)
+            .expect("test configuration must load")
+            .register_service("workspace", service)
+            .expect("Workspace service must register")
+            .build()
+            .expect("application must build");
+        let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+        let mut run = tokio::spawn(app.run(shutdown));
+        wait_for_update(&mut update_changes, |status| {
+            status.phase() == WorkspaceUpdatePhase::Watching
+        })
+        .await;
+
+        assert_eq!(
+            input.submit(explicit_change("active.bsl")),
+            WorkspaceChangeSubmissionOutcome::Accepted
+        );
+        timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || second_started.recv()),
+        )
+        .await
+        .expect("input rebuild must start")
+        .expect("input-build observer must join")
+        .expect("input-build start must be observed");
+        shutdown_sender.send(()).expect("shutdown must be observed");
+        timeout(Duration::from_secs(1), async {
+            loop {
+                match input.submit(explicit_change("after-cancellation.bsl")) {
+                    WorkspaceChangeSubmissionOutcome::Closed => break,
+                    WorkspaceChangeSubmissionOutcome::Accepted
+                    | WorkspaceChangeSubmissionOutcome::Backpressure => {
+                        tokio::task::yield_now().await;
+                    }
+                    WorkspaceChangeSubmissionOutcome::IgnoredEmpty => {
+                        panic!("non-empty test input must not be ignored")
+                    }
+                }
+            }
+        })
+        .await
+        .expect("input receiver must close before the active build is released");
+        assert!(
+            timeout(Duration::from_millis(50), &mut run).await.is_err(),
+            "shutdown must join the active complete rebuild"
+        );
+        second_release
+            .send(())
+            .expect("input rebuild must be released");
+        timeout(Duration::from_secs(1), run)
+            .await
+            .expect("Workspace shutdown must not hang after release")
+            .expect("Workspace task must join")
+            .expect("requested shutdown must succeed");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(updates.status().phase(), WorkspaceUpdatePhase::Stopped);
+        assert_eq!(
+            input.submit(explicit_change("closed.bsl")),
+            WorkspaceChangeSubmissionOutcome::Closed
+        );
     }
 
     #[tokio::test]

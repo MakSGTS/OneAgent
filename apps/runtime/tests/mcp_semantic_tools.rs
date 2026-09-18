@@ -1,15 +1,86 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
 use oneagent_protocol::{McpServer, PROTOCOL_VERSION, encode_response};
-use oneagent_runtime::{WorkspaceSnapshotBuilder, semantic_server};
+use oneagent_runtime::{
+    App, AppBuilder, BoxError, ConfigurationProvider, RuntimeConfig, WorkspaceService,
+    WorkspaceSnapshot, WorkspaceSnapshotBuilder, semantic_server, semantic_server_observer,
+};
 use serde_json::{Value, json};
 use tempfile::{TempDir, tempdir};
+use tokio::sync::{oneshot, watch};
+use tokio::time::timeout;
 
 fn fixture_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/workspace_service")
         .leak()
+}
+
+#[derive(Debug, Clone)]
+struct TestConfigurationProvider {
+    workspace_root: PathBuf,
+}
+
+impl ConfigurationProvider for TestConfigurationProvider {
+    fn load(&self) -> Result<RuntimeConfig, BoxError> {
+        Ok(RuntimeConfig::new("OneAgent Runtime", "mcp-impact-test")
+            .with_workspace_root(self.workspace_root.clone()))
+    }
+}
+
+fn configured_builder(root: impl Into<PathBuf>) -> AppBuilder {
+    App::builder()
+        .configure(&TestConfigurationProvider {
+            workspace_root: root.into(),
+        })
+        .expect("test configuration must load")
+}
+
+fn copy_fixture() -> TempDir {
+    let root = tempdir().expect("temporary Workspace must be created");
+    copy_tree(fixture_root(), root.path());
+    root
+}
+
+fn copy_tree(source: &Path, destination: &Path) {
+    fs::create_dir_all(destination).expect("fixture destination must be created");
+    let mut entries = fs::read_dir(source)
+        .expect("fixture source must be readable")
+        .map(|entry| entry.expect("fixture entry must be readable"))
+        .collect::<Vec<_>>();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in entries {
+        let destination = destination.join(entry.file_name());
+        if entry
+            .file_type()
+            .expect("fixture entry type must be readable")
+            .is_dir()
+        {
+            copy_tree(&entry.path(), &destination);
+        } else {
+            fs::copy(entry.path(), destination).expect("fixture file must be copied");
+        }
+    }
+}
+
+async fn wait_for_snapshot(
+    snapshots: &mut watch::Receiver<Option<Arc<WorkspaceSnapshot>>>,
+    predicate: impl Fn(&WorkspaceSnapshot) -> bool,
+) -> Arc<WorkspaceSnapshot> {
+    loop {
+        if let Some(snapshot) = snapshots.borrow_and_update().clone()
+            && predicate(&snapshot)
+        {
+            return snapshot;
+        }
+        timeout(Duration::from_secs(5), snapshots.changed())
+            .await
+            .expect("Workspace snapshot wait must not hang")
+            .expect("Workspace service must retain snapshot ownership");
+    }
 }
 
 fn request(id: u64, method: &str, fields: &Value) -> String {
@@ -87,6 +158,7 @@ fn assert_catalog(listed: &Value) {
             "oneagent.graph",
             "oneagent.impact",
             "oneagent.query",
+            "oneagent.refactor.plan",
             "oneagent.symbols",
             "oneagent.validation"
         ]
@@ -104,6 +176,12 @@ fn assert_catalog(listed: &Value) {
                     "openWorldHint": false
                 }))
     );
+    assert_query_and_impact_schema(listed);
+    assert_symbol_and_refactoring_schema(listed);
+    assert_diagnostic_schema(listed);
+}
+
+fn assert_query_and_impact_schema(listed: &Value) {
     let query = listed["result"]["tools"]
         .as_array()
         .expect("tools")
@@ -126,6 +204,28 @@ fn assert_catalog(listed: &Value) {
             "triggers"
         ])
     );
+    let impact = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.impact")
+        .expect("impact definition");
+    let alternatives = impact["inputSchema"]["oneOf"]
+        .as_array()
+        .expect("impact selector alternatives");
+    assert_eq!(alternatives.len(), 2);
+    assert_eq!(
+        alternatives[0]["required"],
+        json!(["previousConfigurationId", "currentConfigurationId"])
+    );
+    assert_eq!(alternatives[1]["required"], json!(["configurationId"]));
+    assert_eq!(
+        alternatives[1]["properties"]["reasonLimit"],
+        json!({"type": "integer", "minimum": 1, "maximum": 100})
+    );
+}
+
+fn assert_symbol_and_refactoring_schema(listed: &Value) {
     let symbols = listed["result"]["tools"]
         .as_array()
         .expect("tools")
@@ -137,6 +237,66 @@ fn assert_catalog(listed: &Value) {
         symbols["inputSchema"]["properties"]["kinds"]["items"]["enum"],
         json!(["module", "procedure", "function", "query"])
     );
+    let refactoring = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.refactor.plan")
+        .expect("refactoring definition");
+    assert_eq!(
+        refactoring["inputSchema"]["required"],
+        json!([
+            "publicationId",
+            "configurationId",
+            "targetNodeId",
+            "desiredName"
+        ])
+    );
+    assert_eq!(
+        refactoring["inputSchema"]["properties"]["limit"],
+        json!({"type": "integer", "minimum": 1, "maximum": 100})
+    );
+    assert_eq!(refactoring["inputSchema"]["additionalProperties"], false);
+}
+
+fn assert_diagnostic_schema(listed: &Value) {
+    let diagnostics = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "oneagent.diagnostics")
+        .expect("diagnostics definition");
+    assert_eq!(
+        diagnostics["inputSchema"]["required"],
+        json!(["configurationId"])
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["families"],
+        json!({
+            "type": "array",
+            "items": {"enum": ["semantic", "validation", "rule"]},
+            "minItems": 1,
+            "uniqueItems": true
+        })
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["severities"]["items"]["enum"],
+        json!(["error", "warning"])
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["categories"]["items"]["enum"],
+        json!([
+            "source",
+            "semantic",
+            "structural",
+            "provenance",
+            "build_consistency"
+        ])
+    );
+    assert_eq!(
+        diagnostics["inputSchema"]["properties"]["includeSuppressed"],
+        json!({"type": "boolean"})
+    );
 }
 
 fn tool_cases(
@@ -144,6 +304,7 @@ fn tool_cases(
     node_id: &str,
     diagnostic_configuration: &str,
     current_configuration: &str,
+    refactoring: Value,
 ) -> Vec<Value> {
     vec![
         json!({"name": "oneagent.graph", "arguments": {"limit": 1}}),
@@ -186,7 +347,41 @@ fn tool_cases(
         json!({"name": "oneagent.symbols", "arguments": {
             "query": "e", "limit": 2
         }}),
+        refactoring,
     ]
+}
+
+fn refactoring_call(
+    snapshot: &WorkspaceSnapshot,
+    current_name: &str,
+    desired_name: &str,
+    limit: usize,
+) -> Value {
+    let (configuration, target) = snapshot
+        .configurations()
+        .iter()
+        .find_map(|configuration| {
+            configuration
+                .source_evidence()
+                .documents()
+                .iter()
+                .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+                .find(|occurrence| {
+                    occurrence.kind()
+                        == oneagent_analysis::refactoring::SourceOccurrenceKind::Declaration
+                        && occurrence.token() == current_name
+                })
+                .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+                .map(|target| (configuration, target))
+        })
+        .expect("fixture refactoring target must map uniquely");
+    json!({"name": "oneagent.refactor.plan", "arguments": {
+        "publicationId": snapshot.publication_id().get(),
+        "configurationId": configuration.configuration_id().as_str(),
+        "targetNodeId": target.as_str(),
+        "desiredName": desired_name,
+        "limit": limit
+    }})
 }
 
 #[tokio::test]
@@ -218,6 +413,7 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         .configuration_id()
         .as_str()
         .to_owned();
+    let refactoring = refactoring_call(&snapshot, "Posting", "PostingRenamed", 100);
     let server = semantic_server(snapshot).expect("fixed semantic server must build");
 
     let discovery = dispatch(&server, &request(1, "server/discover", &json!({}))).await;
@@ -230,6 +426,7 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         &node_id,
         &diagnostic_configuration,
         &current_configuration,
+        refactoring,
     );
     for (offset, fields) in cases.iter().enumerate() {
         let first = dispatch(
@@ -277,7 +474,7 @@ async fn public_semantic_tools_are_truthful_policy_gated_and_repeatable() {
         );
         let serialized = first["result"]["structuredContent"].to_string();
         assert!(!serialized.contains(fixture_root().to_str().expect("UTF-8 fixture path")));
-        assert!(!serialized.contains("provenance"));
+        assert!(!serialized.contains("\"provenance\":["));
         assert!(!serialized.contains("Configuration.xml"));
         assert_projection(offset, &first["result"]["structuredContent"]);
     }
@@ -301,6 +498,7 @@ fn assert_projection(offset: usize, content: &Value) {
                     .all(|node| node["viaEdgeId"].is_string())
             );
         }
+        5 => assert_diagnostic_projection(content),
         6 => {
             let affected = content["affectedNodes"].as_array().expect("affected nodes");
             assert!(!affected.is_empty());
@@ -329,8 +527,437 @@ fn assert_projection(offset: usize, content: &Value) {
                     && result["location"]["path"].is_string()
             }));
         }
+        9 => assert_refactoring_projection(content),
         _ => {}
     }
+}
+
+fn assert_diagnostic_projection(content: &Value) {
+    let diagnostics = content["diagnostics"]
+        .as_array()
+        .expect("diagnostic findings");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(content["total"], 3);
+    assert_eq!(content["truncated"], true);
+    assert_eq!(content["summary"]["total"], 3);
+    assert_eq!(content["summary"]["active"], 3);
+    assert_eq!(content["summary"]["suppressed"], 0);
+    assert_eq!(content["summary"]["byFamily"]["semantic"], 3);
+    assert_eq!(content["summary"]["byFamily"]["validation"], 0);
+    assert_eq!(content["summary"]["byFamily"]["rule"], 0);
+    assert!(diagnostics.iter().all(|finding| {
+        finding["family"] == "semantic"
+            && finding["severity"] == "error"
+            && finding["category"] == "semantic"
+            && finding["disposition"] == "active"
+            && finding["sourceNodeId"].is_string()
+            && finding["candidateNodeIds"].is_array()
+            && finding["nodeIds"].is_array()
+            && finding["edgeId"].is_null()
+            && finding["referenceRequestId"].is_null()
+    }));
+    let serialized = content.to_string();
+    assert!(!serialized.contains("reference\""));
+    assert!(!serialized.contains("producer"));
+    assert!(!serialized.contains("rootPath"));
+}
+
+fn assert_refactoring_projection(content: &Value) {
+    assert_eq!(content["family"], "bsl_callable_rename_v1");
+    assert_eq!(content["completeness"], "complete");
+    assert_eq!(content["readOnly"], true);
+    assert_eq!(content["editAuthorization"], "none");
+    assert_eq!(content["summary"]["targets"]["requested"], 1);
+    assert_eq!(content["summary"]["targets"]["planned"], 1);
+    assert_eq!(content["summary"]["targets"]["conflicted"], 0);
+    assert_eq!(content["summary"]["targets"]["rejected"], 0);
+    assert_eq!(
+        content["totalOperations"],
+        content["summary"]["plannedOperations"]
+    );
+    assert_eq!(content["totalOperations"], content["returnedOperations"]);
+    assert_eq!(content["omittedOperations"], 0);
+    assert_eq!(content["truncated"], false);
+    let preview = content["preview"].as_array().expect("refactoring preview");
+    assert!(!preview.is_empty());
+    assert!(preview.iter().all(|entry| {
+        entry["operationId"].is_string()
+            && entry["path"].is_string()
+            && entry["range"]["startByte"].is_u64()
+            && entry["range"]["endByte"].is_u64()
+            && entry["position"]["start"]["line"].is_u64()
+            && entry["replacement"] == "PostingRenamed"
+    }));
+    let serialized = content.to_string();
+    for forbidden in [
+        "rawContent",
+        "contentVersion",
+        "digest",
+        "expectedToken",
+        "provenance",
+    ] {
+        assert!(!serialized.contains(forbidden));
+    }
+}
+
+#[tokio::test]
+async fn public_refactoring_plan_is_bounded_redacted_and_uses_retained_source() {
+    let root = copy_fixture();
+    let source_path = root
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let source = fs::read_to_string(&source_path)
+        .expect("EDT refactoring fixture source must be readable")
+        .replace(
+            "Procedure ReadMissingCatalog()",
+            "Procedure ReadMissingCatalog()\n\tPosting();\n\tPosting();",
+        );
+    fs::write(&source_path, source).expect("bounded call fixture must be written");
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(root.path())
+        .expect("refactoring Workspace must build");
+    let call = refactoring_call(&snapshot, "Posting", "PostingRenamed", 1);
+    let mut stale = call.clone();
+    stale["arguments"]["publicationId"] = json!(snapshot.publication_id().get() + 1);
+    let mut missing = call.clone();
+    missing["arguments"]["targetNodeId"] = json!("target.missing");
+    let mut no_change = call.clone();
+    no_change["arguments"]["desiredName"] = json!("posting");
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    fs::remove_file(&source_path).expect("published source must become unreadable");
+    let first = dispatch(&server, &request(45, "tools/call", &call)).await;
+    let repeated = dispatch(&server, &request(46, "tools/call", &call)).await;
+    let content = &first["result"]["structuredContent"];
+    assert_eq!(content, &repeated["result"]["structuredContent"]);
+    assert_eq!(content["totalOperations"], 3);
+    assert_eq!(content["returnedOperations"], 1);
+    assert_eq!(content["omittedOperations"], 2);
+    assert_eq!(content["truncated"], true);
+    assert_eq!(content["summary"]["internalOperations"]["omitted"], 0);
+    assert_eq!(content["summary"]["internalOperations"]["returned"], 3);
+    assert!(
+        !content
+            .to_string()
+            .contains(root.path().to_str().expect("UTF-8 root"))
+    );
+
+    for (fields, code) in [
+        (stale, "execution_failed"),
+        (missing, "not_found"),
+        (no_change, "execution_failed"),
+        (
+            json!({"name": "oneagent.refactor.plan", "arguments": {
+                "publicationId": 1,
+                "configurationId": "configuration.test",
+                "targetNodeId": "target.test",
+                "desiredName": "Renamed",
+                "limit": 101
+            }}),
+            "invalid_arguments",
+        ),
+        (
+            json!({"name": "oneagent.refactor.plan", "arguments": {
+                "publicationId": 1,
+                "configurationId": "configuration.test",
+                "targetNodeId": "target.test",
+                "desiredName": "x".repeat(257)
+            }}),
+            "invalid_arguments",
+        ),
+        (
+            json!({"name": "oneagent.refactor.plan", "arguments": {
+                "publicationId": 1,
+                "configurationId": "configuration.test",
+                "targetNodeId": "target.test",
+                "desiredName": "Renamed",
+                "extra": true
+            }}),
+            "invalid_arguments",
+        ),
+    ] {
+        let response = dispatch(&server, &request(47, "tools/call", &fields)).await;
+        assert_eq!(response["result"]["isError"], true, "{response}");
+        assert_eq!(
+            response["result"]["structuredContent"]["code"], code,
+            "{response}"
+        );
+        let error = response["result"]["structuredContent"].to_string();
+        assert!(!error.contains("PostingRenamed"));
+        assert!(!error.contains("target.missing"));
+        assert!(!error.contains(root.path().to_str().expect("UTF-8 root")));
+    }
+}
+
+#[tokio::test]
+async fn public_publication_impact_reports_initial_unavailability_and_rejects_selector_matrix() {
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot.configurations()[0]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let current_configuration_id = snapshot.configurations()[1]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+    let fields = json!({"name": "oneagent.impact", "arguments": {
+        "configurationId": configuration_id,
+        "maxDepth": 0,
+        "limit": 100,
+        "reasonLimit": 100
+    }});
+    let available = dispatch(&server, &request(28, "tools/call", &fields)).await;
+    let reordered = dispatch(&server, &reordered_request(29, "tools/call", &fields)).await;
+    let content = &available["result"]["structuredContent"];
+    assert_eq!(content["mode"], "publication");
+    assert_eq!(content["currentPublicationId"], 1);
+    assert_eq!(content["configurationId"], configuration_id);
+    assert_eq!(content["availability"], "no_previous_publication");
+    assert_eq!(content["requestedMaxDepth"], 0);
+    assert_eq!(content["configuredMaxDepth"], 4);
+    for absent in [
+        "previousPublicationId",
+        "transition",
+        "completeness",
+        "summary",
+        "affectedNodes",
+        "total",
+        "truncated",
+        "omittedReasons",
+    ] {
+        assert!(content.get(absent).is_none(), "unexpected field {absent}");
+    }
+    assert_eq!(content, &reordered["result"]["structuredContent"]);
+
+    let invalid_arguments = [
+        json!({}),
+        json!({"previousConfigurationId": configuration_id}),
+        json!({"currentConfigurationId": current_configuration_id}),
+        json!({
+            "previousConfigurationId": configuration_id,
+            "currentConfigurationId": current_configuration_id,
+            "configurationId": configuration_id
+        }),
+        json!({"configurationId": configuration_id, "reasonLimit": 0}),
+        json!({"configurationId": configuration_id, "reasonLimit": 101}),
+        json!({"configurationId": configuration_id, "maxDepth": 5}),
+        json!({"configurationId": configuration_id, "limit": 0}),
+        json!({"configurationId": configuration_id, "limit": 101}),
+        json!({"configurationId": 42}),
+        json!({"configurationId": configuration_id, "extra": true}),
+        json!({
+            "previousConfigurationId": configuration_id,
+            "currentConfigurationId": current_configuration_id,
+            "reasonLimit": 1
+        }),
+    ];
+    for arguments in invalid_arguments {
+        let response = dispatch(
+            &server,
+            &request(
+                30,
+                "tools/call",
+                &json!({"name": "oneagent.impact", "arguments": arguments}),
+            ),
+        )
+        .await;
+        assert_eq!(
+            response["result"]["structuredContent"]["code"], "invalid_arguments",
+            "{response}"
+        );
+    }
+
+    let missing = dispatch(
+        &server,
+        &request(
+            31,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": "configuration.missing"
+            }}),
+        ),
+    )
+    .await;
+    assert_eq!(missing["result"]["structuredContent"]["code"], "not_found");
+}
+
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
+async fn public_observer_backed_impact_projects_compared_removed_added_and_equal_publications() {
+    let root = copy_fixture();
+    let moved = tempdir().expect("temporary removed Configuration owner must be created");
+    let workspace = WorkspaceService::new();
+    let observer = workspace.snapshot_observer();
+    let mut snapshots = observer.subscribe();
+    let server =
+        semantic_server_observer(observer.clone()).expect("live semantic server must build");
+    let app = configured_builder(root.path())
+        .register_service("workspace", workspace)
+        .expect("Workspace service must register")
+        .build()
+        .expect("application must build");
+    let (shutdown_sender, shutdown) = oneshot::channel::<()>();
+    let run = tokio::spawn(app.run_without_banner(shutdown));
+    let initial = wait_for_snapshot(&mut snapshots, |snapshot| snapshot.len() == 2).await;
+    let edt_id = initial.configurations()[1]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let designer_id = initial.configurations()[0]
+        .configuration_id()
+        .as_str()
+        .to_owned();
+
+    let edt_source = root.path().join("edt/src/Configuration/Configuration.mdo");
+    let changed = fs::read_to_string(&edt_source)
+        .expect("EDT source must be readable")
+        .replace("WritesFixture", "WritesMcpImpact");
+    fs::write(&edt_source, changed).expect("EDT source must be changed");
+    let compared = wait_for_snapshot(&mut snapshots, |snapshot| {
+        snapshot.publication_id().get() > initial.publication_id().get()
+            && snapshot.configurations()[1].configuration_name().as_str() == "WritesMcpImpact"
+    })
+    .await;
+    let compared_response = dispatch(
+        &server,
+        &request(
+            40,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": edt_id, "maxDepth": 0, "limit": 1, "reasonLimit": 1
+            }}),
+        ),
+    )
+    .await;
+    let compared_content = &compared_response["result"]["structuredContent"];
+    assert_eq!(compared_content["availability"], "available");
+    assert_eq!(compared_content["transition"], "compared");
+    assert_eq!(
+        compared_content["completeness"],
+        "complete_within_requested_depth"
+    );
+    assert_eq!(
+        compared_content["currentPublicationId"],
+        compared.publication_id().get()
+    );
+    assert_eq!(compared_content["summary"]["requestedMaxDepth"], 0);
+    assert_eq!(compared_content["summary"]["configuredMaxDepth"], 4);
+    assert_eq!(
+        compared_content["total"],
+        compared_content["summary"]["totalAffectedNodes"]
+    );
+    assert!(
+        !compared_content
+            .to_string()
+            .contains(root.path().to_str().expect("UTF-8 root"))
+    );
+
+    let removed_path = moved.path().join("designer");
+    fs::rename(root.path().join("designer"), &removed_path)
+        .expect("Designer Configuration must be removed");
+    let removed = wait_for_snapshot(&mut snapshots, |snapshot| {
+        snapshot.publication_id() > compared.publication_id() && snapshot.len() == 1
+    })
+    .await;
+    let removed_response = dispatch(
+        &server,
+        &request(
+            41,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": designer_id, "maxDepth": 4, "limit": 1, "reasonLimit": 1
+            }}),
+        ),
+    )
+    .await;
+    let removed_content = &removed_response["result"]["structuredContent"];
+    assert_eq!(removed_content["transition"], "removed");
+    assert_eq!(
+        removed_content["currentPublicationId"],
+        removed.publication_id().get()
+    );
+    assert!(
+        removed_content["total"]
+            .as_u64()
+            .is_some_and(|value| value > 1)
+    );
+    assert_eq!(
+        removed_content["affectedNodes"]
+            .as_array()
+            .expect("bounded removed nodes")
+            .len(),
+        1
+    );
+    assert_eq!(removed_content["truncated"], true);
+    assert!(
+        removed_content["summary"]["previousOnlyNodes"]
+            .as_u64()
+            .is_some_and(|value| value > 0)
+    );
+
+    fs::rename(&removed_path, root.path().join("designer"))
+        .expect("Designer Configuration must be restored");
+    let added = wait_for_snapshot(&mut snapshots, |snapshot| {
+        snapshot.publication_id() > removed.publication_id() && snapshot.len() == 2
+    })
+    .await;
+    let added_response = dispatch(
+        &server,
+        &request(
+            42,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": designer_id, "maxDepth": 4, "limit": 100, "reasonLimit": 100
+            }}),
+        ),
+    )
+    .await;
+    assert_eq!(
+        added_response["result"]["structuredContent"]["transition"],
+        "added"
+    );
+
+    fs::write(
+        root.path().join("equal-rebuild.trigger"),
+        "source-neutral\n",
+    )
+    .expect("equal rebuild trigger must be written");
+    let equal = wait_for_snapshot(&mut snapshots, |snapshot| {
+        snapshot.publication_id() > added.publication_id()
+    })
+    .await;
+    let equal_response = dispatch(
+        &server,
+        &request(
+            43,
+            "tools/call",
+            &json!({"name": "oneagent.impact", "arguments": {
+                "configurationId": edt_id
+            }}),
+        ),
+    )
+    .await;
+    let equal_content = &equal_response["result"]["structuredContent"];
+    assert_eq!(
+        equal_content["currentPublicationId"],
+        equal.publication_id().get()
+    );
+    assert_eq!(equal_content["transition"], "compared");
+    assert_eq!(equal_content["total"], 0);
+    assert_eq!(equal_content["affectedNodes"], json!([]));
+    assert_eq!(equal_content["truncated"], false);
+    assert_eq!(equal_content["omittedReasons"], 0);
+
+    shutdown_sender.send(()).expect("shutdown must be observed");
+    timeout(Duration::from_secs(5), run)
+        .await
+        .expect("Runtime shutdown must not hang")
+        .expect("Runtime task must join")
+        .expect("requested shutdown must succeed");
+    assert!(observer.snapshot().is_none());
 }
 
 #[tokio::test]
@@ -402,6 +1029,21 @@ async fn public_semantic_tools_fail_closed_at_argument_and_lookup_boundaries() {
         json!({"name": "oneagent.symbols", "arguments": {
             "query": "x", "extra": true
         }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "families": []
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "families": ["semantic", "semantic"]
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "severities": ["info"]
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "categories": ["runtime"]
+        }}),
+        json!({"name": "oneagent.diagnostics", "arguments": {
+            "configurationId": configuration_id, "includeSuppressed": "true"
+        }}),
     ] {
         let response = dispatch(&server, &request(30, "tools/call", &fields)).await;
         assert_eq!(response["result"]["isError"], true);
@@ -448,6 +1090,84 @@ async fn public_symbols_validate_all_arguments_before_lookup() {
         response["result"]["structuredContent"]["code"], "not_found",
         "{response}"
     );
+}
+
+#[tokio::test]
+async fn public_diagnostics_filter_complete_findings_without_rebuilding_summary() {
+    let snapshot = WorkspaceSnapshotBuilder::new()
+        .build(fixture_root())
+        .expect("mixed fixture must build");
+    let configuration_id = snapshot
+        .configurations()
+        .iter()
+        .find(|configuration| !configuration.diagnostic_report().findings().is_empty())
+        .expect("fixture must contain normalized findings")
+        .configuration_id()
+        .as_str()
+        .to_owned();
+    let server = semantic_server(snapshot).expect("fixed semantic server must build");
+
+    let matching = dispatch(
+        &server,
+        &request(
+            35,
+            "tools/call",
+            &json!({"name": "oneagent.diagnostics", "arguments": {
+                "configurationId": configuration_id,
+                "families": ["semantic"],
+                "severities": ["error"],
+                "categories": ["semantic"],
+                "includeSuppressed": true,
+                "limit": 2
+            }}),
+        ),
+    )
+    .await;
+    let content = &matching["result"]["structuredContent"];
+    assert_eq!(content["total"], 3);
+    assert_eq!(
+        content["diagnostics"].as_array().expect("findings").len(),
+        2
+    );
+    assert_eq!(content["truncated"], true);
+    assert_eq!(content["summary"]["total"], 3);
+
+    let empty = dispatch(
+        &server,
+        &request(
+            36,
+            "tools/call",
+            &json!({"name": "oneagent.diagnostics", "arguments": {
+                "configurationId": configuration_id,
+                "families": ["validation"]
+            }}),
+        ),
+    )
+    .await;
+    let empty = &empty["result"]["structuredContent"];
+    assert_eq!(empty["diagnostics"], json!([]));
+    assert_eq!(empty["total"], 0);
+    assert_eq!(empty["truncated"], false);
+    assert_eq!(empty["summary"], content["summary"]);
+
+    let rules = dispatch(
+        &server,
+        &request(
+            37,
+            "tools/call",
+            &json!({"name": "oneagent.diagnostics", "arguments": {
+                "configurationId": configuration_id,
+                "families": ["rule"]
+            }}),
+        ),
+    )
+    .await;
+    let rules = &rules["result"]["structuredContent"];
+    assert_eq!(rules["diagnostics"], json!([]));
+    assert_eq!(rules["total"], 0);
+    assert_eq!(rules["truncated"], false);
+    assert_eq!(rules["summary"]["byFamily"]["rule"], 0);
+    assert_eq!(rules["summary"], content["summary"]);
 }
 
 #[tokio::test]

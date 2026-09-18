@@ -58,6 +58,36 @@ impl App {
         F: Future<Output = Result<(), E>>,
         E: std::error::Error + Send + Sync + 'static,
     {
+        self.run_with_banner(shutdown, true).await
+    }
+
+    /// Runs without writing the Runtime startup banner to standard output.
+    ///
+    /// Protocol executables use this entry point to keep their data channel
+    /// free from non-protocol bytes while preserving the ordinary Runtime
+    /// lifecycle and structured service cleanup.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same lifecycle, startup, service, task-join, or shutdown
+    /// source errors as [`Self::run`].
+    pub async fn run_without_banner<F, E>(self, shutdown: F) -> Result<(), RuntimeError>
+    where
+        F: Future<Output = Result<(), E>>,
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        self.run_with_banner(shutdown, false).await
+    }
+
+    async fn run_with_banner<F, E>(
+        self,
+        shutdown: F,
+        write_banner: bool,
+    ) -> Result<(), RuntimeError>
+    where
+        F: Future<Output = Result<(), E>>,
+        E: std::error::Error + Send + Sync + 'static,
+    {
         let Self {
             state,
             mut lifecycle,
@@ -87,12 +117,14 @@ impl App {
             return finish_stopped(&mut lifecycle, Err(error));
         }
 
-        println!(
-            "{} {} [{}]",
-            state.configuration().application_name(),
-            env!("CARGO_PKG_VERSION"),
-            state.configuration().environment()
-        );
+        if write_banner {
+            println!(
+                "{} {} [{}]",
+                state.configuration().application_name(),
+                env!("CARGO_PKG_VERSION"),
+                state.configuration().environment()
+            );
+        }
 
         let result = running
             .run_until_with_stopping(shutdown, || {

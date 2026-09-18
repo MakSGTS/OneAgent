@@ -1,5 +1,6 @@
 //! Deterministic resolution of parsed query sources against EDT metadata nodes.
 
+use oneagent_analysis::safe_edit::{SafeEditCountingSink, SafeEditProjectionAdmission};
 use oneagent_bsl::{
     BslQuery, QueryLanguageParseResult, QuerySourceCategory, QuerySourceOccurrence,
 };
@@ -13,8 +14,8 @@ use oneagent_metadata::MetadataKind;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
-const QUERY_SOURCE_COLLECTOR: &str = "oneagent.edt.query-source-collection";
-const QUERY_SOURCE_RESOLVER: &str = "oneagent.edt.query-source-resolution";
+pub(crate) const QUERY_SOURCE_COLLECTOR: &str = "oneagent.edt.query-source-collection";
+pub(crate) const QUERY_SOURCE_RESOLVER: &str = "oneagent.edt.query-source-resolution";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QuerySourceResolutionOutcome {
@@ -33,6 +34,7 @@ pub(crate) enum WorkspaceResolutionScope {
 
 #[derive(Debug)]
 pub(crate) enum QuerySourceRequestError {
+    ProjectionBounds,
     InvalidSourceIdentifier,
     InvalidTargetName(EntityNameError),
     InvalidCollectedRequest {
@@ -44,6 +46,7 @@ pub(crate) enum QuerySourceRequestError {
 impl Display for QuerySourceRequestError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ProjectionBounds => formatter.write_str("query projection admission exceeded"),
             Self::InvalidSourceIdentifier => {
                 formatter.write_str("query source request provenance identifier is invalid")
             }
@@ -67,7 +70,9 @@ impl std::error::Error for QuerySourceRequestError {
         match self {
             Self::InvalidTargetName(error) => Some(error),
             Self::Request(error) => Some(error),
-            Self::InvalidSourceIdentifier | Self::InvalidCollectedRequest { .. } => None,
+            Self::ProjectionBounds
+            | Self::InvalidSourceIdentifier
+            | Self::InvalidCollectedRequest { .. } => None,
         }
     }
 }
@@ -90,6 +95,15 @@ pub(crate) fn collect_query_source_requests(
     module_source: Option<&EntityId>,
     query: &BslQuery,
 ) -> Result<Option<SemanticReferenceRequestLedger>, QuerySourceRequestError> {
+    collect_query_source_requests_with_admission(parse_result, module_source, query, None)
+}
+
+pub(crate) fn collect_query_source_requests_with_admission(
+    parse_result: &QueryLanguageParseResult,
+    module_source: Option<&EntityId>,
+    query: &BslQuery,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
+) -> Result<Option<SemanticReferenceRequestLedger>, QuerySourceRequestError> {
     if !parse_result.is_source_set_complete() || !parse_result.diagnostics().is_empty() {
         return Ok(None);
     }
@@ -100,6 +114,17 @@ pub(crate) fn collect_query_source_requests(
     let mut requests = SemanticReferenceRequestLedger::new();
 
     for source in program.sources() {
+        if let Some(admission) = admission.as_deref_mut() {
+            admission
+                .reserve(
+                    source
+                        .local_name()
+                        .len()
+                        .checked_add(query.id().as_str().len())
+                        .ok_or(QuerySourceRequestError::ProjectionBounds)?,
+                )
+                .map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
+        }
         let target_name = EntityName::new(source.local_name().to_owned())
             .map_err(QuerySourceRequestError::InvalidTargetName)?;
         let request = SemanticReferenceRequest::collected(
@@ -111,6 +136,7 @@ pub(crate) fn collect_query_source_requests(
                 module_source,
                 query,
                 source,
+                admission.as_deref_mut(),
             )?],
         )?;
         requests.insert(request)?;
@@ -175,6 +201,15 @@ impl QuerySourceResolutionIndex {
         collected: &SemanticReferenceRequestLedger,
         workspace_scope: WorkspaceResolutionScope,
     ) -> Result<SemanticReferenceRequestLedger, QuerySourceRequestError> {
+        self.resolve_requests_with_admission(collected, workspace_scope, None)
+    }
+
+    pub(crate) fn resolve_requests_with_admission(
+        &self,
+        collected: &SemanticReferenceRequestLedger,
+        workspace_scope: WorkspaceResolutionScope,
+        mut admission: Option<&mut SafeEditProjectionAdmission>,
+    ) -> Result<SemanticReferenceRequestLedger, QuerySourceRequestError> {
         let mut terminal = SemanticReferenceRequestLedger::new();
 
         for request in collected.requests() {
@@ -190,13 +225,22 @@ impl QuerySourceResolutionIndex {
                 return Err(invalid_collected_request(request));
             }
 
-            let outcome = self.resolve_name(target_name.as_str(), *expected_kind, workspace_scope);
+            let outcome = self.resolve_name_with_admission(
+                target_name.as_str(),
+                *expected_kind,
+                workspace_scope,
+                admission.as_deref_mut(),
+            )?;
             let provenance = [query_source_resolver_provenance(
                 request,
                 *expected_kind,
                 workspace_scope,
                 &outcome,
+                admission.as_deref_mut(),
             )?];
+            if let Some(admission) = admission.as_deref_mut() {
+                reserve_request_clone(request, admission)?;
+            }
             let request = match outcome {
                 QuerySourceResolutionOutcome::Resolved { target_id } => request
                     .clone()
@@ -230,44 +274,138 @@ impl QuerySourceResolutionIndex {
         self.resolve_name(source.local_name(), expected_kind, workspace_scope)
     }
 
+    #[cfg(test)]
     fn resolve_name(
         &self,
         target_name: &str,
         expected_kind: NodeKind,
         workspace_scope: WorkspaceResolutionScope,
     ) -> QuerySourceResolutionOutcome {
-        let lookup_key = query_source_lookup_key(target_name);
-        let Some(candidates) = self.candidates_by_lookup_key.get(&lookup_key) else {
-            return absent_target_outcome(workspace_scope);
-        };
-
-        debug_assert!(
-            candidates.values().all(|candidate| {
-                query_source_lookup_key(candidate.name.as_str()) == lookup_key
-            })
-        );
-
-        let compatible = candidates
-            .values()
-            .filter(|candidate| candidate.kind == expected_kind)
-            .map(|candidate| candidate.id.clone())
-            .collect::<Vec<_>>();
-
-        match compatible.as_slice() {
-            [] => QuerySourceResolutionOutcome::IncompatibleTargetKind {
-                candidates: candidates
-                    .values()
-                    .map(|candidate| candidate.id.clone())
-                    .collect(),
-            },
-            [target_id] => QuerySourceResolutionOutcome::Resolved {
-                target_id: target_id.clone(),
-            },
-            _ => QuerySourceResolutionOutcome::AmbiguousTarget {
-                candidates: compatible,
-            },
-        }
+        self.resolve_name_with_admission(target_name, expected_kind, workspace_scope, None)
+            .expect("unbounded canonical resolution")
     }
+
+    fn resolve_name_with_admission(
+        &self,
+        target_name: &str,
+        expected_kind: NodeKind,
+        workspace_scope: WorkspaceResolutionScope,
+        mut admission: Option<&mut SafeEditProjectionAdmission>,
+    ) -> Result<QuerySourceResolutionOutcome, QuerySourceRequestError> {
+        let lookup_key = admitted_lookup_key(target_name, admission.as_deref_mut())?;
+        let Some(candidates) = self.candidates_by_lookup_key.get(&lookup_key) else {
+            return Ok(absent_target_outcome(workspace_scope));
+        };
+        let copy_candidates =
+            |compatible_only: bool, admission: Option<&mut SafeEditProjectionAdmission>| {
+                let selected = || {
+                    candidates.values().filter(move |candidate| {
+                        !compatible_only || candidate.kind == expected_kind
+                    })
+                };
+                if let Some(admission) = admission {
+                    let mut result = admission
+                        .vector(selected().count())
+                        .map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
+                    for candidate in selected() {
+                        result.push(
+                            admission
+                                .copy_id(&candidate.id)
+                                .map_err(|_| QuerySourceRequestError::ProjectionBounds)?,
+                        );
+                    }
+                    Ok::<_, QuerySourceRequestError>(result)
+                } else {
+                    Ok(selected()
+                        .map(|candidate| candidate.id.clone())
+                        .collect::<Vec<_>>())
+                }
+            };
+        let compatible = copy_candidates(true, admission.as_deref_mut())?;
+        Ok(
+            match candidate_disposition(candidates.len(), compatible.len()) {
+                CandidateDisposition::Absent => absent_target_outcome(workspace_scope),
+                CandidateDisposition::Incompatible => {
+                    QuerySourceResolutionOutcome::IncompatibleTargetKind {
+                        candidates: copy_candidates(false, admission.as_deref_mut())?,
+                    }
+                }
+                CandidateDisposition::Resolved => QuerySourceResolutionOutcome::Resolved {
+                    target_id: if let Some(admission) = admission {
+                        admission
+                            .copy_id(&compatible[0])
+                            .map_err(|_| QuerySourceRequestError::ProjectionBounds)?
+                    } else {
+                        compatible[0].clone()
+                    },
+                },
+                CandidateDisposition::Ambiguous => QuerySourceResolutionOutcome::AmbiguousTarget {
+                    candidates: compatible,
+                },
+            },
+        )
+    }
+}
+
+fn reserve_request_clone(
+    request: &SemanticReferenceRequest,
+    admission: &mut SafeEditProjectionAdmission,
+) -> Result<(), QuerySourceRequestError> {
+    let SemanticReference::Name(name) = request.reference() else {
+        return Err(invalid_collected_request(request));
+    };
+    let mut bytes = request
+        .id()
+        .as_str()
+        .len()
+        .checked_add(request.source_node().as_str().len())
+        .and_then(|n| n.checked_add(name.as_str().len()))
+        .and_then(|n| {
+            n.checked_add(
+                request
+                    .expected_kinds()
+                    .len()
+                    .checked_mul(std::mem::size_of::<NodeKind>())?,
+            )
+        })
+        .and_then(|n| {
+            n.checked_add(
+                request
+                    .candidates()
+                    .len()
+                    .checked_mul(std::mem::size_of::<EntityId>())?,
+            )
+        })
+        .and_then(|n| {
+            n.checked_add(
+                request
+                    .provenance()
+                    .len()
+                    .checked_mul(std::mem::size_of::<Provenance>())?,
+            )
+        })
+        .ok_or(QuerySourceRequestError::ProjectionBounds)?;
+    for id in request.candidates() {
+        bytes = bytes
+            .checked_add(id.as_str().len())
+            .ok_or(QuerySourceRequestError::ProjectionBounds)?;
+    }
+    for value in request.provenance() {
+        bytes = bytes
+            .checked_add(value.source().map_or(0, |id| id.as_str().len()))
+            .and_then(|n| n.checked_add(value.producer().as_str().len()))
+            .and_then(|n| {
+                n.checked_add(
+                    value
+                        .location()
+                        .map_or(0, |location| location.path().as_str().len()),
+                )
+            })
+            .ok_or(QuerySourceRequestError::ProjectionBounds)?;
+    }
+    admission
+        .reserve(bytes)
+        .map_err(|_| QuerySourceRequestError::ProjectionBounds)
 }
 
 fn invalid_collected_request(request: &SemanticReferenceRequest) -> QuerySourceRequestError {
@@ -280,37 +418,16 @@ fn query_source_collection_provenance(
     module_source: Option<&EntityId>,
     query: &BslQuery,
     source: &QuerySourceOccurrence,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
 ) -> Result<Provenance, QuerySourceRequestError> {
-    let mut context = module_source.map_or_else(
-        || query.id().as_str().to_owned(),
-        |source| source.as_str().to_owned(),
-    );
-    context.push_str("#query_source_request");
-    append_context(&mut context, "query", query.id().as_str());
-    append_context(&mut context, "owner", query.owner_id().as_str());
-    append_context(&mut context, "binding", query.binding_name().as_str());
-    append_context(&mut context, "declaration_line", &query.line().to_string());
-    append_context(&mut context, "raw_source", source.raw_spelling());
-    append_context(
-        &mut context,
-        "range",
-        &format!(
-            "{}..{}",
-            source.location().start_byte(),
-            source.location().end_byte()
-        ),
-    );
-    append_context(
-        &mut context,
-        "category",
-        query_source_category_name(source.category()),
-    );
-    append_context(&mut context, "namespace", source.namespace());
-    append_context(&mut context, "local_name", source.local_name());
-    if let Some(alias) = source.alias() {
-        append_context(&mut context, "alias", alias);
+    let context = canonical_context(admission.as_deref_mut(), |sink| {
+        write_collection_context(sink, module_source, query, source)
+    })?;
+    if let Some(admission) = admission {
+        admission
+            .reserve(QUERY_SOURCE_COLLECTOR.len())
+            .map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
     }
-
     request_provenance(
         context,
         QUERY_SOURCE_COLLECTOR,
@@ -324,40 +441,85 @@ fn query_source_resolver_provenance(
     expected_kind: NodeKind,
     workspace_scope: WorkspaceResolutionScope,
     outcome: &QuerySourceResolutionOutcome,
+    mut admission: Option<&mut SafeEditProjectionAdmission>,
 ) -> Result<Provenance, QuerySourceRequestError> {
-    let mut context = request.source_node().as_str().to_owned();
-    context.push_str("#query_source_resolution");
-    append_context(&mut context, "request", request.id().as_str());
     let SemanticReference::Name(target_name) = request.reference() else {
         return Err(invalid_collected_request(request));
     };
-    append_context(&mut context, "target_name", target_name.as_str());
-    append_context(
-        &mut context,
-        "lookup_key",
-        &query_source_lookup_key(target_name.as_str()),
-    );
-    append_context(
-        &mut context,
-        "expected_kind",
-        query_target_kind_name(expected_kind),
-    );
-    append_context(
-        &mut context,
-        "workspace_scope",
-        workspace_scope_name(workspace_scope),
-    );
-    append_context(&mut context, "outcome", query_source_outcome_name(outcome));
-    for candidate in query_source_outcome_candidates(outcome) {
-        append_context(&mut context, "candidate", candidate.as_str());
+    let lookup_key = admitted_lookup_key(target_name.as_str(), admission.as_deref_mut())?;
+    let context = canonical_context(admission.as_deref_mut(), |sink| {
+        write_resolver_context(
+            sink,
+            request,
+            target_name.as_str(),
+            &lookup_key,
+            expected_kind,
+            workspace_scope,
+            outcome,
+        )
+    })?;
+    if let Some(admission) = admission {
+        admission
+            .reserve(QUERY_SOURCE_RESOLVER.len())
+            .map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
     }
-
     request_provenance(
         context,
         QUERY_SOURCE_RESOLVER,
         FactOrigin::Resolved,
         query_source_outcome_state(outcome),
     )
+}
+
+fn admitted_lookup_key(
+    target_name: &str,
+    admission: Option<&mut SafeEditProjectionAdmission>,
+) -> Result<String, QuerySourceRequestError> {
+    // Preserve str::to_lowercase's contextual Unicode casing (notably final
+    // sigma). Prepay its output and possible growth overlap before invoking
+    // that unchanged canonical helper; context counting only borrows the result.
+    let lowercase_bytes = target_name
+        .chars()
+        .flat_map(char::to_lowercase)
+        .try_fold(0usize, |n, c| n.checked_add(c.len_utf8()))
+        .ok_or(QuerySourceRequestError::ProjectionBounds)?;
+    let lowercase_reserve = lowercase_bytes
+        .checked_mul(2)
+        .and_then(|n| n.checked_add(target_name.len()))
+        .ok_or(QuerySourceRequestError::ProjectionBounds)?;
+    if let Some(admission) = admission {
+        admission
+            .reserve(lowercase_reserve)
+            .map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
+    }
+    let lookup_key = query_source_lookup_key(target_name);
+    if lookup_key.capacity() > lowercase_reserve {
+        return Err(QuerySourceRequestError::ProjectionBounds);
+    }
+    Ok(lookup_key)
+}
+
+pub(crate) fn canonical_context(
+    admission: Option<&mut SafeEditProjectionAdmission>,
+    emit: impl Fn(&mut dyn std::fmt::Write) -> std::fmt::Result,
+) -> Result<String, QuerySourceRequestError> {
+    let mut count = SafeEditCountingSink::default();
+    emit(&mut count).map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
+    if let Some(admission) = admission {
+        admission
+            .string(count.bytes(), emit)
+            .map_err(|_| QuerySourceRequestError::ProjectionBounds)
+    } else {
+        let mut value = String::new();
+        value
+            .try_reserve_exact(count.bytes())
+            .map_err(|_| QuerySourceRequestError::ProjectionBounds)?;
+        emit(&mut value).map_err(|_| QuerySourceRequestError::InvalidSourceIdentifier)?;
+        if value.len() != count.bytes() || value.capacity() != count.bytes() {
+            return Err(QuerySourceRequestError::ProjectionBounds);
+        }
+        Ok(value)
+    }
 }
 
 fn request_provenance(
@@ -377,11 +539,78 @@ fn request_provenance(
     ))
 }
 
-fn append_context(context: &mut String, key: &str, value: &str) {
-    use std::fmt::Write as _;
+pub(crate) fn write_collection_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    module_source: Option<&EntityId>,
+    query: &BslQuery,
+    source: &QuerySourceOccurrence,
+) -> std::fmt::Result {
+    use crate::bsl_graph::write_context_field;
+    write!(
+        context,
+        "{}#query_source_request",
+        module_source.unwrap_or(query.id()).as_str()
+    )?;
+    write_context_field(context, "query", query.id().as_str())?;
+    write_context_field(context, "owner", query.owner_id().as_str())?;
+    write_context_field(context, "binding", query.binding_name().as_str())?;
+    write_context_field(context, "declaration_line", query.line())?;
+    write_context_field(context, "raw_source", source.raw_spelling())?;
+    write_context_field(
+        context,
+        "range",
+        format_args!(
+            "{}..{}",
+            source.location().start_byte(),
+            source.location().end_byte()
+        ),
+    )?;
+    write_context_field(
+        context,
+        "category",
+        query_source_category_name(source.category()),
+    )?;
+    write_context_field(context, "namespace", source.namespace())?;
+    write_context_field(context, "local_name", source.local_name())?;
+    if let Some(alias) = source.alias() {
+        write_context_field(context, "alias", alias)?;
+    }
+    Ok(())
+}
 
-    write!(context, ";{key}#{}:{value}", value.len())
-        .expect("writing query source provenance context to a String must succeed");
+pub(crate) fn write_resolver_context(
+    context: &mut (impl std::fmt::Write + ?Sized),
+    request: &SemanticReferenceRequest,
+    target_name: &str,
+    lookup_key: &str,
+    expected_kind: NodeKind,
+    workspace_scope: WorkspaceResolutionScope,
+    outcome: &QuerySourceResolutionOutcome,
+) -> std::fmt::Result {
+    use crate::bsl_graph::write_context_field;
+    write!(
+        context,
+        "{}#query_source_resolution",
+        request.source_node().as_str()
+    )?;
+    write_context_field(context, "request", request.id().as_str())?;
+    write_context_field(context, "target_name", target_name)?;
+    write_context_field(context, "lookup_key", lookup_key)?;
+    write_context_field(
+        context,
+        "expected_kind",
+        query_target_kind_name(expected_kind),
+    )?;
+    write_context_field(
+        context,
+        "workspace_scope",
+        workspace_scope_name(workspace_scope),
+    )?;
+    write_context_field(context, "outcome", query_source_outcome_name(outcome))?;
+    for candidate in query_source_outcome_candidates(outcome) {
+        write_context_field(context, "candidate", candidate.as_str())?;
+    }
+    Ok(())
 }
 
 const fn query_source_outcome_state(outcome: &QuerySourceResolutionOutcome) -> ResolutionState {
@@ -420,7 +649,24 @@ fn query_source_lookup_key(value: &str) -> String {
     value.to_lowercase()
 }
 
-const fn expected_metadata_kind(category: QuerySourceCategory) -> NodeKind {
+#[derive(Clone, Copy)]
+enum CandidateDisposition {
+    Absent,
+    Incompatible,
+    Resolved,
+    Ambiguous,
+}
+
+const fn candidate_disposition(matched: usize, compatible: usize) -> CandidateDisposition {
+    match (matched, compatible) {
+        (0, _) => CandidateDisposition::Absent,
+        (_, 0) => CandidateDisposition::Incompatible,
+        (_, 1) => CandidateDisposition::Resolved,
+        _ => CandidateDisposition::Ambiguous,
+    }
+}
+
+pub(crate) const fn expected_metadata_kind(category: QuerySourceCategory) -> NodeKind {
     match category {
         QuerySourceCategory::Catalog => NodeKind::Metadata(MetadataKind::Catalog),
         QuerySourceCategory::InformationRegister => {
@@ -532,6 +778,65 @@ mod tests {
         )
         .expect("accepted query source must produce a request ledger")
         .expect("accepted query source must enter collection")
+    }
+
+    #[test]
+    fn prepaid_resolution_preserves_unicode_contexts_and_all_terminal_outcomes() {
+        let mut graph = SemanticGraph::new();
+        insert_node(
+            &mut graph,
+            "catalog.sigma",
+            "ΟΣ",
+            NodeKind::Metadata(MetadataKind::Catalog),
+        );
+        insert_node(
+            &mut graph,
+            "catalog.ambiguous.a",
+            "Ambiguous",
+            NodeKind::Metadata(MetadataKind::Catalog),
+        );
+        insert_node(
+            &mut graph,
+            "catalog.ambiguous.b",
+            "Ambiguous",
+            NodeKind::Metadata(MetadataKind::Catalog),
+        );
+        insert_node(&mut graph, "module.wrong", "Wrong", NodeKind::Module);
+        let index = QuerySourceResolutionIndex::new(&graph);
+        assert_eq!(super::query_source_lookup_key("ΟΣ"), "ος");
+        for source in ["ΟΣ", "ος", "Ambiguous", "Wrong", "Missing"] {
+            let query = query(
+                "query.unicode",
+                &format!("SELECT Ref FROM Catalog.{source}"),
+            );
+            let parse = QueryLanguageParser.parse(query.text());
+            let legacy = collected(&query);
+            let mut admission =
+                oneagent_analysis::safe_edit::SafeEditProjectionAdmission::new(0).unwrap();
+            let paid = super::collect_query_source_requests_with_admission(
+                &parse,
+                Some(&id("oneagent://source/CommonModules/Sales/Module.bsl")),
+                &query,
+                Some(&mut admission),
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(legacy, paid);
+            for scope in [
+                WorkspaceResolutionScope::Complete,
+                WorkspaceResolutionScope::Partial,
+            ] {
+                let legacy = index.resolve_requests(&legacy, scope).unwrap();
+                let paid = index
+                    .resolve_requests_with_admission(&paid, scope, Some(&mut admission))
+                    .unwrap();
+                assert_eq!(
+                    legacy, paid,
+                    "canonical identity, context and disposition changed for {source}/{scope:?}"
+                );
+                assert!(admission.retained_bytes() > 0);
+            }
+        }
     }
 
     fn resolve(

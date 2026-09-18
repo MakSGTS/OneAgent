@@ -9,6 +9,7 @@ ingestion, mapping, or cross-adapter conformance slice.
 
 - `docs/codex/core/repository-safety.md`
 - `docs/codex/core/repository-investigation.md`
+- `docs/codex/core/context-management.md`
 - `docs/codex/core/change-contract.md`
 - `docs/codex/core/validation.md`
 - `docs/codex/core/final-report.md`

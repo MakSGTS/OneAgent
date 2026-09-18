@@ -4,16 +4,26 @@ use std::collections::{BTreeSet, VecDeque};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
+use oneagent_analysis::change_impact::{ConfigurationImpact, ConfigurationImpactSummary};
 use oneagent_analysis::context::{
     ContextEngine, ContextError, ContextInclusionReason, ContextIntent, ContextPolicy,
     ContextRelationDirection, ContextRequest, ContextSeed, ContextTraversalDirection,
 };
+use oneagent_analysis::diagnostics::{
+    DiagnosticCategory, DiagnosticDisposition, DiagnosticFamily, DiagnosticFilter,
+    DiagnosticFinding, DiagnosticIdentity, DiagnosticReport, DiagnosticSeverity, DiagnosticSummary,
+};
+use oneagent_analysis::publication::WorkspacePublicationId;
+use oneagent_analysis::refactoring::{
+    RefactoringCancellationSignal, RefactoringErrorKind, RefactoringEvaluation, RefactoringFamily,
+    RefactoringRequest,
+};
 use oneagent_common::{EntityId, SourceLocation};
 use oneagent_graph::{
-    EdgeKind, GraphEdge, GraphNode, ImpactNodeStatus, ImpactPropagationDirection, ImpactReasonKind,
-    ImpactSeedKind, ImpactSnapshot, NodeId, NodeKind, SemanticDiagnosticKind,
-    SemanticDiagnosticSeverity, SemanticGraphQuery, SemanticGraphValidationIssueKind,
-    SemanticGraphValidationSeverity, SemanticImpactAnalyzer, SemanticImpactOptions,
+    EdgeKind, GraphEdge, GraphNode, ImpactNodeAvailability, ImpactNodeStatus,
+    ImpactPropagationDirection, ImpactReasonKind, ImpactSeedKind, ImpactSnapshot, NodeId, NodeKind,
+    SemanticGraphQuery, SemanticGraphValidationIssueKind, SemanticGraphValidationSeverity,
+    SemanticImpactAnalyzer, SemanticImpactOptions,
 };
 use oneagent_protocol::{
     McpServer, McpToolAnnotations, McpToolCallHandler, McpToolCallOutcome, McpToolDefinition,
@@ -29,10 +39,12 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     GraphQueryEdgeKind, GraphQueryNodeKind, WorkspaceConfigurationSnapshot, WorkspaceSnapshot,
+    WorkspaceSnapshotObserver,
 };
 
 const GRAPH: &str = "oneagent.graph";
 const QUERY: &str = "oneagent.query";
+const REFACTOR_PLAN: &str = "oneagent.refactor.plan";
 const VALIDATION: &str = "oneagent.validation";
 const DIAGNOSTICS: &str = "oneagent.diagnostics";
 const IMPACT: &str = "oneagent.impact";
@@ -43,6 +55,8 @@ const REQUEST: &str = "oneagent.mcp.request";
 const REVISION: &str = "oneagent.mcp.read-only.v1";
 const DEFAULT_LIMIT: usize = 50;
 const MAX_LIMIT: usize = 100;
+const DEFAULT_REASON_LIMIT: usize = 50;
+const MAX_REASON_LIMIT: usize = 100;
 const MAX_DEPTH: usize = 4;
 const MAX_SYMBOL_QUERY_BYTES: usize = 256;
 const EDGE_KIND_NAMES: [&str; 11] = [
@@ -63,7 +77,7 @@ const EDGE_KIND_NAMES: [&str; 11] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct McpSemanticServerError;
 
-/// Builds the complete immutable Sprint 31 semantic MCP server.
+/// Builds the complete semantic MCP server over one fixed immutable Workspace snapshot.
 ///
 /// # Errors
 ///
@@ -75,23 +89,50 @@ pub fn semantic_server(snapshot: WorkspaceSnapshot) -> Result<McpServer, McpSema
         GRAPH,
         IMPACT,
         QUERY,
+        REFACTOR_PLAN,
         SYMBOLS,
         VALIDATION,
     ];
     let mut catalog = definitions()?;
     catalog.extend(impact_context_definitions()?);
-    build_server(snapshot, catalog, &names)
+    build_server(SnapshotSource::Fixed(Arc::new(snapshot)), catalog, &names)
+}
+
+/// Builds the complete semantic MCP server over live atomic Workspace publications.
+///
+/// Every tool call clones one current immutable snapshot before validation or
+/// policy evaluation. A temporarily unavailable observer fails the call closed.
+///
+/// # Errors
+///
+/// Returns a closed error when a fixed catalog or policy invariant fails.
+pub fn semantic_server_observer(
+    observer: WorkspaceSnapshotObserver,
+) -> Result<McpServer, McpSemanticServerError> {
+    let names = [
+        CONTEXT,
+        DIAGNOSTICS,
+        GRAPH,
+        IMPACT,
+        QUERY,
+        REFACTOR_PLAN,
+        SYMBOLS,
+        VALIDATION,
+    ];
+    let mut catalog = definitions()?;
+    catalog.extend(impact_context_definitions()?);
+    build_server(SnapshotSource::Observed(observer), catalog, &names)
 }
 
 fn build_server(
-    snapshot: WorkspaceSnapshot,
+    snapshots: SnapshotSource,
     catalog: Vec<McpToolDefinition>,
     names: &[&str],
 ) -> Result<McpServer, McpSemanticServerError> {
     McpServer::with_tools(
         catalog,
         Handler {
-            snapshot: Arc::new(snapshot),
+            snapshots,
             policy: policy(names)?,
         },
     )
@@ -105,14 +146,30 @@ fn impact_context_definitions() -> Result<Vec<McpToolDefinition>, McpSemanticSer
             "Analyze bounded semantic impact between two configurations.",
             json!({
                 "type": "object",
-                "properties": {
-                    "previousConfigurationId": {"type": "string"},
-                    "currentConfigurationId": {"type": "string"},
-                    "maxDepth": {"type": "integer", "minimum": 0, "maximum": MAX_DEPTH},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
-                },
-                "required": ["previousConfigurationId", "currentConfigurationId"],
-                "additionalProperties": false
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "previousConfigurationId": {"type": "string"},
+                            "currentConfigurationId": {"type": "string"},
+                            "maxDepth": {"type": "integer", "minimum": 0, "maximum": MAX_DEPTH},
+                            "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+                        },
+                        "required": ["previousConfigurationId", "currentConfigurationId"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "configurationId": {"type": "string"},
+                            "maxDepth": {"type": "integer", "minimum": 0, "maximum": MAX_DEPTH},
+                            "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT},
+                            "reasonLimit": {"type": "integer", "minimum": 1, "maximum": MAX_REASON_LIMIT}
+                        },
+                        "required": ["configurationId"],
+                        "additionalProperties": false
+                    }
+                ]
             }),
         ),
         (
@@ -132,6 +189,24 @@ fn impact_context_definitions() -> Result<Vec<McpToolDefinition>, McpSemanticSer
                 "additionalProperties": false
             }),
         ),
+        (
+            REFACTOR_PLAN,
+            "Build a bounded read-only semantic refactoring plan and preview.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "publicationId": {"type": "integer", "minimum": 1},
+                    "configurationId": {"type": "string", "minLength": 1},
+                    "targetNodeId": {"type": "string", "minLength": 1},
+                    "desiredName": {"type": "string", "minLength": 1},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+                },
+                "required": [
+                    "publicationId", "configurationId", "targetNodeId", "desiredName"
+                ],
+                "additionalProperties": false
+            }),
+        ),
     ]
     .into_iter()
     .map(|(name, description, schema)| {
@@ -144,6 +219,39 @@ fn impact_context_definitions() -> Result<Vec<McpToolDefinition>, McpSemanticSer
         .map_err(|_| McpSemanticServerError)
     })
     .collect()
+}
+
+fn diagnostic_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "configurationId": {"type": "string"},
+            "families": {
+                "type": "array",
+                "items": {"enum": ["semantic", "validation", "rule"]},
+                "minItems": 1,
+                "uniqueItems": true
+            },
+            "severities": {
+                "type": "array",
+                "items": {"enum": ["error", "warning"]},
+                "minItems": 1,
+                "uniqueItems": true
+            },
+            "categories": {
+                "type": "array",
+                "items": {"enum": [
+                    "source", "semantic", "structural", "provenance", "build_consistency"
+                ]},
+                "minItems": 1,
+                "uniqueItems": true
+            },
+            "includeSuppressed": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT}
+        },
+        "required": ["configurationId"],
+        "additionalProperties": false
+    })
 }
 
 fn definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
@@ -212,8 +320,8 @@ fn definitions() -> Result<Vec<McpToolDefinition>, McpSemanticServerError> {
         (VALIDATION, "Validate one immutable OneAgent semantic graph.", limited()),
         (
             DIAGNOSTICS,
-            "List bounded source-independent OneAgent semantic diagnostics.",
-            limited(),
+            "List bounded source-independent OneAgent diagnostic findings.",
+            diagnostic_schema(),
         ),
     ]
     .into_iter()
@@ -249,15 +357,34 @@ fn policy(names: &[&str]) -> Result<ToolPolicy, McpSemanticServerError> {
     .map_err(|_| McpSemanticServerError)
 }
 
+enum SnapshotSource {
+    Fixed(Arc<WorkspaceSnapshot>),
+    Observed(WorkspaceSnapshotObserver),
+}
+
+impl SnapshotSource {
+    fn snapshot(&self) -> Option<Arc<WorkspaceSnapshot>> {
+        match self {
+            Self::Fixed(snapshot) => Some(Arc::clone(snapshot)),
+            Self::Observed(observer) => observer.snapshot(),
+        }
+    }
+}
+
 struct Handler {
-    snapshot: Arc<WorkspaceSnapshot>,
+    snapshots: SnapshotSource,
     policy: ToolPolicy,
 }
 
 impl McpToolCallHandler for Handler {
     fn call<'a>(&'a self, name: &'a str, arguments: &'a Map<String, Value>) -> McpToolFuture<'a> {
         Box::pin(async move {
-            if name == SYMBOLS && symbol_arguments(arguments).is_err() {
+            let Some(snapshot) = self.snapshots.snapshot() else {
+                return tool_error("execution_failed");
+            };
+            if (name == SYMBOLS && symbol_arguments(arguments).is_err())
+                || (name == REFACTOR_PLAN && refactoring_arguments(arguments).is_err())
+            {
                 return tool_error("invalid_arguments");
             }
             let Ok(encoded) = serde_json::to_string(arguments) else {
@@ -266,9 +393,7 @@ impl McpToolCallHandler for Handler {
             let Ok(request) = request(name, encoded) else {
                 return tool_error("invalid_arguments");
             };
-            let executor = Executor {
-                snapshot: &self.snapshot,
-            };
+            let executor = Executor { snapshot };
             let result = execute_tool(
                 self.policy.evaluate(request),
                 None,
@@ -302,15 +427,15 @@ fn request(name: &str, arguments: String) -> Result<ToolRequest, ()> {
     .map_err(|_| ())
 }
 
-struct Executor<'a> {
-    snapshot: &'a WorkspaceSnapshot,
+struct Executor {
+    snapshot: Arc<WorkspaceSnapshot>,
 }
 
-impl ToolExecutor for Executor<'_> {
+impl ToolExecutor for Executor {
     fn execute<'a>(
         &'a self,
         request: &'a ToolRequest,
-        _cancellation: &'a dyn oneagent_tool_policy::ToolCancellationSignal,
+        cancellation: &'a dyn oneagent_tool_policy::ToolCancellationSignal,
     ) -> ToolFuture<'a, ToolExecutorOutcome> {
         Box::pin(async move {
             let Ok(arguments) =
@@ -318,7 +443,12 @@ impl ToolExecutor for Executor<'_> {
             else {
                 return ToolExecutorOutcome::Failed(None);
             };
-            let envelope = match project(self.snapshot, request.tool().as_str(), &arguments) {
+            let envelope = match project(
+                &self.snapshot,
+                request.tool().as_str(),
+                &arguments,
+                cancellation,
+            ) {
                 Ok(value) => json!({"ok": true, "value": value}),
                 Err(error) => json!({
                     "ok": false,
@@ -407,6 +537,7 @@ fn project(
     snapshot: &WorkspaceSnapshot,
     name: &str,
     arguments: &Map<String, Value>,
+    cancellation: &dyn oneagent_tool_policy::ToolCancellationSignal,
 ) -> Result<Value, SemanticError> {
     match name {
         GRAPH => graph(snapshot, arguments),
@@ -415,9 +546,187 @@ fn project(
         DIAGNOSTICS => diagnostics(snapshot, arguments),
         IMPACT => impact(snapshot, arguments),
         CONTEXT => context(snapshot, arguments),
+        REFACTOR_PLAN => refactoring(snapshot, arguments, cancellation),
         SYMBOLS => symbols(snapshot, arguments),
         _ => Err(INVALID),
     }
+}
+
+struct RefactoringArguments {
+    request: RefactoringRequest,
+    limit: usize,
+}
+
+fn refactoring_arguments(
+    arguments: &Map<String, Value>,
+) -> Result<RefactoringArguments, SemanticError> {
+    fields(
+        arguments,
+        &[
+            "publicationId",
+            "configurationId",
+            "targetNodeId",
+            "desiredName",
+            "limit",
+        ],
+    )?;
+    let publication_id = arguments
+        .get("publicationId")
+        .and_then(Value::as_u64)
+        .and_then(WorkspacePublicationId::new)
+        .ok_or(INVALID)?;
+    let configuration_id =
+        EntityId::new(string(arguments, "configurationId")?.to_owned()).map_err(|_| INVALID)?;
+    let target_node_id =
+        EntityId::new(string(arguments, "targetNodeId")?.to_owned()).map_err(|_| INVALID)?;
+    let desired_name = string(arguments, "desiredName")?;
+    let request = RefactoringRequest::new(
+        RefactoringFamily::BslCallableRenameV1,
+        publication_id,
+        configuration_id,
+        target_node_id,
+        desired_name,
+    )
+    .map_err(|_| INVALID)?;
+    Ok(RefactoringArguments {
+        request,
+        limit: limit(arguments)?,
+    })
+}
+
+struct ToolRefactoringCancellation<'signal>(
+    &'signal dyn oneagent_tool_policy::ToolCancellationSignal,
+);
+
+impl RefactoringCancellationSignal for ToolRefactoringCancellation<'_> {
+    fn is_cancelled(&self) -> bool {
+        self.0.is_cancelled()
+    }
+}
+
+fn refactoring(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+    cancellation: &dyn oneagent_tool_policy::ToolCancellationSignal,
+) -> Result<Value, SemanticError> {
+    let arguments = refactoring_arguments(arguments)?;
+    let evaluation = snapshot
+        .plan_refactoring(
+            &arguments.request,
+            &ToolRefactoringCancellation(cancellation),
+        )
+        .map_err(refactoring_error)?;
+    project_refactoring(&evaluation, arguments.limit)
+}
+
+fn refactoring_error(error: oneagent_analysis::refactoring::RefactoringError) -> SemanticError {
+    match error.kind() {
+        RefactoringErrorKind::InvalidRequest | RefactoringErrorKind::BoundExceeded => INVALID,
+        RefactoringErrorKind::ConfigurationNotFound | RefactoringErrorKind::TargetNotFound => {
+            NOT_FOUND
+        }
+        RefactoringErrorKind::Cancelled
+        | RefactoringErrorKind::PublicationMismatch
+        | RefactoringErrorKind::UnsupportedTarget
+        | RefactoringErrorKind::AmbiguousOwner
+        | RefactoringErrorKind::UnsupportedSourceFormat
+        | RefactoringErrorKind::SourceEvidenceMissing
+        | RefactoringErrorKind::SourceEvidenceIncomplete
+        | RefactoringErrorKind::IncompatibleEvidence
+        | RefactoringErrorKind::StaleSourceVersion
+        | RefactoringErrorKind::InvalidOccurrence
+        | RefactoringErrorKind::AmbiguousOccurrence
+        | RefactoringErrorKind::InvalidDesiredName
+        | RefactoringErrorKind::NoChange
+        | RefactoringErrorKind::NameCollision
+        | RefactoringErrorKind::IdentityCollision
+        | RefactoringErrorKind::DuplicateConflict
+        | RefactoringErrorKind::OverlappingOperations
+        | RefactoringErrorKind::ArithmeticOverflow => EXECUTION_FAILED,
+    }
+}
+
+fn project_refactoring(
+    evaluation: &RefactoringEvaluation,
+    limit: usize,
+) -> Result<Value, SemanticError> {
+    let plan = evaluation.plan();
+    let request = plan.request();
+    let target = plan.target();
+    let summary = plan.summary();
+    let total = evaluation.preview().entries().len();
+    let returned = total.min(limit);
+    let omitted = total.checked_sub(returned).ok_or(EXECUTION_FAILED)?;
+    let preview = evaluation
+        .preview()
+        .entries()
+        .iter()
+        .take(returned)
+        .map(|entry| {
+            let range = entry.range();
+            let position = entry.position();
+            json!({
+                "operationId": entry.operation_id().as_str(),
+                "kind": entry.kind().as_str(),
+                "path": entry.path().path().as_str(),
+                "range": {
+                    "startByte": range.start_byte(),
+                    "endByte": range.end_byte()
+                },
+                "position": {
+                    "start": {
+                        "line": position.start().line(),
+                        "column": position.start().column()
+                    },
+                    "end": {
+                        "line": position.end().line(),
+                        "column": position.end().column()
+                    }
+                },
+                "replacement": entry.replacement()
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "family": request.family().as_str(),
+        "publicationId": request.expected_publication_id().get(),
+        "configurationId": request.configuration_id().as_str(),
+        "planId": plan.id().as_str(),
+        "target": {
+            "nodeId": target.target_node_id().as_str(),
+            "kind": GraphQueryNodeKind::from(target.target_kind()).as_str(),
+            "ownerModuleId": target.owner_module_id().as_str(),
+            "expectedPostRenameNodeId": target.expected_post_rename_node_id().as_str()
+        },
+        "desiredName": request.desired_name(),
+        "completeness": plan.completeness().as_str(),
+        "summary": {
+            "targets": {
+                "requested": summary.requested_targets(),
+                "planned": summary.planned_targets(),
+                "conflicted": summary.conflicted_targets(),
+                "rejected": summary.rejected_targets()
+            },
+            "documents": summary.documents(),
+            "candidateOccurrences": summary.candidate_occurrences(),
+            "exactDuplicatesCollapsed": summary.exact_duplicates_collapsed(),
+            "declarationOperations": summary.declaration_operations(),
+            "localCallOperations": summary.local_call_operations(),
+            "qualifiedCallOperations": summary.qualified_call_operations(),
+            "plannedOperations": summary.planned_operations(),
+            "internalOperations": {
+                "omitted": summary.omitted_operations(),
+                "returned": summary.returned_operations()
+            }
+        },
+        "preview": preview,
+        "totalOperations": total,
+        "returnedOperations": returned,
+        "omittedOperations": omitted,
+        "truncated": omitted > 0,
+        "readOnly": true,
+        "editAuthorization": "none"
+    }))
 }
 
 struct SymbolResult<'a> {
@@ -666,7 +975,7 @@ fn graph(
 }
 
 fn summary(configuration: &WorkspaceConfigurationSnapshot) -> Value {
-    let validation = configuration.graph().validate();
+    let validation = configuration.validation();
     let references = configuration.reference_statistics();
     let format = match configuration.format() {
         WorkspaceFormat::Edt => "edt",
@@ -873,7 +1182,7 @@ fn validation(
     fields(arguments, &["configurationId", "limit"])?;
     let configuration = configuration(snapshot, string(arguments, "configurationId")?)?;
     let limit = limit(arguments)?;
-    let result = configuration.graph().validate();
+    let result = configuration.validation();
     let total = result.issues().len();
     let issues = result
         .issues()
@@ -904,31 +1213,168 @@ fn diagnostics(
     snapshot: &WorkspaceSnapshot,
     arguments: &Map<String, Value>,
 ) -> Result<Value, SemanticError> {
-    fields(arguments, &["configurationId", "limit"])?;
-    let configuration = configuration(snapshot, string(arguments, "configurationId")?)?;
-    let limit = limit(arguments)?;
-    let total = configuration.diagnostics().len();
-    let values = configuration
-        .diagnostics()
-        .iter()
+    let arguments = diagnostic_arguments(arguments)?;
+    let configuration = configuration(snapshot, arguments.configuration_id)?;
+    Ok(project_diagnostic_report(
+        configuration.configuration_id().as_str(),
+        configuration.diagnostic_report(),
+        &arguments.filter,
+        arguments.limit,
+    ))
+}
+
+struct DiagnosticArguments<'a> {
+    configuration_id: &'a str,
+    filter: DiagnosticFilter,
+    limit: usize,
+}
+
+fn diagnostic_arguments(
+    arguments: &Map<String, Value>,
+) -> Result<DiagnosticArguments<'_>, SemanticError> {
+    fields(
+        arguments,
+        &[
+            "configurationId",
+            "families",
+            "severities",
+            "categories",
+            "includeSuppressed",
+            "limit",
+        ],
+    )?;
+    let families = diagnostic_values(arguments, "families", diagnostic_family)?;
+    let severities = diagnostic_values(arguments, "severities", diagnostic_severity)?;
+    let categories = diagnostic_values(arguments, "categories", diagnostic_category)?;
+    let include_suppressed = match arguments.get("includeSuppressed") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err(INVALID),
+    };
+    let dispositions = if include_suppressed {
+        BTreeSet::new()
+    } else {
+        BTreeSet::from([DiagnosticDisposition::Active])
+    };
+    Ok(DiagnosticArguments {
+        configuration_id: string(arguments, "configurationId")?,
+        filter: DiagnosticFilter::new(families, severities, categories, dispositions),
+        limit: limit(arguments)?,
+    })
+}
+
+fn diagnostic_values<T: Ord>(
+    arguments: &Map<String, Value>,
+    field: &str,
+    parse: fn(&str) -> Option<T>,
+) -> Result<BTreeSet<T>, SemanticError> {
+    let Some(value) = arguments.get(field) else {
+        return Ok(BTreeSet::new());
+    };
+    let values = value
+        .as_array()
+        .filter(|values| !values.is_empty())
+        .ok_or(INVALID)?;
+    let mut accepted = BTreeSet::new();
+    for value in values {
+        let value = value.as_str().and_then(parse).ok_or(INVALID)?;
+        if !accepted.insert(value) {
+            return Err(INVALID);
+        }
+    }
+    Ok(accepted)
+}
+
+fn project_diagnostic_report(
+    configuration_id: &str,
+    report: &DiagnosticReport,
+    filter: &DiagnosticFilter,
+    limit: usize,
+) -> Value {
+    let matching = report.filtered(filter).collect::<Vec<_>>();
+    let total = matching.len();
+    let values = matching
+        .into_iter()
         .take(limit)
-        .map(|item| {
-            json!({
-                "code": item.code().as_str(),
-                "severity": diagnostic_severity(item.severity()),
-                "kind": diagnostic_kind(item.kind()),
-                "message": item.message(),
-                "sourceNodeId": item.source_node().map(EntityId::as_str),
-                "candidateNodeIds": item.candidates().iter().map(EntityId::as_str).collect::<Vec<_>>()
-            })
-        })
+        .map(project_diagnostic_finding)
         .collect::<Vec<_>>();
-    Ok(json!({
-        "configurationId": configuration.configuration_id().as_str(),
+    let returned = values.len();
+    json!({
+        "configurationId": configuration_id,
         "diagnostics": values,
         "total": total,
-        "truncated": total > limit
-    }))
+        "truncated": total > returned,
+        "summary": project_diagnostic_summary(report.summary())
+    })
+}
+
+fn project_diagnostic_finding(finding: &DiagnosticFinding) -> Value {
+    let semantic = matches!(finding.family(), DiagnosticFamily::Semantic);
+    let source_node = semantic
+        .then(|| finding.node_anchors().first())
+        .flatten()
+        .map(EntityId::as_str);
+    let candidate_nodes = if semantic {
+        finding
+            .related_nodes()
+            .iter()
+            .map(EntityId::as_str)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut projected = json!({
+        "family": finding.family().as_str(),
+        "code": finding.code().as_str(),
+        "severity": finding.severity().as_str(),
+        "category": finding.category().as_str(),
+        "kind": finding.kind().as_str(),
+        "message": finding.message(),
+        "disposition": finding.disposition().as_str(),
+        "sourceNodeId": source_node,
+        "candidateNodeIds": candidate_nodes,
+        "nodeIds": finding.node_anchors().iter().map(EntityId::as_str).collect::<Vec<_>>(),
+        "edgeId": finding.edge_id().map(oneagent_graph::EdgeId::as_str),
+        "referenceRequestId": finding
+            .reference_request_id()
+            .map(oneagent_graph::SemanticReferenceRequestId::as_str)
+    });
+    if let DiagnosticIdentity::Rule { rule_id, .. } = finding.identity() {
+        projected
+            .as_object_mut()
+            .expect("diagnostic projection must be an object")
+            .insert("ruleId".to_owned(), json!(rule_id.as_str()));
+    }
+    projected
+}
+
+fn project_diagnostic_summary(summary: &DiagnosticSummary) -> Value {
+    let family_count = |value| summary.by_family().get(&value).copied().unwrap_or(0);
+    let severity_count = |value| summary.by_severity().get(&value).copied().unwrap_or(0);
+    let category_count = |value| summary.by_category().get(&value).copied().unwrap_or(0);
+    json!({
+        "total": summary.total(),
+        "active": summary.active(),
+        "suppressed": summary.suppressed(),
+        "byFamily": {
+            "semantic": family_count(DiagnosticFamily::Semantic),
+            "validation": family_count(DiagnosticFamily::Validation),
+            "rule": family_count(DiagnosticFamily::Rule)
+        },
+        "bySeverity": {
+            "error": severity_count(DiagnosticSeverity::Error),
+            "warning": severity_count(DiagnosticSeverity::Warning)
+        },
+        "byCategory": {
+            "source": category_count(DiagnosticCategory::Source),
+            "semantic": category_count(DiagnosticCategory::Semantic),
+            "structural": category_count(DiagnosticCategory::Structural),
+            "provenance": category_count(DiagnosticCategory::Provenance),
+            "build_consistency": category_count(DiagnosticCategory::BuildConsistency)
+        },
+        "activeByCode": summary.active_by_code(),
+        "suppressedByCode": summary.suppressed_by_code()
+    })
 }
 
 fn impact(
@@ -940,10 +1386,28 @@ fn impact(
         &[
             "previousConfigurationId",
             "currentConfigurationId",
+            "configurationId",
             "maxDepth",
             "limit",
+            "reasonLimit",
         ],
     )?;
+    let has_previous = arguments.contains_key("previousConfigurationId");
+    let has_current = arguments.contains_key("currentConfigurationId");
+    let has_publication = arguments.contains_key("configurationId");
+    match (has_previous, has_current, has_publication) {
+        (true, true, false) if !arguments.contains_key("reasonLimit") => {
+            legacy_impact(snapshot, arguments)
+        }
+        (false, false, true) => publication_impact(snapshot, arguments),
+        _ => Err(INVALID),
+    }
+}
+
+fn legacy_impact(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+) -> Result<Value, SemanticError> {
     let previous_id = string(arguments, "previousConfigurationId")?;
     let current_id = string(arguments, "currentConfigurationId")?;
     if previous_id == current_id {
@@ -1010,6 +1474,158 @@ fn impact(
         "total": total,
         "truncated": total > limit
     }))
+}
+
+fn publication_impact(
+    snapshot: &WorkspaceSnapshot,
+    arguments: &Map<String, Value>,
+) -> Result<Value, SemanticError> {
+    let configuration_id =
+        EntityId::new(string(arguments, "configurationId")?.to_owned()).map_err(|_| INVALID)?;
+    let depth = number(arguments, "maxDepth")?.unwrap_or(1);
+    if depth > MAX_DEPTH {
+        return Err(INVALID);
+    }
+    let limit = limit(arguments)?;
+    let reason_limit = bounded_number(
+        arguments,
+        "reasonLimit",
+        DEFAULT_REASON_LIMIT,
+        MAX_REASON_LIMIT,
+    )?;
+
+    let current_publication_id = snapshot.publication_id().get();
+    let Some(report) = snapshot.change_impact().report() else {
+        configuration(snapshot, configuration_id.as_str())?;
+        return Ok(json!({
+            "mode": "publication",
+            "currentPublicationId": current_publication_id,
+            "configurationId": configuration_id.as_str(),
+            "availability": "no_previous_publication",
+            "requestedMaxDepth": depth,
+            "configuredMaxDepth": MAX_DEPTH
+        }));
+    };
+    let transition = report.configuration(&configuration_id).ok_or(NOT_FOUND)?;
+    project_publication_impact(transition, depth, limit, reason_limit, report)
+}
+
+fn project_publication_impact(
+    transition: &ConfigurationImpact,
+    depth: usize,
+    limit: usize,
+    reason_limit: usize,
+    report: &oneagent_analysis::change_impact::ChangeImpactReport,
+) -> Result<Value, SemanticError> {
+    let filtered = transition
+        .result()
+        .affected_nodes()
+        .iter()
+        .filter(|node| node.depth() <= depth)
+        .collect::<Vec<_>>();
+    let summary = project_publication_summary(transition.summary(), &filtered, depth)?;
+    let total = filtered.len();
+    let mut omitted_reasons = 0usize;
+    let affected = filtered
+        .iter()
+        .take(limit)
+        .map(|node| {
+            let reasons = node
+                .reasons()
+                .iter()
+                .filter(|reason| reason.depth() <= depth)
+                .collect::<Vec<_>>();
+            omitted_reasons = omitted_reasons
+                .checked_add(reasons.len().saturating_sub(reason_limit))
+                .ok_or(EXECUTION_FAILED)?;
+            Ok(json!({
+                "nodeId": node.node_id().as_str(),
+                "kind": node.node_kind().map(GraphQueryNodeKind::from).map(GraphQueryNodeKind::as_str),
+                "status": impact_status(node.status()),
+                "availability": impact_availability(node.availability()),
+                "depth": node.depth(),
+                "reasons": reasons.into_iter().take(reason_limit).map(project_impact_reason).collect::<Vec<_>>()
+            }))
+        })
+        .collect::<Result<Vec<_>, SemanticError>>()?;
+    Ok(json!({
+        "mode": "publication",
+        "previousPublicationId": report.previous_publication_id().get(),
+        "currentPublicationId": report.current_publication_id().get(),
+        "configurationId": transition.configuration_id().as_str(),
+        "availability": "available",
+        "transition": transition.kind().as_str(),
+        "completeness": "complete_within_requested_depth",
+        "requestedMaxDepth": depth,
+        "configuredMaxDepth": MAX_DEPTH,
+        "summary": summary,
+        "affectedNodes": affected,
+        "total": total,
+        "truncated": total > limit,
+        "omittedReasons": omitted_reasons
+    }))
+}
+
+fn project_impact_reason(reason: &oneagent_graph::ImpactReason) -> Value {
+    json!({
+        "kind": impact_reason_kind(reason.kind()),
+        "seed": {
+            "kind": impact_seed_kind(reason.seed().kind()),
+            "nodeId": reason.seed().node_id().map(NodeId::as_str),
+            "edgeId": reason.seed().edge_id().map(oneagent_graph::EdgeId::as_str)
+        },
+        "sourceNodeId": reason.source_node().map(NodeId::as_str),
+        "edgeId": reason.edge_id().map(oneagent_graph::EdgeId::as_str),
+        "edgeKind": reason.edge_kind().map(GraphQueryEdgeKind::from).map(GraphQueryEdgeKind::as_str),
+        "depth": reason.depth(),
+        "snapshot": impact_snapshot(reason.snapshot()),
+        "propagation": reason.propagation().map(impact_propagation)
+    })
+}
+
+fn project_publication_summary(
+    complete: ConfigurationImpactSummary,
+    nodes: &[&oneagent_graph::AffectedNode],
+    requested_depth: usize,
+) -> Result<Value, SemanticError> {
+    let mut directly_changed = 0usize;
+    let mut transitively_affected = 0usize;
+    let mut removed = 0usize;
+    let mut previous_only = 0usize;
+    let mut current = 0usize;
+    let mut max_reached_depth = 0usize;
+    for node in nodes {
+        match node.status() {
+            ImpactNodeStatus::DirectlyChanged => increment(&mut directly_changed)?,
+            ImpactNodeStatus::TransitivelyAffected => increment(&mut transitively_affected)?,
+            ImpactNodeStatus::Removed => increment(&mut removed)?,
+        }
+        match node.availability() {
+            ImpactNodeAvailability::PreviousOnly => increment(&mut previous_only)?,
+            ImpactNodeAvailability::CurrentOnly | ImpactNodeAvailability::Both => {
+                increment(&mut current)?;
+            }
+        }
+        max_reached_depth = max_reached_depth.max(node.depth());
+    }
+    Ok(json!({
+        "seedNodeChanges": complete.seed_node_changes(),
+        "seedEdgeChanges": complete.seed_edge_changes(),
+        "directlyChangedNodes": directly_changed,
+        "transitivelyAffectedNodes": transitively_affected,
+        "removedNodes": removed,
+        "previousOnlyNodes": previous_only,
+        "currentNodes": current,
+        "totalAffectedNodes": nodes.len(),
+        "maxReachedDepth": max_reached_depth,
+        "requestedMaxDepth": requested_depth,
+        "configuredMaxDepth": complete.configured_max_depth()
+    }))
+}
+
+fn increment(value: &mut usize) -> Result<(), SemanticError> {
+    *value = value.checked_add(1).ok_or(EXECUTION_FAILED)?;
+    Ok(())
 }
 
 fn context(
@@ -1143,6 +1759,14 @@ const fn impact_status(value: ImpactNodeStatus) -> &'static str {
     }
 }
 
+const fn impact_availability(value: ImpactNodeAvailability) -> &'static str {
+    match value {
+        ImpactNodeAvailability::PreviousOnly => "previous_only",
+        ImpactNodeAvailability::CurrentOnly => "current_only",
+        ImpactNodeAvailability::Both => "both",
+    }
+}
+
 const fn impact_reason_kind(value: ImpactReasonKind) -> &'static str {
     match value {
         ImpactReasonKind::NodeAdded => "node_added",
@@ -1241,6 +1865,19 @@ fn number(arguments: &Map<String, Value>, field: &str) -> Result<Option<usize>, 
         .transpose()
 }
 
+fn bounded_number(
+    arguments: &Map<String, Value>,
+    field: &str,
+    default: usize,
+    maximum: usize,
+) -> Result<usize, SemanticError> {
+    let value = number(arguments, field)?.unwrap_or(default);
+    (1..=maximum)
+        .contains(&value)
+        .then_some(value)
+        .ok_or(INVALID)
+}
+
 fn limit(arguments: &Map<String, Value>) -> Result<usize, SemanticError> {
     let value = number(arguments, "limit")?.unwrap_or(DEFAULT_LIMIT);
     (1..=MAX_LIMIT)
@@ -1306,74 +1943,86 @@ const fn validation_kind(value: SemanticGraphValidationIssueKind) -> &'static st
     }
 }
 
-const fn diagnostic_severity(value: SemanticDiagnosticSeverity) -> &'static str {
+fn diagnostic_family(value: &str) -> Option<DiagnosticFamily> {
     match value {
-        SemanticDiagnosticSeverity::Warning => "warning",
-        SemanticDiagnosticSeverity::Error => "error",
+        "semantic" => Some(DiagnosticFamily::Semantic),
+        "validation" => Some(DiagnosticFamily::Validation),
+        "rule" => Some(DiagnosticFamily::Rule),
+        _ => None,
     }
 }
 
-const fn diagnostic_kind(value: SemanticDiagnosticKind) -> &'static str {
+fn diagnostic_severity(value: &str) -> Option<DiagnosticSeverity> {
     match value {
-        SemanticDiagnosticKind::QueryLanguageMalformedSyntax => "query_language_malformed_syntax",
-        SemanticDiagnosticKind::QueryLanguageUnsupportedStructure => {
-            "query_language_unsupported_structure"
-        }
-        SemanticDiagnosticKind::QueryLanguageUnsupportedPersistentNamespace => {
-            "query_language_unsupported_persistent_namespace"
-        }
-        SemanticDiagnosticKind::QueryLanguageVirtualTableSource => {
-            "query_language_virtual_table_source"
-        }
-        SemanticDiagnosticKind::QueryLanguageTemporaryTableSource => {
-            "query_language_temporary_table_source"
-        }
-        SemanticDiagnosticKind::QueryLanguageExternalOrParameterDataSource => {
-            "query_language_external_or_parameter_data_source"
-        }
-        SemanticDiagnosticKind::DataCompositionNestedDataSetDeferred => {
-            "data_composition_nested_data_set_deferred"
-        }
-        SemanticDiagnosticKind::DataCompositionFieldFolderDeferred => {
-            "data_composition_field_folder_deferred"
-        }
-        SemanticDiagnosticKind::DataCompositionUnsupportedDataSetType => {
-            "data_composition_unsupported_data_set_type"
-        }
-        SemanticDiagnosticKind::DataCompositionUnsupportedFieldType => {
-            "data_composition_unsupported_field_type"
-        }
-        SemanticDiagnosticKind::MalformedReferenceFormat => "malformed_reference_format",
-        SemanticDiagnosticKind::UnsupportedReferencePrefix => "unsupported_reference_prefix",
-        SemanticDiagnosticKind::UnresolvedTarget => "unresolved_target",
-        SemanticDiagnosticKind::AmbiguousTarget => "ambiguous_target",
-        SemanticDiagnosticKind::IncompatibleTargetKind => "incompatible_target_kind",
-        SemanticDiagnosticKind::InvalidOwnerReference => "invalid_owner_reference",
-        SemanticDiagnosticKind::DuplicateSemanticEdgeRequest => "duplicate_semantic_edge_request",
+        "error" => Some(DiagnosticSeverity::Error),
+        "warning" => Some(DiagnosticSeverity::Warning),
+        _ => None,
+    }
+}
+
+fn diagnostic_category(value: &str) -> Option<DiagnosticCategory> {
+    match value {
+        "source" => Some(DiagnosticCategory::Source),
+        "semantic" => Some(DiagnosticCategory::Semantic),
+        "structural" => Some(DiagnosticCategory::Structural),
+        "provenance" => Some(DiagnosticCategory::Provenance),
+        "build_consistency" => Some(DiagnosticCategory::BuildConsistency),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::path::Path;
     use std::sync::Arc;
 
+    use oneagent_analysis::change_impact::{
+        ChangeImpactConfiguration, ChangeImpactEvaluator, ChangeImpactPublicationId,
+        NeverCancelledChangeImpact,
+    };
+    use oneagent_analysis::diagnostics::{
+        DiagnosticCategory, DiagnosticEngine, DiagnosticIdentity, DiagnosticPolicy,
+        DiagnosticSeverity,
+    };
+    use oneagent_analysis::rules::{RuleDiagnostic, RuleDiagnosticCode, RuleId};
     use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
     use oneagent_graph::{
-        Confidence, FactOrigin, GraphNode, NodeKind, ProducerId, Provenance, ResolutionState,
+        Confidence, EdgeKind, FactOrigin, GraphEdge, GraphNode, NodeKind, ProducerId, Provenance,
+        ResolutionState, SemanticDiagnostic, SemanticDiagnosticCode, SemanticDiagnosticKind,
+        SemanticDiagnosticSeverity, SemanticGraph, SemanticReference,
     };
     use oneagent_protocol::{McpToolCallHandler, McpToolCallOutcome};
-    use oneagent_tool_policy::{PolicyRevision, ToolPolicy};
+    use oneagent_tool_policy::{
+        PolicyRevision, ToolCancellationSignal, ToolEffect, ToolFuture, ToolPolicy,
+    };
     use serde_json::{Map, json};
     use tempfile::tempdir;
 
-    use super::{GRAPH, Handler, SYMBOLS, project_symbol_location, unique_symbol_location};
+    use super::{
+        DIAGNOSTICS, GRAPH, Handler, IMPACT, REFACTOR_PLAN, SYMBOLS, SnapshotSource,
+        diagnostic_arguments, output, project, project_diagnostic_finding,
+        project_diagnostic_report, project_publication_impact, project_symbol_location,
+        unique_symbol_location,
+    };
     use crate::WorkspaceSnapshotBuilder;
 
     fn fixture_root() -> &'static Path {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/workspace_service")
             .leak()
+    }
+
+    struct AlwaysCancelled;
+
+    impl ToolCancellationSignal for AlwaysCancelled {
+        fn is_cancelled(&self) -> bool {
+            true
+        }
+
+        fn cancelled(&self) -> ToolFuture<'_, ()> {
+            Box::pin(async {})
+        }
     }
 
     fn provenance(location: SourceLocation, producer: &str) -> Provenance {
@@ -1387,6 +2036,257 @@ mod tests {
         )
     }
 
+    fn diagnostic(source: &str, severity: SemanticDiagnosticSeverity) -> SemanticDiagnostic {
+        SemanticDiagnostic::new(
+            SemanticDiagnosticCode::ReferenceUnresolved,
+            severity,
+            SemanticDiagnosticKind::UnresolvedTarget,
+            "semantic reference target could not be resolved",
+            SemanticReference::NodeId("metadata.target".to_owned()),
+        )
+        .with_source_node(EntityId::new(source).expect("source node ID"))
+    }
+
+    #[test]
+    fn diagnostic_projection_filters_complete_report_and_retains_unfiltered_summary() {
+        let active = diagnostic("metadata.active", SemanticDiagnosticSeverity::Error);
+        let suppressed = diagnostic("metadata.suppressed", SemanticDiagnosticSeverity::Warning);
+        let policy = DiagnosticPolicy::new(BTreeSet::from([DiagnosticIdentity::from_semantic(
+            &suppressed,
+        )]))
+        .expect("one suppression");
+        let mut graph = SemanticGraph::new();
+        graph.insert_node(GraphNode::new(
+            EntityId::new("metadata.validation").expect("validation node ID"),
+            EntityName::new("Validation").expect("validation node name"),
+            NodeKind::Unknown,
+        ));
+        let report = DiagnosticEngine
+            .build(&[suppressed, active], &graph.validate(), &policy)
+            .expect("mixed report");
+
+        let arguments = json!({
+            "configurationId": "configuration.test",
+            "families": ["semantic", "validation", "rule"],
+            "severities": ["warning"],
+            "categories": ["semantic", "provenance"],
+            "includeSuppressed": true,
+            "limit": 1
+        });
+        let arguments = diagnostic_arguments(arguments.as_object().expect("arguments object"))
+            .unwrap_or_else(|_| panic!("valid diagnostic filters"));
+        let projected = project_diagnostic_report(
+            arguments.configuration_id,
+            &report,
+            &arguments.filter,
+            arguments.limit,
+        );
+
+        assert_eq!(projected["total"], 2);
+        assert_eq!(projected["truncated"], true);
+        assert_eq!(projected["diagnostics"][0]["family"], "validation");
+        assert_eq!(projected["diagnostics"][0]["disposition"], "active");
+        assert_eq!(
+            projected["diagnostics"][0]["nodeIds"],
+            json!(["metadata.validation"])
+        );
+        assert!(projected["diagnostics"][0]["sourceNodeId"].is_null());
+        assert_eq!(projected["summary"]["total"], 3);
+        assert_eq!(projected["summary"]["active"], 2);
+        assert_eq!(projected["summary"]["suppressed"], 1);
+        assert_eq!(projected["summary"]["byFamily"]["semantic"], 2);
+        assert_eq!(projected["summary"]["byFamily"]["validation"], 1);
+        assert_eq!(projected["summary"]["byFamily"]["rule"], 0);
+        assert_eq!(projected["summary"]["bySeverity"]["error"], 1);
+        assert_eq!(projected["summary"]["bySeverity"]["warning"], 2);
+        assert_eq!(projected["summary"]["byCategory"]["provenance"], 1);
+        assert_eq!(
+            projected["summary"]["suppressedByCode"]["semantic.reference.unresolved"],
+            1
+        );
+
+        let default_arguments = json!({"configurationId": "configuration.test"});
+        let default_arguments = diagnostic_arguments(
+            default_arguments
+                .as_object()
+                .expect("default arguments object"),
+        )
+        .unwrap_or_else(|_| panic!("default diagnostic arguments"));
+        let active_only = project_diagnostic_report(
+            default_arguments.configuration_id,
+            &report,
+            &default_arguments.filter,
+            default_arguments.limit,
+        );
+        assert_eq!(active_only["total"], 2);
+        assert!(
+            active_only["diagnostics"]
+                .as_array()
+                .expect("active diagnostics")
+                .iter()
+                .all(|finding| finding["disposition"] == "active")
+        );
+        assert_eq!(active_only["summary"], projected["summary"]);
+    }
+
+    #[test]
+    fn diagnostic_projection_exposes_rule_identity_only_for_rule_findings() {
+        let rule_diagnostic = RuleDiagnostic::new(
+            RuleId::new("runtime.rule").expect("rule ID"),
+            RuleDiagnosticCode::new("finding").expect("diagnostic code"),
+            DiagnosticSeverity::Warning,
+            DiagnosticCategory::Semantic,
+            "controlled rule finding",
+            [EntityId::new("metadata.node").expect("node ID")],
+        );
+        let finding = oneagent_analysis::diagnostics::DiagnosticFinding::from_rule(
+            &rule_diagnostic,
+            &DiagnosticPolicy::default(),
+        )
+        .expect("rule finding");
+        let projected = project_diagnostic_finding(&finding);
+
+        assert_eq!(projected["family"], "rule");
+        assert_eq!(projected["kind"], "rule_finding");
+        assert_eq!(projected["code"], "finding");
+        assert_eq!(projected["ruleId"], "runtime.rule");
+        assert_eq!(projected["nodeIds"], json!(["metadata.node"]));
+        assert!(projected["sourceNodeId"].is_null());
+        assert_eq!(projected["candidateNodeIds"], json!([]));
+
+        let semantic = diagnostic("metadata.source", SemanticDiagnosticSeverity::Error);
+        let semantic = oneagent_analysis::diagnostics::DiagnosticFinding::from_semantic(
+            &semantic,
+            &DiagnosticPolicy::default(),
+        )
+        .expect("semantic finding");
+        assert!(
+            project_diagnostic_finding(&semantic)
+                .get("ruleId")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn diagnostic_arguments_reject_empty_duplicate_invalid_and_unknown_values() {
+        for arguments in [
+            json!({"configurationId": "configuration.test", "families": []}),
+            json!({"configurationId": "configuration.test", "families": ["semantic", "semantic"]}),
+            json!({"configurationId": "configuration.test", "families": ["rules"]}),
+            json!({"configurationId": "configuration.test", "severities": []}),
+            json!({"configurationId": "configuration.test", "severities": ["info"]}),
+            json!({"configurationId": "configuration.test", "categories": []}),
+            json!({"configurationId": "configuration.test", "categories": ["source", "source"]}),
+            json!({"configurationId": "configuration.test", "categories": ["runtime"]}),
+            json!({"configurationId": "configuration.test", "includeSuppressed": "true"}),
+            json!({"configurationId": "configuration.test", "extra": true}),
+        ] {
+            assert!(
+                diagnostic_arguments(arguments.as_object().expect("arguments object")).is_err(),
+                "{arguments}"
+            );
+        }
+    }
+
+    #[test]
+    fn publication_projection_reconciles_depth_and_reason_truncation() {
+        let configuration_id = EntityId::new("configuration.test").expect("Configuration ID");
+        let caller_id = EntityId::new("procedure.caller").expect("caller ID");
+        let target_id = EntityId::new("function.target").expect("target ID");
+        let caller = || {
+            GraphNode::new(
+                caller_id.clone(),
+                EntityName::new("Caller").expect("caller name"),
+                NodeKind::Procedure,
+            )
+        };
+        let target = |name| {
+            GraphNode::new(
+                target_id.clone(),
+                EntityName::new(name).expect("target name"),
+                NodeKind::Function,
+            )
+        };
+        let mut previous = SemanticGraph::new();
+        previous.insert_node(caller());
+        previous.insert_node(target("Before"));
+        previous
+            .insert_edge(GraphEdge::new(
+                caller_id.clone(),
+                target_id.clone(),
+                EdgeKind::Calls,
+            ))
+            .expect("previous edge endpoints must exist");
+        let mut current = SemanticGraph::new();
+        current.insert_node(caller());
+        current.insert_node(target("After"));
+        let report = ChangeImpactEvaluator
+            .evaluate(
+                ChangeImpactPublicationId::initial(),
+                &[ChangeImpactConfiguration::new(&configuration_id, &previous)],
+                &[ChangeImpactConfiguration::new(&configuration_id, &current)],
+                &NeverCancelledChangeImpact,
+            )
+            .expect("bounded report must build");
+        let transition = report
+            .configuration(&configuration_id)
+            .expect("Configuration transition must exist");
+        assert!(
+            transition
+                .result()
+                .affected_nodes()
+                .iter()
+                .any(|node| node.reasons().len() > 1),
+            "fixture must exercise reason truncation"
+        );
+
+        let projected = project_publication_impact(transition, 4, 100, 1, &report)
+            .unwrap_or_else(|_| panic!("publication projection must succeed"));
+        assert!(
+            projected["omittedReasons"]
+                .as_u64()
+                .is_some_and(|value| value > 0)
+        );
+        assert_eq!(
+            projected["total"],
+            projected["summary"]["totalAffectedNodes"]
+        );
+        assert_eq!(projected["truncated"], false);
+        assert!(
+            projected["affectedNodes"]
+                .as_array()
+                .expect("affected nodes")
+                .iter()
+                .all(|node| node["reasons"].as_array().expect("reasons").len() == 1)
+        );
+
+        let direct = project_publication_impact(transition, 0, 100, 100, &report)
+            .unwrap_or_else(|_| panic!("depth-zero projection must succeed"));
+        assert!(
+            direct["affectedNodes"]
+                .as_array()
+                .expect("direct affected nodes")
+                .iter()
+                .all(|node| node["depth"] == 0)
+        );
+        assert_eq!(direct["summary"]["requestedMaxDepth"], 0);
+        assert_eq!(direct["summary"]["configuredMaxDepth"], 4);
+
+        let oversized = output(&json!({
+            "ok": true,
+            "value": {
+                "mode": "publication",
+                "affectedNodes": [{"nodeId": "x".repeat(65_536)}]
+            }
+        }));
+        let oneagent_tool_policy::ToolExecutorOutcome::Completed(output) = oversized else {
+            panic!("oversized publication projection must return a bounded fallback");
+        };
+        let fallback: serde_json::Value =
+            serde_json::from_str(output.expose()).expect("fallback must be JSON");
+        assert_eq!(fallback["error"]["code"], "result_too_large");
+    }
+
     #[tokio::test]
     async fn symbols_validate_before_policy_and_valid_calls_remain_policy_gated() {
         let root = tempdir().expect("empty workspace root");
@@ -1394,7 +2294,7 @@ mod tests {
             .build(root.path())
             .expect("empty workspace must build");
         let handler = Handler {
-            snapshot: Arc::new(snapshot),
+            snapshots: SnapshotSource::Fixed(Arc::new(snapshot)),
             policy: ToolPolicy::new(
                 PolicyRevision::new("oneagent.mcp.denied-test").expect("test revision"),
                 Vec::new(),
@@ -1408,6 +2308,55 @@ mod tests {
             McpToolCallOutcome::Error { ref code, ref message }
                 if code == "policy_denied" && message == "The semantic tool request was denied."
         ));
+
+        let valid_diagnostics = json!({"configurationId": "configuration.test"})
+            .as_object()
+            .expect("diagnostic arguments must be an object")
+            .clone();
+        let valid_diagnostics = handler.call(DIAGNOSTICS, &valid_diagnostics).await;
+        assert!(matches!(
+            valid_diagnostics,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
+
+        let publication_impact = json!({"configurationId": "configuration.test"})
+            .as_object()
+            .expect("publication impact arguments must be an object")
+            .clone();
+        let publication_impact = handler.call(IMPACT, &publication_impact).await;
+        assert!(matches!(
+            publication_impact,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
+
+        let valid_refactoring = json!({
+            "publicationId": 1,
+            "configurationId": "configuration.test",
+            "targetNodeId": "procedure.test",
+            "desiredName": "Renamed"
+        })
+        .as_object()
+        .expect("refactoring arguments must be an object")
+        .clone();
+        let denied_refactoring = handler.call(REFACTOR_PLAN, &valid_refactoring).await;
+        assert!(matches!(
+            denied_refactoring,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "policy_denied" && message == "The semantic tool request was denied."
+        ));
+        let invalid_refactoring = handler.call(REFACTOR_PLAN, &Map::new()).await;
+        assert!(matches!(
+            invalid_refactoring,
+            McpToolCallOutcome::Error { ref code, ref message }
+                if code == "invalid_arguments"
+                    && message == "The semantic tool arguments are invalid."
+        ));
+
+        let request = super::request(REFACTOR_PLAN, "{}".to_owned())
+            .unwrap_or_else(|()| panic!("refactoring policy request must build"));
+        assert_eq!(request.effects(), &BTreeSet::from([ToolEffect::ReadOnly]));
 
         let invalid_symbols = handler.call(SYMBOLS, &Map::new()).await;
         assert!(matches!(
@@ -1427,6 +2376,46 @@ mod tests {
             McpToolCallOutcome::Error { ref code, ref message }
                 if code == "policy_denied" && message == "The semantic tool request was denied."
         ));
+    }
+
+    #[test]
+    fn refactoring_projection_maps_product_cancellation_to_one_closed_error() {
+        let snapshot = WorkspaceSnapshotBuilder::new()
+            .build(fixture_root())
+            .expect("mixed fixture must build");
+        let (configuration, target) = snapshot
+            .configurations()
+            .iter()
+            .find_map(|configuration| {
+                configuration
+                    .source_evidence()
+                    .documents()
+                    .iter()
+                    .flat_map(oneagent_analysis::refactoring::SourceDocument::occurrences)
+                    .find(|occurrence| {
+                        occurrence.kind()
+                            == oneagent_analysis::refactoring::SourceOccurrenceKind::Declaration
+                            && occurrence.token() == "Posting"
+                    })
+                    .and_then(oneagent_analysis::refactoring::SourceOccurrence::mapped_target_id)
+                    .map(|target| (configuration, target))
+            })
+            .expect("fixture target must map uniquely");
+        let arguments = json!({
+            "publicationId": snapshot.publication_id().get(),
+            "configurationId": configuration.configuration_id().as_str(),
+            "targetNodeId": target.as_str(),
+            "desiredName": "PostingRenamed"
+        });
+        let error = project(
+            &snapshot,
+            REFACTOR_PLAN,
+            arguments.as_object().expect("refactoring arguments object"),
+            &AlwaysCancelled,
+        )
+        .expect_err("cancelled refactoring projection must fail closed");
+        assert_eq!(error.code, "execution_failed");
+        assert_eq!(error.message, "The semantic tool request failed.");
     }
 
     #[test]

@@ -57,6 +57,26 @@ Hashes cover exact tracked bytes and are ordered by fixture-relative path.
 
 ## Accepted public observations
 
+Sprint 41 safe-edit tests derive their temporary paired projects from the tracked
+`adapters/designer-xml/tests/fixtures/sprint14_conformance/{edt,designer}` corpus
+and this directory's complete Configuration/manifests. The second Common Module
+copies the accepted `ExerciseSecurityCollection` declaration and changes its
+existing call to a qualified call; its descriptor uses the next fixture UUID.
+Query bodies come from the tracked EDT `reads_project` Object Module. Unsupported
+and malformed variants derive from the tracked Query grammar/fixture, with BSL
+multiline continuation preserved. The resolved variant copies the tracked
+Products Catalog; an additional unchanged callable deliberately reuses the Query
+binding. Unicode rename spellings, exact-size comment padding, and fault sentinels
+are generated test data. Designer BOM/CRLF and EDT LF bytes are retained from the
+paired corpus, independently of this directory's LF inventory above.
+
+All copies, mutations, I/O fault artifacts, and temporary directories remain
+under repository-local `local-artifacts/`. No private corpus or external project
+is read. Each rejection checks actual production guards and original/applied
+bytes; successful reversal checks exact byte restoration and immutable old Arcs.
+Owner-local Analysis/adapter tests use canonical constructors and shared producer
+encoders; they do not manufacture private Graph identities or parse ID strings.
+
 - Production discovery finds exactly one EDT and one Designer XML root.
 - Snapshot order follows canonical Configuration identity, not path order.
 - EDT retains recoverable diagnostics, reference requests/statistics, and its
@@ -64,3 +84,13 @@ Hashes cover exact tracked bytes and are ordered by fixture-relative path.
   diagnostic and request evidence.
 - Temporary mutations cover detector conflicts, duplicate Configuration
   identity, and fatal adapter input without introducing additional fixtures.
+## Additional Task 5 boundary derivations
+
+The operation admission corpus keeps the paired EDT descriptors and qualified
+caller, renames the callable token to `A`, and repeats its direct call to produce
+exactly 4096 or 4097 accepted occurrences. Short identifiers keep this boundary
+test independent of large-document byte cost. The longer Unicode paired cases
+also relocate the complete temporary Configuration beneath a custom child root.
+Physical entry/raw/file/staging limits use temporary zero-filled files derived
+from the same local fixture; none are tracked binary fixtures. Runtime tests
+observe real I/O, builders, publication writers and policy gates at their owners.

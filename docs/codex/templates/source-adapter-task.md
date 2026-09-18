@@ -10,23 +10,19 @@ cross-adapter conformance.
 
 - `docs/codex/profiles/source-adapter-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
 - Authoritative ADRs / source-format and architecture documents
-- Prerequisites / required gate
-- Task
 - Source evidence / paired fixtures
 - Discovery boundary and format detection
 - Artifact roles and assembly contract
 - Completeness and failure policy
 - Canonical mapping and identity compatibility
 - Cross-adapter conformance oracle, when applicable
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

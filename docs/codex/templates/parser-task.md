@@ -8,18 +8,14 @@ Use this template for parsing one real serialized source artifact family.
 
 - `docs/codex/profiles/parser-implementation.md`
 
+## Required base template
+
+- `docs/codex/templates/task-prompt.md`
+
 ## Required task-specific sections
 
 - Authoritative ADRs / source-format documents
-- Prerequisites / required gate
-- Task
 - Source evidence / fixtures
-- Scope
-- Included
-- Excluded
-- Acceptance Criteria
-- Task-specific Validation
-- Suggested commit message (recommendation only)
 
 ## Additional acceptance requirements
 

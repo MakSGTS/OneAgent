@@ -1048,6 +1048,9 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use oneagent_analysis::diagnostics::{DiagnosticEngine, DiagnosticPolicy};
+    use oneagent_analysis::refactoring::SourceEvidenceSet;
+    use oneagent_analysis::rules::RuleExecutionReport;
     use oneagent_common::{EntityId, EntityName};
     use oneagent_graph::{
         EdgeKind, GraphEdge, GraphNode, NodeKind, SemanticDiagnostic, SemanticGraph,
@@ -1084,25 +1087,31 @@ mod tests {
         graph: SemanticGraph,
     ) -> WorkspaceConfigurationSnapshot {
         let report = SemanticGraphReport::from_graph(&graph);
+        let validation = graph.validate();
+        let diagnostic_report = DiagnosticEngine
+            .build(&[], &validation, &DiagnosticPolicy::default())
+            .expect("test graph diagnostics must build");
         WorkspaceConfigurationSnapshot {
             root_path: PathBuf::from(configuration_id),
             format,
             configuration_id: id(configuration_id),
             configuration_name: name(configuration_id),
             graph: Arc::new(graph),
+            source_evidence: SourceEvidenceSet::new(id(configuration_id), Vec::new())
+                .expect("empty test source evidence must be valid"),
             diagnostics: Arc::<[SemanticDiagnostic]>::from([]),
             reference_requests: Arc::new(SemanticReferenceRequestLedger::new()),
             reference_statistics: SemanticReferenceStatistics::new(),
             report,
+            validation: Arc::new(validation),
+            rule_execution_report: Arc::new(RuleExecutionReport::default()),
+            diagnostic_report: Arc::new(diagnostic_report),
         }
     }
 
     fn snapshot(mut configurations: Vec<WorkspaceConfigurationSnapshot>) -> WorkspaceSnapshot {
         configurations.sort_by(|left, right| left.configuration_id.cmp(&right.configuration_id));
-        WorkspaceSnapshot {
-            root_path: std::path::PathBuf::new(),
-            configurations,
-        }
+        WorkspaceSnapshot::initial(std::path::PathBuf::new(), configurations)
     }
 
     fn service(

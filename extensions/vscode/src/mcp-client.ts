@@ -17,6 +17,7 @@ const TOOL_NAMES = [
   "oneagent.graph",
   "oneagent.impact",
   "oneagent.query",
+  "oneagent.refactor.plan",
   "oneagent.symbols",
   "oneagent.validation",
 ] as const;

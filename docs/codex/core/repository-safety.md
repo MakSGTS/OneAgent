@@ -26,6 +26,13 @@ stricter safety policy.
   user explicitly requests the exact action.
 - Do not add dependencies unless the task scope requires them and the Change
   Contract identifies the impact.
+- For Sprint 41 and later sprint work, and whenever the current user instruction
+  separately requires this constraint, do not generate, inline, or transmit
+  Base64-encoded data when a repository file, direct text, native binary/media
+  attachment, or another supported representation can carry the required
+  content. Use Base64 only when every supported non-Base64 alternative is
+  unavailable; keep it to the minimum required payload, never encode secrets or
+  unrelated data, and report why the fallback was necessary.
 - Do not perform broad formatting unrelated to touched files.
 - Apply changes to different files through separate atomic `apply_patch` calls.
   Before each patch, inspect the file's current context so a mismatch in one

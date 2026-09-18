@@ -5,7 +5,13 @@
 //! 1. collect every module and declaration into the semantic graph;
 //! 2. extract and resolve local and cross-module calls.
 
+pub mod change_impact;
 pub mod context;
+pub mod diagnostics;
+pub mod publication;
+pub mod refactoring;
+pub mod rules;
+pub mod safe_edit;
 
 use oneagent_bsl::{
     BslCallError, BslCallExtractor, BslCallResolver, BslDeclarationExtractor, BslModuleSymbols,

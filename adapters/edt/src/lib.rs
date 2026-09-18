@@ -21,7 +21,9 @@ mod query_source_resolution;
 mod report_data_composition;
 mod report_data_composition_emission;
 mod role_rights;
+mod safe_edit;
 mod service_descriptor;
+mod source_evidence;
 mod subsystem_content;
 mod subsystem_hierarchy;
 mod writes;
@@ -101,7 +103,10 @@ pub use bsl_graph::{
 };
 pub use coverage::{EdtSemanticCoverageRegistry, EdtSemanticCoverageReport};
 pub use form_navigation_emission::EdtFormNavigationEmissionError;
+pub use safe_edit::project_safe_edit_provenance;
+pub use source_evidence::EdtSourceEvidenceError;
 
+use oneagent_analysis::refactoring::SourceEvidenceSet;
 use oneagent_common::{EntityId, EntityName, SourceLocation, SourcePath};
 use oneagent_workspace::{Configuration, WorkspaceFormat};
 use quick_xml::Reader;
@@ -592,6 +597,39 @@ impl EdtSemanticGraphBuildResult {
     }
 }
 
+/// One production EDT graph build paired with complete captured BSL source evidence.
+#[derive(Debug, Clone)]
+pub struct EdtSemanticGraphSourceBuildResult {
+    build: EdtSemanticGraphBuildResult,
+    source_evidence: SourceEvidenceSet,
+}
+
+impl EdtSemanticGraphSourceBuildResult {
+    /// Returns the existing graph build result without changing its semantics.
+    #[must_use]
+    pub const fn build(&self) -> &EdtSemanticGraphBuildResult {
+        &self.build
+    }
+
+    /// Returns the generated semantic graph.
+    #[must_use]
+    pub const fn graph(&self) -> &SemanticGraph {
+        self.build.graph()
+    }
+
+    /// Returns canonical immutable source evidence for the Configuration.
+    #[must_use]
+    pub const fn source_evidence(&self) -> &SourceEvidenceSet {
+        &self.source_evidence
+    }
+
+    /// Consumes the envelope and returns the compatible graph build result.
+    #[must_use]
+    pub fn into_build(self) -> EdtSemanticGraphBuildResult {
+        self.build
+    }
+}
+
 /// Builds an initial semantic graph from an EDT project.
 pub trait EdtSemanticGraphBuilder {
     /// Builds a semantic graph and ordered diagnostics rooted at the EDT configuration.
@@ -605,6 +643,21 @@ pub trait EdtSemanticGraphBuilder {
         &self,
         project_root: &Path,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError>;
+
+    /// Builds the graph and complete immutable BSL source evidence in one capture.
+    ///
+    /// `project_root` must equal `workspace_root` or be its strict descendant
+    /// so every retained path is Workspace-relative and Configuration-confined.
+    ///
+    /// # Errors
+    ///
+    /// Returns a fatal error without a result when graph construction or source
+    /// evidence capture is incomplete, escaping, conflicting, or over-bound.
+    fn build_graph_with_source_evidence(
+        &self,
+        workspace_root: &Path,
+        project_root: &Path,
+    ) -> Result<EdtSemanticGraphSourceBuildResult, EdtGraphError>;
 
     /// Builds a semantic graph rooted at the EDT configuration.
     ///
@@ -629,36 +682,73 @@ impl EdtSemanticGraphBuilder for FileSystemEdtSemanticGraphBuilder {
         &self,
         project_root: &Path,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
-        Self::build_graph_with_metadata_reference_scope(
+        Self::build_graph_artifacts_with_metadata_reference_scope(
             project_root,
             query_source_resolution::WorkspaceResolutionScope::Complete,
+            false,
         )
+        .map(|artifacts| artifacts.build)
+    }
+
+    fn build_graph_with_source_evidence(
+        &self,
+        workspace_root: &Path,
+        project_root: &Path,
+    ) -> Result<EdtSemanticGraphSourceBuildResult, EdtGraphError> {
+        let artifacts = Self::build_graph_artifacts_with_metadata_reference_scope(
+            project_root,
+            query_source_resolution::WorkspaceResolutionScope::Complete,
+            true,
+        )?;
+        let source_evidence = source_evidence::build_source_evidence(
+            workspace_root,
+            project_root,
+            &artifacts.configuration_id,
+            &artifacts.modules,
+        )?;
+        Ok(EdtSemanticGraphSourceBuildResult {
+            build: artifacts.build,
+            source_evidence,
+        })
     }
 }
 
+struct EdtGraphBuildArtifacts {
+    build: EdtSemanticGraphBuildResult,
+    configuration_id: EntityId,
+    modules: Vec<EdtModuleDescriptor>,
+}
+
 impl FileSystemEdtSemanticGraphBuilder {
+    #[cfg(test)]
     fn build_graph_with_metadata_reference_scope(
         project_root: &Path,
         metadata_reference_scope: query_source_resolution::WorkspaceResolutionScope,
     ) -> Result<EdtSemanticGraphBuildResult, EdtGraphError> {
-        let (configuration, configuration_payload) =
-            FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
-        let mut graph = SemanticGraph::new();
+        Self::build_graph_artifacts_with_metadata_reference_scope(
+            project_root,
+            metadata_reference_scope,
+            false,
+        )
+        .map(|artifacts| artifacts.build)
+    }
+
+    fn build_graph_artifacts_with_metadata_reference_scope(
+        project_root: &Path,
+        metadata_reference_scope: query_source_resolution::WorkspaceResolutionScope,
+        capture_source_evidence: bool,
+    ) -> Result<EdtGraphBuildArtifacts, EdtGraphError> {
+        let mut source_manifest = capture_source_evidence
+            .then(|| preflight_source_manifest(project_root))
+            .transpose()?;
+        let (mut graph, configuration_id) = initialize_configuration_graph(project_root)?;
         let mut collected_metadata = CollectedTopLevelMetadata::default();
         let mut diagnostics = BTreeSet::new();
         let mut reference_statistics = SemanticReferenceStatistics::new();
 
-        let configuration_id = configuration.id().clone();
-        insert_configuration_node(
-            &mut graph,
-            project_root,
-            &configuration,
-            configuration_payload,
-        )?;
-
         let source_root = project_root.join("src");
         if !source_root.is_dir() {
-            return Ok(EdtSemanticGraphBuildResult::new(graph, Vec::new()));
+            return finish_empty_source_root(source_manifest, graph, configuration_id);
         }
 
         let kind_by_directory = supported_metadata_directories();
@@ -694,6 +784,7 @@ impl FileSystemEdtSemanticGraphBuilder {
                 kind,
                 &configuration_id,
                 &mut graph,
+                source_manifest.as_mut(),
             )?;
             collected_metadata.extend(collected)?;
         }
@@ -746,17 +837,194 @@ impl FileSystemEdtSemanticGraphBuilder {
             &mut diagnostics,
             &mut reference_statistics,
             &mut reference_requests,
+            capture_source_evidence,
         )?;
 
-        finish_configuration_graph_build(
+        finish_source_manifest(source_manifest)?;
+
+        finish_graph_artifacts(
             graph,
-            &collected_metadata.writes_sources,
-            &collected_metadata.event_subscriptions,
+            collected_metadata,
             diagnostics,
             reference_statistics,
             reference_requests,
+            configuration_id,
         )
     }
+}
+
+fn finish_empty_source_root(
+    manifest: Option<module_reader::EdtSourceManifest>,
+    graph: SemanticGraph,
+    configuration_id: EntityId,
+) -> Result<EdtGraphBuildArtifacts, EdtGraphError> {
+    finish_source_manifest(manifest)?;
+    Ok(EdtGraphBuildArtifacts {
+        build: EdtSemanticGraphBuildResult::new(graph, Vec::new()),
+        configuration_id,
+        modules: Vec::new(),
+    })
+}
+
+fn finish_source_manifest(
+    manifest: Option<module_reader::EdtSourceManifest>,
+) -> Result<(), EdtGraphError> {
+    manifest.map_or(Ok(()), |manifest| {
+        manifest.finish().map_err(EdtGraphError::Module)
+    })
+}
+
+fn preflight_source_manifest(
+    project_root: &Path,
+) -> Result<module_reader::EdtSourceManifest, EdtGraphError> {
+    let source_root = project_root.join("src");
+    if !source_root.is_dir() {
+        return module_reader::EdtSourceManifest::from_paths(Vec::new())
+            .map_err(EdtGraphError::Module);
+    }
+
+    let kind_by_directory = supported_metadata_directories();
+    let mut family_directories = fs::read_dir(&source_root)
+        .map_err(|source| EdtGraphError::ReadDirectory {
+            path: source_root.clone(),
+            source,
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| EdtGraphError::ReadDirectoryEntry {
+            path: source_root.clone(),
+            source,
+        })?;
+    family_directories.sort_by_key(fs::DirEntry::file_name);
+
+    let mut paths = Vec::new();
+    for entry in family_directories {
+        let file_type = entry
+            .file_type()
+            .map_err(|source| EdtGraphError::ReadFileType {
+                path: entry.path(),
+                source,
+            })?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let directory_name = entry.file_name().to_string_lossy().into_owned();
+        let Some(kind) = kind_by_directory.get(directory_name.as_str()).copied() else {
+            continue;
+        };
+        if kind == MetadataKind::EventSubscription {
+            continue;
+        }
+        if kind == MetadataKind::Subsystem {
+            let hierarchy = FileSystemEdtSubsystemHierarchyReader
+                .read(project_root)
+                .map_err(EdtGraphError::SubsystemHierarchy)?;
+            for source in hierarchy.descriptors() {
+                let descriptor = source.metadata();
+                let object_directory = descriptor.descriptor_path().parent().ok_or_else(|| {
+                    EdtGraphError::InvalidSubsystemDescriptorDirectory {
+                        path: descriptor.descriptor_path().to_path_buf(),
+                    }
+                })?;
+                discover_descriptor_modules(descriptor, object_directory, &mut paths)?;
+            }
+            continue;
+        }
+
+        let family_path = entry.path();
+        let mut object_directories = fs::read_dir(&family_path)
+            .map_err(|source| EdtGraphError::ReadDirectory {
+                path: family_path.clone(),
+                source,
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|source| EdtGraphError::ReadDirectoryEntry {
+                path: family_path.clone(),
+                source,
+            })?;
+        object_directories.sort_by_key(fs::DirEntry::file_name);
+        for object_entry in object_directories {
+            if !object_entry
+                .file_type()
+                .map_err(|source| EdtGraphError::ReadFileType {
+                    path: object_entry.path(),
+                    source,
+                })?
+                .is_dir()
+            {
+                continue;
+            }
+            let object_directory = object_entry.path();
+            let descriptor = FileSystemEdtMetadataObjectReader
+                .read(&object_directory, kind)
+                .map_err(EdtGraphError::MetadataObject)?;
+            discover_descriptor_modules(&descriptor, &object_directory, &mut paths)?;
+        }
+    }
+    module_reader::EdtSourceManifest::from_paths(paths).map_err(EdtGraphError::Module)
+}
+
+fn discover_descriptor_modules(
+    descriptor: &EdtMetadataObjectDescriptor,
+    object_directory: &Path,
+    paths: &mut Vec<PathBuf>,
+) -> Result<(), EdtGraphError> {
+    let children = FileSystemEdtMetadataStructureReader
+        .read_children(descriptor)
+        .map_err(EdtGraphError::MetadataStructure)?;
+    FileSystemEdtModuleReader::discover_form_command_modules(
+        descriptor,
+        &children,
+        object_directory,
+        paths,
+    )
+    .map_err(EdtGraphError::Module)?;
+    FileSystemEdtModuleReader::discover_modules(
+        descriptor.id(),
+        descriptor.name(),
+        object_directory,
+        paths,
+    )
+    .map_err(EdtGraphError::Module)?;
+    Ok(())
+}
+
+fn initialize_configuration_graph(
+    project_root: &Path,
+) -> Result<(SemanticGraph, EntityId), EdtGraphError> {
+    let (configuration, configuration_payload) =
+        FileSystemEdtConfigurationLoader::load_with_payload(project_root)?;
+    let configuration_id = configuration.id().clone();
+    let mut graph = SemanticGraph::new();
+    insert_configuration_node(
+        &mut graph,
+        project_root,
+        &configuration,
+        configuration_payload,
+    )?;
+    Ok((graph, configuration_id))
+}
+
+fn finish_graph_artifacts(
+    graph: SemanticGraph,
+    collected: CollectedTopLevelMetadata,
+    diagnostics: BTreeSet<SemanticDiagnostic>,
+    reference_statistics: SemanticReferenceStatistics,
+    reference_requests: SemanticReferenceRequestLedger,
+    configuration_id: EntityId,
+) -> Result<EdtGraphBuildArtifacts, EdtGraphError> {
+    let build = finish_configuration_graph_build(
+        graph,
+        &collected.writes_sources,
+        &collected.event_subscriptions,
+        diagnostics,
+        reference_statistics,
+        reference_requests,
+    )?;
+    Ok(EdtGraphBuildArtifacts {
+        build,
+        configuration_id,
+        modules: collected.modules,
+    })
 }
 
 fn add_module_and_xdto_semantics(
@@ -766,6 +1034,7 @@ fn add_module_and_xdto_semantics(
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
     reference_requests: &mut SemanticReferenceRequestLedger,
+    capture_source_evidence: bool,
 ) -> Result<(), EdtGraphError> {
     add_configuration_module_semantics(
         graph,
@@ -774,6 +1043,7 @@ fn add_module_and_xdto_semantics(
         diagnostics,
         reference_statistics,
         reference_requests,
+        capture_source_evidence,
     )?;
     xdto_service_emission::resolve_and_emit(
         graph,
@@ -789,9 +1059,10 @@ fn collect_supported_metadata_directory(
     kind: MetadataKind,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
+    source_manifest: Option<&mut module_reader::EdtSourceManifest>,
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     if kind == MetadataKind::Subsystem {
-        collect_subsystem_hierarchy(project_root, configuration_id, graph)
+        collect_subsystem_hierarchy(project_root, configuration_id, graph, source_manifest)
     } else if kind == MetadataKind::EventSubscription {
         Ok(CollectedTopLevelMetadata {
             event_subscriptions: event_subscription_emission::collect_event_subscription_directory(
@@ -802,7 +1073,14 @@ fn collect_supported_metadata_directory(
             ..CollectedTopLevelMetadata::default()
         })
     } else {
-        collect_top_level_metadata(project_root, directory, kind, configuration_id, graph)
+        collect_top_level_metadata(
+            project_root,
+            directory,
+            kind,
+            configuration_id,
+            graph,
+            source_manifest,
+        )
     }
 }
 
@@ -813,17 +1091,29 @@ fn add_configuration_module_semantics(
     diagnostics: &mut BTreeSet<SemanticDiagnostic>,
     reference_statistics: &mut SemanticReferenceStatistics,
     reference_requests: &mut SemanticReferenceRequestLedger,
+    capture_source_evidence: bool,
 ) -> Result<(), EdtGraphError> {
     let form_navigation = form_navigation_emission::collect_form_navigation(modules)
         .map_err(EdtGraphError::FormNavigation)?;
-    bsl_graph::add_configuration_module_symbols_with_diagnostics_in_scope(
-        graph,
-        modules,
-        workspace_scope,
-        diagnostics,
-        reference_statistics,
-        reference_requests,
-    )
+    if capture_source_evidence {
+        bsl_graph::add_configuration_module_symbols_with_bounded_source_evidence(
+            graph,
+            modules,
+            workspace_scope,
+            diagnostics,
+            reference_statistics,
+            reference_requests,
+        )
+    } else {
+        bsl_graph::add_configuration_module_symbols_with_diagnostics_in_scope(
+            graph,
+            modules,
+            workspace_scope,
+            diagnostics,
+            reference_statistics,
+            reference_requests,
+        )
+    }
     .map_err(EdtGraphError::Bsl)?;
     form_navigation_emission::emit_form_navigation(
         graph,
@@ -1085,6 +1375,7 @@ fn collect_subsystem_hierarchy(
     project_root: &Path,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
+    mut source_manifest: Option<&mut module_reader::EdtSourceManifest>,
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     let hierarchy = FileSystemEdtSubsystemHierarchyReader
         .read(project_root)
@@ -1111,6 +1402,7 @@ fn collect_subsystem_hierarchy(
             descriptor,
             configuration_id,
             graph,
+            source_manifest.as_deref_mut(),
         )?;
         collected.extend(object)?;
     }
@@ -1157,6 +1449,7 @@ fn collect_top_level_metadata(
     kind: MetadataKind,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
+    mut source_manifest: Option<&mut module_reader::EdtSourceManifest>,
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     let mut collected = CollectedTopLevelMetadata::default();
 
@@ -1187,6 +1480,7 @@ fn collect_top_level_metadata(
             kind,
             configuration_id,
             graph,
+            source_manifest.as_deref_mut(),
         )?;
 
         collected.extend(object)?;
@@ -1201,6 +1495,7 @@ fn collect_metadata_object(
     kind: MetadataKind,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
+    source_manifest: Option<&mut module_reader::EdtSourceManifest>,
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     let descriptor = FileSystemEdtMetadataObjectReader
         .read(object_directory, kind)
@@ -1211,6 +1506,7 @@ fn collect_metadata_object(
         descriptor,
         configuration_id,
         graph,
+        source_manifest,
     )
 }
 
@@ -1240,12 +1536,14 @@ fn insert_metadata_with_xdto_service_semantics(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn collect_metadata_descriptor(
     project_root: &Path,
     object_directory: &Path,
     descriptor: EdtMetadataObjectDescriptor,
     configuration_id: &EntityId,
     graph: &mut SemanticGraph,
+    mut source_manifest: Option<&mut module_reader::EdtSourceManifest>,
 ) -> Result<CollectedTopLevelMetadata, EdtGraphError> {
     let module_reader = FileSystemEdtModuleReader;
     let structure_reader = FileSystemEdtMetadataStructureReader;
@@ -1306,15 +1604,31 @@ fn collect_metadata_descriptor(
         collect_metadata_child_ownership(graph, &descriptor, child)?;
     }
 
-    let form_command_observations = module_reader
-        .read_form_command_modules(&descriptor, &children, object_directory)
-        .map_err(EdtGraphError::Module)?;
+    let form_command_observations = if let Some(manifest) = source_manifest.as_deref_mut() {
+        FileSystemEdtModuleReader::read_form_command_modules_with_manifest(
+            &descriptor,
+            &children,
+            object_directory,
+            manifest,
+        )
+    } else {
+        module_reader.read_form_command_modules(&descriptor, &children, object_directory)
+    }
+    .map_err(EdtGraphError::Module)?;
     let form_command_modules =
         emit_form_command_modules(graph, &descriptor, &form_command_observations)?;
 
-    let modules = module_reader
-        .read_modules(descriptor.id(), descriptor.name(), object_directory)
-        .map_err(EdtGraphError::Module)?;
+    let modules = if let Some(manifest) = source_manifest {
+        FileSystemEdtModuleReader::read_modules_with_manifest(
+            descriptor.id(),
+            descriptor.name(),
+            object_directory,
+            manifest,
+        )
+    } else {
+        module_reader.read_modules(descriptor.id(), descriptor.name(), object_directory)
+    }
+    .map_err(EdtGraphError::Module)?;
 
     for module in &modules {
         let module_source = module_source_id(&descriptor, module)?;
@@ -3260,6 +3574,9 @@ pub enum EdtGraphError {
     /// BSL symbols could not be added to the graph.
     Bsl(EdtBslGraphError),
 
+    /// Immutable BSL source evidence could not be published.
+    SourceEvidence(EdtSourceEvidenceError),
+
     /// Static Form navigation could not be collected or emitted.
     FormNavigation(form_navigation_emission::EdtFormNavigationEmissionError),
 }
@@ -3361,6 +3678,7 @@ impl Display for EdtGraphError {
             Self::Bsl(error) => {
                 write!(formatter, "failed to add BSL symbols to graph: {error}")
             }
+            Self::SourceEvidence(error) => write!(formatter, "EDT source evidence error: {error}"),
             Self::FormNavigation(error) => {
                 write!(formatter, "failed to emit EDT Form navigation: {error}")
             }
@@ -3496,6 +3814,7 @@ impl std::error::Error for EdtGraphError {
             | Self::InvalidReportDataCompositionOwner { .. }
             | Self::ReportDataCompositionArtifactOutsideProject { .. } => None,
             Self::Bsl(error) => Some(error),
+            Self::SourceEvidence(error) => Some(error),
             Self::FormNavigation(error) => Some(error),
         }
     }
@@ -3504,6 +3823,12 @@ impl std::error::Error for EdtGraphError {
 impl From<EdtLoadError> for EdtGraphError {
     fn from(error: EdtLoadError) -> Self {
         Self::Load(error)
+    }
+}
+
+impl From<EdtSourceEvidenceError> for EdtGraphError {
+    fn from(error: EdtSourceEvidenceError) -> Self {
+        Self::SourceEvidence(error)
     }
 }
 

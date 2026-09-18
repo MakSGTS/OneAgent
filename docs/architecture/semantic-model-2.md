@@ -94,6 +94,8 @@ Owns BSL syntax and semantic extraction:
 * parameters;
 * variables;
 * call expressions;
+* exact raw-byte declaration and call identifier ranges;
+* canonical BSL name equivalence and callable identity;
 * references;
 * scopes;
 * future type information.
@@ -118,12 +120,16 @@ It must not parse BSL, read EDT files, or discover the filesystem.
 
 ### `oneagent-analysis`
 
-Owns source-independent BSL declaration/call analysis and the additive Context
-Engine derived view. The Context Engine borrows one immutable `SemanticGraph`,
-uses only canonical query facts and provenance, and returns an owned
-deterministic semantic bundle. It does not mutate graph facts, read source
-files, call providers/models, or own Runtime, persistence, protocol, MCP, or IDE
-state.
+Owns source-independent BSL declaration/call analysis and the additive Context,
+Diagnostics, Rules, Change Impact, and Refactoring Planner derived views. Change
+Impact accepts only canonical Configuration identity plus complete borrowed
+graphs and invokes the Graph-owned diff and impact APIs. Refactoring owns
+immutable source documents and occurrences, requests, targets, preconditions,
+operations, plans, previews, bounds, summaries, and closed failures while using
+Graph queries and BSL-owned callable identity/name equivalence. Neither view
+becomes a second semantic or traversal authority. They do not mutate graph
+facts, read source during evaluation, call providers/models, or own Runtime,
+persistence, protocol, MCP, or IDE state.
 
 ### `oneagent-llm`
 
@@ -370,7 +376,20 @@ records `pass with non-blocking follow-ups`. Sprint 33 is completed, and Sprint
 34 EDT Integration Prototype and Sprint 35 External AI Client Compatibility are
 completed. The
 [v0.6 MCP and IDE release review](../reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`.
+`pass with non-blocking follow-ups`. The
+[Sprint 36 Diagnostics Engine review](../reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](../reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. The
+[Sprint 38 Git Change Adapter review](../reviews/sprint-38-git-change-adapter.md)
+records `pass` and completes Sprint 38. The
+[Sprint 39 Change Impact Analysis review](../reviews/sprint-39-change-impact-analysis.md)
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
+administratively completed. The
+[Sprint 40.1 Refactoring Planner Remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass`, completes the accepted publication-identity and final-evidence
+corrections, and makes Sprint 41 Safe Edit Transactions the unique `next`
+target.
 
 ADR-0056 governs the implemented native EDT compatibility-probe adapter without
 changing this semantic model. The JavaSE-17 `extensions/edt` bundle recognizes
@@ -381,8 +400,9 @@ project graph facts, import the Rust EDT adapter, or create another Workspace,
 Graph, Analysis, Context, Tool Policy, MCP, LSP, or Coverage authority. Its
 macOS/Windows build matrix, real-process/PDE tests, exact p2 package audit, and
 authorized local EDT 2026.1 workflow therefore provide IDE compatibility
-evidence while preserving the exact seven-tool catalog and all graph-domain and
-EDT Coverage counts. Semantic EDT UI and broader IDE behavior remain deferred.
+evidence while remaining compatible with the current exact eight-tool catalog
+and all graph-domain and EDT Coverage counts. Semantic EDT UI and broader IDE
+behavior remain deferred.
 
 ADR-0050 governs the implemented MCP discovery and transport foundation without
 changing graph, Context Engine, tool-policy, provider, or Runtime service
@@ -400,19 +420,31 @@ notification silence, per-response flush, cooperative cancellation, successful
 EOF completion, and stable controlled transport failures. It composes
 `oneagent.context`, `oneagent.diagnostics`, `oneagent.graph`,
 `oneagent.impact`, `oneagent.query`, `oneagent.symbols`, and
-`oneagent.validation` over one immutable Workspace startup snapshot. Every
-known call traverses the fail-closed Tool Policy gate; results are bounded
-deterministic JSON with equivalent compact text and structured content. The
-original six tools remain path-free. The symbol tool projects only unique,
+`oneagent.validation` over one live Runtime-owned Workspace service while
+cloning exactly one immutable current snapshot per call. Every known call
+traverses the fail-closed Tool Policy gate; results are bounded deterministic
+JSON with equivalent compact text and structured content. The original six
+tools remain path-free. The symbol tool projects only unique,
 lexically confined Workspace-relative forward-slash locations for Module,
 Procedure, Function, and EDT Query nodes and never exposes opaque provenance or
 an absolute source path. The tools perform no real side effect.
 
-The separate `oneagent-mcp` process constructs no Runtime `App`, watcher,
-cache, listener, or background task, preserves protocol-only stdout, exits
-successfully at EOF, and reports stable startup or terminal failure categories
-on stderr. Public domain, semantic-library, fixture, dispatch, adapter, and
-real-process evidence covers catalog order, annotations and schemas, all seven
+ADR-0058 changes only the accepted diagnostic projection. The
+`oneagent.diagnostics` tool consumes the complete immutable Analysis-owned
+report, filters semantic and validation families without rerunning the engine,
+retains a complete unfiltered summary, and returns an ordered prefix of at most
+100 with explicit truncation. It preserves the previous semantic fields and
+exposes no path, source content, raw reference, or provenance. The existing
+Graph summary and validation tool reuse the validation result already published
+in the same Configuration snapshot.
+
+The separate `oneagent-mcp` process constructs one Runtime `App`, Workspace
+watcher, and cache owner but no HTTP listener or remote client. It waits for one
+complete initial publication before reading frames, preserves protocol-only
+stdout, joins Runtime cleanup at EOF, and reports stable startup or terminal
+failure categories on stderr. Public domain, semantic-library, fixture,
+dispatch, adapter, and real-process evidence covers catalog order, annotations
+and schemas, all seven
 tool families, bounds, policy gating, path redaction and confinement, malformed
 and oversized input, unknown methods/tools, LF/CRLF
 framing, notifications, cancellation, transport failures, stdout purity, exit
@@ -423,7 +455,7 @@ Codex directly exercises all seven tools, while Cursor proves the seven-tool
 catalog through its available public list command. The desktop VS Code adapter
 owns explicit-demand Quick Pick navigation and Context selection without
 semantic matching. Additional revisions and clients, remote transports,
-authentication, snapshot refresh, Runtime packaging, references, diagnostics
+authentication, publication history, Runtime packaging, references, diagnostics
 UI, and broader IDE integration remain deferred. The additive LSP process does
 not migrate or alter this MCP boundary.
 
@@ -448,12 +480,14 @@ confines canonical document URIs, and converts typed one-based spans to
 zero-based UTF-16-compatible ranges without reading source text. The truthful
 static surface contains only `workspace/symbol` for located Procedure,
 Function, and EDT Query nodes and `textDocument/diagnostic` full reports for
-existing recoverable diagnostics with located source nodes. Graph identity,
-diagnostic code/severity/message/order, and source-location provenance remain
-the semantic authority. Each result family has a complete limit of 100 and
-fails closed rather than claiming a truncated prefix. No mutable-document,
-definition/reference, completion, edit, workspace-diagnostic, remote, or
-external-client behavior is represented.
+active normalized findings with exactly one node and one confined typed span.
+Graph identity, diagnostic code/severity/message, and source-location
+provenance remain the semantic authority. Missing, multiple, conflicting,
+span-less, escaping, incompatible, or suppressed evidence is omitted rather
+than guessed. Each result family has a complete limit of 100 and fails closed
+rather than claiming a truncated prefix. No mutable-document, definition/
+reference, completion, edit, workspace-diagnostic, remote, or external-client
+behavior is represented.
 
 ## Core principles
 
@@ -1347,6 +1381,476 @@ Knowledge Graph filtered to callable symbols and Calls or MayCall edges
 
 This allows current consumers to migrate without duplicating semantic extraction.
 
+## Diagnostics Engine
+
+The implemented ADR-0058 first slice is a derived source-independent view over
+existing graph evidence. `oneagent-analysis::diagnostics` accepts exactly the
+ordered recoverable `SemanticDiagnostic` values produced by Graph construction
+and one caller-supplied `SemanticGraphValidationResult`. It neither validates
+the graph nor creates a competing fact, producer, provenance, location, report,
+or build-diff authority.
+
+Each finding has a family-tagged typed identity. Semantic identity is code,
+kind, optional source node, and exact semantic reference. Validation identity
+is code, kind, canonical node IDs, optional edge/request identities and kinds,
+and invariant. Severity, category, message, related nodes, provenance count,
+and disposition remain observable content rather than identity. Exact equal
+evidence collapses; equal identity with different content is an error.
+
+The complete report orders active before suppressed, Error before Warning, then
+category, family, typed identity, and observable content. Its summary reconciles
+total, active/suppressed, family, severity, category, and code counts. The only
+implemented suppression input is an exact in-memory identity set; default
+Workspace construction supplies an empty set. Filtering is a read-only view and
+does not rerun normalization or rebuild a summary.
+
+Input and output collections, messages, anchors, provenance counts, and
+suppression sets have explicit hard limits. The engine fails without a partial
+report and never truncates. Protocol adapters retain their smaller independent
+result bounds. Runtime composes validation and the report before snapshot
+publication and deterministically recomputes them after cache decode without
+serializing either derived value.
+
+This boundary adds no Coverage capability because it emits no node, edge,
+parser result, or new diagnostic producer. Sprint 37 adds the Rule diagnostic
+family through the Rules Engine boundary below without changing Graph or
+Coverage authority. Suppression files/patterns, baselines, UI, fixes, mutable
+documents, and telemetry remain deferred. The complete executable matrix is
+recorded in the [Sprint 36 evidence](diagnostics-engine-evidence.md).
+
+## Rules Engine
+
+The implemented ADR-0059 first slice is a derived source-independent evaluation
+boundary over immutable canonical evidence. `oneagent-analysis::rules` borrows
+exactly one `SemanticGraph`, one caller-supplied complete
+`SemanticGraphValidationResult`, and one base ADR-0058 report containing only
+Semantic and Validation findings. It does not parse or read source, mutate the
+graph, invoke validation, infer locations, own facts/provenance, access Runtime
+or persistence, or consume another rule's result.
+
+A validated globally scoped `RuleId` identifies each immutable registration.
+Diagnostic and failure codes are local to that rule. Definitions retain a
+canonical dependency-ID set; executable behavior does not participate in
+registry identity. The bounded registry sorts by complete ID and rejects every
+duplicate or conflicting registration. The only configuration authority is a
+bounded in-memory set of explicit Enabled/Disabled values; absence means
+Enabled, and there is no external grammar or persisted setting.
+
+Planning validates the complete registry and configuration before execution.
+Missing, self, and cyclic dependencies fail without a plan. Dependencies always
+precede dependents, and the smallest complete ready `RuleId` breaks ties. A
+dependency represents required successful completion, not result consumption.
+
+Execution is synchronous and sequential over the immutable context. Disabled,
+NotApplicable, Completed, Blocked, Failed, and Cancelled are distinct terminal
+states. Only Completed satisfies a dependent; independent rules continue after
+a failure until cooperative cancellation is observed. The engine checks
+cancellation before and after evaluation and discards output after a late
+request. Per-rule invalid output fails that rule, while registry, planning,
+context, aggregate-bound, and reconciliation failures return no partial report.
+
+A rule diagnostic carries rule ID, local code, normalized severity/category,
+bounded message, and canonical Graph-node anchors. Its diagnostic identity is
+rule ID, local code, and anchors. Graph supplies observed provenance counts and
+location evidence; ADR-0058 remains authoritative for conflicts, exact
+suppression, ordering, summaries, bounds, dispositions, and the final complete
+report. Rules create no Graph node, edge, validation issue, producer fact, or
+Coverage capability.
+
+Runtime constructs the base diagnostic report, rule plan, complete execution
+report, and final diagnostic report before atomically publishing a Configuration
+snapshot. Production supplies an empty registry, default configuration, and
+`NeverCancelled`, so its complete Rule report is empty and no product rule is
+claimed. Cache schema remains `1`; executable objects, configuration, plans,
+results, and Rule findings are not serialized. Decode recomputes them, while
+semantic compatibility advances from `3` to `4`.
+
+MCP retains seven tools and adds only diagnostic family `rule` plus Rule-only
+`ruleId`. LSP retains its exact capability and payload shape and projects a Rule
+finding only through the existing active, single-anchor, confined-span rule.
+External configuration, product rules, plugins, scripts, remote acquisition,
+hot reload, rule-management protocol/UI, mutable documents, fixes, edits,
+telemetry, and performance/security claims remain deferred. The complete
+executable matrix is recorded in the
+[Sprint 37 evidence](rules-engine-evidence.md). The
+[Sprint 37 review](../reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. The implemented
+Sprint 38 Git Change Adapter does not change this rule or diagnostic boundary.
+
+## Repository change evidence
+
+[ADR-0060](../adr/0060-git-change-adapter.md) adds one bounded explicit-demand
+local repository-evidence boundary in Runtime without extending the semantic
+model. A `GitChangeSet` identifies pinned `HEAD`, the final exact-root worktree,
+explicit tracked-and-non-ignored-untracked completeness, and canonically ordered
+Added, Modified, Deleted, TypeChanged, or Untracked path evidence. Paths are
+validated confined UTF-8 relative values. Conflicts and unstable, incompatible,
+out-of-bound, or cancelled reads return no partial set. Rename/copy similarity
+is disabled and therefore creates no semantic identity.
+
+`WorkspaceService` maps one accepted non-empty set into a private
+source-neutral request for the existing complete rebuild. Git baseline,
+completeness, paths, statuses, and process evidence do not enter a Workspace
+snapshot, cache, Graph, diagnostics, rules, protocols, or Coverage. Production
+filesystem discovery and EDT/Designer adapters still construct complete facts;
+graph validation still precedes publication. Failure retains the last valid
+snapshot and later filesystem or explicit input may recover.
+
+This boundary does not alter the incremental-index contract below. Repository
+paths and statuses are not index operations or impact seeds. Sprint 39 derives
+product-facing change impact only from complete previous/current
+`SemanticGraph` snapshots and the Graph-owned canonical diff/impact APIs. The
+repository-evidence limitations are recorded in the
+[Sprint 38 evidence](git-change-adapter-evidence.md).
+
+## Change Impact Analysis
+
+[ADR-0061](../adr/0061-change-impact-analysis.md) defines the implemented
+source-independent product report. One Analysis evaluation accepts two checked
+adjacent process-local publication IDs, complete endpoint sets of canonical
+Configuration IDs and borrowed validated graphs, and cooperative cancellation.
+It computes the canonical diff and calls `SemanticImpactAnalyzer` with fixed
+maximum depth four, default dependency kinds, ownership disabled, and
+provenance direct-only. Graph retains every node/edge, seed, reason, status,
+availability, and traversal-completeness decision.
+
+Configurations match only by `EntityId`. Exact duplicate endpoint evidence
+collapses; same-ID different-graph evidence fails closed. A previous-only ID is
+Removed, a current-only ID is Added, and an ID change never infers a rename
+from name, source format, path, or Git status. Equal graphs produce a complete
+empty Compared transition. Report order is Configuration ID, then Graph-owned
+node and reason order. Checked summaries reconcile all transition, seed,
+status, availability, affected-node, and depth counts.
+
+The in-memory report is complete through configured depth four or is rejected
+as a whole. It accepts at most 4,096 Configurations per endpoint, 4,096 bytes
+per Configuration/node/edge identifier, 65,536 affected nodes, 256 reasons per
+node, and 262,144 reasons in the report. Cancellation, conflicts,
+inconsistency, bounds, and overflow return closed redacted errors without a
+partial report. Diagnostic suppression does not apply.
+
+Each `WorkspaceSnapshot` embeds a checked process-local publication ID and
+either explicit no-predecessor availability or the complete report from its
+immediately preceding successful publication. Initial cold, warm, standalone,
+and fresh-service snapshots use ID 1 with no invented history. Failed,
+cancelled, stale, invalid, or over-bound rebuilds retain the last valid snapshot
+and consume no ID. Cache schema remains `1`; Sprint 40 source-evidence
+reconstruction and fail-closed BSL receiver classification advance current
+semantic compatibility to `8`, while
+publication IDs and Change Impact reports remain unserialized.
+
+`oneagent.impact` keeps its legacy two-Configuration same-snapshot mode and adds
+one exclusive publication mode. Publication projection can select Compared,
+Added, Removed, or equal transitions, filters the complete owned result to
+requested depth `0..=4`, then applies independent `1..=100` item and reason
+limits. Complete requested-depth summaries are not reconstructed from the
+bounded prefix. Availability, completeness, truncation, and omitted reasons
+remain distinct. The full executable matrix and limitations are recorded in
+the [Sprint 39 evidence](change-impact-analysis-evidence.md). The
+[Sprint 39 review](../reviews/sprint-39-change-impact-analysis.md) records
+`pass`.
+
+## Refactoring Planner
+
+[ADR-0063](../adr/0063-refactoring-planner.md) defines the implemented
+source-independent read-only first slice. Graph remains authoritative for
+Configuration, Module, Procedure, and Function identities, ownership, `Calls`,
+and queries. BSL owns callable identity plus Unicode lowercase name
+equivalence. `oneagent-analysis::refactoring` owns the immutable source,
+request, target, precondition, operation, plan, preview, completeness, bound,
+summary, and failure contracts and evaluates them without filesystem or
+mutation access.
+
+The only family is `bsl_callable_rename_v1`: one top-level Procedure or
+Function declaration plus every supported unique local or exported qualified
+direct-call identifier in one complete Configuration. A document is identified
+by Configuration and Module IDs and retains one accepted format/role, confined
+Workspace-relative path, exact raw UTF-8 bytes, raw length plus SHA-256 content
+version, canonical exact half-open raw-byte occurrences, and one completeness
+marker. Qualified-call occurrences additionally retain the bounded immediate
+lexical owner token validated against exact source bytes. EDT and Designer
+capture paired canonical declarations and calls while
+preserving their deliberate path, format, encoding, line-ending, version, and
+range differences.
+
+Non-unique declaration and local-call evidence is target-related only in the
+selected owner Module. Non-unique qualified-call evidence is target-related
+only when its immediate lexical owner token is BSL-equivalent to the selected
+owner Module name. Unrelated same-name calls therefore do not block a plan,
+while target-owner ambiguity remains fail-closed.
+
+One request binds the checked process-local Workspace publication,
+Configuration, pre-rename target Node ID, and bounded desired name. The planner
+borrows exactly one immutable snapshot, resolves the target through Graph, and
+uses only retained documents. Declaration and direct-call identifier
+replacement are the closed operation set. Dependencies are forbidden; exact
+duplicates collapse; unequal anchors, replacements, versions, identities, and
+overlaps fail atomically. Canonical length-prefixed SHA-256 identities,
+descending-range application order, checked summaries, inclusive bounds,
+closed error precedence, and cancellation are deterministic.
+
+Preview is a complete structured no-snippet projection containing only
+operation identity/kind, a confined relative path, exact byte and derived
+one-based scalar ranges, and the replacement. It does not contain raw content,
+the expected token, a content version or digest, absolute path, provenance, or
+mutable handle. Planning and preview do not change source, repository,
+Workspace, cache, editor, protocol, or plan state and grant no authorization.
+
+Each Workspace Configuration snapshot now retains one complete source-evidence
+set. Cache schema stays `1` and semantic compatibility is `8`; decode rebuilds
+documents from the private source-state bytes and validates the canonical
+manifest. Publication IDs and plans are not persisted. Failed, cancelled,
+stale, incomplete, incompatible, or over-bound attempts return no partial
+result and do not replace a valid publication.
+
+The shared BSL callable-scope parser accepts balanced multiline signatures and
+exact `Async`/`Асинх` prefixes, requires valid identifiers and matching scope
+termination, and retains parameter and local bindings. Computed member calls
+and qualified calls whose leading name is shadowed by a callable or module
+binding are retained as unsupported instead of being guessed as local or
+cross-module targets. Direct qualifiers split across lines retain their lexical
+owner, while unsupported calls are excluded from Graph `Calls` resolution and
+retain one unresolved diagnostic/statistics outcome through a diagnostics-only
+path.
+
+`oneagent.refactor.plan` is the eighth lexicographically ordered read-only MCP
+tool for all three supported revisions. Its exact bounded request and result
+schemas preserve Tool Policy, message/output limits, legacy tools, sequential
+framing, and process lifecycle. Results declare `readOnly=true` and
+`editAuthorization="none"`. VS Code synchronizes only the catalog assertion;
+there is no command, code action, edit request, preview UI, or automatic
+invocation. The complete executable matrix and limitations are recorded in the
+[Sprint 40 evidence](refactoring-planner-evidence.md).
+
+Sprint 40 is administratively completed. The
+[Sprint 40.1 remediation review](../reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass` and completes the publication-owner and stale-evidence
+corrections. Sprint 41 is `completed`; its accepted transaction contract follows.
+
+## Safe Edit Transactions
+
+The [controlled-unwind amendment](../adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+is implemented at `45147cf1649e9ca8315feb52c02a9936df0fa1f9`, after unique
+architecture `d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate design
+pass `19f9f23b3851e5b24f781e6c00b160fc706fe8d3`.
+Its [all-35 audit](safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+retains complete inventory, projection, edge, occurrence, producer, request and
+rule/diagnostic comparison under the same immutable before evidence. A retained
+transaction envelope survives preparation/precommit unwind and checked recovery;
+recovery error/unwind quarantines with exact material/count, never publication.
+All fallible undo/outcome preparation precedes `send_replace`; postcommit cache,
+response drop and stop cannot roll back the accepted successor. Reversal is
+symmetric. No semantic identity, public API/dependency or Coverage change is
+admitted. Custom detector evidence is owner-local, not public service injection;
+global panic-hook output is outside closed transaction-output redaction.
+The [current controlled-unwind evidence](safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+binds all 35 rows/66 named oracles and 18 exit-0 commands to 836 committed input
+hashes; G3 reports 1471 passed, 83 nonempty and four empty binary harnesses.
+Net source scope is 25 paths/+15400/-234 = 15634, no binaries. Fresh independent
+and primary full integration reviews passed on `98d64fb9f775c5af77437b8c18cd0eeb21291c84`,
+each with all 18 commands successful and G3 1471 passed / 83 nonempty / four
+empty harnesses. Same-reviewer artifact consistency passed after draft corrections;
+see the [integration review](../reviews/sprint-41-safe-edit-transactions.md).
+Sprint 41 is completed and only the v0.7 release integration review is eligible.
+Historical results below retain their original ranges and decisions.
+
+[ADR-0064](../adr/0064-safe-edit-transactions.md) accepts the architecture for
+checked local apply/reversal of the existing complete callable-rename family.
+Task 5 implements this boundary at
+`f2813d2eff5fa78efe3f0d4a705e3bc51de13979` after the producer design pass.
+Original Task 6 is `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`.
+The first integration at `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0`
+was blocked for R1-R5/M1-M4. After remediation `aaeacbfa` and evidence
+`9c98e2ce`, both complete all-35 audits at
+`fc146d8802bbb82e9557a63d6c535f584a270b04` were blocked for missing
+oracles M1-M5, with no demonstrated production bypass. Independent F1/F2 passed
+before deliberate runner exit 75 stopped before F3; primary ran no Rust commands.
+The historical ownership-recovery evidence qualifies
+`56fad47bf5c290011e32c4c304cb4639f64ca3ee`, all 35/current owners and
+59 named oracles. All four blocked reviews remain historical; closure still needs
+fresh independent/primary Task 7 validation and artifact consistency.
+Graph identity, BSL name semantics, immutable Analysis planning and adapter
+source capture remain their existing owners. Analysis adds a pure exhaustive
+before/after semantic comparison; Runtime owns the policy-gated service
+capability, complete source baseline, serialized lifecycle and confined I/O.
+
+Success requires the complete production Workspace builder, including Designer
+`Complete`, Graph validation, reference ledger, rules and diagnostics. Exact
+planned byte replacements must produce only the expected target identity/name
+substitution, the bounded identity closure to its directly owned format-supported
+Query nodes, and canonical producer provenance/shifted anchors. Analysis validates
+complete typed mappings frozen from before evidence and exact result bytes before
+staging or candidate rebuild. EDT/Designer share their existing producers with
+pure projection APIs; BSL owns Query ID derivation. Designer gains no Query Graph
+facts. Query binding/text and unrelated Query remain unchanged. All planned declaration
+and call occurrences must resolve to the renamed target; every other node, edge, payload,
+occurrence, reference disposition and rule/diagnostic record must be equivalent
+under that explicit mapping. Designer's complete occurrence evidence does not
+invent unsupported Graph `Calls` edges. Other Configurations remain unchanged.
+Parsing, counts or selected target lookups alone cannot satisfy this oracle.
+
+Every source/discovery input, including untouched modules, metadata and entry
+inventory, is checked against the original publication baseline before writing.
+The single validated successor publication and adjacent impact retain the
+canonical publication sequence. Cache update follows commit. Failures recover
+exact original bytes without publishing; failed recovery clears current
+observation and quarantines the service while retained Arcs remain immutable.
+Reversal needs separate confirmation and freshness against the exact applied
+successor, then publishes a new ID after the same complete validation.
+
+The ADR bounds preparation, source capture, operations, staging and one retained
+undo record before allocation/write. It accepts explicit cooperative exclusive
+source ownership, with per-file replacement and honest multi-file visibility,
+platform and crash limits. No semantic cache/schema migration, source Coverage
+upgrade, new refactoring family, Graph fact, wire endpoint or UI accompanies
+this implementation; existing read-only service composition stays compatible.
+Service-controlled expiry now drops caller-held and queued payloads before worker
+claim. New retained producer records and constructor arguments are prepaid; one
+lease transfers through frozen projection, I/O/recovery and undo. Ordinary rebuild
+cache completion retains Busy, and policy completes before mutation queue entry.
+Exact canonical edge-ID inputs and full provenance are compared without duplicate
+owning identity scratch. Constructor/type rejection remains distinct from reachable
+Runtime and owner-local negative tests. Allocation evidence observes 15 request +
+12 diagnostic owner boundaries, separately from 15 EDT quota attempts and shared
+lease transfer. It is not total-process heap measurement. Canonical Graph/helper
+internals remain under the accepted scoped exclusion; the U+0130 capacity probe
+(input 2/output 3/capacity 8/reservation 8) is not proof of every internal
+reallocation overlap.
+
+Boundary oracles now exercise a real outside-Workspace hard link and sentinel,
+actual create_new AlreadyExists after baseline equality, and a constructor-valid
+role mutation of an existing second Configuration after real rebuild through
+its actual equivalence comparator with recovery. Exact/one-over original bytes
+are tested at the I/O guard; public constructors forbid the oversized source,
+so no impossible Runtime semantic publication receives credit. Actual EDT and
+Designer Configurations under `.oneagent` are included in the prepared baseline;
+ordinary cache scanning/codec retain Missing/Failed outcomes and complete rebuild
+fallback. Apply/undo work despite Failed cache writes; later source mutation
+rejects without publication. No successful Hit/write is claimed for that case.
+
+Historical boundary-cycle canonical result: **1461 passed/83 nonempty targets**, four
+empty harnesses separately. All 18 commands passed with 243 committed source and 44
+log hashes reconciled. Latest attempt 1's unchanged watcher helper timeout at
+`file_watching.rs:256` has unknown exact caller/cause; exact focused retry and
+full cycle 2 passed on identical source. Public fixture/lint failures, historical
+1435/1447, original Git-fixture retry and prior F8 failure remain recorded.
+Current evidence retains 66 read/360 reversal-read cases, 128-level scanner, exact
+causes and actual worker tracing without all-process-output claims. No Rust
+rerun for docs. Cumulative 25/+13471/-234 = 13705 stays within 32/20000 hard caps,
+using original baseline and original Task 5 master delta. Only macOS is qualified.
+No durable undo, hostile-writer exclusion, multi-file disk atomicity or crash
+recovery guarantee follows. Sprint 41 remains `active`.
+
+### Current ownership recovery evidence and fourth blocked review
+
+The fourth integration review at `a1c7e824d1852499d57609788ac1b0bf831e35f0` remains **blocked**.
+Both reviewers inspected all 35 rows and corroborated P2/T13-T14: successful
+`create_new` could be followed by descriptor metadata/identity failure before
+ownership registration, leaving an untracked artifact and an incorrect zero
+retained count. Neither claimed source overwrite or semantic-publication bypass.
+Independent F1-F12/G1-G2 passed; G3 naturally exited **101**, with Runtime lib
+162 passed/one failed in `workspace_service_classifies_blocking_build_panics`
+(`apps/runtime/src/workspace/mod.rs:3192`, `Workspace task panic must not hang: Elapsed(())`).
+The user paused work; no process was signalled and this was not runner exit 75.
+G4-G6 and primary Cargo validation were unexecuted. No full review pass, final
+review artifact or consistency gate exists. All four blocked reviews and every
+historical failure remain preserved in the evidence history.
+
+Current implementation `56fad47bf5c290011e32c4c304cb4639f64ca3ee` registers every successful
+create immediately with an unknown identity, before fallible descriptor checks.
+Unknown identity never authorizes pathname adoption, cleanup, tree exclusion or
+replacement: the artifact stays counted and the existing coordinator quarantines
+with `RecoveryRequired`. Known-identity successful transactions are preserved.
+New actual post-open metadata/identity fault seams cover all four staging and
+both backup-recreation ordinals, including paired reversal, exact one-empty-file
+retention, source state and stop preservation; actual Unix hard-link rejection
+is separate from deterministic injected errors. No OS metadata failure reproduction
+is claimed. Public APIs, dependencies, Graph/Coverage, cache schema and client
+catalog are unchanged; operator repair remains required for unknown ownership.
+
+Exact code range `a1c7e824d1852499d57609788ac1b0bf831e35f0..56fad47bf5c290011e32c4c304cb4639f64ca3ee`:
+**two paths/+236/-27 = 263 churn**. Stable F1-F12/G1-G6 all exited 0;
+F1-F12 passed **82/8/32/10/18/11/13/12/33/222/401/37**, G3 **1464 tests/83 nonempty
+plus four empty targets**, zero failed/ignored. Reconciliation binds all 35 rows,
+59 named oracles (56 preserved plus three new), 243 source/836 committed-input
+hashes and 24 retained log hashes in `owned-file-remediation/`. The panic test
+passed 1/1 on unchanged source before this fix and in the stable full gate;
+its prior timeout cause remains **unknown**, with no timeout or workspace owner
+change and no causal-resolution claim. The earlier watcher timeout also remains
+unknown. The new development clippy semicolon failure (101) and successful exact
+retry remain recorded. No Rust command is rerun by this documentation task.
+
+Net implementation is **25/+14238/-234 = 14472**, no binaries, above estimate
+12000 and within hard caps 32/20000. Keep baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, the 24 original source/fixture
+paths and only the original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisites and all documentation ranges stay separate; no reset, overlapping
+sum or blanket shared-master exclusion. Full unpartitioned code-head history is
+35/+16369/-329 = 16698, not the implementation subtotal.
+
+Sprint 41 stays **active**, Task 7 requires fresh independent/primary validation
+and same-reviewer final-artifact consistency, and v0.7 remains release-ineligible.
+All 11 Sprint 40, four Sprint 40.1 and eight Sprint 41 prompts remain. This
+five-document follow-on starts at the clean code commit above and uses
+`Update Sprint 41 ownership recovery evidence`; checks are retained under
+`local-artifacts/codex-runs/sprint-41/owned-file-evidence/`. It changes no source,
+creates no review artifact and performs no retirement, completion, merge or push.
+Only macOS execution is qualified; context window/telemetry are unknown/unavailable.
+
+### Historical semantic-comparator follow-on
+
+The following current-head/count statements qualify only the earlier comparator
+cycle; current ownership evidence above supersedes them.
+
+The third independent Task 7 audit of all 35 rows at
+`de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for
+T18 target identity, T19 pure Analysis edge evidence, T20 consistent occurrences,
+T21 span-only provenance and T23 same-registry status evidence; no production
+bypass was demonstrated. Independent F1-F6 passed 82/8/31/8/18/11, then deliberate
+runner exit 75 stopped before F7. F7-F12/G1-G6 were unexecuted. Primary launch
+was denied twice by the agent thread limit; no primary review or pass occurred.
+All three blocked reviews and every historical failure remain preserved.
+
+Current implementation `32ffd52e485e7b04c72bf51e77c4e25d69325d0e` has
+exact delta `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5..32ffd52e485e7b04c72bf51e77c4e25d69325d0e`:
+two test-bearing paths/+563/-5 = 568, with production APIs, dependencies,
+Graph/Coverage, cache schema and protocol/client catalog unchanged. The
+[semantic comparator evidence](safe-edit-transactions-evidence.md#semantic-comparator-oracle-closure-and-reachability)
+reconciles all 35 rows/56 named oracles: same-count whole-Graph target identity
+reaches actual A target lookup; Analysis edge-only provenance/endpoints now
+have independent F1 evidence; consistent constructor-valid occurrences and
+untouched Unique retarget reach A/E; canonical span-only changes preserve
+path/producer/count. Analysis RuleEngine proves all six status transitions with
+one identical nonempty registry/RuleId/count and positive controls. Runtime's
+real empty registry remains a separate boundary; no nonempty same-count Runtime
+status evidence or constructor-unreachable comparator case is claimed.
+
+All 18 stable commands exited 0; F1-F12 counts remain
+82/8/31/8/18/11/13/12/33/222/401/37, G3 **1461/83 nonempty plus four empty
+targets**, zero failed/ignored. Independent documentation reconciliation verifies
+243 source and 836 committed all-input hashes, 25 retained log hashes and all
+18 command hashes/counts in `comparator-oracles/`. Current development dependency
+compile/lint failures and corrected selector are retained; the stable cycle
+passed. The prior unchanged watcher timeout's exact caller/cause stays unknown.
+No Rust rerun belongs to this documentation task; only macOS is qualified.
+
+Net implementation is **25/+14029/-234 = 14263**, no binaries, above estimate
+12000 and within hard caps 32/20000. Baseline remains
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: count 24 original source/fixture
+paths plus only exact original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite/Task 6/evidence follow-ons stay separately accounted; never reset
+the baseline, blanket-exclude the master or sum overlapping diffs. Full
+unpartitioned history is 35/+15809/-329 = 16138, not the implementation subtotal.
+
+The current evidence retains the accepted source/Graph/producer boundaries and
+all historical limitations. Documentation checks live in
+`local-artifacts/codex-runs/sprint-41/comparator-evidence/`; telemetry is unavailable.
+Sprint 41 stays active, all old/current prompt suites remain and the immutable
+independent/primary Task 7 gate with artifact consistency is pending. No release
+eligibility, durable undo, crash guarantee or completion claim follows.
+
 ## Incremental indexing
 
 The graph architecture must support future incremental updates.
@@ -1569,7 +2073,8 @@ SM-6 UI and entry points
 
 SM-7 Derived semantic analysis
     dependencies
-    impact analysis
+    implemented: canonical graph diff and bounded impact analysis
+    implemented: complete adjacent-publication Change Impact report
     reachability
     dead declarations
     cycles
@@ -1587,9 +2092,10 @@ SM-8 AI Context Engine
 
 SM-9 MCP and IDE integration
     implemented: MCP 2025-06-18 and 2025-11-25 negotiated compatibility plus preserved stateless 2026-07-28
-    implemented: one fresh connection session per bounded newline-framed stdio run and EOF lifecycle
+    implemented: one fresh connection session and live Runtime-owned Workspace per bounded newline-framed stdio run and joined EOF lifecycle
     implemented: seven read-only graph, diagnostics, impact, query, validation, context, and symbol tools
-    implemented: immutable startup snapshot and Tool Policy execution gate
+    implemented: one immutable atomic snapshot per MCP call and Tool Policy execution gate
+    implemented: legacy and adjacent-publication impact request modes with explicit bounds and completeness
     implemented: exact Codex CLI and Cursor Agent public-client evidence
     implemented: typed Module, Procedure, Function, and EDT Query source locations
     implemented: explicit VS Code Quick Pick symbol search and safe source navigation
@@ -2235,7 +2741,9 @@ edges. Every extracted call now contributes exactly one final reference outcome:
 an unqualified call is handled by local resolution and a qualified call by
 cross-module resolution. Successful outcomes emit a `Calls` edge; unresolved
 outcomes emit the existing typed unresolved-reference diagnostic and update EDT
-build reference statistics. Diagnostic provenance identifies the source BSL
+build reference statistics. Explicitly unsupported calls bypass both resolvers,
+emit no edge, and retain that unresolved diagnostic/statistics outcome. Diagnostic
+provenance identifies the source BSL
 file and stable call identity, and the source procedure or function is attached
 when available. There is no resolved-without-edge path in the current metadata
 reference flow: successful metadata resolution immediately emits a `References`

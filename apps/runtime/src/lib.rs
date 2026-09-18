@@ -22,20 +22,29 @@ pub use lsp::{
     LspStdioTransport, lsp_server, workspace_root_uri,
 };
 pub use mcp::{McpStdioError, McpStdioErrorKind, McpStdioOutcome, McpStdioTransport};
-pub use mcp_tools::{McpSemanticServerError, semantic_server};
+pub use mcp_tools::{McpSemanticServerError, semantic_server, semantic_server_observer};
 pub use service::{
     Cancellation, RunningServices, RuntimeService, ServiceContainer, ServiceContainerBuilder,
     ServiceContext, ServiceStartFuture, ServiceTask,
 };
 pub use state::AppState;
 pub use workspace::{
-    GraphQueryConfiguration, GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind,
-    GraphQueryError, GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth,
-    GraphQueryMetadataKind, GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult,
-    GraphQueryRelation, GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
-    GraphQueryTraversalResult, GraphQueryWorkspaceFormat, WorkspaceBuildError,
-    WorkspaceBuildErrorKind, WorkspaceCacheLoadOutcome, WorkspaceCacheObserver,
-    WorkspaceCacheStatus, WorkspaceCacheWriteOutcome, WorkspaceConfigurationSnapshot,
+    GitChangeCompleteness, GitChangeSet, GitChangeSetError, GitChangeSetErrorKind, GitCommitId,
+    GitCommitIdError, GitCommitIdErrorKind, GitCurrentEndpoint, GitRepositoryReadError,
+    GitRepositoryReadErrorKind, GitRepositoryReader, GraphQueryConfiguration,
+    GraphQueryConfigurationList, GraphQueryDirection, GraphQueryEdgeKind, GraphQueryError,
+    GraphQueryErrorKind, GraphQueryLimit, GraphQueryMaxDepth, GraphQueryMetadataKind,
+    GraphQueryNode, GraphQueryNodeKind, GraphQueryNodeResult, GraphQueryRelation,
+    GraphQueryRelationResult, GraphQueryService, GraphQueryTraversalNode,
+    GraphQueryTraversalResult, GraphQueryWorkspaceFormat, MAX_REPOSITORY_CHANGE_PATH_BYTES,
+    MAX_REPOSITORY_CHANGES, RepositoryChange, RepositoryChangeError, RepositoryChangeErrorKind,
+    RepositoryChangeKind, RepositoryChangePath, RepositoryChangePathError,
+    RepositoryChangePathErrorKind, WorkspaceBuildError, WorkspaceBuildErrorKind,
+    WorkspaceCacheLoadOutcome, WorkspaceCacheObserver, WorkspaceCacheStatus,
+    WorkspaceCacheWriteOutcome, WorkspaceChangeImpact, WorkspaceChangeInputHandle,
+    WorkspaceChangeSubmissionOutcome, WorkspaceConfigurationSnapshot, WorkspaceEditAuthorization,
+    WorkspaceEditCancellation, WorkspaceEditCause, WorkspaceEditChallenge, WorkspaceEditHandle,
+    WorkspaceEditOutcome, WorkspaceEditOwnership, WorkspaceEditReceipt, WorkspaceEditRecovery,
     WorkspaceService, WorkspaceSnapshot, WorkspaceSnapshotBuilder, WorkspaceSnapshotObserver,
     WorkspaceUpdateFailureKind, WorkspaceUpdateObserver, WorkspaceUpdatePhase,
     WorkspaceUpdateStatus,

@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+use std::fs;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -80,6 +82,47 @@ fn decode_frames(mut bytes: &[u8]) -> Vec<Value> {
         bytes = &bytes[end..];
     }
     values
+}
+
+fn copy_tree(source: &Path, destination: &Path) {
+    fs::create_dir_all(destination).expect("fixture destination must be created");
+    let mut entries = fs::read_dir(source)
+        .expect("fixture source must be readable")
+        .map(|entry| entry.expect("fixture entry must be readable"))
+        .collect::<Vec<_>>();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in entries {
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        if entry
+            .file_type()
+            .expect("fixture file type must be readable")
+            .is_dir()
+        {
+            copy_tree(&source_path, &destination_path);
+        } else {
+            fs::copy(&source_path, &destination_path).expect("fixture file must be copied");
+        }
+    }
+}
+
+fn diagnostic_workspace(extra_diagnostics: usize) -> tempfile::TempDir {
+    let root = tempdir().expect("temporary diagnostic Workspace must be created");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/workspace_service");
+    copy_tree(&fixture, root.path());
+    let module = root
+        .path()
+        .join("edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+    let mut source = fs::read_to_string(&module).expect("EDT module must be readable");
+    for index in 0..extra_diagnostics {
+        write!(
+            source,
+            "\nProcedure ReadMissing{index}()\n\tQuery = New Query;\n\tQuery.Text = \"SELECT Ref FROM Catalog.MissingDiagnostic{index}\";\nEndProcedure\n"
+        )
+        .expect("writing to a String must succeed");
+    }
+    fs::write(module, source).expect("extended EDT module must be written");
+    root
 }
 
 #[tokio::test]
@@ -365,6 +408,53 @@ async fn public_lsp_process_pulls_located_diagnostics_and_empty_full_reports() {
     assert_eq!(responses.len(), 9);
 
     assert_diagnostic_responses(&responses);
+}
+
+#[tokio::test]
+async fn public_lsp_process_accepts_exact_and_rejects_one_over_complete_diagnostics() {
+    for (extra, expected_count, expected_error) in [(97, 100, None), (98, 0, Some(-32_803))] {
+        let root = diagnostic_workspace(extra);
+        let root_uri = workspace_root_uri(root.path()).expect("temporary root URI must encode");
+        let document_uri =
+            format!("{root_uri}/edt/src/Documents/RefundOfPaymentByOrder/ObjectModule.bsl");
+        let input = [
+            frame(&initialize(&root_uri)),
+            frame(&notification("initialized")),
+            frame(&request_with_params(
+                2,
+                "textDocument/diagnostic",
+                &json!({"textDocument": {"uri": document_uri}}),
+            )),
+            frame(&request(3, "shutdown")),
+            frame(&notification("exit")),
+        ]
+        .concat();
+        let output = run_process(root.path(), &input).await;
+        assert!(
+            output.status.success(),
+            "stdout={}, stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.stderr.is_empty());
+        let responses = decode_frames(&output.stdout);
+        assert_eq!(responses.len(), 3);
+        if let Some(code) = expected_error {
+            assert_eq!(
+                responses[1]["error"],
+                json!({"code": code, "message": "Request failed"})
+            );
+        } else {
+            assert_eq!(responses[1]["result"]["kind"], "full");
+            assert_eq!(
+                responses[1]["result"]["items"]
+                    .as_array()
+                    .expect("complete diagnostic items")
+                    .len(),
+                expected_count
+            );
+        }
+    }
 }
 
 fn assert_diagnostic_responses(responses: &[Value]) {

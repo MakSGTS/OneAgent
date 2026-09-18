@@ -18,7 +18,7 @@ boundaries; they do not define a second task sequence.
 | v0.4 — Runtime API | Long-running services, APIs, cache, and a usable CLI client | Sprints 15–21 | completed |
 | v0.5 — AI Integration | Context engine and local or OpenAI-compatible LLM providers | Sprints 22–27 | completed |
 | v0.6 — MCP and IDE | MCP, VS Code, LSP, EDT, and external AI client integrations | Sprints 28–35 | completed |
-| v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | planned |
+| v0.7 — Intelligence | Diagnostics, Git-aware change ingestion, impact, refactoring, and safe edits | Sprints 36–41 | completed |
 | v0.8 — Designer XML Structure | Complete nested metadata and specialized semantic coverage for Designer XML | Sprints 42–43 | planned |
 | v0.9 — Designer XML Parity | Complete code, query, dependency, and cross-adapter semantic parity for Designer XML | Sprint 44 | planned |
 | v1.0 — Stable Platform | Stable APIs, plugin SDK, hardening, documentation, and release over the complete Designer XML model | Sprints 45–49 | planned |
@@ -37,9 +37,26 @@ closed with a `pass` decision in the
 closed with a `pass` decision in the
 [v0.5 release review](reviews/v0.5-release-review.md). The
 [v0.6 release review](reviews/v0.6-release-review.md) records
-`pass with non-blocking follow-ups`; v0.6 is completed and Sprint 36 Diagnostics
-Engine is the unique `next` planning target. The
-completed
+`pass with non-blocking follow-ups`; v0.6 is completed. The
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. The
+[Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
+records `pass` and completes Sprint 38. The
+[Sprint 39 Change Impact Analysis review](reviews/sprint-39-change-impact-analysis.md)
+records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
+administratively `completed`. The
+[Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass`, resolves the two confirmed blockers, and completes Sprint 40.1.
+The [Sprint 41 integration review](reviews/sprint-41-safe-edit-transactions.md)
+records `pass` and completes Sprint 41. The
+[v0.7 release integration review](reviews/v0.7-release-review.md) records `pass`
+and closes the Sprints 36–41 review boundary after cross-platform remediation.
+The `completed` version status records acceptance of that boundary, not a
+published release: merge to `main` and tag `v0.7` remain pending separate
+authorization. Sprint 42 remains planned until release execution is complete.
+The completed
 [current project review and remediation](reviews/current-project-review-2026-08-26.md)
 records one resolved Medium finding, complete validation, and a clean-context
 re-review with no actionable findings.
@@ -153,10 +170,11 @@ before it is marked complete. A version closes with a release integration review
 after its final sprint; release gates are not separate numbered sprints unless
 they acquire independent implementation scope.
 
-Sprint status uses three values:
+Sprint status uses four values:
 
 - `completed` — implementation and integration review are complete;
 - `next` — the next planning and kickoff target, but not yet active;
+- `active` — the committed planning baseline is executing in dependency order;
 - `planned` — ordered future work whose detailed scope is defined at kickoff.
 
 ### Task prompt template readiness forecast
@@ -187,15 +205,41 @@ kickoff because distant scope remains provisional.
 | Task prompt template update completed — AI Tool Policy | Sprint 27 | Authorization, denial, side-effect classification, confirmation boundaries, audit evidence, failure containment, and policy regression tests implemented by the [AI Tool Policy profile](codex/profiles/ai-tool-policy-implementation.md), [AI Tool Policy workflow](codex/workflows/ai-tool-policy.md), and [AI Tool Policy template](codex/templates/ai-tool-policy-task.md). | Sprints 27, 29, and 33 | completed |
 | Task prompt template update completed — MCP and Protocol Tools | Sprint 28 | Server lifecycle, transport and schema compatibility, capability negotiation, semantic tool contracts, protocol conformance, and external-client evidence implemented by the [MCP Protocol profile](codex/profiles/mcp-protocol-implementation.md), [MCP Protocol workflow](codex/workflows/mcp-protocol.md), [MCP Protocol template](codex/templates/mcp-protocol-task.md), existing [Runtime Service modules](codex/profiles/runtime-service-implementation.md), and existing [AI Tool Policy modules](codex/profiles/ai-tool-policy-implementation.md). | Sprints 28–29 and 35; protocol baseline for Sprint 32 | completed |
 | Task prompt template update completed — IDE and Extension Integration | Sprint 30 | Cross-language build and validation, packaging, activation, configuration, connectivity, UI state, editor lifecycle, and integration-test evidence implemented by the [IDE Extension profile](codex/profiles/ide-extension-implementation.md), [IDE Extension workflow](codex/workflows/ide-extension.md), and [IDE Extension template](codex/templates/ide-extension-task.md), with existing Runtime Service and MCP Protocol modules retained for their owned boundaries. | Sprints 30–34 | completed |
-| Task prompt template update required — Diagnostics and Rules | Sprint 36 | Stable diagnostic identity, severity and configuration, deterministic rule registration and execution, suppression, reporting, and regression evidence. | Sprints 36–37 and 39 | planned |
-| Task prompt template update required — Git Change Adapter | Sprint 38 | Repository change-set identity, rename/delete/conflict behavior, ordering, workspace-change equivalence, and the boundary between Git evidence and semantic authority. | Sprint 38 | planned |
-| Task prompt template update required — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation. | Sprints 40–41 | planned |
+| Task prompt template update completed — Diagnostics Engine | Sprint 36 | Canonical diagnostic inputs, stable typed identity, duplicate/conflict handling, suppression authority, deterministic ordering, bounds, summaries, sensitive-data policy, immutable snapshots, projections, and regression evidence implemented by the [Diagnostics Engine profile](codex/profiles/diagnostics-engine-implementation.md), [workflow](codex/workflows/diagnostics-engine.md), and [template](codex/templates/diagnostics-engine-task.md). | Sprints 36 and 39 | completed |
+| Task prompt template update completed — Rules Engine | Sprint 37 | Deterministic rule registration, identity, dependencies, configuration, execution, result contracts, and integration with accepted diagnostic evidence implemented by the [Rules Engine profile](codex/profiles/rules-engine-implementation.md), [workflow](codex/workflows/rules-engine.md), and [template](codex/templates/rules-engine-task.md). | Sprint 37 | completed |
+| Task prompt template update completed — Git Change Adapter | Sprint 38 | Repository change-set identity, endpoint and state-layer validation, rename/copy/delete/conflict behavior, deterministic ordering, path confinement, Workspace change-input equivalence, and the boundary between Git evidence and semantic authority implemented by the [Git Change Adapter profile](codex/profiles/git-change-adapter-implementation.md), [workflow](codex/workflows/git-change-adapter.md), and [template](codex/templates/git-change-adapter-task.md). | Sprint 38 | completed |
+| Task prompt template update completed — Refactoring and Safe Edits | Sprint 40 | Plan preconditions, conflict detection, preview, atomicity, rollback, reversibility, filesystem safety, and post-edit semantic validation implemented by the [Refactoring and Safe Edits profile](codex/profiles/refactoring-safe-edits-implementation.md), [workflow](codex/workflows/refactoring-safe-edits.md), and [template](codex/templates/refactoring-safe-edits-task.md). | Sprints 40–41 | completed |
 | Task prompt template update required — Designer XML Semantic Parity | Sprint 42 | Official-format source evidence, complete nested and specialized metadata mapping, all accepted module roles, code and dependency semantics, cross-adapter capability parity, explicit `Supported`/`NotApplicable` decisions, deterministic conformance, and release-blocking coverage evidence. | Sprints 42–44 | planned |
 | Task prompt template update required — API Stability and Plugin SDK | Sprint 45 | Compatibility policy, deprecation, versioning, migration, extension isolation, capability negotiation, SDK examples, and consumer conformance. | Sprints 45–46 | planned |
 | Task prompt template update required — Performance and Security | Sprint 47 | Reproducible benchmark baselines, profiling, regression thresholds, threat models, security findings, remediation evidence, and residual-risk acceptance. | Sprint 47 | planned |
 | Task prompt template update required — Documentation and Examples | Sprint 48 | Audience and artifact inventory, executable examples, link and snippet validation, documentation builds, and source-to-documentation consistency. | Sprint 48 | planned |
 | Task prompt template update required — Release | Sprint 49 | Version and packaging checks, release candidate evidence, artifact publication, rollback, release notes, final acceptance gates, and release decision. | Sprint 49 | planned |
 | Task prompt template update required — Configuration Structure Explorer | Sprint 50 | Source-independent hierarchy projection, deterministic lazy loading and refresh, VS Code Tree View lifecycle, source navigation, accessibility, multi-configuration behavior, EDT/Designer XML compatibility, and extension-host integration evidence. | Sprint 50 | planned |
+
+The Git Change Adapter audit at committed Sprint 37 review head `b029544f`
+found that the generic Implementation, Source Adapter, and Runtime Service
+contracts do not require typed repository baseline/current endpoints, explicit
+index/worktree/untracked/conflict layer ownership, Git change identity,
+rename/copy/delete/type-change policy, canonical ordering, repository and path
+confinement, process or dependency boundaries, or equivalence with accepted
+Workspace change inputs. The Git Change Adapter modules add only those reusable
+execution and evidence requirements. They do not select a Git library or
+executable, repository-discovery rule, endpoint vocabulary, included state
+layers, status model, rename threshold, path representation, bounds,
+persistence schema, Runtime surface, protocol, UI, or first production slice;
+those remain Sprint 38 investigation and architecture decisions.
+
+The Rules Engine audit at committed Sprint 36 review head `8240ed1a` found
+that the generic Implementation and Diagnostics Engine contracts do not require
+deterministic rule registration ownership, typed identity, dependency
+validation and ordering, configuration authority and compatibility,
+applicability, execution lifecycle and failure containment, or typed aggregate
+results integrated through the accepted diagnostic boundary. The Rules Engine
+modules add only those reusable execution and evidence requirements. They do
+not select an engine owner, rule trait, identity grammar, registration source,
+dependency meaning, configuration format, scheduler, failure policy, result
+vocabulary, limits, persistence schema, public protocol, UI, or first rule set;
+those remain Sprint 37 investigation and architecture decisions.
 
 The Context Engine audit at committed v0.4 release head
 `b47e6ff493a5db2b1188761bc7b7bab362e511ca` found that the generic
@@ -7140,8 +7184,12 @@ non-blocking documentation follow-up.
 
 The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 `pass with non-blocking follow-ups` for Sprints 28–35. The release is
-`completed`, and Sprint 36 Diagnostics Engine is the unique `next` planning
-target.
+`completed`. The
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+records `pass` and completes Sprint 36. The
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups` and completes Sprint 37. Sprint 38 Git
+Change Adapter is the unique `next` target.
 
 ##### Sprint 30 VS Code Extension Foundation execution plan
 
@@ -8528,14 +8576,2303 @@ The [v0.6 release integration review](reviews/v0.6-release-review.md) records
 
 | Sprint | Goal | Status |
 |---|---|---|
-| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | next |
-| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | planned |
-| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | planned |
-| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | planned |
-| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | planned |
-| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | planned |
+| Sprint 36 — Diagnostics Engine | Build semantic diagnostic orchestration and reporting. | completed |
+| Sprint 37 — Rules Engine | Define deterministic rule registration, execution, and result contracts. | completed |
+| Sprint 38 — Git Change Adapter | Convert repository change sets into deterministic workspace change inputs without making Git a semantic authority. | completed |
+| Sprint 39 — Change Impact Analysis | Expand impact analysis into a product-facing workflow. | completed |
+| Sprint 40 — Refactoring Planner | Produce validated semantic refactoring plans. | completed |
+| Sprint 40.1 — Refactoring Planner Remediation | Correct the publication-owner contract and synchronize final evidence after the administrative Sprint 40 closure. | completed |
+| Sprint 41 — Safe Edit Transactions | Apply planned edits through checked, reversible transactions. | completed |
 
-The v0.7 release integration review follows Sprint 41.
+##### Sprint 36 Diagnostics Engine execution plan
+
+Sprint 36 is planned from committed governance head `4a165109`. The
+[v0.6 release integration review](reviews/v0.6-release-review.md) records
+`pass with non-blocking follow-ups`, completes Sprints 28–35, and makes Sprint
+36 — Diagnostics Engine the unique `next` target. The live baseline already
+owns ordered recoverable `SemanticDiagnostic` values, graph validation issues,
+immutable Workspace Configuration snapshots, deterministic graph reports and
+build diffs, the bounded `oneagent.diagnostics` MCP tool, pull-only LSP document
+diagnostics, and tracked mixed EDT/Designer public-process fixtures.
+
+The data and testability gate passes. Existing typed diagnostics and validation
+issues provide two independent repository-owned input families; Workspace
+snapshots preserve their graph, source-location, provenance, report, cache, and
+repeated-build evidence; MCP and LSP tests provide observable reporting oracles.
+The exact cross-family identity, orchestration, suppression, ordering, bounds,
+summary, compatibility, and ownership decisions are unresolved and therefore
+belong to Task 1 investigation and accepted ADR-0058 before production changes.
+
+The initial planning baseline incorrectly treated the generic Implementation
+modules as sufficient even though the live task-template readiness forecast
+required a Diagnostics and Rules framework before Sprint 36. The post-Task-1
+readiness audit resolves the concrete Diagnostics Engine gap through the
+dedicated profile, workflow, and template. The reusable contract covers
+canonical inputs, identity, conflicts, suppression, ordering, bounds, reports,
+snapshots, persistence, protocol projection, sensitive data, and deterministic
+evidence. The general Rules Engine framework remains a separate required Sprint
+37 gate; no speculative registration or execution contract is created here.
+
+The complete Sprint 36 prompt suite is owned by
+`docs/codex/prompts/sprint-36-diagnostics-engine/`. The immediately preceding
+suite is exactly
+`docs/codex/prompts/sprint-35-external-ai-client-compatibility/`, containing
+these seven tracked files with an identical filesystem inventory and no
+untracked addition at planning time:
+
+- `00-sprint-35-execution-loop.md`
+- `01-investigate-external-ai-client-compatibility.md`
+- `02-define-external-ai-client-compatibility.md`
+- `03-implement-legacy-mcp-protocol.md`
+- `04-integrate-mcp-client-lifecycle.md`
+- `05-complete-external-client-evidence.md`
+- `06-sprint-35-integration-review.md`
+
+Only Task 8 may retire those exact files after a non-blocking independent and
+primary review, successful complete validation, and a passing same-reviewer
+artifact-consistency check.
+
+###### Sprint 36 objective
+
+Build one source-independent deterministic diagnostic orchestration and
+reporting boundary over preserved recoverable semantic diagnostics and graph
+validation evidence, then publish its accepted immutable results through the
+existing Workspace, MCP, and LSP boundaries without moving Graph authority,
+inventing source facts, or implementing the Sprint 37 Rules Engine.
+
+Included scope is:
+
+- repository and architecture investigation of all diagnostic producers,
+  validators, reports, diffs, snapshots, cache paths, source locations,
+  protocols, tests, consumers, ordering, bounds, and compatibility constraints;
+- accepted ADR-0058 for diagnostic identity, input families, normalization,
+  severity and category policy, suppression, ordering, bounds, summaries,
+  provenance/location handling, ownership, failures, compatibility, evidence,
+  and deferrals;
+- a source-independent typed diagnostic result and report domain with stable
+  identity and deterministic observable ordering;
+- deterministic orchestration of only the ADR-accepted existing recoverable
+  semantic-diagnostic and graph-validation inputs, including accepted
+  suppression and bounded reporting behavior;
+- immutable Workspace snapshot composition, cache/rebuild equivalence, and
+  repeated-build evidence without post-publication source reads;
+- accepted MCP `oneagent.diagnostics` and LSP pull-diagnostic projection changes
+  with truthful schemas/capabilities, Tool Policy preservation, confinement,
+  bounds, compatibility, and public-process evidence;
+- complete focused, workspace, public-process, compatibility, dependency,
+  scope, sensitive-data, and current-state documentation evidence; and
+- one mandatory fresh-context read-only integration reviewer, primary
+  reconciliation, artifact consistency, Sprint 37 hand-off, and conditional
+  Sprint 35 prompt-suite retirement.
+
+Excluded scope is a configurable or extensible rule registry, rule discovery,
+third-party rules, scripting, dynamic rule execution, automatic fixes, code
+actions, diagnostics UI, push/workspace diagnostics, mutable-document parsing,
+new source parsers or graph facts, new diagnostic producers unsupported by live
+evidence, source mutation, refactoring/edit transactions, remote transport,
+telemetry, persistence of user configuration, and broad performance or
+security claims.
+
+###### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Diagnostics Engine. | Investigation / investigation | Complete producer, consumer, identity, ordering, suppression, bound, compatibility, and executable-oracle evidence with decision-ready ADR questions. | Sprint 36 planning baseline. | `Investigate Sprint 36 diagnostics engine` |
+| 2 | Define the Diagnostics Engine. | Architecture / architecture | Accepted ADR-0058 for source-independent diagnostic orchestration and reporting. | Task 1 and the committed Diagnostics Engine framework prerequisite. | `Define Sprint 36 diagnostics engine` |
+| 3 | Implement the diagnostic domain. | Diagnostics Engine / Diagnostics Engine | Accepted typed identity, normalized result, suppression outcome, summary, report, bounds, and deterministic ordering model. | Accepted ADR-0058. | `Implement Sprint 36 diagnostic domain` |
+| 4 | Implement diagnostic orchestration. | Diagnostics Engine / Diagnostics Engine | Deterministic bounded orchestration of the accepted existing diagnostic and validation input families with focused evidence. | Task 3. | `Implement Sprint 36 diagnostic orchestration` |
+| 5 | Integrate diagnostic snapshots. | Diagnostics Engine + Runtime Service / Diagnostics Engine | Immutable Workspace composition, rebuild/cache equivalence, lifecycle compatibility, and repeated-snapshot evidence for the accepted engine result. | Task 4. | `Integrate Sprint 36 diagnostic snapshots` |
+| 6 | Integrate diagnostic reporting. | Diagnostics Engine + MCP Protocol + Runtime Service / Diagnostics Engine | Accepted MCP and LSP projections with truthful schemas/capabilities, Tool Policy, confinement, bounds, compatibility, and public-process evidence. | Task 5. | `Integrate Sprint 36 diagnostic reporting` |
+| 7 | Complete Diagnostics Engine evidence. | Diagnostics Engine / Diagnostics Engine | Complete validation, compatibility/dependency/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 36 diagnostics evidence` |
+| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 37 hand-off, and conditional Sprint 35 suite retirement. | Task 7 and all validation. | `Complete Sprint 36 diagnostics engine review` |
+
+Tasks execute strictly in order. Documentation-only Tasks 1–2 run evidence,
+link, structure, and `git diff --check` gates. Production Tasks 3–7 run non-zero
+focused Graph/Analysis/Workspace/Runtime/protocol/public-process tests plus the
+canonical Rust workspace gate. Task 8 gives the exact planning-through-Task-7
+range to one fresh-context read-only reviewer, then the primary independently
+inspects and reruns the complete matrix. The same reviewer must pass the drafted
+artifact before any Roadmap transition or prompt deletion.
+
+###### Sprint 36 investigation evidence
+
+Task 1 starts from committed planning baseline `cc890879`. The
+[Diagnostics Engine investigation](architecture/diagnostics-engine-investigation.md)
+inventories the 17 recoverable semantic diagnostic codes, 19 graph-validation
+codes, producer precursors, typed identities and ordering, reports and diffs,
+Workspace snapshots, cache reconstruction, MCP/LSP projections, source-location
+constraints, dependencies, consumers, fixtures, and executable baseline.
+
+The evidence is decision-ready for ADR-0058. Graph remains semantic and
+validation authority; no repository-owned suppression configuration or unified
+cross-family identity exists. ADR-0058 must therefore select the bounded
+source-independent owner, family-discriminated identity, disposition,
+suppression, ordering, report, error, Workspace/cache, and MCP/LSP contracts
+before production changes. A configurable rule registry, third-party or
+scripted rules, new producers, diagnostics UI, mutable documents, fixes,
+telemetry, and remote behavior remain outside Sprint 36. Sprint 36 is now
+`active`; Task 2 owns architecture acceptance.
+
+The committed framework prerequisite after Task 1 adds
+`docs/codex/profiles/diagnostics-engine-implementation.md`,
+`docs/codex/workflows/diagnostics-engine.md`, and
+`docs/codex/templates/diagnostics-engine-task.md`, corrects the planning routing,
+and restarts readiness from the accepted investigation evidence. No production
+behavior changes in that prerequisite.
+
+###### Sprint 36 architecture decision
+
+Task 2 accepts [ADR-0058](adr/0058-diagnostics-engine.md). The source-independent
+Diagnostics Engine belongs to `oneagent-analysis` and consumes only immutable
+Graph-owned recoverable diagnostics plus a caller-supplied Graph validation
+result. It produces a complete bounded typed report with family-discriminated
+identity, exact duplicate handling, fail-closed conflicting evidence,
+error-before-warning deterministic ordering, checked summaries, and only exact
+in-memory identity suppression. Workspace uses the default no-suppression
+policy.
+
+Workspace retains raw diagnostics and adds derived complete validation and
+diagnostic-report evidence before immutable publication. Cache schema and
+canonical serialized evidence fields remain unchanged; semantic compatibility
+advances from version `2` to `3`, intentionally invalidating version `2`
+entries, and warm loads recompute equal derived evidence. MCP keeps the
+seven-tool catalog and current semantic item fields while adding exact filters,
+normalized fields, summary, and validation findings with explicit truncation.
+LSP keeps its existing pull capability and complete 100-result bound while
+projecting only active findings with one exact confined node span. No
+dependency, new producer, Coverage transition, Rules Engine, suppression
+configuration, UI, mutable-document, fix, or remote behavior is accepted by
+architecture alone.
+
+###### Sprint 36 implementation and completion evidence
+
+Tasks 3–6 implement the accepted boundary in dependency order. Analysis owns
+the typed domain and deterministic engine; Runtime publishes complete Graph
+validation and the default-policy report atomically and recomputes both after
+cache decode; MCP projects filtered semantic/validation findings plus the
+complete unfiltered summary; LSP projects only active single-node findings with
+one confined typed span. Existing raw diagnostics, Graph reports/diffs,
+seven-tool catalog, Tool Policy, protocol revisions, LSP capabilities, cache
+schema, HTTP, CLI, VS Code, EDT, and Coverage behavior remain compatible.
+
+Task 7 records the complete requirement-to-test matrix in the
+[Sprint 36 Diagnostics Engine evidence](architecture/diagnostics-engine-evidence.md).
+The accepted canonical Rust gate contains 73 test targets and 1,176 passing
+tests with zero failures, ignored, measured, or filtered tests. Four expected
+binary entry-point targets contain zero tests and are not acceptance filters.
+Focused public evidence includes 25 Analysis diagnostic unit tests, 3 public
+engine tests, 86 Graph validation/report/diff/reference/Coverage tests, 95
+Runtime unit tests, 7 semantic MCP tests, 8 MCP stdio tests, 17 public MCP
+process tests, 12 LSP protocol tests, 5 LSP stdio tests, and 8 public LSP
+process tests. VS Code typecheck/compile, 62 unit and 2 real-process tests pass;
+the EDT Tycho reactor reports `BUILD SUCCESS` with 41 tests and no failure,
+error, or skip.
+
+Task 7 changes documentation only. Sprint 36 remains `active`; Task 8 still
+owns the fresh-context independent integration review, primary reconciliation,
+same-reviewer artifact-consistency check, Sprint 37 hand-off, and conditional
+retirement of the exact Sprint 35 prompt suite. No review decision or prompt
+retirement is claimed by completion evidence.
+
+###### Sprint 36 integration review
+
+Task 8 reviews the exact immutable range
+`4a165109a37dc44371d81e49b1931c2d3a1de06c..9afd3026a98c900a7e8b606650d6bc056e92a3bc`.
+Fresh-context read-only reviewer `/root/sprint36_validation_evidence_reviewer`
+returns `pass` with no finding, missing evidence, or follow-up. Primary
+reconciliation reproduces the focused matrix and complete canonical gate at
+the same head: 73 targets and 1,177 tests pass with zero failed, ignored,
+measured, or filtered tests; strict format, check, Clippy, Rustdoc, and diff
+checks also pass.
+
+Four separate remediation commits close every earlier review finding:
+`88295738` corrects cache compatibility claims and the Task 5 ADR link;
+`5573ef60` corrects the remaining Roadmap statements; `60743f45` corrects
+README cache wording and makes Designer XML use complete build-result
+validation; and `170b9e8f` adds the shared production helper plus a negative
+`InconsistentReport` regression that distinguishes complete validation from
+graph-only validation. The same final reviewer confirms the completed
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md),
+this state transition, the Sprint 37 hand-off, and the exact retirement
+inventory as truthful, complete, and non-weakening.
+
+Sprint 36 is `completed`; Sprint 37 Rules Engine is the unique `next` target.
+All nine Sprint 36 prompt files remain tracked. The completed transition
+retires exactly the seven verified Sprint 35 External AI Client Compatibility
+prompt files and no other prompt or repository file.
+
+Sprint 36 remains `next` during planning, becomes `active` when Task 1 starts,
+and may become `completed` only after Task 8. `already_complete` requires current
+committed evidence and successful required validation; no empty commit is
+created. Missing or contradictory diagnostic evidence, unstable identity or
+ordering, unbounded or path-leaking results, Graph-authority duplication,
+Sprint 37 rule-registry scope, MCP schema/handler/Tool Policy disagreement, LSP
+capability mismatch, cache/snapshot inequality, zero matched tests, failed
+validation or commit, reviewer mutation or incompleteness, unresolved evidence
+disagreement, or failed artifact consistency stops execution.
+
+Canonical production validation is:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 36 Diagnostics Engine
+```
+
+##### Sprint 37 Rules Engine execution plan
+
+Sprint 37 is planned from completed Sprint 36 review baseline `8240ed1a` and
+the committed reusable Rules Engine framework prerequisite `68045f0c`. The
+[Sprint 36 Diagnostics Engine review](reviews/sprint-36-diagnostics-engine.md)
+records `pass`; the committed Sprint 37 planning baseline starts the active
+target.
+
+The data and testability gate passes for planning. The repository owns an
+immutable source-independent `SemanticGraph`, complete Graph validation,
+recoverable semantic diagnostics, the ADR-0058 `DiagnosticEngine` and
+`DiagnosticReport`, immutable Workspace Configuration snapshots, deterministic
+cache reconstruction and watcher replacement, Runtime cancellation/lifecycle,
+bounded MCP/LSP projections, and non-zero package and public-process tests.
+These provide canonical input, result-integration, rebuild, persistence,
+cancellation, compatibility, and cleanup oracles. No general Rules Engine,
+rule registry, rule identity, dependency planner, rule configuration source, or
+aggregate rule execution result exists in production.
+
+Task 1 records the decision-ready
+[Rules Engine investigation](architecture/rules-engine-investigation.md).
+Current code confirms that Graph, complete validation, Diagnostics Engine,
+Workspace snapshots, cache reconstruction, watcher replacement, Runtime
+cancellation, and MCP/LSP projections provide deterministic inputs and oracles.
+It also confirms that no general rule domain, registry, dependency planner,
+rule configuration authority, execution aggregate, or directly representable
+ADR-0058 Rule diagnostic family exists. No new dependency is required by the
+evidence-backed ownership candidates. Task 2 must resolve these architecture
+questions in ADR-0059 before production changes.
+
+Exact rule inputs, ownership, identity, registration, dependency meanings,
+configuration authority, applicability, execution lifecycle, failure
+containment, cancellation, result vocabulary, diagnostic mapping, bounds,
+snapshot/cache behavior, and public compatibility remain unresolved. Task 1
+must produce decision-ready repository evidence and Task 2 must accept ADR-0059
+before production changes. Unknown external configuration, plugin, script,
+remote-rule, UI, or edit behavior is not required data for the bounded first
+slice and remains deferred.
+
+The live framework audit found a concrete reusable gap beyond generic
+Implementation and Diagnostics Engine contracts. Commit `68045f0c` closes it
+with the [Rules Engine profile](codex/profiles/rules-engine-implementation.md),
+[workflow](codex/workflows/rules-engine.md), and
+[template](codex/templates/rules-engine-task.md). They require deterministic
+identity, registration, dependencies, configuration, execution, results,
+diagnostic integration, bounds, failures, snapshots, persistence, and evidence
+without selecting concrete architecture. Existing Investigation, Architecture,
+Diagnostics Engine, Runtime Service, Persistent State, Review, sprint planning,
+and sequential execution contracts cover all other planned boundaries. No
+additional framework or post-sprint framework-audit task is planned.
+
+The complete Sprint 37 prompt suite is owned by
+`docs/codex/prompts/sprint-37-rules-engine/`. The verified immediately
+preceding suite is
+`docs/codex/prompts/sprint-36-diagnostics-engine/`; its nine tracked files
+exactly match the filesystem inventory and it contains no untracked addition.
+Only Task 8 may conditionally retire that exact suite after a non-blocking
+review, successful complete validation, and same-reviewer artifact consistency.
+
+###### Sprint 37 objective
+
+Define and implement one source-independent deterministic Rules Engine
+boundary for bounded rule identity, registration, dependencies, configuration,
+execution, and typed results over accepted immutable evidence. Compose only the
+accepted rule-produced diagnostic evidence into immutable Workspace snapshots
+while preserving Graph, validation, provenance, location, and Diagnostics
+Engine authority and existing truthful public projections.
+
+Included scope is:
+
+- repository investigation and one accepted ADR for canonical inputs,
+  ownership, identity, registry, dependencies, configuration, applicability,
+  execution, cancellation, failures, results, diagnostic mapping, bounds,
+  errors, snapshots, cache, compatibility, and deterministic evidence;
+- one source-independent typed rule domain and immutable deterministic
+  registry with validated registration and explicit duplicate/conflict
+  behavior;
+- deterministic dependency validation and execution planning for accepted
+  topologies and failure cases;
+- one bounded first-slice configuration authority and explicit applicability
+  outcomes, without inventing an external grammar;
+- one deterministic execution boundary with accepted cancellation, failure
+  containment, terminal per-rule and aggregate results, and repository-owned
+  conformance rules;
+- accepted mapping of rule-produced evidence through ADR-0058 diagnostic
+  identity, collision, ordering, suppression, summary, provenance, location,
+  bounds, and completeness;
+- immutable Workspace snapshot composition, cache/rebuild/invalidation,
+  watching/lifecycle, reporting compatibility, focused/public/full evidence,
+  current-state documentation, independent review, Sprint 38 hand-off, and
+  conditional Sprint 36 prompt-suite retirement.
+
+Excluded scope is:
+
+- dynamic plugin loading, scripting, remote rule acquisition, third-party rule
+  SDK, filesystem discovery, hot reload, mutable global registration, or
+  runtime code loading;
+- user/project configuration file grammar, environment variables, persistent
+  preferences, configuration migration, protocol configuration, settings UI,
+  profiles, baselines, directives, or policy administration unless ADR-0059
+  proves one smaller repository-owned prerequisite;
+- new graph facts, source parsers, adapters, validator authority, source reads
+  inside rules, graph mutation, hidden validation, diagnostic suppression
+  redesign, or Coverage transition;
+- new MCP tools, rule-management protocol, LSP capability, VS Code/EDT UI,
+  mutable-document analysis, push/workspace diagnostics, remote transport,
+  authentication, or external-client expansion;
+- automatic fixes, code actions, refactoring plans, safe edits, source
+  mutation, Git Change Adapter work, telemetry, performance/security claims,
+  release review, or Sprint 38 implementation.
+
+###### Sprint 37 architecture decision
+
+Task 2 accepts [ADR-0059](adr/0059-rules-engine.md).
+`oneagent-analysis::rules` owns the source-independent typed rule domain,
+immutable registry, enable/disable-only in-memory configuration, deterministic
+dependency plan, synchronous sequential execution, cooperative cancellation
+contract, terminal per-rule results, and complete aggregate report. Rules
+borrow only Graph, complete validation, and the base ADR-0058
+Semantic/Validation report; they do not read source, mutate facts, invoke
+validation, or own Runtime and protocols.
+
+The accepted plan orders independent ready rules by complete validated
+`RuleId`. Dependencies require `Completed`; Disabled, NotApplicable,
+Blocked, Failed, and Cancelled outcomes block dependents while independent
+rules continue until cancellation. Engine/domain failures return no partial
+report. Rule output adds one typed `DiagnosticFamily::Rule` with rule ID,
+local code, existing normalized severity/category, bounded message, and
+canonical graph-node anchors. Existing `DiagnosticEngine::build` remains;
+an additive entry point normalizes Rule evidence through the same identity,
+suppression, order, summary, bounds, and location contracts.
+
+Production uses an empty immutable registry and default configuration. It
+publishes a complete empty Rule execution report and makes no product-rule
+claim. Cache schema remains `1`, derived Rule and final diagnostic reports are
+recomputed, and semantic compatibility advances from `3` to `4`. MCP keeps
+seven tools and adds only the `rule` diagnostic family and optional
+`ruleId`; LSP keeps its exact capability and payload shape. No new
+dependency, Coverage transition, external configuration, plugin, script,
+source edit, or protocol capability is accepted.
+
+###### Accepted planning baseline and ordered task manifest
+
+ADR-0008 keeps Graph source-format independent. ADR-0039 preserves immutable
+Workspace publication and lifecycle. ADR-0042 preserves cache authority,
+compatibility, invalidation, and recovery. ADR-0058 keeps diagnostic identity,
+normalization, suppression, ordering, summary, and reporting in the Diagnostics
+Engine while explicitly deferring rule registration and execution. Task 1 must
+resolve all remaining rule-specific decisions from current repository evidence.
+Task 2 must accept ADR-0059 before Cargo, public API, or production Rust changes.
+Any new production dependency requires explicit approval before its first use.
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Rules Engine. | Investigation / investigation | Complete input, owner, registry, dependency, configuration, execution, result, diagnostic, compatibility, and oracle evidence. | Sprint 37 planning baseline and Rules Engine framework prerequisite. | `Investigate Sprint 37 rules engine` |
+| 2 | Define the Rules Engine. | Architecture / architecture | Accepted ADR-0059 for the bounded source-independent Rules Engine. | Task 1. | `Define Sprint 37 rules engine` |
+| 3 | Implement the rule registry. | Rules Engine / Rules Engine | Accepted typed rule domain and deterministic immutable registry. | Accepted ADR-0059. | `Implement Sprint 37 rule registry` |
+| 4 | Implement rule planning. | Rules Engine / Rules Engine | Deterministic dependency validation, execution planning, configuration, and applicability. | Task 3. | `Implement Sprint 37 rule planning` |
+| 5 | Implement rule execution. | Rules Engine + Diagnostics Engine / Rules Engine | Bounded execution, terminal results, failure/cancellation behavior, and accepted diagnostic integration. | Task 4. | `Implement Sprint 37 rule execution` |
+| 6 | Integrate rule snapshots. | Rules Engine + Runtime Service / Rules Engine | Immutable Workspace/cache/rebuild result composition, lifecycle, and unchanged truthful projections. | Task 5. | `Integrate Sprint 37 rule snapshots` |
+| 7 | Complete Rules Engine evidence. | Rules Engine / Rules Engine | Complete validation, compatibility/dependency/scope audits, and synchronized current-state documentation. | Task 6. | `Complete Sprint 37 rules engine evidence` |
+| 8 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 38 hand-off, and conditional Sprint 36 suite retirement. | Task 7 and all validation. | `Complete Sprint 37 rules engine review` |
+
+Task 1 creates only
+`docs/architecture/rules-engine-investigation.md` and the minimal Roadmap
+state update needed to mark execution active. It traces canonical inputs and
+owners, existing similarly named non-engine rule concepts, registry and
+dependency alternatives, configuration evidence, execution/cancellation/
+failure/result options, diagnostic integration, consumers, compatibility,
+dependency impact, and deterministic test oracles. It implements no production
+behavior.
+
+Task 2 creates `docs/adr/0059-rules-engine.md` and only planning-level
+architecture synchronization. It accepts exact ownership, dependency direction,
+inputs, identity, registration, dependency semantics/order, configuration,
+applicability, execution lifecycle, cancellation, failures, results,
+diagnostic mapping, bounds, errors, snapshot/cache behavior, compatibility,
+evidence, first slice, and deferred scope.
+
+Task 3 implements only the accepted typed domain and immutable registry. It
+adds no dependency planning, configuration, rule body execution, diagnostics,
+Workspace composition, or public projection.
+
+Task 4 implements only accepted dependency validation, canonical execution
+planning, first-slice configuration, and applicability. It adds no rule body
+execution or diagnostics.
+
+Task 5 implements accepted rule execution, cancellation and failure
+containment, terminal results, and diagnostic evidence integration. It adds no
+Workspace/cache or protocol composition.
+
+Task 6 composes the complete accepted result into immutable Workspace
+Configuration snapshots, implements accepted cache/recompute/invalidation and
+watching/lifecycle behavior, and proves existing MCP/LSP/HTTP/CLI/IDE
+compatibility without advertising an unsupported rule-management surface.
+
+Task 7 adds only missing evidence harnesses and current-state documentation,
+runs the exact complete focused/public/full matrix, and introduces no new
+production behavior. Task 8 owns the independent review, primary
+reconciliation, same-reviewer artifact-consistency check, state transition,
+Sprint 38 hand-off, and conditional retirement of the exact Sprint 36 suite.
+
+###### Sprint 37 implementation and completion evidence
+
+Tasks 3–6 implement ADR-0059 in dependency order. Analysis owns validated rule
+identity, immutable registration, in-memory enable/disable configuration,
+canonical dependency planning, synchronous sequential execution, cooperative
+cancellation, terminal results, and bounded Rule diagnostic evidence. Runtime
+publishes a complete rule report and final diagnostic report atomically and
+recomputes both after cache decode. Production uses an empty registry and
+default configuration, so this boundary makes no product-rule claim.
+
+Cache schema remains `1` and semantic compatibility advances from `3` to `4`.
+MCP retains exactly seven read-only Tool Policy-gated tools and adds only the
+`rule` diagnostic family plus Rule-only `ruleId`. LSP retains its exact 3.17
+capability and payload shape. Graph facts, validation, provenance, locations,
+reports, diffs, adapters, HTTP, CLI, VS Code, EDT, and Coverage remain under
+their existing authorities and behavior.
+
+Task 7 records the complete requirement-to-test matrix in the
+[Sprint 37 Rules Engine evidence](architecture/rules-engine-evidence.md). The
+accepted canonical Rust gate contains 77 test targets and 1,231 passing tests
+with zero failures, ignored, measured, or filtered tests. Four expected binary
+entry-point targets contain zero tests; the other 73 are non-empty. Focused
+evidence includes 19 rule-domain unit tests; 5 registry, 6 planning, 15
+execution, and 6 diagnostic public tests; 86 Graph tests; 99 Runtime unit tests;
+12 Workspace/cache/watching tests; 53 Protocol tests; 33 Tool Policy tests; 7
+semantic MCP, 8 MCP stdio, 17 MCP process, 5 LSP stdio, 8 LSP process, 4 HTTP,
+and 2 CLI tests.
+
+Exact Task 6 head `ca054770` also passes all six cross-platform CI jobs. macOS
+and Windows VS Code jobs pass typecheck, 62 unit tests, 18 Extension Host
+scenarios, 2 real-process tests, and package/scope audits. macOS and Windows EDT
+jobs use JDK 25 and pass 41 tests with zero failures, errors, or skips plus the
+p2 package audit. The first local EDT attempt used ambient Java 17 and stopped
+before tests; it is recorded as non-evidence rather than weakening the exact-
+head CI result.
+
+Task 7 changes documentation only. Task 8 reviews exact range
+`8240ed1a1e56bac4e6fef985cce31c56ec7233ce..d82b9d12e25b6fea737656f8803c03bb1d06a82e`.
+Fresh read-only reviewer `/root/sprint37_rules_engine_reviewer` reports one Low
+source-compatibility documentation issue: `DiagnosticFinding::code()` now
+returns a borrow and `DiagnosticCode` is no longer `Copy`, so arbitrary
+external Rust source compatibility is not established even though every
+repository consumer is migrated and green. Primary reconciliation accepts the
+finding; no blocking finding or missing evidence remains.
+
+The independent and primary focused matrices pass with Rules 19/5/6/15/6,
+Diagnostics 25/3, Graph 86, Runtime 99, Workspace/cache/watching 6/4/2,
+Protocol 53, Tool Policy 33, MCP 7/8/17, LSP 5/8, HTTP 4, and CLI 2. Both full
+gates pass with 77 targets, 73 non-zero targets, four expected zero-test binary
+entry points, and 1,231 tests. Exact code head `ca054770` also passes all six
+macOS/Windows Rust, VS Code, and EDT CI jobs; Task 7 changes documentation only.
+
+The same reviewer confirms the drafted
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md), Roadmap
+transition, finding, risks, validation, Sprint 38 hand-off, and exact retirement
+inventory without weakening. The effective decision is
+`pass with non-blocking follow-ups`: Sprint 37 is `completed`, Sprint 38 Git
+Change Adapter is the unique `next` target, and exactly the nine verified
+Sprint 36 prompt files are retired. The Sprint 37 suite and every unrelated
+prompt path remain tracked and unchanged.
+
+###### State, failure, and validation gates
+
+Sprint 37 is `active` after Task 1 starts from the committed planning
+baseline. A task may be
+`already_complete` only when committed live evidence and successful required
+validation prove every acceptance criterion; no empty commit is created.
+Missing or contradictory canonical evidence, an unimplementable ADR,
+unapproved dependency, unstable identity or ordering, registry conflict
+selection by input order, unresolved dependency cycle, invented configuration,
+unrecorded partial execution, cancellation or cleanup leak, diagnostic
+authority duplication, snapshot/cache mismatch, false schema/capability claim,
+zero matched tests, failed validation, staging/commit/push failure, reviewer
+mutation or incompleteness, unresolved evidence disagreement, failed artifact
+consistency, or retirement inventory drift stops the sprint immediately.
+
+Documentation-only Tasks 1–2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3–6 run non-zero focused and affected
+package/public-process tests plus the canonical full workspace gate. Task 7
+reruns the complete requirement matrix and compatibility audits. Task 8
+independently and primarily reruns the required matrix before any transition:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership,
+exact Sprint 36 retirement inventory, mandatory independent reviewer handoff
+and consistency gate, `git diff --check`, and unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 37 Rules Engine
+```
+
+##### Sprint 38 Git Change Adapter execution plan
+
+Sprint 38 is planned from completed Sprint 37 review head `b029544f`, version
+integration head `a1434fa0`, and the committed Git Change Adapter framework
+prerequisite `580496eb`. The
+[Sprint 37 Rules Engine review](reviews/sprint-37-rules-engine.md) records
+`pass with non-blocking follow-ups`; Sprint 38 is the unique `next` target and
+remains `next` during planning.
+
+The data and testability gate passes. ADR-0041 and production Runtime code own
+deterministic complete-byte Workspace observations, bounded latest-revision
+change signals, serialized complete rebuilds, atomic immutable publication,
+last-valid failure retention, recovery, cancellation, and cleanup. Public
+tests already prove modifications, additions, removals, rename-equivalent end
+states, invalid builds, recovery, repeated fresh runs, and EDT/Designer
+consumer compatibility. The repository itself supplies real Git history and
+Git 2.50.1 is available for repository-owned temporary-repository evidence.
+ADR-0027 explicitly prevents filesystem or Git events from becoming canonical
+Graph/index inputs.
+
+No Git change-set domain, repository endpoint contract, reader, injected port,
+Workspace Git input, or Git-specific fixture exists in production. Exact
+repository discovery, baseline/current endpoints, included committed/index/
+worktree/untracked/conflict layers, status vocabulary, rename/copy policy,
+path representation, ordering, limits, process or library boundary,
+concurrent-mutation behavior, and Workspace integration remain unresolved.
+Task 1 must make these questions decision-ready from live evidence and Task 2
+must accept ADR-0060 before production changes. Remote repositories,
+credentials, submodule traversal, semantic impact, refactoring, and edits are
+not required data for the bounded local first slice and remain deferred unless
+the investigation proves one is an unavoidable compatibility prerequisite.
+
+The framework readiness audit found a concrete reusable gap beyond generic
+Implementation, Source Adapter, and Runtime Service contracts. Commit
+`580496eb` closes it with the
+[Git Change Adapter profile](codex/profiles/git-change-adapter-implementation.md),
+[workflow](codex/workflows/git-change-adapter.md), and
+[template](codex/templates/git-change-adapter-task.md). They require endpoint
+and state-layer validation, normalized change identity, status/path handling,
+rename/copy/delete/conflict policy, deterministic order, bounds, process or
+dependency evidence, confinement, and Workspace equivalence without selecting
+concrete architecture. Existing Investigation, Architecture, Runtime Service,
+Review, sprint-planning, and sequential-execution modules cover the remaining
+boundaries. No additional framework or post-sprint framework audit is planned.
+
+The complete Sprint 38 prompt suite is owned by
+`docs/codex/prompts/sprint-38-git-change-adapter/`. The verified immediately
+preceding suite is `docs/codex/prompts/sprint-37-rules-engine/`; its nine
+tracked files exactly match the filesystem inventory and it contains no
+untracked addition at planning time. Only Task 7 may conditionally retire that
+exact suite after a non-blocking independent and primary review, successful
+complete validation, and same-reviewer artifact consistency.
+
+###### Sprint 38 objective
+
+Define and implement one bounded deterministic local Git Change Adapter that
+converts accepted repository change evidence into source-independent Workspace
+change inputs without making Git a semantic, validation, impact, or edit
+authority. Integrate the accepted input through existing complete rebuild,
+atomic publication, failure recovery, lifecycle, cache, and consumer contracts.
+
+Included scope is:
+
+- repository, history, API, dependency, platform, security, consumer, fixture,
+  and deterministic-oracle investigation followed by one accepted ADR;
+- one source-independent typed normalized repository change-set domain with
+  validated endpoints, paths, statuses, deterministic identity/order, bounds,
+  and closed failures selected by ADR-0060;
+- one accepted local Git repository reader boundary with deterministic
+  repository-owned temporary-repository evidence for included state layers and
+  change classes;
+- mapping of the accepted Git-derived change set into one source-independent
+  Workspace change-input boundary with equivalence to relevant complete
+  filesystem end states;
+- preservation of complete production discovery/parsing/build/validation,
+  serialized rebuilds, coalescing, immutable atomic publication, last-valid
+  recovery, cache behavior, cancellation, shutdown, and supported consumers;
+- complete focused, public, cross-platform, dependency, API, path-confinement,
+  sensitive-data, scope, and full-workspace evidence plus current-state docs;
+- one mandatory fresh-context read-only integration review, primary
+  reconciliation, artifact consistency, Sprint 39 hand-off, and conditional
+  Sprint 37 prompt-suite retirement.
+
+Excluded scope is:
+
+- Git as graph, semantic identity, validation, diagnostic, impact, rule,
+  provenance, source-location, cache, refactoring, plan, or edit authority;
+- incremental Graph/index mutation, changed-entity inference, semantic impact
+  analysis, diagnostics from Git status, selective parsing/building, or partial
+  snapshot publication;
+- remote repository access, fetch/pull/push, credentials, authentication,
+  hosting-provider APIs, network workspaces, repository mutation, staging,
+  commits, branch manipulation, checkout, merge, rebase, reset, or cleanup;
+- source edits, refactoring plans, safe edit transactions, rollback, code
+  actions, mutable documents, protocol/IDE Git UI, telemetry, benchmarks, or
+  broad performance/security claims;
+- unsupported nested-repository, submodule-content, worktree-management,
+  symlink-traversal, arbitrary encoding, or platform behavior not accepted by
+  ADR-0060; and
+- Sprint 39 Change Impact Analysis or later Sprint 40–41 planning/edit scope.
+
+###### Sprint 38 investigation evidence
+
+Task 1 starts from committed planning baseline `e60b95c0`. The
+[Git Change Adapter investigation](architecture/git-change-adapter-investigation.md)
+confirms that no production Git domain, endpoint, reader, Workspace input, or
+Git implementation dependency exists. It inventories the private complete-byte
+`WorkspaceFileState`, latest-revision source, complete rebuild coordinator,
+cache source identity, immutable publication, failure/recovery, lifecycle,
+consumers, tracked mixed-format fixture, local Git 2.50.1 evidence, and
+macOS/Windows CI constraints.
+
+The evidence is decision-ready for ADR-0060. It separates repository/worktree
+identity, baseline/current endpoints, committed/index/worktree/untracked/
+ignored/conflict layers, status and path identity, rename/copy policy,
+ordering, bounds, errors, process/library families, source-neutral Workspace
+mapping, and complete end-state equivalence into explicit decisions. The
+existing-executable family requires an accepted production executable contract;
+an external Rust Git library additionally requires dependency approval. Direct
+`.git` parsing and an injected-only production source lack evidence for a
+bounded complete first slice.
+
+Seventeen existing non-zero focused tests pass: five change-source unit tests,
+six public Workspace tests, two public File Watching tests, and four public
+Persistent Cache tests. They prove the reusable complete-state, publication,
+recovery, cancellation, cache, and fresh-run oracles but no Git behavior. The
+tracked fixture can be copied and initialized only inside disposable temporary
+repositories for future production-reader evidence. No external data, remote,
+credential, user repository, or source format is required. Sprint 38 is now
+`active`; Task 2 owns architecture acceptance.
+
+###### Sprint 38 architecture decision
+
+Task 2 accepts [ADR-0060](adr/0060-git-change-adapter.md).
+`oneagent-runtime` owns one explicit-demand local repository-change domain,
+bounded Git process reader, and source-neutral Workspace input mapping. The
+default Runtime and filesystem watcher remain unchanged; Git input is
+supplementary and can request only the existing complete discovery, build,
+validation, cache, and atomic publication path. It never identifies semantic
+entities or becomes Graph, Diff, Impact, diagnostic, rule, cache, refactoring,
+edit, protocol, or IDE authority.
+
+The accepted reader resolves pinned `HEAD` as a 40- or 64-hex baseline and
+compares it with one exact worktree root containing tracked final-worktree and
+non-ignored untracked files. It rejects conflicts, unborn/bare/mismatched
+repositories, unsupported entry kinds, unconfined or non-UTF-8 paths, one-over
+bounds, unstable two-pass reads, incompatible Git, process failures, timeout,
+and cancellation. Rename/copy detection is disabled, so moves remain
+deterministic delete/add evidence. Normalized paths are bounded confined UTF-8
+forward-slash values; changes use a closed Added/Modified/Deleted/TypeChanged/
+Untracked vocabulary and canonical bytewise order.
+
+The process family uses fixed non-shell, NUL-delimited local Git commands under
+16 MiB stdout, 64 KiB stderr, 10,000-change, 4,096-byte-path, two-pass, and
+30-second complete-read bounds. It owns and joins every child and performs no
+network or repository mutation. No Cargo dependency, manifest, lockfile,
+schema, cache-version, protocol, Coverage, or default Runtime change is
+accepted.
+
+`WorkspaceService` gains one explicit one-slot input handle. Empty sets are
+ignored, one non-empty set is accepted, full input reports backpressure, and a
+closed service rejects input. Accepted work always follows the existing
+complete filesystem rebuild and lifecycle; Git evidence is not serialized or
+published. Tasks 3–5 implement the domain, reader, and Workspace mapping in
+order; Task 6 completes cross-platform and current-state evidence.
+
+###### Sprint 38 implementation evidence
+
+Tasks 3–5 are committed as `e0aadfab`, `3ed8990f`, and `175de804`. Runtime now
+owns the additive normalized repository-change domain, explicit bounded local
+Git process reader, and capacity-one source-neutral Workspace input accepted by
+ADR-0060. The reader uses pinned `HEAD`, one exact worktree root, tracked final-
+worktree plus non-ignored untracked state, two-pass stability, confined UTF-8
+paths, deterministic delete/add move and copy evidence, closed conflicts and
+failures, fixed output/count/time bounds, and owned cancellation cleanup.
+
+Task 6 evidence and the bounded review remediations are committed as
+`550fa5df`, `3e13e523`, `a2cb0641`, `dffd2f1c`, `03281583`, `b1d551a1`, and
+`43165bfe`, with the complete production chain integrated into the version
+branch by merge `129b69c8`. They close caller-drop ownership and the complete
+deadline, add real child-process cleanup evidence, complete the invalid
+status/path and UNC matrices, prove equal complete Workspace results across
+opposite operation orders, exercise injected spawn/read/exit failures, close
+the Workspace change-request receiver immediately after terminal state
+selection and before joining active owned work, and set `GIT_NO_LAZY_FETCH=1`
+on every production Git command without changing the accepted boundary.
+
+Every accepted non-empty input uses the existing complete filesystem scan,
+production discovery, EDT/Designer build and validation, stable rescan, cache
+policy, and atomic immutable publication. Git evidence does not enter cache,
+Workspace snapshots, Graph, Analysis, diagnostics, rules, Coverage, protocols,
+or IDE capabilities. The portable filesystem watcher remains active and the
+default Runtime remains independent from Git.
+
+The [Sprint 38 evidence](architecture/git-change-adapter-evidence.md) records
+the complete requirement matrix, exact non-zero focused/public-process counts,
+the historical 1,268-test inventory and exact-head CI run `33323588901` at
+`b1d551a1`, and the current 80-target, 1,270-test inventory plus successful
+six-job macOS/Windows CI run `33399662895` at final production-code head
+`129b69c8`. It also records the API/dependency/executable/path/sensitive-data/
+scope audits through that final head. The
+[Sprint 38 integration review](reviews/sprint-38-git-change-adapter.md) records
+`pass`, completes Sprint 38, preserves Git as bounded input evidence, and hands
+off Sprint 39 Change Impact Analysis as the unique `next` target.
+
+###### Accepted planning baseline and ordered task manifest
+
+ADR-0027 keeps Graph/index change input canonical and source-independent.
+ADR-0039 owns complete immutable Workspace snapshots. ADR-0041 owns the
+implemented complete filesystem observation and rebuild lifecycle. ADR-0042
+owns cache validation, recovery, and publication order. Task 1 must resolve all
+Git-specific choices from current evidence; Task 2 must accept ADR-0060 before
+Cargo, public API, or production Rust changes. Any new production dependency
+requires explicit approval before its first use.
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate the Git Change Adapter. | Investigation / investigation | Complete repository, endpoint, state-layer, status, path, ordering, process/dependency, Workspace-equivalence, compatibility, and oracle evidence. | Sprint 38 planning baseline and Git Change Adapter framework prerequisite. | `Investigate Sprint 38 Git Change Adapter` |
+| 2 | Define the Git Change Adapter. | Architecture / architecture | Accepted ADR-0060 for the bounded local Git Change Adapter. | Task 1. | `Define Sprint 38 Git Change Adapter` |
+| 3 | Implement the normalized change-set domain. | Git Change Adapter / Git Change Adapter | Accepted typed endpoints, normalized changes, paths, ordering, bounds, and failures without repository I/O. | Accepted ADR-0060. | `Implement Sprint 38 change-set domain` |
+| 4 | Implement the Git repository reader. | Git Change Adapter / Git Change Adapter | Accepted local reader/process or library boundary and deterministic repository-state evidence. | Task 3. | `Implement Sprint 38 Git repository reader` |
+| 5 | Integrate Workspace change inputs. | Git Change Adapter + Runtime Service / Git Change Adapter | Accepted source-independent Workspace mapping, rebuild equivalence, lifecycle, cache, and consumer compatibility. | Task 4. | `Integrate Sprint 38 Workspace change inputs` |
+| 6 | Complete Git Change Adapter evidence. | Git Change Adapter / Git Change Adapter | Complete validation, cross-platform/dependency/API/scope audits, and synchronized current-state documentation. | Task 5. | `Complete Sprint 38 Git Change Adapter evidence` |
+| 7 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 39 hand-off, and conditional Sprint 37 suite retirement. | Task 6 and all validation. | `Complete Sprint 38 Git Change Adapter review` |
+
+Task 1 creates only
+`docs/architecture/git-change-adapter-investigation.md` and the minimal Roadmap
+state update needed to mark execution `active`. It inventories live Git,
+Workspace, watcher, cache, lifecycle, consumer, dependency, platform,
+confinement, sensitive-data, and test evidence and leaves every concrete
+architecture choice to Task 2.
+
+Task 2 creates `docs/adr/0060-git-change-adapter.md` and only planning-level
+architecture synchronization. Task 3 implements only the accepted normalized
+domain and adds no repository I/O. Task 4 implements only the accepted local
+repository reader and its deterministic temporary-repository evidence. Task 5
+integrates the accepted source-independent input through the existing complete
+Workspace lifecycle without adding selective semantic mutation or a public Git
+control surface.
+
+Task 6 adds only missing evidence harnesses and current-state documentation,
+runs the exact complete focused/public/full matrix, and introduces no new
+production behavior. Task 7 owns the independent review, primary
+reconciliation, same-reviewer artifact-consistency check, state transition,
+Sprint 39 hand-off, and conditional retirement of the exact Sprint 37 suite.
+
+###### State, failure, and validation gates
+
+Sprint 38 remains `next` during planning, becomes `active` only when Task 1
+starts from the committed planning baseline, and may become `completed` only
+after Task 7. A task may be `already_complete` only when committed live
+evidence and successful required validation prove every criterion; no empty
+commit is created.
+
+Missing or contradictory repository evidence, an unimplementable ADR,
+unapproved dependency, ambiguous endpoints or state layers, order-dependent
+identity, escaping or absolute output path, raw output/credential leak,
+unsupported conflict or rename selection, incomplete Workspace mapping,
+selective semantic authority, cache/snapshot mismatch, zero matched tests,
+failed validation, staging/commit/push failure, reviewer mutation or
+incompleteness, unresolved evidence disagreement, failed artifact consistency,
+or retirement inventory drift stops the sprint immediately.
+
+Documentation-only Tasks 1–2 run evidence/decision/link consistency and
+`git diff --check`. Production Tasks 3–5 run non-zero focused and affected
+package/public-process tests plus the canonical full workspace gate. Task 6
+reruns the complete requirement matrix and compatibility audits. Task 7
+independently and primarily reruns the required matrix before any transition:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership,
+exact Sprint 37 retirement inventory, mandatory independent reviewer handoff
+and consistency gate, `git diff --check`, and unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 38 Git Change Adapter
+```
+
+##### Sprint 39 Change Impact Analysis execution plan
+
+Sprint 39 is planned from completed Sprint 38 review head `56bb3004` and
+version integration `295a5454`. The
+[Sprint 38 Git Change Adapter review](reviews/sprint-38-git-change-adapter.md)
+records `pass`, completes Sprint 38, and makes Sprint 39 Change Impact Analysis
+the unique `next` target. Sprint 39 remained `next` during planning and is
+`active` from Task 1.
+
+The data and testability gate passes. `oneagent-graph` already owns the
+directional `SemanticGraphDiff`, bounded deterministic `SemanticImpactAnalyzer`,
+typed seeds, reasons, availability, status, summaries, options, and closed
+errors. Repository-owned Graph, EDT, Workspace, filesystem-watching,
+Git-input, MCP in-memory, and MCP process tests provide empty, positive,
+negative, removed/added, reordered, repeated, depth/filter/bound,
+complete-rebuild, failure/recovery, and public-projection oracles. The focused
+planning baseline passes 18 Graph impact tests, 6 Workspace tests, 2 filesystem
+watching tests, 3 Git-to-Workspace tests, and 7 MCP semantic-tool tests with no
+failure, skip, ignore, or filtered test.
+
+The unresolved work is bounded and decision-ready rather than blocked by
+external data. The current MCP first slice compares two distinct Configuration
+IDs inside one immutable Workspace snapshot. Runtime publishes only the latest
+complete snapshot, and the accepted Git input requests a complete rebuild
+without publishing Git evidence. Task 1 must determine the exact product
+workflow, owner, previous/current Configuration matching, report identity and
+completeness, bounds, lifecycle, persistence/cache, public projection,
+compatibility, and failure questions. Task 2 must accept ADR-0061 before
+production changes. Repository paths and statuses are never semantic impact
+seeds or authority.
+
+The Codex Framework readiness audit finds no reusable gap. The completed
+Diagnostics Engine framework is explicitly forecast for Sprint 39 and already
+covers canonical inputs, identity, collisions, ordering, bounds, summaries,
+redaction, immutable snapshots, persistence decisions, projections, and
+deterministic evidence. Existing Investigation, Architecture, Runtime Service,
+MCP Protocol, AI Tool Policy, Review, sprint-planning, and sequential-execution
+contracts cover the remaining boundaries. No framework file or post-sprint
+framework-audit task is justified.
+
+The complete Sprint 39 prompt suite is owned by
+`docs/codex/prompts/sprint-39-change-impact-analysis/`. The verified immediately
+preceding suite is exactly
+`docs/codex/prompts/sprint-38-git-change-adapter/`, containing these eight
+tracked files with an identical filesystem inventory and no untracked addition
+at planning time:
+
+- `00-sprint-38-execution-loop.md`
+- `01-investigate-git-change-adapter.md`
+- `02-define-git-change-adapter.md`
+- `03-implement-change-set-domain.md`
+- `04-implement-git-repository-reader.md`
+- `05-integrate-workspace-change-inputs.md`
+- `06-complete-git-change-adapter-evidence.md`
+- `07-sprint-38-integration-review.md`
+
+Only Task 7 may retire those exact files after a non-blocking independent and
+primary review, successful complete validation, and a passing same-reviewer
+artifact-consistency check.
+
+###### Sprint 39 objective
+
+Define and implement one bounded deterministic product-facing Change Impact
+Analysis workflow over complete previous/current semantic Configuration graphs
+and their canonical `SemanticGraphDiff`, publish the accepted immutable report
+through the existing Runtime and MCP boundaries, and preserve Graph authority,
+complete Workspace rebuilds, failure recovery, Tool Policy, compatibility, and
+source confinement.
+
+Included scope is:
+
+- repository and architecture investigation of Graph diff/impact, complete
+  Workspace snapshots and replacements, Configuration identity, cache,
+  filesystem and Git change inputs, Runtime consumers, MCP impact behavior,
+  tests, bounds, compatibility, and sensitive-data constraints;
+- accepted ADR-0061 for workflow ownership, canonical inputs, previous/current
+  identity, result identity and vocabulary, ordering, duplicates/conflicts,
+  completeness, summaries, bounds, failures, snapshot lifecycle, cache,
+  protocol projection, compatibility, evidence, and deferrals;
+- one source-independent immutable product impact report derived only from the
+  accepted Graph-owned analyzer over canonical complete graph diffs;
+- accepted Workspace composition across complete successful publications,
+  including new/removed/unchanged configurations, equal rebuilds,
+  failure/recovery, filesystem/Git input equivalence, cache behavior,
+  cancellation, shutdown, and repeated service runs;
+- an accepted compatible `oneagent.impact` projection and public MCP process
+  evidence with truthful schema, bounds, truncation/completeness, Tool Policy,
+  deterministic output, and no sensitive source or repository values;
+- complete focused, workspace, public-process, compatibility, dependency, API,
+  scope, sensitive-data, and current-state documentation evidence; and
+- one mandatory fresh-context read-only integration reviewer, primary
+  reconciliation, artifact consistency, Sprint 40 hand-off, and conditional
+  Sprint 38 prompt-suite retirement.
+
+Excluded scope is Git path/status impact seeding, selective or incremental
+semantic rebuild, a second Graph diff or impact authority, source parsing or
+new graph facts, new diagnostics or rules, impact scoring or risk prediction,
+refactoring plans, code actions, source edits, transactions, rollback, Git
+mutation or remote access, new HTTP/CLI/LSP/IDE UI, telemetry, benchmarks,
+broad performance/security claims, and Sprint 40–41 implementation.
+
+###### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate Change Impact Analysis. | Investigation / investigation | Complete Graph, snapshot, identity, lifecycle, cache, MCP, compatibility, sensitive-data, and oracle evidence with decision-ready ADR questions. | Sprint 39 planning baseline. | `Investigate Sprint 39 Change Impact Analysis` |
+| 2 | Define Change Impact Analysis. | Architecture / architecture | Accepted ADR-0061 for the bounded product-facing workflow. | Task 1. | `Define Sprint 39 Change Impact Analysis` |
+| 3 | Implement the Change Impact report. | Diagnostics Engine / Diagnostics Engine | Accepted immutable typed report, completeness, summary, ordering, bounds, and closed failures over canonical Graph impact. | Accepted ADR-0061. | `Implement Sprint 39 Change Impact report` |
+| 4 | Integrate Workspace impact snapshots. | Diagnostics Engine + Runtime Service / Diagnostics Engine | Accepted complete-publication composition, matching, failure/recovery, cache, lifecycle, and filesystem/Git equivalence. | Task 3. | `Integrate Sprint 39 Workspace impact snapshots` |
+| 5 | Integrate product impact reporting. | MCP Protocol + AI Tool Policy + Runtime Service / MCP Protocol | Accepted compatible `oneagent.impact` schema, projection, policy, bounds, errors, and public-process workflow. | Task 4. | `Integrate Sprint 39 product impact reporting` |
+| 6 | Complete Change Impact evidence. | Diagnostics Engine / Diagnostics Engine | Complete validation, compatibility/dependency/API/scope audits, and synchronized current-state documentation. | Task 5. | `Complete Sprint 39 Change Impact evidence` |
+| 7 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 40 hand-off, and conditional Sprint 38 suite retirement. | Task 6 and all validation. | `Complete Sprint 39 Change Impact Analysis review` |
+
+Tasks execute strictly in order. Documentation-only Tasks 1–2 run evidence,
+link, structure, and `git diff --check` gates. Production Tasks 3–5 run non-zero
+focused Graph/Analysis/Workspace/Runtime/protocol/public-process tests plus the
+canonical Rust workspace gate. Task 6 reruns the complete acceptance and
+compatibility matrix. Task 7 gives the exact planning-through-Task-6 range to
+one fresh-context read-only reviewer, then the primary independently inspects
+and reruns the complete matrix. The same reviewer must pass the drafted
+artifact before any Roadmap transition or prompt deletion.
+
+###### Sprint 39 investigation evidence
+
+Task 1 starts from committed planning baseline `6d9fd0ff`. The
+[Change Impact Analysis investigation](architecture/change-impact-analysis-investigation.md)
+inventories canonical Graph diff/build-diff/impact inputs and results, the 18
+focused Graph impact cases, complete Workspace Configuration identity and
+publication, filesystem/Git rebuild inputs, cache schema `1` and semantic
+compatibility `4`, the immutable seven-tool MCP process and current
+two-Configuration `oneagent.impact` contract, Tool Policy, consumers,
+compatibility, sensitive-data boundaries, and executable test oracles.
+
+The evidence is decision-ready for ADR-0061. No product report currently
+compares successive complete Workspace publications; snapshots retain no
+predecessor or publication identity; equal rebuilds publish; failed attempts
+retain the last valid snapshot; and a warm cache hit supplies no proven prior
+live endpoint. The current MCP impact tool instead compares distinct
+Configuration IDs inside one immutable startup snapshot. Graph result
+completeness covers requested traversal depth only and product-level report,
+reason, history, persistence, and projection bounds remain unresolved.
+
+ADR-0061 must select the product owner, exact Graph input boundary,
+previous/current publication and Configuration matching, report identity and
+vocabulary, duplicate/conflict handling, total order, completeness, summaries,
+bounds, redacted failures, atomic snapshot lifecycle, cache policy,
+filesystem/Git end-state equivalence, and compatible MCP migration before
+production changes. Repository paths, statuses, baselines, completeness, and
+operation order remain excluded from semantic impact identity, seeds, reasons,
+summaries, persistence, and output.
+
+The focused Task 1 matrix passes 18 Graph impact, 6 Workspace, 2 filesystem
+watching, 3 Git-to-Workspace, 4 persistent-cache, 7 MCP semantic-tool, and 17
+public MCP process tests: 57 total with zero failures, ignored, measured, or
+filtered tests. No external data, production dependency, source fixture family,
+protocol revision, Graph concept, Coverage transition, GUI process, or network
+access is required. Sprint 39 is now `active`; Task 2 owns architecture
+acceptance.
+
+###### Sprint 39 architecture decision
+
+[ADR-0061](adr/0061-change-impact-analysis.md) is `Accepted`. A new
+`oneagent-analysis::change_impact` domain owns one complete bounded product
+report over adjacent process-local Workspace publications while Graph remains
+the sole diff, dependency, propagation, seed, reason, and impact authority.
+Configurations match only by canonical `EntityId`; additions and removals use
+the canonical empty graph, ID changes never infer renames, and equal rebuilds
+produce distinct complete empty transitions. Runtime embeds the report and
+checked publication identity in the new immutable snapshot before one atomic
+replacement; failed, cancelled, stale, or over-bound attempts retain the last
+valid publication, and recovery compares with that last success.
+
+The in-memory report is complete through fixed Graph depth four or is rejected
+as a whole. It admits at most 4,096 Configurations per endpoint, 4,096 bytes per
+Configuration/node/edge identifier, 65,536 affected nodes, 256 reasons per
+node, and 262,144 reasons total. It owns canonical ordered transitions, Graph
+results, checked reconciled summaries, closed redacted failures, and no
+diagnostic suppression. Initial cold and warm publications explicitly have no
+previous publication. Transition reports and process-local publication IDs are
+not cached; cache schema remains `1` and semantic compatibility advances from
+`4` to `5`.
+
+`oneagent.impact` retains its exact legacy two-Configuration mode and adds one
+exclusive publication mode selected by `configurationId`, with depth, item,
+and reason bounds plus explicit availability, completeness, truncation, and
+omission counts. The seven-tool catalog, MCP revision `2026-07-28`, Tool Policy,
+and static immutable server constructor remain compatible. The public
+`oneagent-mcp` executable deliberately migrates to observer-backed
+`WorkspaceService` composition: each call clones one immutable atomic snapshot,
+while later calls may observe a newer successful publication. Filesystem and
+Git triggers remain equivalent only through complete semantic end states;
+repository evidence never enters report identity, seeds, reasons, cache, wire,
+or failures.
+
+Tasks 3–6 own the Analysis report, Workspace/cache lifecycle, compatible MCP
+and public-process integration, and complete evidence respectively. No Rust or
+Cargo behavior changes in Task 2. Selective rebuilding, new Graph semantics,
+diagnostics/rules, scoring, refactoring, mutation, history, new product UI,
+telemetry, benchmarks, and broad claims remain deferred to their accepted
+future boundaries.
+
+###### Sprint 39 implementation and Task 6 evidence
+
+Tasks 3–5 are committed as `c1ea37fb`, `483a0865`, and `9ea95dbf`. The first
+adds the bounded `oneagent-analysis::change_impact` report over Graph-owned
+diff/impact results. The second embeds checked publication identity and the
+complete adjacent report in one atomic Workspace snapshot, advances cache
+semantic compatibility to `5` without serializing reports/history, and proves
+filesystem/Git complete-end-state equivalence. The third retains the legacy
+impact mode, adds the exclusive publication projection, and migrates the public
+MCP executable to one live Runtime-owned Workspace while cloning one immutable
+snapshot per call.
+
+The [Sprint 39 evidence](architecture/change-impact-analysis-evidence.md)
+records the complete requirement matrix and limitations. Focused local evidence
+passes 18 Graph Impact tests, 128 Analysis tests including 9 public Change
+Impact tests, 123 Runtime unit tests, the 15-test Workspace/watching/Git/cache
+matrix, 53 Protocol tests, 33 Tool Policy tests, and the 35-test MCP
+semantic/stdio/process matrix with zero failures, ignores, or filtered tests.
+The complete Rust inventory contains 81 targets, 77 non-zero targets, four
+expected zero-test binaries, and 1,286 passing tests. Local VS Code evidence
+passes 62 unit and 2 public-process tests. Exact-head CI run `33431687151` at
+`9ea95dbf` passes Rust, VS Code, and EDT jobs on macOS and Windows, including 18
+Extension Host scenarios, the 41-test EDT real-process gate, and both package
+audits.
+
+Dependency, public API, cache/schema, protocol/capability, Coverage,
+sensitive-data, generated-artifact, and deferred-scope audits pass. No Cargo
+manifest or lockfile changes, production dependency, feature, license, unsafe
+surface, Graph/Coverage authority change, credential/configuration surface, or
+new HTTP/CLI/LSP/IDE impact operation is introduced. Repository paths,
+statuses, baselines, completeness, and operation order remain absent from
+impact identity, Configuration matching, seeds, reasons, summaries, cache,
+wire results, and errors.
+
+Task 6 changes only current-state documentation and adds no fixture or
+production behavior because the Task 3–5 evidence matrix is complete. Sprint
+39 remains `active`: Task 7 must perform the fresh-context review, primary
+reconciliation, full validation, artifact consistency, and conditional Sprint
+38 prompt-suite retirement before marking Sprint 39 `completed` and promoting
+Sprint 40 Refactoring Planner from `planned` to `next`. Sprint 40 must define a
+separate accepted plan/precondition contract and cannot treat Change Impact as
+edit authorization, path-to-node mapping, risk scoring, or unbounded closure.
+
+###### Sprint 39 remediation and integration review
+
+The first fresh-context review of `295a5454..e9a9c3a0` blocked completion
+because Analysis did not enforce the accepted 4,096-byte bound on canonical
+Graph `EdgeId` values when equal graphs produced no affected reasons. The
+implementation was merged as `91181fd7`, and the separate remediation commits
+`eee6b615` and `eb2f56ca` reuse Graph-owned
+`SemanticGraphQuery::edge_id`, add exact 4,096 and one-over 4,097 equal-graph
+public evidence, and correct the requirement matrix. The remediation was
+merged into the version branch as `e522d852`.
+
+The [Sprint 39 integration review](reviews/sprint-39-change-impact-analysis.md)
+records `pass` for exact range `295a5454..e522d852`. The final fresh-context
+reviewer reports no blocking or non-blocking findings and no missing evidence;
+the primary independently reproduces that result. Both paths pass 18 Graph
+Impact tests, the 86-test Graph compatibility matrix, 129 Analysis tests
+including 10 public Change Impact tests, 123 Runtime unit tests, the complete
+Workspace/watching/Git/cache/query and protocol/public-process matrices, 339
+Rust EDT tests, and the canonical workspace gate. The current executable
+inventory is 81 targets, 77 non-zero targets, four expected zero-test binary
+entry points, and 1,287 tests.
+
+Exact-head CI runs `33457248893`, `33457813120`, and `33458360180` each pass
+all six macOS and Windows Rust, VS Code, and EDT jobs at remediation code,
+evidence, and final merge heads respectively. The same final reviewer passed
+the complete review artifact, current-state transition, Sprint 40 hand-off,
+and exact eight-path Sprint 38 retirement inventory before any state change,
+deletion, staging, or commit.
+
+Sprint 39 is `completed`, and Sprint 40 Refactoring Planner is the unique
+`next` target. Sprint 40 still requires a separate accepted plan and
+precondition contract; Change Impact remains evidence rather than edit
+authorization, path-to-node mapping, risk scoring, or unbounded closure.
+
+###### State, failure, and validation gates
+
+Sprint 39 remains `next` during planning, becomes `active` only when Task 1
+starts from the committed planning baseline, and may become `completed` only
+after Task 7. A task may be `already_complete` only when committed live evidence
+and successful required validation prove every criterion; no empty commit is
+created.
+
+Missing or contradictory impact/snapshot evidence, an unimplementable ADR,
+Graph-authority duplication, Git path/status seeding, ambiguous Configuration
+matching, order-dependent identity, unreconciled summary, implicit partial
+result, unbounded or sensitive output, snapshot/cache inequality, failed
+rebuild recovery, protocol/schema/Tool Policy mismatch, zero matched tests,
+failed validation, staging/commit/push failure, reviewer mutation or
+incompleteness, unresolved evidence disagreement, failed artifact consistency,
+or retirement inventory drift stops the sprint immediately.
+
+Canonical production validation is:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+git diff --check
+```
+
+Planning validation covers Markdown structure and links, contiguous prompt
+numbering, manifest/dependency/commit-message agreement, accepted versus
+deferred scope, unchanged `next` state, complete current-suite ownership,
+exact Sprint 38 retirement inventory, mandatory independent reviewer handoff
+and consistency gate, `git diff --check`, and unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 39 Change Impact Analysis
+```
+
+##### Sprint 40 Refactoring Planner execution plan
+
+Sprint 40 is planned from completed Sprint 39 version integration `8d28ba8a`,
+the committed Prompt Contract v2 framework baseline `5210f8ee`, and the
+Refactoring and Safe Edits readiness prerequisite `5c273da1`. The
+[Sprint 39 review](reviews/sprint-39-change-impact-analysis.md) records `pass`,
+completes Sprint 39, and makes Sprint 40 Refactoring Planner the unique `next`
+target. Sprint 40 remains `next` during planning and becomes `active` only when
+Task 1 starts from the committed planning baseline.
+
+The data and testability gate passes with one repository-implementable
+prerequisite. The repository owns stable semantic identities, typed
+`SourcePath`, `SourcePosition`, `SourceSpan`, and `SourceLocation`, Graph
+provenance and queries, complete immutable Workspace publications,
+adjacent-publication Change Impact evidence, paired EDT/Designer fixtures,
+controlled source-change tests, and Runtime/MCP public-process oracles. EDT and
+Designer BSL declarations currently expose file paths and one-based declaration
+points, resolved call edges do not prove complete edit ranges, and Workspace
+publications do not retain exact captured source content with its deterministic
+content version. Tasks 3–4 therefore implement and prove immutable
+source-document evidence and exact occurrence ranges before planner evaluation.
+This is sufficient to investigate, define, implement, and expose one bounded
+read-only semantic plan and preview, but not to claim source mutation,
+atomicity, rollback, or reversibility.
+
+The concrete first refactoring family, owner, target and plan identity,
+preconditions, supported node/source kinds, source-version evidence, operation
+vocabulary, conflict rules, completeness, bounds, preview, Workspace binding,
+public projection, compatibility, and failure policy remain decision-ready
+questions for Task 1 and ADR-0063. Task 2 must accept those decisions before
+production implementation. Impact, diagnostics, Git status, paths, or model
+output never become edit authorization or a competing semantic authority.
+
+The framework readiness audit found a reusable gap before planning. Generic
+Implementation, Diagnostics Engine, and Git Change Adapter modules did not
+jointly require plan/snapshot preconditions, deterministic operations and
+preview, or the later transaction atomicity, rollback, reversibility,
+filesystem-confinement, and post-edit semantic-validation evidence forecast for
+Sprints 40–41. Commit `5c273da1` closes only that reusable gap through the
+[Refactoring and Safe Edits profile](codex/profiles/refactoring-safe-edits-implementation.md),
+[workflow](codex/workflows/refactoring-safe-edits.md), and
+[template](codex/templates/refactoring-safe-edits-task.md). It does not select
+Sprint 40 product architecture.
+
+Planning context preflight records an `unknown` effective context window and
+unavailable runtime token telemetry. Static-instruction allocation is
+unavailable. Bounded admitted repository authorities and selectors were
+128,765 UTF-8 bytes, conservatively estimated at about 32,200 tokens using four
+characters per token. The decision is `warning`: whole Roadmap, Architecture,
+semantic-model, fixture corpora, generated outputs, and successful command logs
+remain excluded; every child repeats a fresh bounded preflight.
+
+The initial Task 1 attempt from planning commit `2bc6afb7` stopped without file
+changes or a commit because live evidence showed no single immutable contract
+binding a confined source path, exact captured content, deterministic content
+version, and exact declaration/reference ranges across EDT and Designer. The
+missing evidence is internal repository work rather than an unavailable
+external corpus or oracle. The continuation instruction authorizes this plan
+amendment: Tasks 3–4 own the prerequisite, and Task 1 must record it as an
+implementable gate for ADR-0063 instead of reporting external missing data.
+
+The complete Sprint 40 suite is owned by
+`docs/codex/prompts/sprint-40-refactoring-planner/`. The verified immediately
+preceding suite is exactly
+`docs/codex/prompts/sprint-39-change-impact-analysis/`, containing these eight
+tracked files at planning time:
+
+- `00-sprint-39-execution-loop.md`
+- `01-investigate-change-impact-analysis.md`
+- `02-define-change-impact-analysis.md`
+- `03-implement-change-impact-report.md`
+- `04-integrate-workspace-impact-snapshots.md`
+- `05-integrate-product-impact-reporting.md`
+- `06-complete-change-impact-evidence.md`
+- `07-sprint-39-integration-review.md`
+
+Only Task 10 may retire those exact files after a non-blocking independent and
+primary review, complete validation, and a passing same-reviewer artifact-
+consistency check.
+
+###### Sprint 40 objective
+
+Define and implement one bounded deterministic read-only semantic refactoring
+plan and preview over an immutable complete Workspace publication, expose the
+accepted projection through existing Runtime, Tool Policy, and MCP boundaries,
+and preserve semantic/source authority, complete rebuild behavior, compatible
+clients, source confinement, and an explicit no-mutation boundary for Sprint
+41.
+
+Included scope is:
+
+- repository and architecture investigation of semantic identity, Graph
+  ownership/query/provenance, source locations, adapter source evidence,
+  Workspace publications, impact and diagnostic evidence, Runtime/MCP
+  consumers, compatibility, bounds, sensitive data, fixtures, and oracles;
+- accepted ADR-0063 for the first refactoring family, owners, canonical inputs,
+  target and plan identity, preconditions, operations, ordering, duplicates,
+  conflicts, completeness, bounds, failures, preview, snapshot lifecycle,
+  product projection, compatibility, evidence, and deferrals;
+- one source-independent immutable source-document contract that binds a
+  confined path, exact captured content, deterministic content version, and
+  validated exact BSL declaration/reference occurrence ranges;
+- paired EDT/Designer production-adapter capture and conformance evidence for
+  that source contract before planner evaluation;
+- one source-independent immutable typed plan domain with closed validation and
+  explicit read-only completeness;
+- deterministic Graph-backed planner evaluation and preview for only the
+  accepted first slice;
+- immutable Workspace publication composition and the accepted EDT/Designer
+  source-evidence boundary without reading or changing source after snapshot
+  publication;
+- an accepted read-only Tool Policy and MCP projection with truthful schema,
+  bounds, redaction, deterministic output, and public-process evidence;
+- complete focused, workspace, public-process, compatibility, dependency, API,
+  scope, sensitive-data, and current-state documentation evidence; and
+- one mandatory fresh-context read-only integration reviewer, primary
+  reconciliation, artifact consistency, Sprint 41 hand-off, and conditional
+  Sprint 39 prompt-suite retirement.
+
+Excluded scope is source or repository mutation; concrete text edits; editor
+workspace edits or code actions; transaction staging, commit, atomicity,
+rollback, reversibility, backups, crash recovery, or post-edit rebuild;
+path/status-derived semantic identity; Git mutation or remote access; Graph or
+source-adapter authority duplication; automatic model-generated edits; new
+diagnostics or rules; scoring, probability, or risk prediction; persistence or
+history; new HTTP/CLI/LSP/IDE UI; telemetry, benchmarks, and broad performance,
+security, or interoperability claims; and Sprint 41 implementation.
+
+###### Ordered task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Investigate Refactoring Planner. | Investigation / investigation | Decision-ready semantic, source, snapshot, precondition, conflict, consumer, compatibility, sensitive-data, and oracle evidence. | Sprint 40 planning baseline. | `Investigate Sprint 40 Refactoring Planner` |
+| 2 | Define Refactoring Planner. | Architecture / architecture | Accepted ADR-0063 for the bounded read-only planner. | Task 1. | `Define Sprint 40 Refactoring Planner` |
+| 3 | Implement immutable source evidence. | Refactoring and Safe Edits / Refactoring and Safe Edits | Immutable source-document, deterministic content-version, and exact BSL occurrence contracts. | Accepted ADR-0063. | `Implement Sprint 40 immutable source evidence` |
+| 4 | Integrate adapter source evidence. | Source Adapter / Source Adapter | Paired EDT/Designer capture, canonical mapping, completeness, and conformance evidence. | Task 3. | `Integrate Sprint 40 adapter source evidence` |
+| 5 | Implement the refactoring plan domain. | Refactoring and Safe Edits / Refactoring and Safe Edits | Immutable typed request, target, precondition, operation, preview, summary, completeness, and closed failure contracts. | Task 4. | `Implement Sprint 40 refactoring plan domain` |
+| 6 | Implement validated planner evaluation. | Refactoring and Safe Edits / Refactoring and Safe Edits | Deterministic Graph-backed validation, conflicts, operations, preview, bounds, and repetition behavior. | Task 5. | `Implement Sprint 40 validated refactoring planner` |
+| 7 | Integrate Workspace refactoring plans. | Refactoring and Safe Edits + Runtime Service / Refactoring and Safe Edits | Accepted immutable publication binding, configuration matching, source evidence, lifecycle, and failure behavior. | Task 6. | `Integrate Sprint 40 Workspace refactoring plans` |
+| 8 | Integrate product refactoring planning. | Refactoring and Safe Edits + MCP Protocol + AI Tool Policy / Refactoring and Safe Edits | Accepted read-only schema, policy, projection, bounds, errors, and public-process workflow. | Task 7. | `Integrate Sprint 40 product refactoring planning` |
+| 9 | Complete Refactoring Planner evidence. | Refactoring and Safe Edits / Refactoring and Safe Edits | Complete validation, compatibility/dependency/API/scope audits, and synchronized current-state documentation. | Task 8. | `Complete Sprint 40 Refactoring Planner evidence` |
+| 10 | Review the integrated baseline. | Review / review | Fresh-context independent review, primary reconciliation, artifact consistency, Sprint 41 hand-off, and conditional Sprint 39 suite retirement. | Task 9, all validation, no-ff implementation merge into `codex/v0.7`, and the review branch. | `Complete Sprint 40 Refactoring Planner review` |
+
+Tasks execute strictly in order through
+`docs/codex/prompts/sprint-40-refactoring-planner/00-sprint-40-execution-loop.md`.
+Every child uses Prompt Contract v2 and a guaranteed fresh context. Tasks 1–2
+run documentation-appropriate evidence and link gates. Tasks 3–8 run non-zero
+focused tests plus the canonical Rust workspace gate. Task 9 reruns the complete
+accepted matrix. After the no-ff implementation merge into `codex/v0.7`, Task 10
+supplies the exact immutable range to one fresh-context read-only reviewer on
+`codex/v0.7-sprint-40-review`, then the primary independently inspects and
+reruns the matrix. The same reviewer must pass the drafted review artifact
+before state transition or prompt retirement. Successful review is merged back
+into `codex/v0.7` with `--no-ff` under the repository workflow.
+
+###### Sprint 40 investigation evidence
+
+Task 1 starts from amended planning baseline `1319674f`. The
+[Refactoring Planner investigation](architecture/refactoring-planner-investigation.md)
+inventories Common source path/position/span/location contracts; Graph target,
+provenance, query, and impact ownership; BSL declaration and call extraction;
+EDT and Designer source-evidence asymmetry; immutable Workspace publications;
+cache, Runtime, Tool Policy, MCP, VS Code, compatibility, sensitive-data, and
+Cargo boundaries; paired fixtures; controlled changes; and exact future
+oracles.
+
+No current refactoring family has complete immutable content, deterministic
+content-version, exact declaration/reference range, conflict, and paired-format
+evidence. The smallest coherent candidate for ADR-0063 is one top-level BSL
+Procedure/Function rename plus every supported direct call occurrence that
+resolves uniquely to it in one complete Configuration publication. Tasks 3–4
+own the repository-implementable immutable source-document, version, exact
+occurrence, mapping, and cross-format conformance prerequisite. The repository
+contains the required corpus and oracles, so `SPRINT_BLOCKED_MISSING_DATA` does
+not apply; planner evaluation remains fail-closed until that prerequisite
+passes.
+
+ADR-0063 must select the exact family and source forms, source-independent
+owner, target/publication/document/plan/operation identities, preconditions,
+BSL name equivalence, duplicates, conflicts, total order, completeness,
+summaries, preview and redaction, bounds, closed failures, Workspace/cache
+lifecycle, and compatible read-only MCP migration. Graph remains semantic
+authority; impact, diagnostics, Git paths/status, model output, and point-only
+locations are evidence only and never edit authorization.
+
+The focused Task 1 matrix passes 3 Common source, 34 Graph provenance, 1 EDT
+callable-emission, 3 paired-adapter conformance, 2 Workspace, and 2 MCP tests:
+45 meaningful tests with zero failures, ignored, or measured tests. Six Graph
+test binaries selected by the package-wide name filter contained zero matches
+and are reported separately rather than counted. Sprint 40 is now `active`;
+Task 2 owns architecture acceptance, and no edit or mutation capability is
+claimed.
+
+###### Sprint 40 architecture decision
+
+[ADR-0063](adr/0063-refactoring-planner.md) is `Accepted`. The only first
+family is `bsl_callable_rename_v1`: rename one top-level BSL Procedure or
+Function declaration and every supported local or exported qualified direct
+call occurrence that resolves uniquely to it in one complete Configuration
+publication. EDT and Designer XML are paired source formats; unsupported,
+unresolved, ambiguous, incomplete, stale, conflicting, or over-bound target
+evidence rejects the whole request. Graph remains semantic identity, ownership,
+call, and query authority, while `oneagent-analysis::refactoring` owns the
+source-independent immutable document, occurrence, request, precondition,
+target, operation, plan, preview, summary, bound, and failure contracts.
+
+One source document is identified by Configuration and Module IDs and retains
+a confined Workspace-relative path, exact raw UTF-8 bytes, raw length plus
+SHA-256 content version, exact non-empty half-open raw-byte occurrence ranges,
+and one complete family-specific occurrence ledger. A planner borrows one
+immutable Workspace Arc and may not read source after publication. The
+ADR-0061 process-local sequence is generalized to one
+`WorkspacePublicationId`; Change Impact and planning use the same non-zero
+counter, lifetime, and failed-attempt behavior. Target identity retains the
+pre-rename Node ID and one owner Module while recording the BSL-owned expected
+post-rename ID separately.
+
+The desired identifier is bounded to 256 UTF-8 bytes, uses the accepted BSL
+Unicode identifier grammar and lowercase equivalence, rejects the closed v1
+keyword set, case-only no-ops, sibling callable collisions, and Graph identity
+collisions. Declaration and direct-call replacements are the only operations;
+exact duplicates collapse, dependencies are forbidden, and any unequal same
+range, overlap, version conflict, or identity collision fails atomically.
+Operations are ordered by document ID, descending raw range, kind, and ID.
+Plan and operation IDs use canonical length-prefixed encoding and SHA-256;
+successful plans are complete, checked, and contain no omitted operation.
+
+Preview is a deterministic structured no-snippet projection with confined
+relative paths and exact ranges. It never creates patched text, performs a
+write, changes Workspace/cache/editor/protocol state, or grants authorization.
+The internal contract admits at most 4,096 documents, 1 MiB per document,
+64 MiB total source, 4,096 occurrences per document, and 65,536 candidate or
+planned operations; exact identity/path/name, public preview, Tool Policy,
+diagnostic, and MCP frame bounds are fixed by ADR-0063 with exact/one-over
+evidence and deterministic closed failure precedence.
+
+Workspace publications must contain complete paired source evidence or fail
+before replacement. Cache schema remains `1`; the initial source manifest
+advanced semantic compatibility from `5` to `6`, and the later lexical-owner
+manifest amendment advanced it to `7`. The fail-closed callable-scope and
+receiver-classification remediation advances the current value to `8`. Warm decode
+reconstructs exact documents from the private
+source-state bytes while validating a persisted canonical occurrence manifest;
+publication IDs and plans are not persisted. Task 8 adds the eighth
+lexicographically ordered read-only tool `oneagent.refactor.plan` for all three
+supported MCP revisions, preserves every legacy tool, and synchronizes only
+the VS Code catalog assertion without adding an edit command or UI.
+
+Tasks 3–4 are the hard implementation gate: they must prove immutable raw
+documents, content versions, exact ranges, mapping, completeness, confinement,
+and equal paired EDT/Designer evidence before planner evaluation. Tasks 5–9
+then own the domain, deterministic planner, Workspace/cache composition,
+read-only product projection, and complete evidence. Task 2 changes no Rust,
+Cargo, adapter, Runtime, cache, protocol, policy, client, fixture, or product
+behavior. Source mutation, apply authorization, editor edits, transaction
+staging, pre-write recheck, atomicity, rollback, reversibility, recovery,
+post-edit rebuild, and semantic validation remain explicitly owned by Sprint
+41.
+
+###### Sprint 40 implementation and Task 9 evidence
+
+Tasks 3–8 implement ADR-0063 in dependency order. Common and BSL own one
+canonical SHA-256 implementation, callable identity/name equivalence, and exact
+raw identifier ranges. Analysis owns complete immutable source evidence and the
+typed deterministic planner domain/evaluation. EDT and Designer capture paired
+documents and canonical declaration/local/qualified-call outcomes before
+publication. Qualified calls retain their immediate lexical owner, and the
+planner scopes non-unique local/declaration evidence by owner Module ID and
+non-unique qualified evidence by the BSL-equivalent owner name, so unrelated
+same-name calls do not block a plan. Workspace publishes the evidence
+atomically, reconstructs it from cache semantic compatibility `8`, and plans
+only from one retained immutable snapshot. Runtime, Tool Policy, and MCP expose
+the eighth read-only tool
+`oneagent.refactor.plan`; VS Code changes only its catalog assertion.
+
+The [Sprint 40 evidence](architecture/refactoring-planner-evidence.md) maps
+every ADR-0063 criterion to executable or audit evidence. The paired production
+oracle proves equal canonical declaration, local-call, and exported qualified-
+call mapping across EDT LF and Designer BOM+CRLF sources while preserving their
+different paths, formats, raw bytes, content versions, ranges, and therefore
+plan identities. Each paired plan is complete with one declaration, one local
+call, one qualified call, and no omitted internal operation. Workspace and MCP
+tests make the original source unreadable after publication and still produce
+equal repeated plans from retained bytes; successor publications reject stale
+requests and produce fresh identities.
+
+Focused unfiltered evidence passes 6 Common, 54 BSL, 298 Graph, 159 Analysis,
+351 EDT, 46 Designer, 124 Runtime unit, 9 Workspace, 2 File Watching, 3 Git-
+input, 4 cache, 53 Protocol, 33 Tool Policy, 10 semantic MCP, 8 MCP stdio, and
+19 public MCP process tests. Graph Query, HTTP, LSP stdio/process, CLI, and the
+62-test VS Code unit matrix also pass. The executable inventory contains 85
+all-target entries: 81 non-zero targets, four expected zero-test public binary
+entry points reported only as inventory, and 1,365 tests. The canonical
+workspace run passes all 1,365 with zero failed, ignored, measured, or filtered
+tests; format, all-target check, strict Clippy, warning-denied Rustdoc, and diff
+checks also pass.
+
+Sprint 40.1 makes
+`oneagent-analysis::publication::WorkspacePublicationId` the only checked
+non-zero publication newtype, preserves `ChangeImpactPublicationId` and the
+former Refactoring export as type-identical compatibility paths, and migrates
+Runtime Workspace signatures to the canonical vocabulary. The added public
+oracle proves exact-path availability, conversion-free alias identity, and
+zero rejection. Numeric sequencing, snapshot/impact atomicity, stale and
+overflow failures, fresh-service reset, cache schema `1`, semantic compatibility
+`8`, MCP wire values, read-only behavior, and edit authorization remain
+unchanged.
+
+The six governance-only commits `dce7470e`, `25019f17`, `f1698840`, `89ce1402`,
+`6e038660`, and `8a8e4734` have a combined net diff confined to seven
+`docs/codex/**` paths and `scripts/validate-codex-prompts.sh` (453 additions, 15
+deletions). They contribute no Rust, Cargo, product API, cache, protocol,
+client, Graph, adapter, or Refactoring Planner behavior.
+
+Task-range audits find only accepted internal Cargo dependency edges, no third-
+party package/feature/license change, no removed public API, no Graph or
+Coverage transition, no unsafe or production source-write/edit/process
+primitive, no sensitive output, no generated/tracked artifact, and no deferred
+Sprint 41 behavior. Cache schema remains `1`; publication IDs and plans are not
+persisted. Public results remain bounded and redacted with `readOnly=true` and
+`editAuthorization="none"`.
+
+The planning-through-Task-9 branch range starts after exact completed Sprint 39
+version head `8d28ba8acacd00efd902eb2aa4ab3194f1636c05` and ends at the unique
+Task 9 commit whose first parent is exact recovery head
+`3924acb37af4528f18dcaa0ee93c4358dae1730f` and whose subject is
+`Complete Sprint 40 Refactoring Planner evidence`. After the required push and
+no-ff implementation merge into `codex/v0.7`, Task 10 must review
+`8d28ba8acacd00efd902eb2aa4ab3194f1636c05..<Sprint 40 implementation merge>`
+with the complete Task 9 matrix. Task 9 changes documentation only. Sprint 40
+remains `active`; it is not completed and no Sprint 39 prompt is retired here.
+
+###### State, failure, and validation gates
+
+Sprint 40 remained `next` during planning and became `active` from Task 1. Its
+ordinary acceptance gate required a non-blocking Task 10 review. The explicit
+2026-09-06 user direction administratively closes Sprint 40 without claiming
+that gate passed and transfers the confirmed publication-owner and stale-
+evidence blockers to Sprint 40.1. No Sprint 40 review artifact or prompt
+retirement is implied by this closure. A task may be `already_complete` only
+when committed evidence and successful required validation prove every
+criterion; no empty commit is created.
+
+Missing or contradictory source/precondition evidence, absence of a
+deterministic oracle, unimplementable ADR, source or Graph authority
+duplication, edit authorization inferred from impact/path/status/model output,
+ambiguous target or source evidence, order-dependent identity, unreconciled
+summary, implicit partial result, unbounded or sensitive output, hidden source
+read or mutation, protocol/schema/Tool Policy mismatch, zero matched tests,
+failed validation, staging/commit/push failure, reviewer mutation or
+incompleteness, unresolved evidence disagreement, failed artifact consistency,
+or retirement inventory drift stops the sprint immediately.
+
+Canonical validation is owned only by
+`docs/codex/core/validation.md`. Planning validation covers all child prompts,
+Markdown links and structure, contiguous numbering, manifest/prerequisite and
+commit-message agreement, Context Manifest selectors and preflights, accepted
+versus deferred scope, unchanged `next` state, exact Sprint 39 retirement
+inventory, mandatory reviewer handoff and consistency, `git diff --check`, and
+unrelated-change absence.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 40 Refactoring Planner
+```
+
+Suggested planning-amendment commit message:
+
+```text
+Amend Sprint 40 plan for immutable source evidence
+```
+
+##### Sprint 40.1 Refactoring Planner Remediation execution plan
+
+Sprint 40.1 is a bounded corrective completion sprint from version head
+`427a78cd809a16bae2ee160867b20bb64c1d415e`. The interrupted Sprint 40
+integration review confirmed two completion blockers: ADR-0063 names
+`oneagent-analysis::publication::WorkspacePublicationId` as the canonical
+checked identity and `ChangeImpactPublicationId` as compatibility only, while
+the implementation owns the newtype under the old name and exposes the new name
+only from `refactoring`; and the committed evidence reports the pre-remediation
+52 BSL, 346 EDT, 41 Designer, and 1,352 workspace totals instead of deriving the
+final counts from the live post-`346f542f` baseline. The same review also
+identified six governance-only efficiency commits whose scope must be audited
+separately from Refactoring Planner product behavior.
+
+Sprint 40 is administratively `completed` without a passing integration review;
+the two confirmed acceptance blockers remain open only in this corrective
+scope. Sprint 40.1 is the unique `next` target during planning and becomes
+`active` when its targeted design review starts from the committed planning
+baseline. Sprint 41 remains `planned` and cannot start until the Sprint 40.1
+review is non-blocking.
+
+This corrective sprint explicitly opts into the Sprint 41+ execution controls:
+one committed ADR-invariant matrix, one fresh-context targeted design review
+before production changes, one numeric implementation scope baseline, one
+stable pre-review full gate, exact immutable integration-review endpoints, one
+fresh-context integration reviewer, independent primary validation, and
+same-reviewer artifact consistency before state transition.
+
+###### Sprint 40.1 objective
+
+Restore the exact accepted publication identity ownership without changing its
+numeric value, sequence, lifecycle, or wire behavior; preserve the old public
+name as a source-compatible alias; migrate Runtime's Rust vocabulary; add the
+missing public-path oracle; update evidence from executed counts; and classify
+the post-Task-9 governance changes separately from product scope. Source edits,
+transactions, protocol revisions, cache changes, Graph changes, new
+refactoring families, UI, and Sprint 41 behavior remain excluded.
+
+###### Sprint 40.1 ADR invariant matrix
+
+| Accepted invariant | Production owner/location | Required ordering or retention point | Negative production oracle | Focused validation |
+|---|---|---|---|---|
+| One canonical checked non-zero Workspace publication identity | `crates/analysis/src/publication.rs` owning `WorkspacePublicationId` and exported by `crates/analysis/src/lib.rs` | Construction and checked successor occur before publication replacement | Zero is rejected and `u64::MAX` successor fails without publication | Analysis publication and Change Impact tests |
+| Change Impact preserves source compatibility without a second sequence | `crates/analysis/src/change_impact.rs` compatibility export `ChangeImpactPublicationId` | Alias/projection resolves to the canonical type before report construction | Compile/runtime identity oracle proves both names are the same type and value | Analysis Change Impact and public API tests |
+| Refactoring and Change Impact observe the same publication | `crates/analysis/src/refactoring.rs` requests/plans and `apps/runtime/src/workspace/mod.rs` snapshots/impact | One Runtime-owned checked successor is retained atomically with snapshot and impact | Stale, overflow, failed-build, recovery, and fresh-service tests expose no second ID | Refactoring plan, Runtime lib, Workspace, watching, Git-input, and cache tests |
+| Public product behavior remains read-only and wire-compatible | Runtime MCP projection plus existing Protocol, Tool Policy, process, and VS Code consumers | Canonical Rust identity is projected before unchanged bounded numeric wire output | Legacy revisions/catalog, denial, oversize, EOF, repeated-session, and no-edit assertions | Protocol, Tool Policy, MCP semantic/stdio/process, and VS Code tests |
+| Final evidence matches the immutable reviewed head | `docs/architecture/refactoring-planner-evidence.md` and Sprint 40/40.1 Roadmap evidence | Enumerate after the stable implementation diff and before review dispatch | Any stale, additive, zero-match, filtered, or unreconciled count blocks completion | Focused suite inventory plus `cargo test --workspace --all-targets` enumeration |
+| Governance changes do not become product scope | Exact commits `dce7470e`, `25019f17`, `f1698840`, `89ce1402`, `6e038660`, and `8a8e4734` | Classify path/net effect separately before the combined acceptance decision | Any Rust/product/API behavior attributable only to those commits blocks review | Exact range/path audit and prompt validator |
+
+###### Sprint efficiency contract
+
+sprint_efficiency_contract: v1
+adr_invariant_matrix: docs/Roadmap.md::Sprint 40.1 ADR invariant matrix
+design_review_gate: docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/01-review-refactoring-planner-remediation-design.md|Sprint 40.1 planning baseline|docs/reviews/sprint-40-1-refactoring-planner-remediation-design.md|Approve Sprint 40.1 remediation design
+implementation_baseline: docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/02-remediate-refactoring-planner-contract.md|10|600|none|9|1
+
+The implementation stop-loss is 10 unique task-owned paths, 600 textual added
+plus deleted lines, and no binary paths. The implementation budget contains
+nine focused check groups and exactly one stable full workspace gate; the
+design and final integration reviewers plus the primary completion gate remain
+separate required evidence.
+
+###### Ordered Sprint 40.1 task manifest
+
+| Order | Task | Profile / template | Task-owned outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | Review the remediation design. | Review / review | Fresh-context targeted decision over the publication owner, compatibility alias, Runtime boundary, evidence plan, scope audit, and numeric baseline; a `pass` is recorded in the predeclared artifact. | Sprint 40.1 planning baseline on `codex/v0.7-sprint-40.1`. | `Approve Sprint 40.1 remediation design` |
+| 2 | Remediate the Refactoring Planner contract. | Refactoring and Safe Edits / Refactoring and Safe Edits | Canonical public identity owner, source-compatible alias, migrated Rust consumers, regressions, exact live evidence, and governance/product scope classification. | Task 1 committed `pass` artifact. | `Remediate Sprint 40.1 Refactoring Planner contract` |
+| 3 | Review and close Sprint 40.1. | Review / review | Fresh-context combined-baseline integration review, primary reconciliation, artifact consistency, Sprint 40.1 state transition, Sprint 41 hand-off, and conditional exact Sprint 39 suite retirement. | Task 2 commit and validation, no-ff implementation merge into `codex/v0.7`, and immutable `codex/v0.7-sprint-40.1-review`. | `Complete Sprint 40.1 Refactoring Planner remediation review` |
+
+Tasks execute strictly through
+`docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/00-sprint-40-1-execution-loop.md`.
+The final review covers both the complete product range from completed Sprint
+39 head `8d28ba8acacd00efd902eb2aa4ab3194f1636c05` and the corrective range from
+`427a78cd809a16bae2ee160867b20bb64c1d415e` through the immutable Sprint 40.1
+implementation merge.
+
+Only a non-blocking final decision may mark Sprint 40.1 `completed`, make
+Sprint 41 the unique `next` target, create
+`docs/reviews/sprint-40-1-refactoring-planner-remediation.md`, and retire the
+exact eight tracked Sprint 39 prompt files already listed by the Sprint 40
+plan. The Sprint 40 and Sprint 40.1 suites remain preserved. Any design,
+implementation, scope, validation, review, consistency, commit, merge, push, or
+inventory failure stops the sprint without a completion transition.
+
+###### Sprint 40.1 completion evidence
+
+The [Sprint 40.1 Refactoring Planner Remediation review](reviews/sprint-40-1-refactoring-planner-remediation.md)
+records `pass` over immutable combined range
+`8d28ba8acacd00efd902eb2aa4ab3194f1636c05..dd55365a62a12f8733ca91185237eaff2f09aa95`
+and corrective range
+`427a78cd809a16bae2ee160867b20bb64c1d415e..dd55365a62a12f8733ca91185237eaff2f09aa95`.
+The independent reviewer and primary each passed all 34 ADR-0063 criteria and
+all six corrective invariants, 26 non-zero focused Rust commands, the complete
+canonical gate, five VS Code compiler/unit stages, and the API, dependency,
+cache, protocol, governance, sensitive-data, artifact, scope, prompt, link, and
+cleanliness audits. Each independently enumerated 85 targets, 81 non-zero
+targets, four expected zero-test binaries, and 1,365 tests.
+
+The same reviewer confirmed the complete uncommitted review and state diff
+before the exact eight-file Sprint 39 prompt suite was retired. Sprint 40 and
+Sprint 40.1 prompt suites remain preserved. Sprint 40 remains administratively
+`completed`; Sprint 40.1 is `completed`, and Sprint 41 Safe Edit Transactions
+is the unique `next` target. The v0.7 release integration review remains after
+Sprint 41.
+
+Suggested planning commit message:
+
+```text
+Plan Sprint 40.1 Refactoring Planner remediation
+```
+
+##### Sprint 41 Safe Edit Transactions execution plan
+
+###### Completed Task 7 integration review
+
+[Sprint 41 integration review](reviews/sprint-41-safe-edit-transactions.md) records independent and primary **pass**
+on `ceb3a91da70afde202cab84f7ea42846cdd734bd..98d64fb9f775c5af77437b8c18cd0eeb21291c84`.
+Both separately executed F1-F12/G1-G6 (all exits 0; each G3 1471 passed,
+83 nonempty/four empty harnesses). Same-reviewer artifact consistency passed
+after two draft-only evidence corrections; the initial blocked consistency and
+all historical blocked source reviews remain preserved. Sprint 41 is **completed**;
+only the v0.7 release integration review is eligible. Dispatcher commit/no-ff
+version integration and current-version-only push remain pending at this record.
+The exact four Sprint 40.1 prompts are retired by this review change; all 11
+Sprint 40 and eight Sprint 41 files remain. The following prerequisite and task
+results preserve the historical implementation handoff; they do not reopen Task 7.
+
+###### Current controlled-unwind prerequisite
+
+The user renewed the full unwind-recovery plan on 2026-09-12; only historical
+awaiting-agreement statements are superseded. Starting clean input is
+`38a9bde3407f151e2c17b380e8bd28252c5a39f9` on
+`codex/v0.7-sprint-41-remediation`. The
+[ADR amendment](adr/0064-safe-edit-transactions.md#controlled-transaction-owner-unwind)
+and [complete all-35 audit](architecture/safe-edit-transactions-invariants.md#controlled-unwind-ownership-and-complete-audit)
+define the retained-envelope contract implemented at
+`45147cf1649e9ca8315feb52c02a9936df0fa1f9` after unique architecture
+`d328d8638bab12c5ebc8fe2591d21d615be115a8` and separate targeted design pass
+`19f9f23b3851e5b24f781e6c00b160fc706fe8d3`.
+Producer pass `f25388cd8073bcd228c8eaa951ef1c0178907431` remains historical.
+The four efficiency records below select this new gate; the seven-task manifest,
+all children, original Task 5/6 boundaries and historical ledger are unchanged.
+This continuation gate overrides their historical prerequisite routing only.
+
+Only `apps/runtime/src/workspace/edit.rs`, `edit_io.rs` and `mod.rs` form the
+committed source correction (+1341/-179 = 1520, within its 1000-1800 estimate); seven
+authority/evidence documents have a separate 300-700 estimate. Retain cumulative
+baseline `93661837df8d63bfed10c9b70d1986c4e0d12aa5`, 24 original source/fixture
+paths and only original Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Initial measured subtotal: 25/+14238/-234 = 14472, no binaries. No reset or
+blanket master exclusion; hard caps stay 32 paths/20000 churn/no binaries.
+
+Current net implementation subtotal is **25/+15400/-234 = 15634**, no binaries.
+Separate architecture `38a9bde3..d328d863` is six paths/+399/-17; design
+`d328d863..19f9f23b` is one path/+190/-0. This seven-document Task 6 delta is
+accounted separately from source, including its exact shared-master change.
+The [current evidence](architecture/safe-edit-transactions-evidence.md#current-controlled-unwind-evidence-and-review-handoff)
+reconciles all 35 rows/66 named oracles and rehashes 836 committed blobs plus
+18 command logs/input manifests. F1-F12 counts are
+82/8/38/11/18/11/13/12/33/222/401/37; all F1-F12/G1-G6 exit 0. G3 is
+1471 passed/0 failed, 83 nonempty/four empty targets. The complete 18-command
+cycle totals 313.70s; G1-G6 alone 173.37s, without a historical-timeout diagnosis.
+
+Next sequence is dispatcher-committed Task 6 evidence, no-ff remediation merge
+into the version branch, fresh independent/primary Task 7 full gates on that
+immutable endpoint, same-reviewer artifact consistency, then gated completion,
+retirement and final no-ff integration/push of current `codex/v0.7` only.
+No release review, main merge, tag or Sprint 42. All 11/4/8 prior/current prompt
+inventories remain; Sprint 41 stays active and v0.7 release-ineligible.
+
+The fifth blocked review's disagreement remains: primary P2 contract/evidence
+recommendation, independent conditional owner-local concern without confirmed
+P2 and incomplete integration acceptance. No default-input trigger was established.
+The current executed post-write oracles use the approved owner-local private
+service-builder boundary; they do not establish public injection. The rejected exploratory probe never
+compiled/executed; it must not be retried or credited. The originating handoff
+reported natural G3 exit 101 (Runtime lib 165/1; partial total 1285/1,
+64 nonempty/one empty target, 4927.014s), not a signal or exit 75. G4-G6 and
+primary Cargo remained unexecuted in that historical review; watcher/startup timeout causes are unknown.
+The master continuation section retains the exact reported failure/counts.
+Historical partial checks do not qualify the new implementation. Task 6 records
+the current source-qualified cycle separately; integration review is PENDING.
+
+Planning starts from clean version head
+`ceb3a91da70afde202cab84f7ea42846cdd734bd` on `codex/v0.7` after the
+committed non-blocking Sprint 40.1 review. Sprint 41 became `active` when Task 1
+started from committed planning boundary
+`078b258e150842da0a79da96ea09395887080cfc`. No production transaction or
+design-review pass is claimed by the investigation.
+
+###### Task 1 investigation result
+
+The [transaction investigation](architecture/safe-edit-transactions-investigation.md)
+is ready for Task 2 architecture. It traces all three production snapshot
+writers, watcher/explicit-input rebuilds, cache timing, planner consumers,
+confirmation/cancellation behavior and confinement primitives. Operation-only
+source preconditions do not cover semantically relevant changes to untouched
+modules or metadata; Runtime must bind a complete stable publication source
+baseline. Existing rebuild instability checks skip cache writes but do not
+themselves prevent publication. The paired three-operation oracle, complete
+Runtime builders and controlled lifecycle/I/O harness primitives are available;
+transaction recovery/undo tests and exact ownership mechanisms remain pending.
+No essential source-format oracle is missing. Task 1 adds no production behavior,
+API, dependency, test or Coverage claim. Exact validation is recorded in its
+investigation and master ledger. Task 2 architecture acceptance is recorded
+below; Task 3 mapping and subsequent gate/blocker history follow. The historical
+producer-correction blocker is resolved by the Task 5/6 evidence recorded below;
+Task 7 remains `not_started`.
+
+###### Task 2 architecture result
+
+Task 2 accepts [ADR-0064](adr/0064-safe-edit-transactions.md). Analysis owns pure
+plan/replacement/semantic equivalence; Runtime owns the opt-in local Rust API,
+service-bound one-use policy confirmation, complete publication source baseline,
+bounded attempt/undo retention and one coordinator for every publication writer.
+Private Runtime I/O owns staged result/original backups, confined per-file rename,
+checked restoration and cleanup. The complete source baseline closes untouched
+module, metadata and discovery freshness gaps and reconciles scan exclusions.
+
+The accepted order guards authorization, full plan/source/path identity and
+budgets before writes, then requires a complete production rebuild and exhaustive
+renamed-target/call plus unaffected semantic evidence equivalence before one
+successor publication. Cache update follows commit. Failed recovery clears
+current observation and disables further publication; separate confirmed reversal
+requires the exact applied successor. Old snapshots and canonical publication
+identity remain unchanged. Cooperative exclusive source ownership and macOS/Linux
+file-identity guards are explicit prerequisites; no multi-file disk atomicity,
+hostile-writer exclusion, durable undo or crash-recovery guarantee is claimed.
+
+Architecture sections and affected consumer inventory are synchronized. No Rust,
+dependency, source Coverage, protocol/UI or supported-capability change occurs.
+The ADR leaves no transaction mechanism for Task 3 to choose: that task must map
+the accepted owners, guard/retention order and complete negative oracles, followed
+by Task 4's independent design gate. Sprint 41 remains `active`. Documentation
+validation and the one local task commit are recorded in the master ledger;
+push remains deferred to sprint end.
+
+###### Task 3 invariant mapping result
+
+The [accepted-ADR production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+now maps 35 production obligations to exact existing/planned owners, guarded
+operations and retention points, negative production-path tests and 12 concrete
+focused commands. It separates full plan/authorization binding, complete bounded
+source observation, every staging/replacement/restoration/cleanup boundary, all
+publication/cache writers and every complete semantic oracle component. Explicit
+provenance comparison avoids Graph edge equality's narrower semantics; canonical
+coordinate and identity constructors remain their existing owners.
+
+All new symbols/tests are planned; this documentation gate claims no production
+test execution or design-review pass. At that mapping boundary the design was allocated across 16
+exact implementation paths and 5000 estimated text additions/deletions, including
+the ledger, with no binary/dependency changes, 12 focused checks and one stable
+full gate. Task 4 independently evaluates the committed mapping and scope before
+Task 5. Sprint 41 remains `active`; push remains deferred to sprint end.
+
+###### Constructor-boundary oracle correction
+
+Task 4's original pass was committed at
+`b2f89c86012e71190afed077f42b5af82d552b42` after correcting seven prompt
+EOF defects. Task 5 then stopped during admission with zero changed paths:
+T03 incorrectly required Runtime and an integration test to mutate every
+Analysis-private plan field while preserving its ID. The canonical constructor
+recomputes IDs, and `RefactoringCompleteness` has only `Complete`; arbitrary
+foreign-field and incomplete-enum mutants are not safely representable through
+that boundary. This is a mapping/evidence defect, not a production vulnerability.
+
+The separate corrective prerequisite is
+`Refine Sprint 41 constructor-boundary test ownership`. It keeps every
+constructor-reachable same-ID difference, whole-plan replacement and private
+capability case in the real Runtime gate. Representable private-field mutants
+move to `refactoring.rs::safe_edit_tests` and call the real Analysis comparator;
+closed-type/constructor evidence covers unrepresentable states without unsafe
+values or a public forging API. F1 adds `--lib`; there are still 12 groups.
+The existing 16-file/5000-line estimate is redistributed by moving 140 test
+lines from the integration-test allocation to the already included owner file.
+ADR-0064, transaction behavior, dependencies and other invariants are unchanged.
+
+The original design pass remains historical, but does not unlock the corrected
+mapping. The updated Task 4 gate below must pass at a new immutable endpoint
+and be committed separately before Task 5 resumes from that new baseline.
+Tasks 6-7 have not started. Sprint 41 remains active, with push at sprint end.
+
+###### Complete invariant audit and renewed agreement
+
+The independent review at `d2dc6fdb772f04cb15cc38029b7494d262cae9af`
+accepted the T03 constructor-boundary correction but blocked the same
+type-impossible marker in T17. A full T01-T35 representability, constructor and
+privacy audit found no other confirmed defect. The user explicitly agreed to
+the resulting consolidated plan before another correction; isolated patches
+were suspended for that audit and agreement.
+
+The new corrective prerequisite is
+`Clarify Sprint 41 complete invariant evidence placement`. The matrix now
+classifies every row as public/producer-reachable, owner-local representable,
+constructor-rejected or type-unrepresentable. T17 uses exact evidence for the
+single `SourceEvidenceCompleteness::BslCallableRenameV1` variant and retains
+all executable missing-document/occurrence, inventory, role/path/root and
+Configuration cases through the real Runtime comparator. T20-T23 use valid
+canonical whole-value/report substitutions, not forged private derived fields
+or nonexistent incomplete/omission markers. Constructor rejection is never
+credited as an executed Runtime comparator test.
+
+Production comparison, source/semantic/failure guarantees, ADR-0064 and the
+16-file/5000-line/12-group budget remain unchanged. At that historical boundary Task 5 had zero source
+changes and awaited the complete-audit design pass. That pass was committed as
+93661837df8d63bfed10c9b70d1986c4e0d12aa5; the later blocked implementation
+attempt and new producer-projection prerequisite are recorded below.
+
+###### Producer-owned projection correction and Task 5 resume
+
+The user explicitly approved the revised producer plan after Task 5 started at
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5` and exposed Designer whole-module
+SHA/declaration provenance and EDT callable-owned Query identity dependencies.
+At that historical pause the incomplete attempt had 9 task-owned paths/1593 text churn/no binary paths,
+no implementation commit and no push. Analysis package checking passed; Runtime
+all-targets checking passed before later uncovered edits. Runtime integration
+exited 101 with 1 passed and 1 failed test (SemanticMismatch, Recovered, zero
+retained files). Remaining focused and canonical full gates have not run; logs
+are in `local-artifacts/codex-runs/sprint-41/task-5/`.
+
+The original implementation is preserved by the dispatcher; the clean corrective
+branch starts at `b2f1bdcfb9591ba24a1da9ef79c4a388083bac7f`. The separate
+`Define Sprint 41 producer-owned semantic projection` documentation commit fixes
+canonical adapter/BSL ownership, typed before-fact mappings, complete consumption
+and reservation before producer scratch/retention. Expected values freeze before
+staging and candidate rebuild. Only directly owned format-supported Query IDs
+join the target closure; unchanged Query binding/text, all provenance, ledger
+and diagnostics remain required. Designer gains no Query Graph semantics.
+
+The complete T01-T35 representability audit, all reachable negative cases and
+accepted eligibility remain. Filesystem/recovery/undo/coordinator mechanisms do
+not change. Prior review decisions remain historical. At that correction the
+next unique gate was `Approve Sprint 41 producer-owned semantic projection design`;
+review was pending and the correction did not self-approve or resume production
+work. The later pass is `f25388cd8073bcd228c8eaa951ef1c0178907431`.
+
+The new pass is the resume prerequisite, not a new implementation budget start.
+Keep `93661837df8d63bfed10c9b70d1986c4e0d12aa5` as Task 5's original
+accounting baseline. Include the preserved 9 files/1593 churn and every subsequent
+task-owned change, untracked text, formatting and ledger update. Exclude only
+separately committed prerequisite documentation/review deltas by exact range;
+never classify the preserved work as unrelated or subtract whole shared paths.
+Reconcile the cumulative diff without double-counting overlapping snapshots.
+At that pause Sprint 41 remained active, Task 5 blocked and Tasks 6-7 not started.
+The completed implementation and evidence boundary follows; push stays deferred.
+
+###### Task 5 implementation and Task 6 evidence
+
+The paragraphs below preserve original Task 5/6 evidence. The subsequent blocked
+review and current remediation evidence are recorded immediately afterwards;
+the historical 1435 result does not validate remediation.
+
+Task 5 is committed as `f2813d2eff5fa78efe3f0d4a705e3bc51de13979`
+(`Implement Sprint 41 Safe Edit Transactions`). The
+[Task 6 evidence](architecture/safe-edit-transactions-evidence.md) reconciles the
+exact implementation delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`,
+all 35 invariants, forty named executed oracles, full log paths, public consumers,
+dependencies, Graph/Coverage, cache, protocols and redaction. The unique next
+task is Task 7 integration review after the required no-ff implementation merge;
+Sprint 41 remains `active` and no review pass or release eligibility is claimed.
+
+Cumulative implementation accounting keeps original baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5` and includes all carried work.
+Only the exact separately committed prerequisite documentation range through
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510` is excluded. The final delta
+is 25 paths, +11067/-192 = 11259 text churn, seven new/eighteen modified files,
+no binaries, within the authorized 32-path/20000-churn caps. The shared Task 5
+ledger delta is included; intermediate totals are not added again.
+
+F1-F12 all exited 0 with nonzero tests, followed by the successful canonical
+fmt/check/test/clippy/doc/diff cycle. The workspace test result is 1435 passed
+tests in 83 nonzero targets and four separate empty harnesses. The first G3
+attempt failed in unchanged Git-reader fixture discovery under repository-local
+TMPDIR; the exact target then passed 8/8 with `GIT_CEILING_DIRECTORIES=$TMPDIR`,
+and the canonical cycle repeated successfully on unchanged source. Historical
+development failures and the environment attempt remain recorded, not summed
+into stable counts. All production validation reproductions require the exact
+environment documented in Task 6 evidence. Linux/Windows execution, GUI tests,
+durable undo, crash recovery and hostile-writer exclusion are not claimed.
+
+Default product services remain edit-disabled; only the opt-in Rust API is
+implemented. No new dependency, Graph fact, source Coverage claim, cache schema,
+protocol catalog or UI edit surface changed. Task 7 owns separate independent
+and primary validation, the integration decision and any completion transition.
+
+###### First blocked integration review and remediation evidence (historical)
+
+Original Task 6 committed as `e99a6ac14494f9b00fc2f144b01b84e402c9f7d4`.
+The review endpoint `33922bea4cbd1e9b84e67fd01a8ebc7e6c81f5a0` was
+**blocked**: primary found R3-R5 (P2), while independent found R1/R2 (P1),
+R3 (P2) and missing evidence M1-M4. Primary ran documentation checks but no
+Cargo completion gate; independent completed only F1-F10 on that old tree.
+Neither is a successful review. Isolated baseline
+`fa031100ac19a98b17e676687a498bcce4e7280e` has an identical tree.
+
+Remediation `aaeacbfa675bd1a321f5e5c160950c6c661052d0` corrects revocable
+caller/queued payload lifetime, prepaid nested producer records/arguments,
+ordinary rebuild cache Busy, shared projection/I/O/undo reservation and policy
+before queue entry. Its [current evidence](architecture/safe-edit-transactions-evidence.md#current-stable-validation-and-immutable-handoff)
+reconciles all 35 requirements and 52 named oracles, including 66 read/360
+reversal-read cases, real deep-128 scanner, exact causes and actual worker
+tracing. Allocation-owner boundaries (15 request + 12 diagnostic), 15 EDT quota
+attempts, and shared lease transfer are separate evidence; none measures the
+whole-process heap. The Unicode capacity probe does not prove every canonical
+helper internal reallocation overlap. Accepted ADR/matrix and R/L/C/T split
+remain unchanged; R1-R5/M1-M4 closure awaits fresh independent review.
+
+All 18 current commands exited 0: F1-F12 counts are
+82/6/28/7/16/9/11/10/33/222/401/37; canonical test passed 1447 tests across
+83 nonzero targets plus four separate empty harnesses. fmt/check/clippy/doc/diff
+passed. All 243 input hashes match the stable manifest. The remediation first
+stable attempt's F8 9/1 failure and development corrections remain historical,
+alongside the original 1435 result and Git-fixture environment retry. This
+documentation follow-on reconciles retained logs without rerunning Cargo.
+
+Scope remains based on `93661837df8d63bfed10c9b70d1986c4e0d12aa5`:
+original Task 5 25 paths/+11067/-192 = 11259; remediation 8/+2257/-393 = 2650;
+net cumulative implementation **25/+12973/-234 = 13207**, no binaries. It
+exceeds the 12000 estimate and remains within 32/20000 hard caps. The exact
+prerequisite ten-document range through `f3c1f8c087378b78c50f7fd97499b2c2d7e5f510`
+is 823 churn; original Task 6's five-document 438 churn is separate. The
+original Task 5 master delta remains included. Full unpartitioned history
+35 paths/14446 churn at `aaeacbfa` is separate from implementation accounting;
+no carried work or shared path is blanket-excluded. Reproduction is retained in
+`local-artifacts/codex-runs/sprint-41/remediation/scope.json` and `audit-scope.py`.
+
+This fresh evidence follow-on uses commit subject
+`Update Sprint 41 remediation evidence`, preserving the unique original Task 6.
+The next gate is a fresh Task 7 after the required remediation integration;
+Sprint 41 remains `active`, all old/current prompts remain, and v0.7 release
+review is not yet eligible. Push remains deferred to sprint end.
+
+###### Second blocked review and historical boundary-oracle evidence
+
+Both fresh Task 7 reviewers completed all 35 source obligations at
+`ceb3a91da70afde202cab84f7ea42846cdd734bd..fc146d8802bbb82e9557a63d6c535f584a270b04`
+and returned **blocked** for five missing oracles M1-M5, with no demonstrated
+production protection bypass. This follows remediation `aaeacbfa` and evidence
+`9c98e2ce9abd205bb93a79f7177649ff1c7acbdf`. Independent F1/F2 passed
+82/6 tests, then the dispatcher deliberately stopped the runner with exit 75
+before F3; remaining Rust gates were unexecuted. Primary ran no Rust commands.
+Both all-35 audits and documentation checks finished; no pass artifact,
+artifact-consistency gate, prompt retirement or completion occurred.
+
+Current code `a78568b250201fbab35bb36928d82b3b8fb9f414` adds the exact
+three-path/+507/-9 = 516 delta from `fc146d8802bbb82e9557a63d6c535f584a270b04`.
+The [boundary evidence](architecture/safe-edit-transactions-evidence.md#boundary-oracle-closure-and-reachability)
+reconciles all 35 rows and **56** named oracles: actual outside-Workspace alias,
+OS AlreadyExists collision, real existing second-Configuration comparator,
+original 1 MiB + 1 at its reachable I/O owner, and production `.oneagent`
+Configurations with bound baseline, Missing/Failed cache outcomes and rebuild.
+The public oversized source is constructor-unreachable; no forged semantic
+publication or successful `.oneagent` cache Hit/write is claimed.
+
+All 18 stable-attempt-2 commands exited 0. F1-F12 counts are
+82/8/31/8/18/11/13/12/33/222/401/37; canonical test is **1461/83 nonempty targets
+plus four empty targets**, zero failed/ignored. All 243 committed input hashes
+and 44 retained log hashes independently reconcile. Latest attempt 1 failed in
+the unchanged generic watcher update timeout at `file_watching.rs:256`
+(1293 passed/one failed); exact caller/cause is unknown. Focused retry and full
+cycle 2 passed on unchanged source. New public-fixture and clippy failures,
+earlier F8/Git-fixture failures and both blocked reviews remain historical.
+No Rust rerun belongs to this documentation task.
+
+Cumulative implementation remains rooted at
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: **25/+13471/-234 = 13705**,
+no binaries, above estimate 12000 and within hard caps 32/20000. Count the
+24 original source/fixture paths plus exact original Task 5 shared-master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Keep prerequisite 10/823, original Task 6 five/438, prior evidence five/553 and
+this documentation follow-on separate; never blanket-exclude the master or
+sum overlapping diffs. Full unpartitioned code-head history is 35/15249.
+
+This distinct documentation commit uses `Update Sprint 41 boundary oracle evidence`;
+compact checks are retained in `local-artifacts/codex-runs/sprint-41/oracle-evidence/`.
+Sprint 41 stays `active`; the next gate is fresh independent and primary Task 7
+on the immutable integrated endpoint including this evidence, with their own
+validation and artifact consistency. Preserve every old/current prompt suite.
+No release eligibility or review pass follows from implementation success;
+push stays deferred to sprint end. Telemetry is unavailable, macOS only.
+
+###### Current ownership recovery evidence and fourth blocked review
+
+The fourth integration review at `a1c7e824d1852499d57609788ac1b0bf831e35f0` remains **blocked**.
+Both reviewers inspected all 35 rows and corroborated P2/T13-T14: successful
+`create_new` could be followed by descriptor metadata/identity failure before
+ownership registration, leaving an untracked artifact and an incorrect zero
+retained count. Neither claimed source overwrite or semantic-publication bypass.
+Independent F1-F12/G1-G2 passed; G3 naturally exited **101**, with Runtime lib
+162 passed/one failed in `workspace_service_classifies_blocking_build_panics`
+(`apps/runtime/src/workspace/mod.rs:3192`, `Workspace task panic must not hang: Elapsed(())`).
+The user paused work; no process was signalled and this was not runner exit 75.
+G4-G6 and primary Cargo validation were unexecuted. No full review pass, final
+review artifact or consistency gate exists. All four blocked reviews and every
+historical failure remain preserved in the evidence history.
+
+Current implementation `56fad47bf5c290011e32c4c304cb4639f64ca3ee` registers every successful
+create immediately with an unknown identity, before fallible descriptor checks.
+Unknown identity never authorizes pathname adoption, cleanup, tree exclusion or
+replacement: the artifact stays counted and the existing coordinator quarantines
+with `RecoveryRequired`. Known-identity successful transactions are preserved.
+New actual post-open metadata/identity fault seams cover all four staging and
+both backup-recreation ordinals, including paired reversal, exact one-empty-file
+retention, source state and stop preservation; actual Unix hard-link rejection
+is separate from deterministic injected errors. No OS metadata failure reproduction
+is claimed. Public APIs, dependencies, Graph/Coverage, cache schema and client
+catalog are unchanged; operator repair remains required for unknown ownership.
+
+Exact code range `a1c7e824d1852499d57609788ac1b0bf831e35f0..56fad47bf5c290011e32c4c304cb4639f64ca3ee`:
+**two paths/+236/-27 = 263 churn**. Stable F1-F12/G1-G6 all exited 0;
+F1-F12 passed **82/8/32/10/18/11/13/12/33/222/401/37**, G3 **1464 tests/83 nonempty
+plus four empty targets**, zero failed/ignored. Reconciliation binds all 35 rows,
+59 named oracles (56 preserved plus three new), 243 source/836 committed-input
+hashes and 24 retained log hashes in `owned-file-remediation/`. The panic test
+passed 1/1 on unchanged source before this fix and in the stable full gate;
+its prior timeout cause remains **unknown**, with no timeout or workspace owner
+change and no causal-resolution claim. The earlier watcher timeout also remains
+unknown. The new development clippy semicolon failure (101) and successful exact
+retry remain recorded. No Rust command is rerun by this documentation task.
+
+Net implementation is **25/+14238/-234 = 14472**, no binaries, above estimate
+12000 and within hard caps 32/20000. Keep baseline
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`, the 24 original source/fixture
+paths and only the original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisites and all documentation ranges stay separate; no reset, overlapping
+sum or blanket shared-master exclusion. Full unpartitioned code-head history is
+35/+16369/-329 = 16698, not the implementation subtotal.
+
+Sprint 41 stays **active**, Task 7 requires fresh independent/primary validation
+and same-reviewer final-artifact consistency, and v0.7 remains release-ineligible.
+All 11 Sprint 40, four Sprint 40.1 and eight Sprint 41 prompts remain. This
+five-document follow-on starts at the clean code commit above and uses
+`Update Sprint 41 ownership recovery evidence`; checks are retained under
+`local-artifacts/codex-runs/sprint-41/owned-file-evidence/`. It changes no source,
+creates no review artifact and performs no retirement, completion, merge or push.
+Only macOS execution is qualified; context window/telemetry are unknown/unavailable.
+
+###### Historical semantic-comparator follow-on
+
+The following current-head/count statements qualify only the earlier comparator
+cycle; current ownership evidence above supersedes them.
+
+###### Third blocked review and current semantic-comparator evidence
+
+The third independent Task 7 audit of all 35 rows at
+`de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5` returned **blocked** for
+T18 target identity, T19 pure Analysis edge evidence, T20 consistent occurrences,
+T21 span-only provenance and T23 same-registry status evidence; no production
+bypass was demonstrated. Independent F1-F6 passed 82/8/31/8/18/11, then deliberate
+runner exit 75 stopped before F7. F7-F12/G1-G6 were unexecuted. Primary launch
+was denied twice by the agent thread limit; no primary review or pass occurred.
+All three blocked reviews and every historical failure remain preserved.
+
+Current implementation `32ffd52e485e7b04c72bf51e77c4e25d69325d0e` has
+exact delta `de0db6f0f9c1997dbf51646ba9bd3aac18b5c5c5..32ffd52e485e7b04c72bf51e77c4e25d69325d0e`:
+two test-bearing paths/+563/-5 = 568, with production APIs, dependencies,
+Graph/Coverage, cache schema and protocol/client catalog unchanged. The
+[semantic comparator evidence](architecture/safe-edit-transactions-evidence.md#semantic-comparator-oracle-closure-and-reachability)
+reconciles all 35 rows/56 named oracles: same-count whole-Graph target identity
+reaches actual A target lookup; Analysis edge-only provenance/endpoints now
+have independent F1 evidence; consistent constructor-valid occurrences and
+untouched Unique retarget reach A/E; canonical span-only changes preserve
+path/producer/count. Analysis RuleEngine proves all six status transitions with
+one identical nonempty registry/RuleId/count and positive controls. Runtime's
+real empty registry remains a separate boundary; no nonempty same-count Runtime
+status evidence or constructor-unreachable comparator case is claimed.
+
+All 18 stable commands exited 0; F1-F12 counts remain
+82/8/31/8/18/11/13/12/33/222/401/37, G3 **1461/83 nonempty plus four empty
+targets**, zero failed/ignored. Independent documentation reconciliation verifies
+243 source and 836 committed all-input hashes, 25 retained log hashes and all
+18 command hashes/counts in `comparator-oracles/`. Current development dependency
+compile/lint failures and corrected selector are retained; the stable cycle
+passed. The prior unchanged watcher timeout's exact caller/cause stays unknown.
+No Rust rerun belongs to this documentation task; only macOS is qualified.
+
+Net implementation is **25/+14029/-234 = 14263**, no binaries, above estimate
+12000 and within hard caps 32/20000. Baseline remains
+`93661837df8d63bfed10c9b70d1986c4e0d12aa5`: count 24 original source/fixture
+paths plus only exact original Task 5 master delta
+`f3c1f8c087378b78c50f7fd97499b2c2d7e5f510..f2813d2eff5fa78efe3f0d4a705e3bc51de13979`.
+Prerequisite/Task 6/evidence follow-ons stay separately accounted; never reset
+the baseline, blanket-exclude the master or sum overlapping diffs. Full
+unpartitioned history is 35/+15809/-329 = 16138, not the implementation subtotal.
+
+This distinct five-document follow-on uses `Update Sprint 41 semantic oracle evidence`;
+checks live under `local-artifacts/codex-runs/sprint-41/comparator-evidence/`.
+Original Task 5/6 and design subjects remain unique. Sprint 41 stays `active`,
+Task 7 awaits a fresh immutable independent/primary gate and artifact consistency,
+and v0.7 release remains ineligible. Preserve all 11 Sprint 40, four Sprint 40.1
+and eight Sprint 41 prompts. No source change, review artifact, retirement,
+completion, merge or push is part of this documentation task; dispatcher owns
+later integration and final push. Telemetry is unavailable.
+
+###### Objective, evidence, and bounded scope
+
+Apply and reverse the existing complete `bsl_callable_rename_v1` plans through
+a checked local runtime Rust API for EDT and Designer XML, with explicit bound
+authorization, source freshness, confined writes, failure recovery, and complete
+post-edit semantic validation before successful publication. ADR-0064 now accepts
+the transaction algorithm, owners, concurrency model, atomicity boundary, undo
+contract and honest crash limits. The required Tasks 3-4 gates preceded the
+implementation recorded above; final integration remains gated by Task 7.
+
+Data/readiness passes at planning: ADR-0063, Analysis source/plan contracts,
+Runtime immutable publications/builders/watchers/cache, Tool Policy one-use
+confirmation, and the tracked paired Sprint 14 adapter corpus exist. The corpus
+has a declaration, local call and qualified call over semantically equivalent
+EDT LF and Designer BOM/CRLF sources. Exact-byte apply/reversal comparison plus
+a complete production Workspace rebuild provide independent source and semantic
+oracles. Task 1 verifies the mutation failure/concurrency harness and inventories
+every publication writer before accepting a mechanism. Missing essential
+evidence is a blocker, not an invitation to invent a source format.
+
+The existing Refactoring and Safe Edits Profile, Workflow and Template cover
+confinement, conflict recheck, authorization phases, atomicity, rollback,
+reversibility, semantic rebuild and compatibility. The existing architecture,
+investigation, review and sequential execution modules cover the other tasks;
+no reusable framework modification is required. Coverage registries remain
+semantic-source support evidence; planning changes no Supported claim.
+
+Other families, metadata/file/path renames, multi-Configuration/cross-Workspace
+edits, Git/remote mutation, new MCP/HTTP/CLI/LSP/IDE edit surfaces, third-party or
+internal production dependency additions without approval, persisted
+cross-process plans/undo history, broad performance/security guarantees, and
+release execution are excluded. Runtime API additions must enumerate consumers
+and migration impact before implementation; existing public contracts remain
+compatible.
+
+###### Context preflight and branch contract
+
+Effective context window and measured token telemetry: unknown/unavailable.
+Planning uses bounded section/symbol queries, not whole large authorities.
+Admission decision: warning, with further reading narrowed to exact selectors;
+this is a conservative admission judgement, not measured token usage. Child
+contexts must perform their own preflight against the canonical 15% static,
+20% authorities, 35% normal pre-work, 50% hard-stop, 35% working and 15% reserve
+allocations.
+
+Create `codex/v0.7-sprint-41` from the starting version head. The current user
+explicitly authorizes one commit per completed task and push at sprint end;
+that timing overrides the repository's immediate-push default for this run.
+After Tasks 1-6 and validation, no-ff merge into `codex/v0.7`, create
+`codex/v0.7-sprint-41-review`, execute Task 7, then no-ff merge a successful
+review back into `codex/v0.7` and push only that current version branch. This
+publishes the reachable implementation and review commits together. Do not
+merge to main, tag, or run the release review as part of this sprint. A failed
+push stops further work.
+
+Each child and independent reviewer needs a guaranteed fresh context. Resolve
+authorization under the current user instruction and higher-priority runtime
+rules; stored launch text cannot override runtime restrictions. The dispatcher
+coordinates review agents so child runners do not delegate. If the runtime
+requires explicit additional authorization or cannot guarantee fresh context,
+stop at the concrete child boundary with its committed prerequisite.
+
+###### Ordered Sprint 41 task manifest
+
+| Order | Prompt | Kind / Profile | Outcome | Required committed prerequisite | Suggested commit message |
+|---:|---|---|---|---|---|
+| 1 | [01-investigate-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/01-investigate-safe-edit-transactions.md) | investigation / investigation | Repository-backed transaction readiness and boundary investigation. | Plan Sprint 41 Safe Edit Transactions | `Investigate Sprint 41 Safe Edit Transactions` |
+| 2 | [02-define-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/02-define-safe-edit-transactions.md) | architecture / architecture | Accepted bounded transaction ADR and compatibility contract. | Investigate Sprint 41 Safe Edit Transactions | `Define Sprint 41 Safe Edit Transactions` |
+| 3 | [03-map-safe-edit-transaction-invariants.md](codex/prompts/sprint-41-safe-edit-transactions/03-map-safe-edit-transaction-invariants.md) | architecture / architecture | Complete accepted-ADR production invariant matrix. | Define Sprint 41 Safe Edit Transactions | `Map Sprint 41 Safe Edit Transaction Invariants` |
+| 4 | [04-review-safe-edit-transaction-design.md](codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md) | review / review | Independent targeted design gate, recorded only after pass. | Define Sprint 41 producer-owned semantic projection | `Approve Sprint 41 producer-owned semantic projection design` |
+| 5 | [05-implement-safe-edit-transactions.md](codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md) | implementation / refactoring-safe-edits-implementation | Checked apply/reversal with confined writes, recovery, authorization, and atomic semantic publication. | Approve Sprint 41 producer-owned semantic projection design | `Implement Sprint 41 Safe Edit Transactions` |
+| 6 | [06-complete-safe-edit-transaction-evidence.md](codex/prompts/sprint-41-safe-edit-transactions/06-complete-safe-edit-transaction-evidence.md) | architecture / architecture | Exact final implementation evidence, consumer audit, and immutable review handoff. | Implement Sprint 41 Safe Edit Transactions | `Document Sprint 41 Safe Edit Transaction Evidence` |
+| 7 | [07-sprint-41-integration-review.md](codex/prompts/sprint-41-safe-edit-transactions/07-sprint-41-integration-review.md) | review / review | Independent integration decision, Sprint 41 completion, and v0.7 release-review handoff. | Document Sprint 41 Safe Edit Transaction Evidence | `Complete Sprint 41 Safe Edit Transactions Review` |
+
+The master prompt is
+`docs/codex/prompts/sprint-41-safe-edit-transactions/00-sprint-41-execution-loop.md`.
+It records task-specific validation additions and the durable task ledger.
+Every child uses Prompt Contract v2 and `fresh_context: required`. Each future
+prerequisite subject must resolve uniquely in this sprint ancestry to a full
+commit ID before dispatch.
+
+###### Sprint 41 invariant and design gates
+
+The completed Task 3
+[production matrix](architecture/safe-edit-transactions-invariants.md#sprint-41-adr-invariant-matrix)
+maps accepted ADR-0064 production invariants to exact existing/planned paths and
+symbols, guard ordering, negative production oracles and concrete focused
+commands. Documentation/governance and deferred guarantees are separate. Task 4
+independently reviews this complete committed mapping before production changes;
+only its separate committed pass artifact unlocks Task 5.
+
+###### Sprint efficiency contract
+
+```text
+sprint_efficiency_contract: v1
+adr_invariant_matrix: docs/architecture/safe-edit-transactions-invariants.md::Sprint 41 ADR invariant matrix
+design_review_gate: docs/codex/prompts/sprint-41-safe-edit-transactions/04-review-safe-edit-transaction-design.md|Define Sprint 41 controlled unwind recovery|docs/reviews/sprint-41-safe-edit-transactions-design.md|Approve Sprint 41 controlled unwind recovery design
+implementation_baseline: docs/codex/prompts/sprint-41-safe-edit-transactions/05-implement-safe-edit-transactions.md|25|12000|none|12|1
+```
+
+Task 5's revised expected path count is 25 and estimated text additions plus
+deletions 12000, with no binary paths, 12 focused groups and one stable full gate.
+The user explicitly increased the hard cap to 20000 on 2026-09-08, superseding
+the proposed 14000 and former 10000. The complete audited remaining-work estimate
+sets the final estimate at 12000; this numeric-only override changes no owner,
+architecture, requirement or gate. The existing design pass
+f25388cd8073bcd228c8eaa951ef1c0178907431 was the mechanism gate for that
+numeric-only override; the current unwind amendment requires the new pass above. The
+24-path/9369-churn historical pause was incomplete and counted from
+original baseline 93661837df8d63bfed10c9b70d1986c4e0d12aa5, including all
+carried work and the eventual Task 5 ledger delta; only exact separately
+committed prerequisite documentation ranges are excluded. That pause made no
+accounting reset or completion claim; the original 25-path/11259-churn result
+and current net 25-path/14263-churn remediation aggregate are recorded above.
+The latter exceeds the 12000 estimate but stays below the 20000 hard cap.
+The matrix allocates all 25 paths exactly. F10 becomes
+`cargo test -p oneagent-analysis -p oneagent-bsl --all-targets`; F11 becomes
+`cargo test -p oneagent-designer-xml -p oneagent-edt --all-targets`.
+F1-F9/F12 remain unchanged. Explicitly stop before further work at more than
+32 paths, more than 20000 text churn or any binary path; these tighter caps
+override the general 2x calculation for the new estimate. Independent reviewer
+and primary completion gates remain separate required evidence.
+
+###### State, validation, review and retirement gates
+
+Validate the master and all seven children explicitly with
+`scripts/validate-codex-prompts.sh`, its shell syntax, the repository-wide
+prompt set, Markdown links/selectors, contiguous numbering, prerequisites,
+commit messages, efficiency-record equality, initial clean-state preservation,
+and `git diff --check`. Documentation-only planning does not trigger Rust
+production checks; production and review validation use the canonical
+`docs/codex/core/validation.md` matrix. Keep full logs only under
+`local-artifacts/codex-runs/sprint-41/`.
+
+Task 6 records final exact-head counts, validation outcomes, scope/consumer
+audits and an immutable review handoff; it cannot fix implementation or complete
+the sprint. Task 7 requires the independent fresh read-only review, primary
+independent focused/full checks, reconciliation and same-reviewer artifact
+consistency before state transition or retirement. A blocker preserves all
+later `not_started` tasks and current evidence. No empty or partial task commit.
+
+The immediately preceding suite is exactly these four tracked paths:
+
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/00-sprint-40-1-execution-loop.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/01-review-refactoring-planner-remediation-design.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/02-remediate-refactoring-planner-contract.md`
+- `docs/codex/prompts/sprint-40-1-refactoring-planner-remediation/03-sprint-40-1-integration-review.md`
+
+Only a successful Task 7 may retire that unchanged inventory in its single
+review commit after re-enumeration and artifact consistency. Preserve the
+Sprint 40 suite and all current Sprint 41 prompts. A non-blocking final review
+marks Sprint 41 completed and makes the v0.7 release integration review eligible;
+Sprint 42 stays planned pending the release gate.
+
+Suggested planning commit message: `Plan Sprint 41 Safe Edit Transactions`.
+
+
+The [v0.7 release integration review](reviews/v0.7-release-review.md) records
+`pass` after Sprint 41 and its portability remediation. Release execution
+(merge to `main` and tag `v0.7`) remains a separate pending step; Sprint 42
+has not started.
 
 #### v0.8 — Designer XML Structure
 

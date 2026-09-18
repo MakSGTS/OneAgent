@@ -6234,6 +6234,7 @@ mod portable_tests {
             Err(WorkspaceEditCause::Busy)
         ));
         pending.abort();
+        assert!(pending.await.unwrap_err().is_cancelled());
         assert!(
             matches!(
                 queued.handle.reserve_attempt(),
@@ -6243,7 +6244,6 @@ mod portable_tests {
         );
         drop(command);
         assert_eq!(queued.handle.shared.admission.lock().unwrap().slot, None);
-        assert!(pending.await.unwrap_err().is_cancelled());
     }
 
     #[test]

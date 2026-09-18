@@ -35,7 +35,11 @@ records `pass` and completes Sprint 39. Sprint 40 Refactoring Planner is
 administratively completed, and the
 [Sprint 40.1 Refactoring Planner Remediation review](docs/reviews/sprint-40-1-refactoring-planner-remediation.md)
 records `pass`, resolves its two acceptance blockers, and completes Sprint 40.1.
-Sprint 41 Safe Edit Transactions is the unique `next` target.
+Sprint 41 Safe Edit Transactions is completed. The
+[v0.7 Intelligence release review](docs/reviews/v0.7-release-review.md) records
+`pass` and closes the Sprints 36–41 review boundary. Release execution
+(merge to `main` and tag `v0.7`) remains pending separate authorization;
+Sprint 42 remains planned until that release step is complete.
 See
 [`docs/Roadmap.md`](docs/Roadmap.md) for canonical execution order.
 

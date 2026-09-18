@@ -51,8 +51,17 @@ Portability remediation preserves these invariants with the following oracle
 locations: the original `R::disabled_unready_stopped_and_foreign_services_reject`
 is split into portable `R::disabled_unready_and_stopped_services_reject` and
 Unix-only `R::foreign_services_reject`. `E::closed_precedence_and_redaction`
-now lives in `edit.rs::portable_tests` on every platform. The remaining E and I
-filesystem transaction oracles require Unix identity support; shared R helpers
+now lives in `edit.rs::portable_tests` on every platform. That portable module
+also owns `policy_gate_is_exact_confirmed_and_side_effect_free`,
+`queued_request_drop_retains_reservation_until_command_drop`, and
+`reservation_lifetime_busy_and_overflow`, extracted from the mixed policy and
+attempt-lifetime oracles. The Unix policy service cases remain in
+`E::policy_denial_and_unconfirmed_allow_reject`; `E::attempt_lifetime_and_bounds`
+retains the mutation-dependent bounds and prepared-capability cases. The shared
+integration fixture module lives at `edit.rs::fixtures` for both platforms.
+`edit_io.rs::portable_tests` owns `baseline_budget_exact_over_and_overflow` and
+`buffer_budget_exact_over_and_overflow`, extracted from the scanner and
+buffer/disk oracles. Their filesystem cases remain Unix-only. Shared R helpers
 and read-only checks remain portable. Non-Unix rejection is covered by
 `edit_io.rs::non_unix_tests::identity_and_capture_fail_closed_before_source_writes`
 and `R::non_unix_edit_preparation_rejects_and_read_only_workspace_remains_available`.

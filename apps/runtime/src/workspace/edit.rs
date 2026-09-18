@@ -1818,6 +1818,15 @@ fn compare_exact_snapshot(before: &WorkspaceSnapshot, after: &WorkspaceSnapshot)
     Ok(())
 }
 
+#[cfg(test)]
+mod fixtures {
+    use crate as oneagent_runtime;
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/safe_edit_transactions.rs"
+    ));
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     // Keep each accepted named matrix oracle and its full fault table together.
@@ -1914,14 +1923,6 @@ mod tests {
             }
             Ok(projects)
         }
-    }
-
-    mod fixtures {
-        use crate as oneagent_runtime;
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/safe_edit_transactions.rs"
-        ));
     }
 
     #[derive(Clone)]
@@ -3166,31 +3167,6 @@ mod tests {
             task.await.unwrap().unwrap();
         }
         let root = fixtures::fixture("edt");
-        let snapshot = WorkspaceSnapshotBuilder::new().build(root.path()).unwrap();
-        let mut queued = EditCoordinator::new();
-        queued.handle.shared.admission.lock().unwrap().ready = true;
-        let handle = queued.handle();
-        let request = fixtures::request(&snapshot, "Changed");
-        let pending = tokio::spawn(async move {
-            handle
-                .prepare_apply(request, fixtures::actor(), fixtures::request_id())
-                .await
-        });
-        let command = queued.commands.recv().await.unwrap();
-        assert!(matches!(
-            queued.handle.reserve_attempt(),
-            Err(WorkspaceEditCause::Busy)
-        ));
-        pending.abort();
-        assert!(
-            matches!(
-                queued.handle.reserve_attempt(),
-                Err(WorkspaceEditCause::Busy)
-            ),
-            "queued owner retains the slot after receiver drop"
-        );
-        drop(command);
-        assert_eq!(queued.handle.shared.admission.lock().unwrap().slot, None);
         let service = WorkspaceService::new().with_edit_policy(
             fixtures::policy(RuleAction::RequireConfirmation),
             WorkspaceEditOwnership::ExclusiveCooperative,
@@ -3215,34 +3191,6 @@ mod tests {
         }
         stop.send(()).unwrap();
         task.await.unwrap().unwrap();
-        let coordinator = EditCoordinator::new();
-        coordinator.handle.shared.admission.lock().unwrap().ready = true;
-        let first = coordinator.handle.reserve_attempt().unwrap();
-        assert!(matches!(
-            coordinator.handle.reserve_attempt(),
-            Err(WorkspaceEditCause::Busy)
-        ));
-        drop(first);
-        let second = coordinator.handle.reserve_attempt().unwrap();
-        assert_eq!(second.id, 2);
-        drop(second);
-        coordinator.handle.shared.admission.lock().unwrap().writer = true;
-        assert!(matches!(
-            coordinator.handle.reserve_attempt(),
-            Err(WorkspaceEditCause::Busy)
-        ));
-        let mut state = coordinator.handle.shared.admission.lock().unwrap();
-        state.writer = false;
-        state.next = u64::MAX;
-        drop(state);
-        assert!(matches!(
-            coordinator.handle.reserve_attempt(),
-            Err(WorkspaceEditCause::BoundsExceeded)
-        ));
-        assert_eq!(
-            coordinator.handle.shared.admission.lock().unwrap().slot,
-            None
-        );
     }
 
     #[tokio::test]
@@ -5167,62 +5115,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn policy_gate_is_exact_confirmed_and_side_effect_free() {
-        struct GateSignal(bool);
-        impl oneagent_tool_policy::ToolCancellationSignal for GateSignal {
-            fn is_cancelled(&self) -> bool {
-                self.0
-            }
-            fn cancelled(&self) -> oneagent_tool_policy::ToolFuture<'_, ()> {
-                if self.0 {
-                    Box::pin(async {})
-                } else {
-                    Box::pin(std::future::pending())
-                }
-            }
-        }
-        for cancelled in [false, true] {
-            let request = ToolRequest::new(
-                fixtures::request_id(),
-                fixtures::actor(),
-                ToolId::new("oneagent.workspace.edit.apply").unwrap(),
-                ToolArguments::new("SECRET_SOURCE_TOKEN /absolute/private/path SECRET_DIGEST")
-                    .unwrap(),
-                [ToolEffect::LocalMutation],
-            )
-            .unwrap();
-            let mut authorization =
-                fixtures::policy(RuleAction::RequireConfirmation).evaluate(request);
-            let confirmation = authorization
-                .take_confirmation_challenge()
-                .unwrap()
-                .confirm();
-            super::super::edit_io::faults::set(vec![]);
-            let outcome = execute_tool(
-                authorization,
-                Some(confirmation),
-                &EditPolicyGate,
-                &GateSignal(cancelled),
-            )
-            .await;
-            assert_eq!(
-                outcome.audit().terminal_outcome(),
-                if cancelled {
-                    ToolTerminalOutcome::Cancelled
-                } else {
-                    ToolTerminalOutcome::Completed
-                }
-            );
-            assert!(super::super::edit_io::faults::events().is_empty());
-            let rendered = format!("{:?}", outcome.audit());
-            for secret in [
-                "SECRET_SOURCE_TOKEN",
-                "/absolute/private/path",
-                "SECRET_DIGEST",
-            ] {
-                assert!(!rendered.contains(secret));
-            }
-        }
+    async fn policy_denial_and_unconfirmed_allow_reject() {
         for (action, expected) in [
             (RuleAction::Deny, WorkspaceEditCause::PolicyDenied),
             (RuleAction::Allow, WorkspaceEditCause::ConfirmationRequired),
@@ -6259,6 +6152,131 @@ mod tests {
 #[cfg(test)]
 mod portable_tests {
     use super::*;
+    use oneagent_tool_policy::RuleAction;
+
+    #[tokio::test]
+    async fn policy_gate_is_exact_confirmed_and_side_effect_free() {
+        struct GateSignal(bool);
+        impl oneagent_tool_policy::ToolCancellationSignal for GateSignal {
+            fn is_cancelled(&self) -> bool {
+                self.0
+            }
+            fn cancelled(&self) -> oneagent_tool_policy::ToolFuture<'_, ()> {
+                if self.0 {
+                    Box::pin(async {})
+                } else {
+                    Box::pin(std::future::pending())
+                }
+            }
+        }
+        for cancelled in [false, true] {
+            let request = ToolRequest::new(
+                fixtures::request_id(),
+                fixtures::actor(),
+                ToolId::new("oneagent.workspace.edit.apply").unwrap(),
+                ToolArguments::new("SECRET_SOURCE_TOKEN /absolute/private/path SECRET_DIGEST")
+                    .unwrap(),
+                [ToolEffect::LocalMutation],
+            )
+            .unwrap();
+            let mut authorization =
+                fixtures::policy(RuleAction::RequireConfirmation).evaluate(request);
+            let confirmation = authorization
+                .take_confirmation_challenge()
+                .unwrap()
+                .confirm();
+            #[cfg(unix)]
+            super::super::edit_io::faults::set(vec![]);
+            let outcome = execute_tool(
+                authorization,
+                Some(confirmation),
+                &EditPolicyGate,
+                &GateSignal(cancelled),
+            )
+            .await;
+            assert_eq!(
+                outcome.audit().terminal_outcome(),
+                if cancelled {
+                    ToolTerminalOutcome::Cancelled
+                } else {
+                    ToolTerminalOutcome::Completed
+                }
+            );
+            #[cfg(unix)]
+            assert!(super::super::edit_io::faults::events().is_empty());
+            let rendered = format!("{:?}", outcome.audit());
+            for secret in [
+                "SECRET_SOURCE_TOKEN",
+                "/absolute/private/path",
+                "SECRET_DIGEST",
+            ] {
+                assert!(!rendered.contains(secret));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn queued_request_drop_retains_reservation_until_command_drop() {
+        let root = fixtures::fixture("edt");
+        let snapshot = WorkspaceSnapshotBuilder::new().build(root.path()).unwrap();
+        let mut queued = EditCoordinator::new();
+        queued.handle.shared.admission.lock().unwrap().ready = true;
+        let handle = queued.handle();
+        let request = fixtures::request(&snapshot, "Changed");
+        let pending = tokio::spawn(async move {
+            handle
+                .prepare_apply(request, fixtures::actor(), fixtures::request_id())
+                .await
+        });
+        let command = queued.commands.recv().await.unwrap();
+        assert!(matches!(
+            queued.handle.reserve_attempt(),
+            Err(WorkspaceEditCause::Busy)
+        ));
+        pending.abort();
+        assert!(
+            matches!(
+                queued.handle.reserve_attempt(),
+                Err(WorkspaceEditCause::Busy)
+            ),
+            "queued owner retains the slot after receiver drop"
+        );
+        drop(command);
+        assert_eq!(queued.handle.shared.admission.lock().unwrap().slot, None);
+        assert!(pending.await.unwrap_err().is_cancelled());
+    }
+
+    #[test]
+    fn reservation_lifetime_busy_and_overflow() {
+        let coordinator = EditCoordinator::new();
+        coordinator.handle.shared.admission.lock().unwrap().ready = true;
+        let first = coordinator.handle.reserve_attempt().unwrap();
+        assert!(matches!(
+            coordinator.handle.reserve_attempt(),
+            Err(WorkspaceEditCause::Busy)
+        ));
+        drop(first);
+        let second = coordinator.handle.reserve_attempt().unwrap();
+        assert_eq!(second.id, 2);
+        drop(second);
+        coordinator.handle.shared.admission.lock().unwrap().writer = true;
+        assert!(matches!(
+            coordinator.handle.reserve_attempt(),
+            Err(WorkspaceEditCause::Busy)
+        ));
+        let mut state = coordinator.handle.shared.admission.lock().unwrap();
+        state.writer = false;
+        state.next = u64::MAX;
+        drop(state);
+        assert!(matches!(
+            coordinator.handle.reserve_attempt(),
+            Err(WorkspaceEditCause::BoundsExceeded)
+        ));
+        assert_eq!(
+            coordinator.handle.shared.admission.lock().unwrap().slot,
+            None
+        );
+    }
 
     #[test]
     fn closed_precedence_and_redaction() {

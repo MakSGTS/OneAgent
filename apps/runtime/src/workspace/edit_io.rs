@@ -1118,39 +1118,6 @@ mod tests {
             EditBaseline::capture(root.path(), &[]),
             Err(EditIoError::Bounds)
         ));
-        let mut budget = EditIoBudget::default();
-        for _ in 0..MAX_ENTRIES {
-            budget.entry(Path::new("")).unwrap();
-        }
-        assert_eq!(budget.entry(Path::new("")), Err(EditIoError::Bounds));
-        let mut budget = EditIoBudget::default();
-        let exact = "a".repeat(MAX_PATH);
-        for _ in 0..MAX_PATHS / MAX_PATH {
-            budget.entry(Path::new(&exact)).unwrap();
-        }
-        assert_eq!(budget.entry(Path::new("a")), Err(EditIoError::Bounds));
-        assert_eq!(budget.paths, MAX_PATHS);
-        assert_eq!(budget.entries, MAX_PATHS / MAX_PATH);
-        budget.paths = usize::MAX;
-        assert_eq!(budget.entry_length(1), Err(EditIoError::Bounds));
-        budget.paths = 0;
-        budget.entries = usize::MAX;
-        assert_eq!(budget.entry_length(0), Err(EditIoError::Bounds));
-        assert_eq!(
-            EditIoBudget::default().entry(Path::new(&"a".repeat(MAX_PATH + 1))),
-            Err(EditIoError::Bounds)
-        );
-        let mut budget = EditIoBudget::default();
-        for _ in 0..MAX_BASELINE / MAX_FILE {
-            assert_eq!(budget.file(MAX_FILE as u64), Ok(MAX_FILE));
-        }
-        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
-        assert_eq!(
-            EditIoBudget::default().file(MAX_FILE as u64 + 1),
-            Err(EditIoError::Bounds)
-        );
-        budget.bytes = usize::MAX;
-        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
         let (root, io) = fixture();
         fs::write(root.path().join("a.bsl"), b"grown").unwrap();
         assert!(io.baseline.verify_tree(&BTreeMap::new(), &[]).is_err());
@@ -1246,15 +1213,6 @@ mod tests {
                 assert!(!faults::events().contains(&"create"));
             }
         }
-        assert_eq!(EditIoBudget::buffers(&[MAX_BUFFERS]), Ok(()));
-        assert_eq!(
-            EditIoBudget::buffers(&[MAX_BUFFERS, 1]),
-            Err(EditIoError::Bounds)
-        );
-        assert_eq!(
-            EditIoBudget::buffers(&[usize::MAX, 1]),
-            Err(EditIoError::Bounds)
-        );
         let (_root, io) = fixture();
         let baseline = io.baseline.clone();
         let mut results = io.results();
@@ -1797,5 +1755,60 @@ mod non_unix_tests {
         ));
         assert_eq!(fs::read(&source).unwrap(), b"unchanged");
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    }
+}
+
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+
+    #[test]
+    fn baseline_budget_exact_over_and_overflow() {
+        let mut budget = EditIoBudget::default();
+        for _ in 0..MAX_ENTRIES {
+            budget.entry(Path::new("")).unwrap();
+        }
+        assert_eq!(budget.entry(Path::new("")), Err(EditIoError::Bounds));
+        let mut budget = EditIoBudget::default();
+        let exact = "a".repeat(MAX_PATH);
+        for _ in 0..MAX_PATHS / MAX_PATH {
+            budget.entry(Path::new(&exact)).unwrap();
+        }
+        assert_eq!(budget.entry(Path::new("a")), Err(EditIoError::Bounds));
+        assert_eq!(budget.paths, MAX_PATHS);
+        assert_eq!(budget.entries, MAX_PATHS / MAX_PATH);
+        budget.paths = usize::MAX;
+        assert_eq!(budget.entry_length(1), Err(EditIoError::Bounds));
+        budget.paths = 0;
+        budget.entries = usize::MAX;
+        assert_eq!(budget.entry_length(0), Err(EditIoError::Bounds));
+        assert_eq!(
+            EditIoBudget::default().entry(Path::new(&"a".repeat(MAX_PATH + 1))),
+            Err(EditIoError::Bounds)
+        );
+        let mut budget = EditIoBudget::default();
+        for _ in 0..MAX_BASELINE / MAX_FILE {
+            assert_eq!(budget.file(MAX_FILE as u64), Ok(MAX_FILE));
+        }
+        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
+        assert_eq!(
+            EditIoBudget::default().file(MAX_FILE as u64 + 1),
+            Err(EditIoError::Bounds)
+        );
+        budget.bytes = usize::MAX;
+        assert_eq!(budget.file(1), Err(EditIoError::Bounds));
+    }
+
+    #[test]
+    fn buffer_budget_exact_over_and_overflow() {
+        assert_eq!(EditIoBudget::buffers(&[MAX_BUFFERS]), Ok(()));
+        assert_eq!(
+            EditIoBudget::buffers(&[MAX_BUFFERS, 1]),
+            Err(EditIoError::Bounds)
+        );
+        assert_eq!(
+            EditIoBudget::buffers(&[usize::MAX, 1]),
+            Err(EditIoError::Bounds)
+        );
     }
 }
